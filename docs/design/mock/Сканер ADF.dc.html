@@ -1,0 +1,1392 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics="">
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+:root{
+/* — примитивы: цвет — */
+--color-ink-900:#1c1a16;
+--color-ink-700:#4a463f;
+--color-ink-600:#6f6a60;
+--color-ink-500:#7c766b;
+--color-ink-400:#8b857a;
+--color-ink-300:#9b958a;
+--color-ink-200:#b5afa4;
+--color-ink-100:#cfc9bd;
+--color-sand-500:#e4e0d7;
+--color-sand-400:#e8e4db;
+--color-sand-300:#eceae3;
+--color-sand-200:#efece5;
+--color-sand-100:#f2efe8;
+--color-sand-50:#f7f5f1;
+--color-sand-25:#fbfaf7;
+--color-white:#fff;
+--color-green-600:#0f7a5a;
+--color-green-700:#0a5b43;
+--color-green-500:#2e7d4f;
+--color-red-600:#a3352a;
+--color-amber-600:#a06a2a;
+--color-blue-600:#3f6ea8;
+--color-violet-600:#6b4ea8;
+--alpha-ink-10:rgba(28,26,22,.1);
+--alpha-ink-13:rgba(28,26,22,.13);
+--alpha-ink-14:rgba(28,26,22,.14);
+--alpha-ink-16:rgba(28,26,22,.16);
+--alpha-ink-20:rgba(28,26,22,.2);
+--alpha-ink-25:rgba(28,26,22,.25);
+--alpha-ink-28:rgba(28,26,22,.28);
+--alpha-ink-34:rgba(28,26,22,.34);
+--alpha-ink-45:rgba(28,26,22,.45);
+--alpha-white-55:rgba(255,255,255,.55);
+--alpha-green-8:rgba(15,122,90,.08);
+--alpha-green-12:rgba(15,122,90,.12);
+--alpha-green-40:rgba(15,122,90,.4);
+--alpha-red-40:rgba(163,53,42,.4);
+/* — семантика: цвет — */
+--color-accent:var(--color-ink-700);
+--color-link:var(--color-green-600);
+--color-link-hover:var(--color-green-700);
+--color-success:var(--color-green-500);
+--color-danger:var(--color-red-600);
+--color-warning:var(--color-amber-600);
+--color-status-ready:var(--color-success);
+--color-status-busy:var(--color-danger);
+--color-status-unavailable:var(--color-ink-300);
+--color-doc-1:var(--color-accent);
+--color-doc-2:var(--color-amber-600);
+--color-doc-3:var(--color-blue-600);
+--color-doc-4:var(--color-violet-600);
+--color-pass-1:var(--color-accent);
+--color-pass-2:var(--color-amber-600);
+--color-pass-3:var(--color-violet-600);
+--color-text-primary:var(--color-ink-900);
+--color-text-secondary:var(--color-ink-700);
+--color-text-muted:var(--color-ink-600);
+--color-text-subtle:var(--color-ink-500);
+--color-text-hint:var(--color-ink-400);
+--color-text-faint:var(--color-ink-300);
+--color-text-ghost:var(--color-ink-200);
+--color-text-on-inverse:var(--color-sand-50);
+--color-text-on-inverse-muted:var(--color-ink-100);
+--color-text-on-accent:var(--color-white);
+--color-bg-canvas:var(--color-sand-500);
+--color-bg-app:var(--color-sand-100);
+--color-bg-surface:var(--color-sand-25);
+--color-bg-elevated:var(--color-sand-50);
+--color-bg-paper:var(--color-white);
+--color-bg-panel:var(--color-sand-300);
+--color-bg-toolbar:var(--color-sand-200);
+--color-bg-well:var(--color-sand-400);
+--color-bg-inverse:var(--color-ink-900);
+--color-bg-tray:var(--color-ink-100);
+--color-bg-selected:color-mix(in oklab, var(--color-accent) 9%, var(--color-bg-surface));
+--color-bg-accent-soft:var(--alpha-green-8);
+--color-bg-accent-hover:var(--alpha-green-12);
+--color-bg-overlay:var(--alpha-ink-34);
+--color-bg-nav:var(--alpha-white-55);
+--color-bg-control-off:var(--alpha-ink-20);
+--color-border-subtle:var(--alpha-ink-10);
+--color-border-default:var(--alpha-ink-14);
+--color-border-strong:var(--alpha-ink-16);
+--color-border-emphasis:var(--alpha-ink-20);
+--color-border-heavy:var(--alpha-ink-25);
+--color-border-inverse:var(--color-ink-900);
+--color-border-focus:var(--color-accent);
+--color-border-accent-soft:var(--alpha-green-40);
+--color-border-danger-soft:var(--alpha-red-40);
+--color-glyph-soft:var(--alpha-ink-13);
+--color-glyph:var(--alpha-ink-20);
+--color-glyph-strong:var(--alpha-ink-28);
+/* — типографика — */
+--font-family-sans:"Golos Text",system-ui,sans-serif;
+--font-family-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+--font-weight-regular:400;
+--font-weight-medium:500;
+--font-weight-semibold:600;
+--font-size-xxs:9.5px;
+--font-size-xs:10.5px;
+--font-size-s:11.5px;
+--font-size-m:12.5px;
+--font-size-base:13px;
+--font-size-l:14.5px;
+--font-size-xl:17px;
+--font-size-2xl:19px;
+--font-size-3xl:21px;
+--font-size-4xl:24px;
+--font-size-display-s:30px;
+--font-size-display:33px;
+--leading-none:1;
+--leading-tight:1.15;
+--leading-snug:1.2;
+--leading-normal:1.3;
+--leading-relaxed:1.45;
+--leading-loose:1.55;
+--tracking-tight:-.02em;
+--tracking-snug:-.01em;
+--tracking-wide:.06em;
+--tracking-caps:.12em;
+/* — отступы — */
+--space-px:1px;
+--space-1:2px;
+--space-2:4px;
+--space-3:6px;
+--space-4:8px;
+--space-5:10px;
+--space-6:12px;
+--space-7:14px;
+--space-8:16px;
+--space-9:18px;
+--space-10:20px;
+--space-11:22px;
+--space-12:26px;
+--space-13:30px;
+--space-14:34px;
+--space-15:44px;
+--space-16:54px;
+/* — размеры — */
+--size-frame-w:1280px;
+--size-frame-h:800px;
+--size-rail:288px;
+--size-inspector:300px;
+--size-aside:470px;
+--size-toolbar:50px;
+--size-statusbar:46px;
+--size-modal-s:500px;
+--size-modal:560px;
+--size-thumb:96px;
+--size-label-col:118px;
+--size-list-row:44px;
+--size-control-w:30px;
+--size-control-h:28px;
+--size-step:24px;
+--size-badge:20px;
+--size-badge-s:17px;
+--size-check:16px;
+--size-toggle-w:22px;
+--size-toggle-h:13px;
+--size-toggle-knob:9px;
+--size-dot:8px;
+--size-scrollbar:10px;
+/* — радиусы, границы, тени — */
+--radius-xs:2px;
+--radius-s:4px;
+--radius-m:6px;
+--radius-l:8px;
+--radius-xl:12px;
+--radius-round:50%;
+--border-width:1px;
+--border-width-dashed:1.5px;
+--border-width-thick:3px;
+--shadow-frame:0 30px 70px rgba(28,26,22,.26);
+--shadow-modal:0 24px 60px rgba(28,26,22,.34);
+--shadow-float:0 12px 30px rgba(28,26,22,.3);
+--shadow-paper:0 8px 26px rgba(28,26,22,.16);
+--shadow-button:0 1px 2px rgba(28,26,22,.2);
+--shadow-hairline:0 1px 0 rgba(28,26,22,.08);
+--shadow-ring-selected:0 0 0 2px rgba(28,26,22,.45);
+/* — движение, слои, прозрачность — */
+--duration-fast:150ms;
+--duration-base:200ms;
+--duration-loop:1200ms;
+--duration-loop-long:3800ms;
+--delay-stagger:200ms;
+--ease-standard:ease;
+--ease-loop:ease-in-out;
+--z-raised:3;
+--z-tooltip:6;
+--opacity-soft:.85;
+--opacity-disabled:.55;
+--opacity-dragging:.45;
+}
+body{margin:0;background:var(--color-bg-canvas);font-family:var(--font-family-sans);-webkit-font-smoothing:antialiased}
+a{color:var(--color-link)}a:hover{color:var(--color-link-hover)}
+*{box-sizing:border-box}
+::-webkit-scrollbar{width:var(--size-scrollbar)}::-webkit-scrollbar-thumb{background:var(--color-border-emphasis);border-radius:var(--radius-m);border:var(--border-width-thick) solid transparent;background-clip:content-box}
+@keyframes feed{0%{transform:translateY(-22px) scaleY(.98);opacity:0}25%{opacity:1}100%{transform:translateY(30px);opacity:0}}
+@keyframes pulse{0%,100%{opacity:.35}50%{opacity:1}}
+@keyframes turn180{0%{transform:translateY(-10px) rotate(0) scale(.98);opacity:0}14%{transform:translateY(0) rotate(0) scale(1);opacity:1}24%{transform:translateY(-7px) rotate(0) scale(1.03);opacity:1}54%{transform:translateY(-7px) rotate(180deg) scale(1.03);opacity:1}64%{transform:translateY(0) rotate(180deg) scale(1);opacity:1}76%{transform:translateY(0) rotate(180deg) scale(1);opacity:1}94%{transform:translateY(34px) rotate(180deg) scale(.96);opacity:0}100%{transform:translateY(34px) rotate(180deg) scale(.96);opacity:0}}
+@keyframes sweep{0%{transform:translateX(-100%)}100%{transform:translateX(320%)}}
+</style>
+</helmet>
+
+<div style="padding:var(--space-14) var(--space-14) var(--space-15);display:flex;flex-direction:column;gap:var(--space-10);align-items:center">
+
+<div style="width:var(--size-frame-w);display:flex;gap:var(--space-12);align-items:flex-end">
+  <div style="flex:1;display:flex;flex-direction:column;gap:var(--space-4)">
+    <div style="font:var(--font-weight-medium) var(--font-size-xs)/var(--leading-none) var(--font-family-mono);letter-spacing:var(--tracking-caps);color:var(--color-text-hint)">МАКЕТ ИНТЕРФЕЙСА · ДЕСКТОП 1280×800</div>
+    <div style="font:var(--font-weight-semibold) var(--font-size-3xl)/var(--leading-snug) var(--font-family-sans);letter-spacing:var(--tracking-snug);color:var(--color-text-primary)">Duplexn't — двусторонний скан на одностороннем автоподатчике</div>
+  </div>
+  <div style="flex:none;max-width:440px;font:var(--font-weight-regular) var(--font-size-m)/var(--leading-relaxed) var(--font-family-sans);color:var(--color-text-muted);text-wrap:pretty">Допущения: один документ за сессию, страницы A4, пачка разворачивается на 180° без переворота, автосортировка по схеме «лицо 1…N + оборот N…1». Кликайте по шагам ниже, чтобы пройти весь поток.</div>
+</div>
+
+<div style="display:flex;align-items:center;justify-content:flex-end;gap:var(--space-4)">
+            
+          </div><div style="width:var(--size-frame-w);height:var(--size-frame-h);background:var(--color-bg-app);border-radius:var(--radius-xl);overflow:hidden;box-shadow:var(--shadow-frame);display:flex;flex-direction:column;color:var(--color-text-primary);position:relative">
+
+  <sc-if value="{{ isSetup }}" hint-placeholder-val="{{ true }}">
+  <div style="flex:1;min-height:0;display:grid;grid-template-columns:1fr var(--size-aside)">
+    <div style="padding:0 var(--space-16);display:flex;flex-direction:column;gap:var(--space-12);justify-content:center">
+      <div style="display:flex;flex-direction:column;gap:var(--space-6);max-width:520px">
+        <div style="font:var(--font-weight-medium) var(--font-size-xs)/var(--leading-none) var(--font-family-mono);letter-spacing:var(--tracking-caps);color:var(--color-text-hint)">НОВЫЙ ДОКУМЕНТ</div>
+        <h1 style="margin:0;font:var(--font-weight-semibold) var(--font-size-display)/var(--leading-tight) var(--font-family-sans);letter-spacing:var(--tracking-tight);text-wrap:pretty">Сканируем обе стороны<br>в два прохода</h1>
+        <p style="margin:0;font:var(--font-weight-regular) var(--font-size-l)/var(--leading-loose) var(--font-family-sans);color:var(--color-text-muted);max-width:450px;text-wrap:pretty">Сначала лицевые стороны всей пачки. Потом вы разворачиваете пачку на 180° — не переворачивая листы — и приложение само сопоставляет обороты с лицами.</p>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:var(--space-px);background:var(--color-border-subtle);border:var(--border-width) solid var(--color-border-subtle);border-radius:var(--radius-l);overflow:hidden;max-width:520px">
+        <div style="display:flex;align-items:center;gap:var(--space-6);padding:var(--space-7) var(--space-8);background:var(--color-bg-surface)">
+          <sc-if value="{{ deviceConnected }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;align-items:center;gap:var(--space-6);flex:1;min-width:0">
+              <div style="font:var(--font-weight-medium) var(--font-size-base)/var(--leading-snug) var(--font-family-sans)">{{ deviceName }}</div>
+              <div style="display:flex;align-items:center;gap:var(--space-3)">
+                <div style="flex:none;width:var(--size-dot);height:var(--size-dot);border-radius:var(--radius-round);background:{{ deviceStatusColor }}"></div>
+                <div style="font:var(--font-weight-regular) var(--font-size-s)/var(--leading-snug) var(--font-family-mono);color:{{ deviceStatusColor }};white-space:nowrap">{{ deviceTray }}</div>
+              </div>
+              <div style="flex:1"></div>
+              <button onClick="{{ cycleDevice }}" style="font:var(--font-weight-medium) var(--font-size-m)/var(--leading-none) var(--font-family-sans);color:var(--color-accent);background:none;border:0;padding:var(--space-2);cursor:pointer" style-hover="text-decoration:underline">Сменить</button>
+            </div>
+          </sc-if>
+          <sc-if value="{{ deviceMissing }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;align-items:center;gap:var(--space-6);flex:1;min-width:0">
+              <div style="font:var(--font-weight-regular) var(--font-size-m)/var(--leading-snug) var(--font-family-sans);color:var(--color-text-subtle)">Сканер не подключён</div>
+              <div style="flex:1"></div>
+              <button onClick="{{ openDevice }}" style="display:flex;align-items:center;gap:var(--space-4);font:var(--font-weight-medium) var(--font-size-m)/var(--leading-none) var(--font-family-sans);color:var(--color-text-on-accent);background:var(--color-accent);border:0;border-radius:var(--radius-m);padding:var(--space-4) var(--space-6);cursor:pointer;white-space:nowrap"><span style="font:var(--font-weight-regular) var(--font-size-l)/var(--leading-none) var(--font-family-sans)">+</span>Добавить сканер</button>
+            </div>
+          </sc-if>
+        </div>
+        <sc-for list="{{ scanOpts }}" as="o" hint-placeholder-count="4">
+          <div style="display:flex;align-items:center;gap:var(--space-6);padding:var(--space-4) var(--space-7);background:var(--color-bg-surface)">
+            <div style="flex:none;width:var(--size-label-col);font:var(--font-weight-regular) var(--font-size-m)/var(--leading-snug) var(--font-family-sans);color:var(--color-text-muted)">{{ o.label }}</div>
+            <div style="flex:1;display:flex;gap:var(--space-2);justify-content:flex-end;flex-wrap:wrap">
+              <sc-for list="{{ o.choices }}" as="c" hint-placeholder-count="3">
+                <button onClick="{{ c.pick }}" title="{{ c.title }}" style="font:var(--font-weight-medium) var(--font-size-s)/var(--leading-none) var(--font-family-sans);color:{{ c.color }};background:{{ c.bg }};border:var(--border-width) solid {{ c.border }};border-radius:var(--radius-m);padding:var(--space-4) var(--space-4);cursor:pointer;white-space:nowrap" style-hover="border-color:var(--color-accent)">{{ c.t }}</button>
+              </sc-for>
+            </div>
+          </div>
+        </sc-for>
+        <div style="display:flex;align-items:center;justify-content:flex-end;padding:var(--space-4) var(--space-7);background:var(--color-bg-panel)">
+          <button onClick="{{ resetOpts }}" style="font:var(--font-weight-medium) var(--font-size-s)/var(--leading-none) var(--font-family-sans);color:var(--color-text-subtle);background:none;border:0;padding:var(--space-2);cursor:pointer" style-hover="color:var(--color-accent)">Сбросить параметры</button>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:var(--space-10)">
+        <button onClick="{{ startInitial }}" style="font:var(--font-weight-semibold) var(--font-size-l)/var(--leading-none) var(--font-family-sans);color:var(--color-text-on-accent);background:var(--color-accent);border:0;border-radius:var(--radius-l);padding:var(--space-8) var(--space-12);cursor:pointer;box-shadow:var(--shadow-button);white-space:nowrap" style-hover="filter:brightness(1.08)">Сканировать лицевые стороны</button>
+        <div style="font:var(--font-weight-regular) var(--font-size-m)/var(--leading-relaxed) var(--font-family-sans);color:var(--color-text-subtle);max-width:200px">Загрузите пачку лицом вверх, первая страница сверху</div>
+      </div>
+    </div>
+
+    <div style="background:var(--color-bg-well);border-left:var(--border-width) solid var(--color-border-subtle);padding:0 var(--space-15);display:flex;flex-direction:column;justify-content:center;gap:var(--space-11)">
+      <div style="font:var(--font-weight-medium) var(--font-size-xs)/var(--leading-none) var(--font-family-mono);letter-spacing:var(--tracking-caps);color:var(--color-text-hint)">КАК ЭТО РАБОТАЕТ</div>
+      <div style="display:flex;flex-direction:column;gap:var(--space-1)">
+        <sc-for list="{{ howto }}" as="st" hint-placeholder-count="4">
+          <div style="display:flex;gap:var(--space-8);padding:var(--space-6) 0;border-bottom:var(--border-width) solid var(--color-border-subtle)">
+            <div style="flex:none;width:var(--size-step);height:var(--size-step);border-radius:var(--radius-round);border:var(--border-width) solid var(--color-border-emphasis);display:flex;align-items:center;justify-content:center;font:var(--font-weight-medium) var(--font-size-m)/var(--leading-none) var(--font-family-mono);color:var(--color-text-muted)">{{ st.n }}</div>
+            <div style="display:flex;flex-direction:column;gap:var(--space-2)">
+              <div style="font:var(--font-weight-medium) var(--font-size-base)/var(--leading-normal) var(--font-family-sans)">{{ st.t }}</div>
+              <div style="font:var(--font-weight-regular) var(--font-size-m)/var(--leading-relaxed) var(--font-family-sans);color:var(--color-text-subtle);text-wrap:pretty">{{ st.d }}</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isScan }}" hint-placeholder-val="{{ false }}">
+  <div style="flex:1;min-height:0;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--space-14);padding:var(--space-15)">
+    <div style="display:flex;justify-content:center">
+      <div style="padding:var(--space-2) var(--space-5);border-radius:var(--radius-m);background:var(--color-accent);font:var(--font-weight-medium) var(--font-size-xs)/var(--leading-normal) var(--font-family-mono);letter-spacing:var(--tracking-caps);color:var(--color-text-on-accent)">{{ scanTag }}</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;align-items:center;gap:var(--space-11)">
+      <div style="position:relative;width:150px;height:186px;flex:none">
+        <div style="position:absolute;left:14px;top:0;width:118px;height:150px;border-radius:var(--radius-s);background:var(--color-bg-paper);border:var(--border-width) solid var(--color-border-strong);box-shadow:var(--shadow-hairline)"></div>
+        <div style="position:absolute;left:10px;top:6px;width:118px;height:150px;border-radius:var(--radius-s);background:var(--color-bg-paper);border:var(--border-width) solid var(--color-border-strong)"></div>
+        <div style="position:absolute;left:16px;top:12px;width:118px;height:150px;border-radius:var(--radius-s);background:var(--color-bg-paper);border:var(--border-width) solid var(--color-border-strong);animation:feed var(--duration-loop) var(--ease-loop) infinite"></div>
+        <div style="position:absolute;left:0;bottom:0;width:150px;height:30px;border-radius:var(--radius-s);background:var(--color-bg-tray)"></div>
+        <div style="position:absolute;left:12px;bottom:12px;width:126px;height:4px;border-radius:var(--radius-xs);background:var(--color-accent);animation:pulse var(--duration-loop) var(--ease-loop) infinite"></div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:var(--space-3)">
+        <div style="font:var(--font-weight-semibold) var(--font-size-xl)/var(--leading-snug) var(--font-family-sans);color:var(--color-text-primary);text-align:center">{{ scanCounter }}</div>
+        <div style="font:var(--font-weight-regular) var(--font-size-m)/var(--leading-relaxed) var(--font-family-mono);color:var(--color-text-subtle);text-align:center">{{ scanMeta }}</div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:var(--space-4);height:74px;align-items:flex-end">
+      <sc-for list="{{ scanStrip }}" as="s" hint-placeholder-count="5">
+        <div style="width:50px;height:70px;border-radius:var(--radius-xs);background:var(--color-bg-paper);border:var(--border-width) solid var(--color-border-default);display:flex;flex-direction:column;gap:var(--space-2);padding:var(--space-3) var(--space-2);opacity:{{ s.op }}">
+          <sc-for list="{{ s.lines }}" as="l" hint-placeholder-count="4">
+            <div style="height:2px;border-radius:var(--radius-xs);background:var(--color-glyph);width:{{ l.w }}%"></div>
+          </sc-for>
+        </div>
+      </sc-for>
+    </div>
+
+    <button onClick="{{ cancelScan }}" style="font:var(--font-weight-medium) var(--font-size-base)/var(--leading-none) var(--font-family-sans);color:var(--color-text-primary);background:var(--color-bg-surface);border:var(--border-width) solid var(--color-border-strong);border-radius:var(--radius-l);padding:var(--space-6) var(--space-9);cursor:pointer">Остановить</button>
+
+    
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isFlip }}" hint-placeholder-val="{{ false }}">
+  <div style="flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--space-13);padding:var(--space-14) var(--space-16)">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:var(--space-4)">
+      <div style="font:var(--font-weight-medium) var(--font-size-xs)/var(--leading-none) var(--font-family-mono);letter-spacing:var(--tracking-caps);color:var(--color-text-hint)">ШАГ 2 ИЗ 3 · ЛИЦА ГОТОВЫ: {{ frontCount }}</div>
+      <h2 style="margin:0;font:var(--font-weight-semibold) var(--font-size-display-s)/var(--leading-tight) var(--font-family-sans);letter-spacing:var(--tracking-tight);text-align:center">Разверните пачку на 180°</h2>
+      <p style="margin:0;font:var(--font-weight-regular) var(--font-size-l)/var(--leading-relaxed) var(--font-family-sans);color:var(--color-text-muted);max-width:470px;text-align:center;text-wrap:pretty">Переворачивать не нужно: из податчика пачка вышла оборотами вверх. Возьмите её целиком, разверните на 180° и положите обратно в лоток.</p>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:var(--space-13);padding:var(--space-12) var(--space-14);background:var(--color-bg-surface);border:var(--border-width) solid var(--color-border-subtle);border-radius:var(--radius-xl)">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:var(--space-6)">
+        <div style="position:relative;width:150px;height:186px;flex:none;overflow:hidden">
+          <div style="position:absolute;left:18px;top:14px;width:114px;height:146px;animation:turn180 var(--duration-loop-long) var(--ease-loop) infinite">
+            <div style="position:absolute;left:4px;top:5px;width:114px;height:146px;border-radius:var(--radius-s);background:var(--color-bg-toolbar);border:var(--border-width) solid var(--color-border-default)"></div>
+            <div style="position:absolute;left:2px;top:2px;width:114px;height:146px;border-radius:var(--radius-s);background:var(--color-bg-elevated);border:var(--border-width) solid var(--color-border-default)"></div>
+          </div>
+          <div style="position:absolute;left:18px;top:14px;width:114px;height:146px;border-radius:var(--radius-s);background:var(--color-bg-paper);border:var(--border-width) solid var(--color-border-strong);display:flex;flex-direction:column;align-items:center;gap:var(--space-2);padding:var(--space-6) var(--space-5);animation:turn180 var(--duration-loop-long) var(--ease-loop) infinite">
+            <div style="font:var(--font-weight-regular) var(--font-size-xl)/var(--leading-none) var(--font-family-sans);color:var(--color-accent)">↑</div>
+            <div style="font:var(--font-weight-medium) var(--font-size-xxs)/var(--leading-none) var(--font-family-mono);letter-spacing:var(--tracking-caps);color:var(--color-accent)">ВЕРХ</div>
+            <div style="align-self:stretch;margin-top:var(--space-4);display:flex;flex-direction:column;gap:var(--space-2)">
+              <div style="height:2px;border-radius:var(--radius-xs);background:var(--color-glyph-soft);width:86%"></div>
+              <div style="height:2px;border-radius:var(--radius-xs);background:var(--color-glyph-soft);width:72%"></div>
+              <div style="height:2px;border-radius:var(--radius-xs);background:var(--color-glyph-soft);width:80%"></div>
+            </div>
+          </div>
+          <div style="position:absolute;left:0;bottom:0;width:150px;height:30px;border-radius:var(--radius-s);background:var(--color-bg-tray);z-index:var(--z-raised)"></div>
+        </div>
+        <div style="font:var(--font-weight-regular) var(--font-size-s)/var(--leading-normal) var(--font-family-mono);color:var(--color-text-subtle);text-align:center">пачка целиком —<br>разворот на 180°</div>
+      </div>
+
+      <div style="width:var(--border-width);height:150px;background:var(--color-border-subtle)"></div>
+
+      <div style="display:flex;flex-direction:column;gap:var(--space-6);width:250px">
+        <sc-for list="{{ flipChecks }}" as="c" hint-placeholder-count="3">
+          <div style="display:flex;gap:var(--space-5);align-items:flex-start">
+            <div style="flex:none;width:var(--size-check);height:var(--size-check);border-radius:var(--radius-s);border:var(--border-width) solid var(--color-border-emphasis);background:var(--color-bg-paper);display:flex;align-items:center;justify-content:center;font:var(--font-weight-medium) var(--font-size-xs)/var(--leading-none) var(--font-family-sans);color:var(--color-accent);margin-top:var(--space-px)">✓</div>
+            <div style="font:var(--font-weight-regular) var(--font-size-m)/var(--leading-relaxed) var(--font-family-sans);color:var(--color-text-secondary);text-wrap:pretty">{{ c.t }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;align-items:center;gap:var(--space-4)">
+      <button onClick="{{ startPass2 }}" style="font:var(--font-weight-semibold) var(--font-size-l)/var(--leading-none) var(--font-family-sans);color:var(--color-text-on-accent);background:var(--color-accent);border:0;border-radius:var(--radius-l);padding:var(--space-8) var(--space-12);cursor:pointer;white-space:nowrap">Пачка в лотке — сканировать обороты</button>
+      <button onClick="{{ skipBacks }}" style="font:var(--font-weight-medium) var(--font-size-base)/var(--leading-none) var(--font-family-sans);color:var(--color-text-muted);background:none;border:0;padding:var(--space-4) var(--space-6);cursor:pointer" style-hover="color:var(--color-text-primary)">Обороты не нужны</button>
+    </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isMerge }}" hint-placeholder-val="{{ false }}">
+  <div style="flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--space-12)">
+    <div style="font:var(--font-weight-semibold) var(--font-size-4xl)/var(--leading-snug) var(--font-family-sans);letter-spacing:var(--tracking-snug)">Сопоставляю проходы</div>
+    <div style="display:flex;flex-direction:column;gap:var(--space-6);width:560px">
+      <div style="display:flex;align-items:center;gap:var(--space-6)">
+        <div style="width:96px;flex:none;font:var(--font-weight-regular) var(--font-size-s)/var(--leading-none) var(--font-family-mono);color:var(--color-text-subtle)">лица 1→12</div>
+        <div style="flex:1;display:flex;gap:var(--space-2)"><sc-for list="{{ mergeCells }}" as="m" hint-placeholder-count="12"><div style="flex:1;height:22px;border-radius:var(--radius-s);background:var(--color-accent);opacity:var(--opacity-soft)"></div></sc-for></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:var(--space-6)">
+        <div style="width:96px;flex:none;font:var(--font-weight-regular) var(--font-size-s)/var(--leading-none) var(--font-family-mono);color:var(--color-text-subtle)">обороты 12→1</div>
+        <div style="flex:1;display:flex;gap:var(--space-2);flex-direction:row-reverse"><sc-for list="{{ mergeCells }}" as="m" hint-placeholder-count="12"><div style="flex:1;height:22px;border-radius:var(--radius-s);background:var(--color-warning);opacity:var(--opacity-soft);animation:pulse var(--duration-loop) var(--ease-loop) infinite"></div></sc-for></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:var(--space-6);padding-top:var(--space-3)">
+        <div style="width:96px;flex:none;font:var(--font-weight-medium) var(--font-size-s)/var(--leading-none) var(--font-family-mono);color:var(--color-text-primary)">документ</div>
+        <div style="flex:1;display:flex;gap:var(--space-1)"><sc-for list="{{ mergePairs }}" as="m" hint-placeholder-count="24"><div style="flex:1;height:22px;border-radius:var(--radius-xs);background:{{ m.c }}"></div></sc-for></div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:var(--space-4);align-items:center;font:var(--font-weight-regular) var(--font-size-m)/var(--leading-relaxed) var(--font-family-sans);color:var(--color-text-muted)">
+      <div>Порядок восстановлен: лист N ← лицо N + оборот N</div>
+      <div style="font:var(--font-weight-regular) var(--font-size-s)/var(--leading-none) var(--font-family-mono);color:var(--color-text-hint)">{{ mergeStatus }}</div>
+    </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isEditor }}" hint-placeholder-val="{{ false }}">
+  <div style="flex:1;min-height:0;position:relative;display:flex;flex-direction:column">
+    <div style="height:var(--size-toolbar);flex:none;display:grid;grid-template-columns:var(--size-rail) minmax(0,1fr) var(--size-inspector);border-bottom:var(--border-width) solid var(--color-border-subtle);background:var(--color-bg-toolbar)">
+      <div style="display:flex;align-items:center;gap:var(--space-4);padding:0 var(--space-7);border-right:var(--border-width) solid var(--color-border-subtle)">
+        <button onClick="{{ askNewScan }}" style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:var(--space-4);font:var(--font-weight-medium) var(--font-size-base)/var(--leading-none) var(--font-family-sans);color:var(--color-text-secondary);background:var(--color-bg-surface);border:var(--border-width) solid var(--color-border-strong);border-radius:var(--radius-l);padding:var(--space-5) var(--space-4);cursor:pointer;white-space:nowrap" style-hover="background:var(--color-bg-well);color:var(--color-text-primary)"><span style="font:var(--font-weight-regular) var(--font-size-base)/var(--leading-none) var(--font-family-sans)">↺</span>Новый скан</button>
+        <button onClick="{{ openAdd }}" style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:var(--space-4);font:var(--font-weight-medium) var(--font-size-base)/var(--leading-none) var(--font-family-sans);color:var(--color-text-primary);background:var(--color-bg-surface);border:var(--border-width) solid var(--color-border-strong);border-radius:var(--radius-l);padding:var(--space-5) var(--space-4);cursor:pointer;white-space:nowrap" style-hover="border-color:var(--color-accent);color:var(--color-accent)"><span style="font:var(--font-weight-regular) var(--font-size-l)/var(--leading-none) var(--font-family-sans)">+</span>Добавить</button>
+      </div>
+      <div style="min-width:0;display:flex;align-items:center;gap:var(--space-5);padding:0 var(--space-8)">
+        <div style="flex:none;width:var(--size-dot);height:var(--size-dot);border-radius:var(--radius-xs);background:{{ previewDocColor }}"></div>
+        <div style="font:var(--font-weight-semibold) var(--font-size-m)/var(--leading-snug) var(--font-family-sans);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:240px">{{ previewDocTitle }}</div>
+        <div style="font:var(--font-weight-regular) var(--font-size-s)/var(--leading-snug) var(--font-family-mono);color:var(--color-text-subtle);white-space:nowrap">{{ previewDocPos }}</div>
+        <div style="flex:1;min-width:0"></div>
+        <sc-if value="{{ canSplitHere }}" hint-placeholder-val="{{ true }}">
+          <button onClick="{{ splitHere }}" style="flex:none;font:var(--font-weight-medium) var(--font-size-m)/var(--leading-snug) var(--font-family-sans);color:var(--color-accent);background:var(--color-bg-surface);border:var(--border-width) solid var(--color-border-strong);border-radius:var(--radius-m);padding:var(--space-4) var(--space-6);cursor:pointer;white-space:nowrap" style-hover="border-color:var(--color-accent)">+ Новый документ с этой страницы</button>
+        </sc-if>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:flex-end;padding:0 var(--space-8);border-left:var(--border-width) solid var(--color-border-subtle)">
+        <button onClick="{{ openSave }}" style="flex:none;font:var(--font-weight-semibold) var(--font-size-base)/var(--leading-none) var(--font-family-sans);color:var(--color-text-on-accent);background:var(--color-accent);border:0;border-radius:var(--radius-l);padding:var(--space-6) var(--space-9);cursor:pointer;white-space:nowrap">{{ saveBtnLabel }}</button>
+      </div>
+    </div>
+
+    <div style="flex:1;min-height:0;display:grid;grid-template-columns:var(--size-rail) 1fr var(--size-inspector)">
+
+      <div style="border-right:var(--border-width) solid var(--color-border-subtle);background:var(--color-bg-panel);display:flex;flex-direction:column;min-height:0">
+        <div style="flex:none;padding:0 var(--space-7);display:flex;flex-direction:column;gap:var(--space-4)">
+          <sc-if value="{{ hasMultiSel }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;flex-direction:column;gap:var(--space-4);padding:var(--space-4) var(--space-5);border-radius:var(--radius-l);background:var(--color-bg-inverse)">
+              <div style="font:var(--font-weight-medium) var(--font-size-s)/var(--leading-normal) var(--font-family-sans);color:var(--color-text-on-inverse)">{{ selCountLabel }}</div>
+              <div style="display:flex;gap:var(--space-3)">
+                <button onClick="{{ groupSelection }}" style="flex:1;font:var(--font-weight-semibold) var(--font-size-s)/var(--leading-snug) var(--font-family-sans);color:var(--color-text-primary);background:var(--color-bg-elevated);border:0;border-radius:var(--radius-m);padding:var(--space-4) var(--space-4);cursor:pointer">Выделить в документ</button>
+                <button onClick="{{ clearSelection }}" style="font:var(--font-weight-medium) var(--font-size-s)/var(--leading-snug) var(--font-family-sans);color:var(--color-text-on-inverse-muted);background:none;border:0;padding:var(--space-4) var(--space-3);cursor:pointer">Снять</button>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+        <div style="flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:var(--space-6) var(--space-7) var(--space-8);display:flex;flex-direction:column;gap:0">
+          <sc-for list="{{ groups }}" as="g" hint-placeholder-count="2">
+            <div style="display:flex;flex-direction:column;gap:var(--space-4);padding:0 0 var(--space-8)">
+              <sc-if value="{{ g.hasDivider }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;align-items:center;gap:var(--space-3);padding:var(--space-1) 0 var(--space-5)">
+                  <div style="flex:none;padding:var(--space-2) var(--space-4);border-radius:var(--radius-xl);background:var(--color-accent);color:var(--color-text-on-accent);font:var(--font-weight-semibold) var(--font-size-xxs)/var(--leading-none) var(--font-family-mono);letter-spacing:var(--tracking-wide);white-space:nowrap">НОВЫЙ ДОКУМЕНТ</div>
+                  <div style="flex:1;height:0;border-top:var(--border-width-dashed) dashed var(--color-accent)"></div>
+                  <button onClick="{{ g.unsplit }}" title="Убрать границу — присоединить к предыдущему документу" style="flex:none;display:flex;align-items:center;justify-content:center;padding:0;font:var(--font-weight-regular) var(--font-size-s)/var(--leading-none) var(--font-family-sans);color:var(--color-accent);background:none;border:var(--border-width) solid var(--color-border-accent-soft);border-radius:var(--radius-m);width:var(--size-badge);height:var(--size-badge);cursor:pointer" style-hover="background:var(--color-bg-accent-hover)">✕</button>
+                </div>
+              </sc-if>
+              <div style="display:flex;align-items:center;gap:var(--space-4)">
+                <div style="flex:none;width:var(--size-badge);height:var(--size-badge);border-radius:var(--radius-m);background:{{ g.badgeBg }};color:var(--color-text-on-accent);display:flex;align-items:center;justify-content:center;font:var(--font-weight-semibold) var(--font-size-xs)/var(--leading-none) var(--font-family-mono)">{{ g.idx }}</div>
+                <input value="{{ g.name }}" onChange="{{ g.rename }}" ref="{{ g.nameRef }}" placeholder="Название документа" style="flex:1;min-width:0;font:var(--font-weight-semibold) var(--font-size-m)/var(--leading-snug) var(--font-family-sans);color:var(--color-text-primary);background:none;border:var(--border-width) solid transparent;border-radius:var(--radius-m);padding:var(--space-2) var(--space-3);outline:none" style-hover="border-color:var(--color-border-strong);background:var(--color-bg-surface)" style-focus="border-color:var(--color-accent);background:var(--color-bg-paper)">
+                <div style="flex:none;font:var(--font-weight-regular) var(--font-size-xs)/var(--leading-none) var(--font-family-mono);color:var(--color-text-faint);white-space:nowrap">{{ g.countLabel }}</div>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--size-thumb),1fr));gap:var(--space-6);align-content:start">
+                <sc-for list="{{ g.pages }}" as="p" hint-placeholder-count="6">
+                  <div draggable="true" onClick="{{ p.select }}" onDragStart="{{ p.dragStart }}" onDragOver="{{ p.dragOver }}" onDrop="{{ p.drop }}" onDragEnd="{{ p.dragEnd }}" style="position:relative;display:flex;flex-direction:column;gap:var(--space-2);padding:var(--space-3);border-radius:var(--radius-l);cursor:grab;border:var(--border-width) solid {{ p.cardBorder }};background:{{ p.cardBg }};opacity:{{ p.cardOpacity }};box-shadow:{{ p.cardShadow }}">
+                    <div style="position:relative;aspect-ratio:1/1.414;background:var(--color-bg-paper);border:var(--border-width) solid var(--color-border-default);border-radius:var(--radius-xs);padding:var(--space-4) var(--space-4);display:flex;flex-direction:column;gap:var(--space-2);overflow:hidden">
+                      <sc-for list="{{ p.lines }}" as="l" hint-placeholder-count="6">
+                        <div style="height:2px;border-radius:var(--radius-xs);background:var(--color-glyph);width:{{ l.w }}%"></div>
+                      </sc-for>
+                      <sc-if value="{{ p.blankTag }}" hint-placeholder-val="{{ false }}">
+                        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:var(--font-weight-regular) var(--font-size-xxs)/var(--leading-none) var(--font-family-mono);color:var(--color-text-faint);letter-spacing:var(--tracking-wide)">ПУСТО</div>
+                      </sc-if>
+                    </div>
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-2)">
+                      <div style="font:var(--font-weight-medium) var(--font-size-s)/var(--leading-none) var(--font-family-mono);color:{{ p.numColor }}">{{ p.num }}</div>
+                      <div style="font:var(--font-weight-regular) var(--font-size-xxs)/var(--leading-none) var(--font-family-mono);color:var(--color-text-faint)">{{ p.sideLabel }}</div>
+                    </div>
+                    <sc-if value="{{ p.showSplitBar }}" hint-placeholder-val="{{ true }}">
+                      <button onClick="{{ p.splitToggle }}" title="{{ p.splitTitle }}" style="position:absolute;left:6px;right:6px;top:6px;height:30px;z-index:var(--z-raised);display:flex;align-items:center;justify-content:center;gap:var(--space-2);padding:0 var(--space-2);border:0;border-radius:var(--radius-m) var(--radius-m) var(--radius-s) var(--radius-s);cursor:pointer;background:{{ p.splitBarBg }};color:{{ p.splitBarColor }};font:var(--font-weight-semibold) var(--font-size-xxs)/var(--leading-tight) var(--font-family-mono);letter-spacing:var(--tracking-wide);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:0;transition:opacity var(--duration-fast) var(--ease-standard)" style-hover="opacity:1">{{ p.splitBarLabel }}</button>
+                    </sc-if>
+                    <sc-if value="{{ p.passTag }}" hint-placeholder-val="{{ false }}">
+                      <div style="position:absolute;top:10px;left:10px;padding:var(--space-1) var(--space-2);border-radius:var(--radius-s);font:var(--font-weight-medium) var(--font-size-xxs)/var(--leading-snug) var(--font-family-mono);color:var(--color-text-on-accent);background:{{ p.passColor }}">{{ p.passTag }}</div>
+                    </sc-if>
+                    <sc-if value="{{ p.markerBefore }}" hint-placeholder-val="{{ false }}">
+                      <div style="position:absolute;left:-7px;top:4px;bottom:4px;width:var(--border-width-thick);border-radius:var(--radius-xs);background:var(--color-accent)"></div>
+                    </sc-if>
+                    <sc-if value="{{ p.markerAfter }}" hint-placeholder-val="{{ false }}">
+                      <div style="position:absolute;right:-7px;top:4px;bottom:4px;width:var(--border-width-thick);border-radius:var(--radius-xs);background:var(--color-accent)"></div>
+                    </sc-if>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        <button onClick="{{ toggleBlanks }}" title="{{ blankToggleTitle }}" style="flex:none;display:flex;align-items:center;gap:var(--space-4);padding:var(--space-4) var(--space-7) var(--space-4);background:none;border:0;border-top:var(--border-width) solid var(--color-border-subtle);cursor:pointer;text-align:left">
+          <span style="flex:none;width:var(--size-toggle-w);height:var(--size-toggle-h);border-radius:var(--radius-l);background:{{ blankTrack }};position:relative;transition:background var(--duration-fast) var(--ease-standard)"><span style="position:absolute;top:2px;left:{{ blankKnob }};width:var(--size-toggle-knob);height:var(--size-toggle-knob);border-radius:var(--radius-round);background:var(--color-bg-paper);transition:left var(--duration-fast) var(--ease-standard)"></span></span>
+          <span style="font:var(--font-weight-regular) var(--font-size-xs)/var(--leading-none) var(--font-family-mono);color:var(--color-text-subtle);white-space:nowrap">добавить пустые<br></span>
+          <span style="flex:1"></span>
+          <span style="font:var(--font-weight-regular) var(--font-size-xs)/var(--leading-none) var(--font-family-mono);color:var(--color-text-faint);white-space:nowrap">{{ blankCountLabel }}</span>
+        </button>
+      </div>
+
+      <div style="min-width:0;display:flex;flex-direction:column;background:var(--color-bg-well)">
+        <div style="flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:var(--space-11)">
+          <div style="height:100%;aspect-ratio:1/1.414;background:var(--color-bg-paper);box-shadow:var(--shadow-paper);border:var(--border-width) solid var(--color-border-subtle);border-top:{{ previewTopEdge }};padding:var(--space-15) var(--space-15);display:flex;flex-direction:column;gap:var(--space-4);transform:rotate({{ previewRot }}deg);transition:transform var(--duration-base) var(--ease-standard);overflow:hidden">
+            <div style="display:flex;align-items:baseline;justify-content:space-between;gap:var(--space-5);margin-bottom:var(--space-3)">
+              <div style="font:var(--font-weight-medium) var(--font-size-xxs)/var(--leading-none) var(--font-family-mono);letter-spacing:var(--tracking-caps);color:var(--color-text-ghost)">{{ previewCorner }}</div>
+              <sc-if value="{{ previewIsDocStart }}" hint-placeholder-val="{{ false }}">
+                <div style="font:var(--font-weight-medium) var(--font-size-xxs)/var(--leading-none) var(--font-family-mono);letter-spacing:var(--tracking-caps);color:var(--color-accent)">НАЧАЛО ДОКУМЕНТА {{ previewDocIdx }}</div>
+              </sc-if>
+            </div>
+            <sc-if value="{{ previewBlank }}" hint-placeholder-val="{{ false }}">
+              <div style="flex:1;display:flex;align-items:center;justify-content:center;font:var(--font-weight-regular) var(--font-size-m)/var(--leading-loose) var(--font-family-mono);color:var(--color-text-ghost);text-align:center">пустая сторона листа<br>(распознано автоматически)</div>
+            </sc-if>
+            <sc-for list="{{ previewLines }}" as="l" hint-placeholder-count="16">
+              <div style="height:6px;border-radius:var(--radius-xs);background:{{ l.a }};width:{{ l.w }}%"></div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="flex:none;height:var(--size-statusbar);display:flex;align-items:center;gap:var(--space-4);padding:0 var(--space-6);border-top:var(--border-width) solid var(--color-border-subtle);background:var(--color-bg-toolbar)">
+          <div style="flex:1;min-width:0"></div>
+          <button onClick="{{ prevPage }}" style="font:var(--font-weight-regular) var(--font-size-base)/var(--leading-none) var(--font-family-sans);color:var(--color-text-secondary);background:var(--color-bg-surface);border:var(--border-width) solid var(--color-border-default);border-radius:var(--radius-m);width:var(--size-control-w);height:var(--size-control-h);cursor:pointer">←</button>
+          <div style="font:var(--font-weight-regular) var(--font-size-m)/var(--leading-none) var(--font-family-mono);color:var(--color-text-secondary);min-width:96px;text-align:center">{{ previewCounter }}</div>
+          <button onClick="{{ nextPage }}" style="font:var(--font-weight-regular) var(--font-size-base)/var(--leading-none) var(--font-family-sans);color:var(--color-text-secondary);background:var(--color-bg-surface);border:var(--border-width) solid var(--color-border-default);border-radius:var(--radius-m);width:var(--size-control-w);height:var(--size-control-h);cursor:pointer">→</button>
+          <div style="width:var(--border-width);height:18px;background:var(--color-border-default);margin:0 var(--space-3)"></div>
+          <button onClick="{{ rotateSel }}" title="Повернуть" style="display:flex;align-items:center;justify-content:center;font:var(--font-weight-regular) var(--font-size-l)/var(--leading-none) var(--font-family-sans);color:var(--color-text-secondary);background:var(--color-bg-surface);border:var(--border-width) solid var(--color-border-default);border-radius:var(--radius-m);width:var(--size-control-w);height:var(--size-control-h);padding:0;cursor:pointer" style-hover="border-color:var(--color-accent);color:var(--color-accent)">↻</button>
+          <button onClick="{{ deleteSel }}" title="Удалить" style="display:flex;align-items:center;justify-content:center;font:var(--font-weight-regular) var(--font-size-l)/var(--leading-none) var(--font-family-sans);color:var(--color-text-secondary);background:var(--color-bg-surface);border:var(--border-width) solid var(--color-border-default);border-radius:var(--radius-m);width:var(--size-control-w);height:var(--size-control-h);padding:0;cursor:pointer" style-hover="color:var(--color-danger);border-color:var(--color-border-danger-soft)"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"><path d="M2.5 3.6h9"></path><path d="M5.6 3.6V2.4h2.8v1.2"></path><path d="M3.7 3.6l.55 7.4h5.5l.55-7.4"></path><path d="M5.9 5.8v3M8.1 5.8v3"></path></svg></button>
+          <div style="flex:1;min-width:0"></div>
+          <div style="position:relative;display:flex">
+            <button onClick="{{ rescanSel }}" onMouseEnter="{{ rescanHoverOn }}" onMouseLeave="{{ rescanHoverOff }}" style="font:var(--font-weight-regular) var(--font-size-m)/var(--leading-none) var(--font-family-sans);color:var(--color-text-secondary);background:var(--color-bg-surface);border:var(--border-width) solid var(--color-border-default);border-radius:var(--radius-m);padding:var(--space-4) var(--space-6);cursor:pointer">Пересканировать</button>
+            <sc-if value="{{ rescanHover }}" hint-placeholder-val="{{ false }}">
+              <div style="position:absolute;bottom:calc(100% + 9px);left:50%;transform:translateX(-50%);z-index:var(--z-tooltip);padding:var(--space-4) var(--space-6);border-radius:var(--radius-l);background:var(--color-bg-inverse);box-shadow:var(--shadow-float);font:var(--font-weight-medium) var(--font-size-s)/var(--leading-normal) var(--font-family-sans);color:var(--color-text-on-inverse);white-space:nowrap;pointer-events:none">Положите лист в лоток — пересканирую только эту страницу</div>
+            </sc-if>
+          </div>
+        </div>
+      </div>
+
+      <div style="border-left:var(--border-width) solid var(--color-border-subtle);background:var(--color-bg-panel);display:flex;flex-direction:column;min-height:0;overflow-y:auto">
+        <div style="padding:var(--space-6) var(--space-8);display:flex;flex-direction:column;gap:var(--space-6);border-bottom:var(--border-width) solid var(--color-border-subtle)">
+          <button onClick="{{ toggleDetails }}" style="display:flex;align-items:center;gap:var(--space-4);padding:var(--space-1) 0;background:none;border:0;cursor:pointer;text-align:left">
+            <span style="font:var(--font-weight-medium) var(--font-size-xs)/var(--leading-none) var(--font-family-mono);letter-spacing:var(--tracking-caps);color:var(--color-text-hint)">ДЕТАЛИ</span>
+            <span style="flex:1;height:0;border-top:var(--border-width) solid var(--color-border-subtle)"></span>
+            <span style="font:var(--font-weight-regular) var(--font-size-s)/var(--leading-none) var(--font-family-mono);color:var(--color-text-faint);white-space:nowrap">{{ detailsSummary }}</span>
+            <span style="font:var(--font-weight-regular) var(--font-size-xs)/var(--leading-none) var(--font-family-sans);color:var(--color-text-hint);transform:rotate({{ detailsArrow }}deg)">▾</span>
+          </button>
+          <sc-if value="{{ detailsOpen }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;flex-direction:column;gap:var(--space-6)">
+              <div style="font:var(--font-weight-semibold) var(--font-size-xl)/var(--leading-snug) var(--font-family-sans)">{{ selTitle }}</div>
+              <div style="display:flex;flex-direction:column;gap:var(--space-px);background:var(--color-border-subtle);border:var(--border-width) solid var(--color-border-subtle);border-radius:var(--radius-l);overflow:hidden">
+                <sc-for list="{{ selFacts }}" as="f" hint-placeholder-count="4">
+                  <div style="display:flex;justify-content:space-between;align-items:baseline;gap:var(--space-5);padding:var(--space-4) var(--space-6);background:var(--color-bg-surface)">
+                    <span style="font:var(--font-weight-regular) var(--font-size-m)/var(--leading-snug) var(--font-family-sans);color:var(--color-text-muted)">{{ f.k }}</span>
+                    <span style="font:var(--font-weight-medium) var(--font-size-m)/var(--leading-snug) var(--font-family-mono);color:var(--color-text-primary);text-align:right">{{ f.v }}</span>
+                  </div>
+                </sc-for>
+              </div>
+              <sc-if value="{{ pairNote }}" hint-placeholder-val="{{ true }}">
+                <div style="padding:var(--space-5) var(--space-6);border-radius:var(--radius-l);background:var(--color-bg-accent-soft);font:var(--font-weight-regular) var(--font-size-s)/var(--leading-relaxed) var(--font-family-sans);color:var(--color-text-primary);text-wrap:pretty">{{ pairNote }}</div>
+              </sc-if>
+            </div>
+          </sc-if>
+        </div>
+
+        <div style="padding:var(--space-8);display:flex;flex-direction:column;gap:var(--space-6);border-bottom:var(--border-width) solid var(--color-border-subtle)">
+          <div style="display:flex;align-items:baseline;justify-content:space-between;gap:var(--space-4)">
+            <div style="font:var(--font-weight-medium) var(--font-size-xs)/var(--leading-none) var(--font-family-mono);letter-spacing:var(--tracking-caps);color:var(--color-text-hint)">ДОКУМЕНТЫ В НАБОРЕ</div>
+            <div style="font:var(--font-weight-regular) var(--font-size-xs)/var(--leading-none) var(--font-family-mono);color:var(--color-text-faint)">{{ docCountLabel }}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:var(--space-3)">
+            <sc-for list="{{ docList }}" as="d" hint-placeholder-count="2">
+              <div onClick="{{ d.open }}" style="display:flex;align-items:center;gap:var(--space-4);padding:var(--space-4) var(--space-6);border-radius:var(--radius-l);cursor:pointer;background:{{ d.bg }};border:var(--border-width) solid {{ d.border }}">
+                <div style="flex:none;width:var(--size-badge-s);height:var(--size-badge-s);border-radius:var(--radius-s);background:{{ d.color }};color:var(--color-text-on-accent);display:flex;align-items:center;justify-content:center;font:var(--font-weight-semibold) var(--font-size-xs)/var(--leading-none) var(--font-family-mono)">{{ d.idx }}</div>
+                <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:var(--space-1)">
+                  <div style="font:var(--font-weight-medium) var(--font-size-m)/var(--leading-snug) var(--font-family-sans);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ d.name }}</div>
+                  <div style="font:var(--font-weight-regular) var(--font-size-xs)/var(--leading-snug) var(--font-family-mono);color:var(--color-text-hint)">{{ d.meta }}</div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="font:var(--font-weight-regular) var(--font-size-s)/var(--leading-relaxed) var(--font-family-sans);color:var(--color-text-subtle);text-wrap:pretty">{{ docsNote }}</div>
+        </div>
+
+        <div style="padding:var(--space-8);display:flex;flex-direction:column;gap:var(--space-4)">
+          <div style="font:var(--font-weight-medium) var(--font-size-xs)/var(--leading-none) var(--font-family-mono);letter-spacing:var(--tracking-caps);color:var(--color-text-hint)">ПРОВЕРКА</div>
+          <sc-for list="{{ checks }}" as="c" hint-placeholder-count="3">
+            <div style="display:flex;gap:var(--space-4);align-items:flex-start">
+              <div style="flex:none;font:var(--font-weight-medium) var(--font-size-s)/var(--leading-relaxed) var(--font-family-sans);color:{{ c.color }}">{{ c.icon }}</div>
+              <div style="font:var(--font-weight-regular) var(--font-size-m)/var(--leading-relaxed) var(--font-family-sans);color:var(--color-text-secondary);text-wrap:pretty">{{ c.t }}</div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="flex:1"></div>
+        <sc-if value="{{ orderEdited }}" hint-placeholder-val="{{ false }}">
+          <div style="flex:none;margin:0 var(--space-8) var(--space-8);padding:var(--space-4) var(--space-4) var(--space-4) var(--space-6);border-radius:var(--radius-l);background:var(--color-bg-surface);border:var(--border-width) solid var(--color-border-default);display:flex;align-items:center;gap:var(--space-4)">
+            <div style="flex:1;min-width:0;font:var(--font-weight-medium) var(--font-size-s)/var(--leading-snug) var(--font-family-sans);color:var(--color-warning);white-space:nowrap">Порядок изменён</div>
+            <button onClick="{{ resort }}" style="flex:none;font:var(--font-weight-medium) var(--font-size-m)/var(--leading-none) var(--font-family-sans);color:var(--color-text-primary);background:var(--color-bg-toolbar);border:var(--border-width) solid var(--color-border-strong);border-radius:var(--radius-m);padding:var(--space-4) var(--space-6);cursor:pointer;white-space:nowrap">Вернуть</button>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isAdd }}" hint-placeholder-val="{{ false }}">
+  <div style="position:absolute;inset:0;background:var(--color-bg-overlay);display:flex;align-items:center;justify-content:center">
+    <div style="width:var(--size-modal);background:var(--color-bg-elevated);border-radius:var(--radius-xl);box-shadow:var(--shadow-modal);overflow:hidden">
+      <div style="padding:var(--space-11) var(--space-12) var(--space-8);display:flex;flex-direction:column;gap:var(--space-4);border-bottom:var(--border-width) solid var(--color-border-subtle)">
+        <div style="font:var(--font-weight-semibold) var(--font-size-2xl)/var(--leading-snug) var(--font-family-sans)">Добавить скан к документу</div>
+        <div style="font:var(--font-weight-regular) var(--font-size-m)/var(--leading-relaxed) var(--font-family-sans);color:var(--color-text-muted)">Новые страницы станут отдельным проходом — вы сможете двигать их отдельно.</div>
+      </div>
+      <div style="padding:var(--space-10) var(--space-12);display:flex;flex-direction:column;gap:var(--space-9)">
+        <div style="display:flex;flex-direction:column;gap:var(--space-4)">
+          <div style="font:var(--font-weight-medium) var(--font-size-xs)/var(--leading-none) var(--font-family-mono);letter-spacing:var(--tracking-caps);color:var(--color-text-hint)">ЧТО СКАНИРУЕМ</div>
+          <sc-for list="{{ addKinds }}" as="k" hint-placeholder-count="3">
+            <div onClick="{{ k.pick }}" style="display:flex;gap:var(--space-6);align-items:flex-start;padding:var(--space-6) var(--space-6);border-radius:var(--radius-l);cursor:pointer;background:{{ k.bg }};border:var(--border-width) solid {{ k.border }}">
+              <div style="flex:none;width:var(--size-check);height:var(--size-check);border-radius:var(--radius-round);border:var(--border-width) solid {{ k.dotBorder }};background:{{ k.dotBg }};margin-top:var(--space-px)"></div>
+              <div style="display:flex;flex-direction:column;gap:var(--space-2)">
+                <div style="font:var(--font-weight-medium) var(--font-size-base)/var(--leading-snug) var(--font-family-sans)">{{ k.t }}</div>
+                <div style="font:var(--font-weight-regular) var(--font-size-s)/var(--leading-relaxed) var(--font-family-sans);color:var(--color-text-muted)">{{ k.d }}</div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:var(--space-4)">
+          <div style="font:var(--font-weight-medium) var(--font-size-xs)/var(--leading-none) var(--font-family-mono);letter-spacing:var(--tracking-caps);color:var(--color-text-hint)">КУДА ВСТАВИТЬ</div>
+          <div style="display:flex;gap:var(--space-4)">
+            <sc-for list="{{ addSpots }}" as="s" hint-placeholder-count="2">
+              <button onClick="{{ s.pick }}" style="flex:1;font:var(--font-weight-medium) var(--font-size-m)/var(--leading-normal) var(--font-family-sans);color:{{ s.color }};background:{{ s.bg }};border:var(--border-width) solid {{ s.border }};border-radius:var(--radius-l);padding:var(--space-6) var(--space-6);cursor:pointer;text-align:left">{{ s.t }}</button>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+      <div style="padding:var(--space-8) var(--space-12);background:var(--color-bg-panel);border-top:var(--border-width) solid var(--color-border-subtle);display:flex;align-items:center;gap:var(--space-6)">
+        <div style="flex:1;font:var(--font-weight-regular) var(--font-size-s)/var(--leading-relaxed) var(--font-family-mono);color:var(--color-text-subtle)">{{ addSummary }}</div>
+        <button onClick="{{ closeModal }}" style="font:var(--font-weight-medium) var(--font-size-base)/var(--leading-none) var(--font-family-sans);color:var(--color-text-secondary);background:none;border:0;padding:var(--space-6) var(--space-6);cursor:pointer">Отмена</button>
+        <button onClick="{{ startAdd }}" style="font:var(--font-weight-semibold) var(--font-size-base)/var(--leading-none) var(--font-family-sans);color:var(--color-text-on-accent);background:var(--color-accent);border:0;border-radius:var(--radius-l);padding:var(--space-6) var(--space-9);cursor:pointer">Начать скан</button>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isSave }}" hint-placeholder-val="{{ false }}">
+  <div style="position:absolute;inset:0;background:var(--color-bg-overlay);display:flex;align-items:center;justify-content:center">
+    <div style="width:var(--size-modal);max-height:calc(100% - 60px);background:var(--color-bg-elevated);border-radius:var(--radius-xl);box-shadow:var(--shadow-modal);overflow:hidden;display:flex;flex-direction:column">
+      <div style="flex:none;padding:var(--space-11) var(--space-12) var(--space-8);border-bottom:var(--border-width) solid var(--color-border-subtle)">
+        <div style="font:var(--font-weight-semibold) var(--font-size-2xl)/var(--leading-snug) var(--font-family-sans)">{{ saveTitle }}</div>
+      </div>
+      <div style="flex:1;min-height:0;overflow-y:auto;padding:var(--space-10) var(--space-12);display:flex;flex-direction:column;gap:var(--space-8)">
+        <div style="display:flex;flex-direction:column;gap:var(--space-4)">
+          <div style="font:var(--font-weight-medium) var(--font-size-xs)/var(--leading-none) var(--font-family-mono);letter-spacing:var(--tracking-caps);color:var(--color-text-hint)">ЧТО СОХРАНЯЕМ</div>
+          <div style="display:flex;gap:var(--space-4)">
+            <sc-for list="{{ saveModes }}" as="m" hint-placeholder-count="2">
+              <button onClick="{{ m.pick }}" style="flex:1;display:flex;flex-direction:column;gap:var(--space-2);text-align:left;font:var(--font-weight-medium) var(--font-size-m)/var(--leading-snug) var(--font-family-sans);color:{{ m.color }};background:{{ m.bg }};border:var(--border-width) solid {{ m.border }};border-radius:var(--radius-l);padding:var(--space-5) var(--space-6);cursor:pointer">
+                <span>{{ m.t }}</span>
+                <span style="font:var(--font-weight-regular) var(--font-size-s)/var(--leading-normal) var(--font-family-sans);color:var(--color-text-subtle)">{{ m.d }}</span>
+              </button>
+            </sc-for>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:var(--space-4)">
+          <div style="font:var(--font-weight-medium) var(--font-size-xs)/var(--leading-none) var(--font-family-mono);letter-spacing:var(--tracking-caps);color:var(--color-text-hint)">{{ fileListTitle }}</div>
+          <div style="display:flex;flex-direction:column;gap:var(--space-px);background:var(--color-border-subtle);border:var(--border-width) solid var(--color-border-subtle);border-radius:var(--radius-l);overflow:hidden;max-height:{{ fileListMax }};overflow-y:{{ fileListScroll }}">
+            <sc-for list="{{ fileList }}" as="f" hint-placeholder-count="2">
+              <div style="display:flex;align-items:center;gap:var(--space-4);padding:var(--space-4) var(--space-6);background:var(--color-bg-surface)">
+                <div style="flex:none;width:var(--size-badge-s);height:var(--size-badge-s);border-radius:var(--radius-s);background:{{ f.color }};color:var(--color-text-on-accent);display:flex;align-items:center;justify-content:center;font:var(--font-weight-semibold) var(--font-size-xs)/var(--leading-none) var(--font-family-mono)">{{ f.idx }}</div>
+                <input value="{{ f.name }}" onChange="{{ f.rename }}" style="flex:1;min-width:0;font:var(--font-weight-regular) var(--font-size-m)/var(--leading-snug) var(--font-family-sans);color:var(--color-text-primary);background:none;border:var(--border-width) solid transparent;border-radius:var(--radius-m);padding:var(--space-3);outline:none" style-hover="border-color:var(--color-border-strong);background:var(--color-bg-paper)" style-focus="border-color:var(--color-accent);background:var(--color-bg-paper)">
+                <div style="flex:none;font:var(--font-weight-regular) var(--font-size-s)/var(--leading-snug) var(--font-family-mono);color:var(--color-text-hint)">{{ f.meta }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:var(--space-4)">
+          <div style="font:var(--font-weight-medium) var(--font-size-xs)/var(--leading-none) var(--font-family-mono);letter-spacing:var(--tracking-caps);color:var(--color-text-hint)">ПАПКА</div>
+          <div style="display:flex;align-items:center;gap:var(--space-4);padding:var(--space-4) var(--space-6);border-radius:var(--radius-l);background:var(--color-bg-surface);border:var(--border-width) solid var(--color-border-subtle)">
+            <div style="flex:none;width:15px;height:12px;border-radius:var(--radius-xs);border:var(--border-width) solid var(--color-border-heavy);border-top-width:var(--border-width-thick)"></div>
+            <div style="flex:1;min-width:0;font:var(--font-weight-regular) var(--font-size-m)/var(--leading-normal) var(--font-family-sans);color:var(--color-text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;direction:rtl;text-align:left">{{ saveFolder }}</div>
+            <button onClick="{{ pickFolder }}" style="flex:none;font:var(--font-weight-medium) var(--font-size-m)/var(--leading-none) var(--font-family-sans);color:var(--color-text-primary);background:var(--color-bg-toolbar);border:var(--border-width) solid var(--color-border-strong);border-radius:var(--radius-m);padding:var(--space-4) var(--space-6);cursor:pointer;white-space:nowrap" style-hover="border-color:var(--color-accent);color:var(--color-accent)">Выбрать…</button>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:var(--space-px);background:var(--color-border-subtle);border:var(--border-width) solid var(--color-border-subtle);border-radius:var(--radius-l);overflow:hidden">
+          <sc-for list="{{ saveFacts }}" as="f" hint-placeholder-count="3">
+            <div style="display:flex;justify-content:space-between;padding:var(--space-4) var(--space-6);background:var(--color-bg-surface)"><span style="font:var(--font-weight-regular) var(--font-size-m)/var(--leading-snug) var(--font-family-sans);color:var(--color-text-muted)">{{ f.k }}</span><span style="font:var(--font-weight-medium) var(--font-size-m)/var(--leading-snug) var(--font-family-mono)">{{ f.v }}</span></div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="flex:none;padding:var(--space-8) var(--space-12);background:var(--color-bg-panel);border-top:var(--border-width) solid var(--color-border-subtle);display:flex;align-items:center;gap:var(--space-5)">
+        <div style="flex:1"></div>
+        <button onClick="{{ closeModal }}" style="font:var(--font-weight-medium) var(--font-size-base)/var(--leading-none) var(--font-family-sans);color:var(--color-text-secondary);background:none;border:0;padding:var(--space-6) var(--space-6);cursor:pointer">Отмена</button>
+        <button onClick="{{ doSave }}" style="font:var(--font-weight-semibold) var(--font-size-base)/var(--leading-none) var(--font-family-sans);color:var(--color-text-on-accent);background:var(--color-accent);border:0;border-radius:var(--radius-l);padding:var(--space-6) var(--space-10);cursor:pointer;white-space:nowrap">{{ saveBtn }}</button>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isMismatch }}" hint-placeholder-val="{{ false }}">
+  <div style="position:absolute;inset:0;background:var(--color-bg-overlay);display:flex;align-items:center;justify-content:center">
+    <div style="width:var(--size-modal);background:var(--color-bg-elevated);border-radius:var(--radius-xl);box-shadow:var(--shadow-modal);overflow:hidden">
+      <div style="padding:var(--space-11) var(--space-12) var(--space-8);display:flex;flex-direction:column;gap:var(--space-4);border-bottom:var(--border-width) solid var(--color-border-subtle)">
+        <div style="display:flex;align-items:center;gap:var(--space-4)"><div style="width:var(--size-dot);height:var(--size-dot);border-radius:var(--radius-round);background:var(--color-warning)"></div><div style="font:var(--font-weight-medium) var(--font-size-xs)/var(--leading-none) var(--font-family-mono);letter-spacing:var(--tracking-caps);color:var(--color-warning)">НЕ СХОДЯТСЯ ПРОХОДЫ</div></div>
+        <div style="font:var(--font-weight-semibold) var(--font-size-2xl)/var(--leading-snug) var(--font-family-sans);text-wrap:pretty">В первом проходе 12 листов, во втором — 11</div>
+        <div style="font:var(--font-weight-regular) var(--font-size-m)/var(--leading-relaxed) var(--font-family-sans);color:var(--color-text-muted);text-wrap:pretty">Скорее всего, один лист не прошёл через податчик или залип. Документ уже собран по совпавшим парам — осталось решить, что делать с листом без оборота.</div>
+      </div>
+      <div style="padding:var(--space-9) var(--space-12);display:flex;flex-direction:column;gap:var(--space-4)">
+        <sc-for list="{{ fixes }}" as="f" hint-placeholder-count="3">
+          <div onClick="{{ f.pick }}" style="display:flex;gap:var(--space-6);align-items:center;padding:var(--space-6);border-radius:var(--radius-l);background:var(--color-bg-surface);border:var(--border-width) solid var(--color-border-subtle);cursor:pointer" style-hover="border-color:var(--color-accent)">
+            <div style="flex:none;width:30px;height:42px;border-radius:var(--radius-xs);background:var(--color-bg-paper);border:var(--border-width) solid var(--color-border-strong)"></div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:var(--space-2)">
+              <div style="font:var(--font-weight-medium) var(--font-size-base)/var(--leading-snug) var(--font-family-sans)">{{ f.t }}</div>
+              <div style="font:var(--font-weight-regular) var(--font-size-s)/var(--leading-relaxed) var(--font-family-sans);color:var(--color-text-muted)">{{ f.d }}</div>
+            </div>
+            <div style="font:var(--font-weight-regular) var(--font-size-l)/var(--leading-none) var(--font-family-sans);color:var(--color-text-faint)">→</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isNewScan }}" hint-placeholder-val="{{ false }}">
+  <div style="position:absolute;inset:0;background:var(--color-bg-overlay);display:flex;align-items:center;justify-content:center">
+    <div style="width:var(--size-modal-s);background:var(--color-bg-elevated);border-radius:var(--radius-xl);box-shadow:var(--shadow-modal);overflow:hidden">
+      <div style="padding:var(--space-11) var(--space-12) var(--space-8);display:flex;flex-direction:column;gap:var(--space-4);border-bottom:var(--border-width) solid var(--color-border-subtle)">
+        <div style="display:flex;align-items:center;gap:var(--space-4)"><div style="width:var(--size-dot);height:var(--size-dot);border-radius:var(--radius-round);background:{{ newScanDotColor }}"></div><div style="font:var(--font-weight-medium) var(--font-size-xs)/var(--leading-none) var(--font-family-mono);letter-spacing:var(--tracking-caps);color:{{ newScanDotColor }}">{{ newScanKicker }}</div></div>
+        <div style="font:var(--font-weight-semibold) var(--font-size-2xl)/var(--leading-snug) var(--font-family-sans);text-wrap:pretty">Начать новое сканирование?</div>
+        <div style="font:var(--font-weight-regular) var(--font-size-m)/var(--leading-relaxed) var(--font-family-sans);color:var(--color-text-muted);text-wrap:pretty">{{ newScanNote }}</div>
+      </div>
+      <div style="padding:var(--space-9) var(--space-12);display:flex;flex-direction:column;gap:var(--space-4)">
+        <div onClick="{{ newScanFresh }}" style="display:flex;gap:var(--space-6);align-items:center;padding:var(--space-6);border-radius:var(--radius-l);background:var(--color-bg-surface);border:var(--border-width) solid var(--color-border-subtle);cursor:pointer" style-hover="border-color:var(--color-accent)">
+          <div style="flex:none;width:30px;height:42px;border-radius:var(--radius-xs);background:var(--color-bg-paper);border:var(--border-width) solid var(--color-border-strong)"></div>
+          <div style="flex:1;display:flex;flex-direction:column;gap:var(--space-2)">
+            <div style="font:var(--font-weight-medium) var(--font-size-base)/var(--leading-snug) var(--font-family-sans)">Закрыть текущий и начать новую пачку</div>
+            <div style="font:var(--font-weight-regular) var(--font-size-s)/var(--leading-relaxed) var(--font-family-sans);color:var(--color-text-muted)">{{ newScanFreshNote }}</div>
+          </div>
+          <div style="font:var(--font-weight-regular) var(--font-size-l)/var(--leading-none) var(--font-family-sans);color:var(--color-text-faint)">→</div>
+        </div>
+        <sc-if value="{{ newScanUnsaved }}" hint-placeholder-val="{{ true }}">
+          <div onClick="{{ newScanSaveFirst }}" style="display:flex;gap:var(--space-6);align-items:center;padding:var(--space-6);border-radius:var(--radius-l);background:var(--color-bg-surface);border:var(--border-width) solid var(--color-border-subtle);cursor:pointer" style-hover="border-color:var(--color-accent)">
+            <div style="flex:none;width:30px;height:42px;border-radius:var(--radius-xs);background:var(--color-bg-paper);border:var(--border-width) solid var(--color-accent)"></div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:var(--space-2)">
+              <div style="font:var(--font-weight-medium) var(--font-size-base)/var(--leading-snug) var(--font-family-sans)">Сначала сохранить текущий</div>
+              <div style="font:var(--font-weight-regular) var(--font-size-s)/var(--leading-relaxed) var(--font-family-sans);color:var(--color-text-muted)">Откроется окно сохранения, потом начнём новую пачку</div>
+            </div>
+            <div style="font:var(--font-weight-regular) var(--font-size-l)/var(--leading-none) var(--font-family-sans);color:var(--color-text-faint)">→</div>
+          </div>
+        </sc-if>
+      </div>
+      <div style="padding:var(--space-7) var(--space-12);background:var(--color-bg-panel);border-top:var(--border-width) solid var(--color-border-subtle);display:flex;justify-content:flex-end">
+        <button onClick="{{ closeModal }}" style="font:var(--font-weight-medium) var(--font-size-base)/var(--leading-none) var(--font-family-sans);color:var(--color-text-secondary);background:none;border:0;padding:var(--space-5) var(--space-6);cursor:pointer">Остаться в документе</button>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isDevice }}" hint-placeholder-val="{{ false }}">
+  <div style="position:absolute;inset:0;background:var(--color-bg-overlay);display:flex;align-items:center;justify-content:center">
+    <div style="width:var(--size-modal);max-height:calc(100% - 60px);background:var(--color-bg-elevated);border-radius:var(--radius-xl);box-shadow:var(--shadow-modal);overflow:hidden;display:flex;flex-direction:column">
+      <div style="flex:none;padding:var(--space-11) var(--space-12) var(--space-8);border-bottom:var(--border-width) solid var(--color-border-subtle)">
+        <div style="font:var(--font-weight-semibold) var(--font-size-2xl)/var(--leading-snug) var(--font-family-sans)">Добавить сканер</div>
+      </div>
+      <div style="flex:1;min-height:0;overflow-y:auto;padding:var(--space-9) var(--space-12);display:flex;flex-direction:column;gap:var(--space-7)">
+        <div style="display:flex;flex-direction:column;gap:var(--space-4)">
+          <div style="font:var(--font-weight-medium) var(--font-size-xs)/var(--leading-none) var(--font-family-mono);letter-spacing:var(--tracking-caps);color:var(--color-text-hint)">СЕТЕВЫЕ СКАНЕРЫ</div>
+          <div style="display:flex;flex-direction:column;gap:var(--space-3);min-height:132px">
+            <sc-if value="{{ devSearching }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;flex-direction:column;gap:var(--space-3)">
+                <div style="height:var(--size-list-row);border-radius:var(--radius-l);background:var(--color-bg-surface);border:var(--border-width) solid var(--color-border-subtle);animation:pulse var(--duration-loop) var(--ease-loop) infinite"></div>
+                <div style="height:var(--size-list-row);border-radius:var(--radius-l);background:var(--color-bg-surface);border:var(--border-width) solid var(--color-border-subtle);animation:pulse var(--duration-loop) var(--ease-loop) var(--delay-stagger) infinite"></div>
+                <div style="height:var(--size-list-row);border-radius:var(--radius-l);background:var(--color-bg-surface);border:var(--border-width) solid var(--color-border-subtle);animation:pulse var(--duration-loop) var(--ease-loop) calc(var(--delay-stagger)*2) infinite"></div>
+              </div>
+            </sc-if>
+            <sc-for list="{{ devList }}" as="d" hint-placeholder-count="0">
+              <div onClick="{{ d.pick }}" style="display:flex;align-items:center;gap:var(--space-6);padding:var(--space-6) var(--space-6);border-radius:var(--radius-l);background:{{ d.bg }};border:var(--border-width) solid {{ d.border }};cursor:{{ d.cursor }};opacity:{{ d.op }}">
+                <div style="flex:1;min-width:0;display:flex;align-items:baseline;gap:var(--space-4)">
+                  <div style="font:var(--font-weight-medium) var(--font-size-base)/var(--leading-snug) var(--font-family-sans);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ d.n }}</div>
+                  <div style="font:var(--font-weight-regular) var(--font-size-s)/var(--leading-snug) var(--font-family-mono);color:var(--color-text-faint);white-space:nowrap">{{ d.ip }}</div>
+                </div>
+                <div style="flex:none;font:var(--font-weight-regular) var(--font-size-s)/var(--leading-snug) var(--font-family-mono);color:{{ d.stColor }};white-space:nowrap">{{ d.st }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:var(--space-4)">
+          <div style="font:var(--font-weight-medium) var(--font-size-xs)/var(--leading-none) var(--font-family-mono);letter-spacing:var(--tracking-caps);color:var(--color-text-hint)">АДРЕС ВРУЧНУЮ</div>
+          <input value="{{ devAddr }}" onChange="{{ setDevAddr }}" placeholder="192.168.1.42 или scanner.local" style="font:var(--font-weight-regular) var(--font-size-base)/var(--leading-snug) var(--font-family-mono);color:var(--color-text-primary);background:var(--color-bg-surface);border:var(--border-width) solid var(--color-border-strong);border-radius:var(--radius-l);padding:var(--space-6) var(--space-6);outline:none" style-focus="border-color:var(--color-accent);background:var(--color-bg-paper)">
+          <button onClick="{{ toggleDevAdv }}" style="align-self:flex-start;display:flex;align-items:center;gap:var(--space-4);background:none;border:0;padding:var(--space-2) 0;cursor:pointer">
+            <span style="font:var(--font-weight-medium) var(--font-size-s)/var(--leading-none) var(--font-family-sans);color:var(--color-text-secondary)">Дополнительно</span>
+            <span style="font:var(--font-weight-regular) var(--font-size-xs)/var(--leading-none) var(--font-family-sans);color:var(--color-text-hint);transform:rotate({{ devAdvArrow }}deg)">▾</span>
+          </button>
+          <sc-if value="{{ devAdvOpen }}" hint-placeholder-val="{{ false }}">
+            <div style="display:grid;grid-template-columns:minmax(0,1.4fr) 74px minmax(0,1fr);gap:var(--space-4)">
+              <sc-for list="{{ devFields }}" as="f" hint-placeholder-count="3">
+                <div style="min-width:0;display:flex;flex-direction:column;gap:var(--space-2)">
+                  <div style="font:var(--font-weight-regular) var(--font-size-xs)/var(--leading-none) var(--font-family-mono);color:var(--color-text-hint)">{{ f.k }}</div>
+                  <input value="{{ f.v }}" onChange="{{ f.set }}" style="width:100%;min-width:0;font:var(--font-weight-regular) var(--font-size-m)/var(--leading-snug) var(--font-family-mono);color:var(--color-text-primary);background:var(--color-bg-surface);border:var(--border-width) solid var(--color-border-default);border-radius:var(--radius-m);padding:var(--space-4) var(--space-5);outline:none" style-focus="border-color:var(--color-accent);background:var(--color-bg-paper)">
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+      <div style="flex:none;padding:var(--space-7) var(--space-12);background:var(--color-bg-panel);border-top:var(--border-width) solid var(--color-border-subtle);display:flex;align-items:center;gap:var(--space-6)">
+        <div style="flex:1;font:var(--font-weight-regular) var(--font-size-s)/var(--leading-relaxed) var(--font-family-sans);color:{{ devStatusColor }};text-wrap:pretty">{{ devStatusLine }}</div>
+        <button onClick="{{ closeModal }}" style="flex:none;font:var(--font-weight-medium) var(--font-size-base)/var(--leading-none) var(--font-family-sans);color:var(--color-text-secondary);background:none;border:0;padding:var(--space-6) var(--space-6);cursor:pointer">Отмена</button>
+        <button onClick="{{ connectDevice }}" style="flex:none;font:var(--font-weight-semibold) var(--font-size-base)/var(--leading-none) var(--font-family-sans);color:var(--color-text-on-accent);background:var(--color-accent);border:0;border-radius:var(--radius-l);padding:var(--space-6) var(--space-9);cursor:pointer;white-space:nowrap">Подключить</button>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;left:50%;bottom:26px;transform:translateX(-50%);display:flex;align-items:center;gap:var(--space-7);padding:var(--space-6) var(--space-6) var(--space-6) var(--space-9);border-radius:var(--radius-l);background:var(--color-bg-inverse);box-shadow:var(--shadow-float)">
+      <div style="font:var(--font-weight-medium) var(--font-size-m)/var(--leading-none) var(--font-family-sans);color:var(--color-text-on-inverse)">{{ toast }}</div>
+      <sc-if value="{{ toastActionLabel }}" hint-placeholder-val="{{ false }}">
+        <button onClick="{{ toastAction }}" style="font:var(--font-weight-semibold) var(--font-size-m)/var(--leading-none) var(--font-family-sans);color:var(--color-text-primary);background:var(--color-bg-elevated);border:0;border-radius:var(--radius-m);padding:var(--space-4) var(--space-6);cursor:pointer;white-space:nowrap">{{ toastActionLabel }}</button>
+      </sc-if>
+    </div>
+  </sc-if>
+
+</div>
+
+<div style="width:var(--size-frame-w);display:flex;align-items:center;gap:var(--space-4);flex-wrap:wrap">
+  <div style="font:var(--font-weight-medium) var(--font-size-xs)/var(--leading-none) var(--font-family-mono);letter-spacing:var(--tracking-caps);color:var(--color-text-hint);margin-right:var(--space-3)">ЭКРАНЫ</div>
+  <sc-for list="{{ nav }}" as="n" hint-placeholder-count="7">
+    <button onClick="{{ n.go }}" style="font:var(--font-weight-medium) var(--font-size-m)/var(--leading-none) var(--font-family-sans);color:{{ n.color }};background:{{ n.bg }};border:var(--border-width) solid {{ n.border }};border-radius:var(--radius-m);padding:var(--space-4) var(--space-6);cursor:pointer">{{ n.t }}</button>
+  </sc-for>
+</div>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = {
+    screen: 'setup', modal: null, pages: null, selId: null,
+    scanned: 0, passTotal: 12, activePass: 1, nextPass: 3,
+    flow: { mode: 'initial', sheets: 12, duplex: true, insert: 'end' },
+    addKind: 'duplex', addSpot: 'end',
+    dragId: null, overId: null, overBefore: true,
+    rot: {}, sortApplied: true, orderEdited: false, revealBlanks: false,
+    docName: 'Договор аренды 4471-А', toast: null,
+    saved: false, pendingNew: false, docNo: 1,
+    splits: [], docNames: {}, selIds: [], anchorId: null, saveMode: null,
+    opt: { color: 'Оттенки серого', dpi: '300 dpi', size: 'A4' }, blankOverride: null, deviceIdx: 0
+  };
+
+  resetForNewScan(extra) {
+    clearInterval(this.timer); clearTimeout(this.t2); clearTimeout(this.t3); clearTimeout(this.t4);
+    this.setState(st => ({
+      screen: 'setup', modal: null, pages: [], selId: null, scanned: 0, passTotal: 12,
+      activePass: 1, nextPass: 3, flow: { mode: 'initial', sheets: 12, duplex: true, insert: 'end' },
+      addKind: 'duplex', addSpot: 'end', dragId: null, overId: null, rot: {},
+      sortApplied: true, orderEdited: false, revealBlanks: false,
+      saved: false, pendingNew: false, docNo: st.docNo + 1,
+      splits: [], docNames: {}, selIds: [], anchorId: null, saveMode: null,
+      docName: 'Новый документ ' + (st.docNo + 1),
+      toast: null, ...(extra || {})
+    }));
+  }
+  foundDevices() {
+    return [
+      { n: 'HP LaserJet MFP M428', ip: '192.168.1.42', st: 'готов', ok: true, adf: true },
+      { n: 'Canon imageFORMULA R40', ip: '192.168.1.58', st: 'занят', ok: false, adf: true },
+      { n: 'Epson Perfection V39', ip: '192.168.1.71', st: 'готов', ok: true, adf: false },
+      { n: 'Brother ADS-2400N', ip: '192.168.1.90', st: 'готов', ok: true, adf: true }
+    ];
+  }
+  openDevice() {
+    clearTimeout(this.tdev);
+    this.setState({ modal: 'device', devSearch: 'searching', devPick: null, devErr: null });
+    this.tdev = setTimeout(() => this.setState({ devSearch: 'done' }), 1500);
+  }
+  connectDevice() {
+    const S = this.state;
+    if (S.devPick != null) {
+      const d = this.foundDevices()[S.devPick];
+      this.setState({ conn: { n: d.n, ok: d.ok, ip: d.ip }, modal: null, devErr: null });
+      this.flash('Сканер подключён: ' + d.n);
+      return;
+    }
+    const a = (S.devAddr || '').trim();
+    if (!a) { this.setState({ devErr: 'Выберите сканер в списке или введите адрес' }); return; }
+    if (a.indexOf('.') < 0) { this.setState({ devSearch: 'error', devErr: 'Не удалось подключиться к «' + a + '» — хост не найден в сети' }); return; }
+    this.setState({ conn: { n: a, ok: true, ip: a }, modal: null, devErr: null });
+    this.flash('Сканер подключён: ' + a);
+  }
+  plural(n, forms) { const a = Math.abs(n) % 100, b = a % 10; if (a > 10 && a < 20) return forms[2]; if (b > 1 && b < 5) return forms[1]; if (b === 1) return forms[0]; return forms[2]; }
+  splitAt(id) { this.setState(st => ({ splits: st.splits.indexOf(id) >= 0 ? st.splits : st.splits.concat([id]), selIds: [], selId: id, saved: false, focusDocId: id })); }
+  unsplitAt(id) {
+    this.setState(st => { const d = { ...st.docNames }; delete d[id]; return { splits: st.splits.filter(x => x !== id), docNames: d, saved: false }; });
+  }
+  clickPage(id, i, vis, e) {
+    const st = this.state;
+    if (e && e.shiftKey && st.anchorId) {
+      const a = vis.findIndex(p => p.id === st.anchorId);
+      if (a >= 0) {
+        const lo = Math.min(a, i), hi = Math.max(a, i);
+        this.setState({ selIds: vis.slice(lo, hi + 1).map(p => p.id), selId: id });
+        return;
+      }
+    }
+    if (e && (e.metaKey || e.ctrlKey)) {
+      const cur = st.selIds && st.selIds.length ? st.selIds : (st.selId ? [st.selId] : []);
+      this.setState({ selIds: cur.indexOf(id) >= 0 ? cur.filter(x => x !== id) : cur.concat([id]), selId: id, anchorId: id });
+      return;
+    }
+    this.setState({ selId: id, selIds: [id], anchorId: id });
+  }
+  flash(msg, ms) { clearTimeout(this.t4); this.setState({ toast: msg, toastKind: null }); this.t4 = setTimeout(() => this.setState({ toast: null }), ms || 2600); }
+
+  componentDidMount() { this.setState({ pages: this.buildDoc(), selId: 's1-front' }); }
+  componentWillUnmount() { clearInterval(this.timer); clearTimeout(this.t2); clearTimeout(this.t3); clearTimeout(this.t4); clearTimeout(this.tdev); }
+
+  rnd(s) { const x = Math.sin(s * 12.9898) * 43758.5453; return x - Math.floor(x); }
+  mkLines(seed, n) {
+    const out = [];
+    for (let i = 0; i < n; i++) {
+      const last = i === n - 1;
+      out.push({ w: last ? 32 + Math.round(this.rnd(seed + i) * 20) : 62 + Math.round(this.rnd(seed + i * 3.7) * 36), a: this.rnd(seed + i * 1.3) > .82 ? 'var(--color-glyph-strong)' : 'var(--color-glyph-soft)' });
+    }
+    return out;
+  }
+  mkPage(sheet, side, pass) {
+    const blank = side === 'back' && [4, 9, 12].indexOf(sheet) >= 0;
+    const seed = sheet * (side === 'front' ? 1.7 : 6.3) + pass;
+    return { id: 's' + sheet + '-' + side + '-p' + pass, sheet, side, pass, blank, lines: blank ? [] : this.mkLines(seed, 7), plines: blank ? [] : this.mkLines(seed, 17) };
+  }
+  buildDoc() {
+    const out = [];
+    for (let s = 1; s <= 12; s++) { out.push(this.mkPage(s, 'front', 1)); out.push(this.mkPage(s, 'back', 2)); }
+    return out;
+  }
+  autoSort(pages) {
+    const key = p => (p.pass <= 2 ? 0 : p.pass) * 1000 + p.sheet * 2 + (p.side === 'back' ? 1 : 0);
+    return [...pages].sort((a, b) => key(a) - key(b));
+  }
+
+  runScan(pass, total) {
+    clearInterval(this.timer);
+    this.setState({ screen: 'scan', modal: null, activePass: pass, scanned: 0, passTotal: total });
+    this.timer = setInterval(() => {
+      this.setState(s => {
+        const n = s.scanned + 1;
+        if (n >= s.passTotal) { clearInterval(this.timer); this.t2 = setTimeout(() => this.afterPass(), 520); return { scanned: s.passTotal }; }
+        return { scanned: n };
+      });
+    }, 300);
+  }
+  afterPass() {
+    const f = this.state.flow;
+    if (f.duplex && this.state.activePass % 2 === 1) { this.setState({ screen: 'flip' }); return; }
+    this.setState({ screen: 'merge' });
+    this.t3 = setTimeout(() => this.finish(), 1600);
+  }
+  finish() {
+    const f = this.state.flow;
+    if (f.mode === 'initial') {
+      const pages = this.buildDoc();
+      this.setState({ screen: 'editor', pages, selId: pages[0].id, sortApplied: true, orderEdited: false, saved: false });
+      return;
+    }
+    const pass = this.state.nextPass, add = [];
+    for (let s = 1; s <= f.sheets; s++) { add.push(this.mkPage(100 + s, 'front', pass)); if (f.duplex) add.push(this.mkPage(100 + s, 'back', pass)); }
+    const pages = [...(this.state.pages || [])];
+    let at = pages.length;
+    if (f.insert === 'after') { const i = pages.findIndex(p => p.id === this.state.selId); if (i >= 0) at = i + 1; }
+    pages.splice(at, 0, ...add);
+    this.setState({ screen: 'editor', pages, nextPass: pass + (f.duplex ? 2 : 1), selId: add[0].id, saved: false });
+    this.flash('Добавлено ' + add.length + ' стр. · проход ' + pass);
+  }
+
+  move(dragId, overId, before) {
+    const pages = [...(this.state.pages || [])];
+    const from = pages.findIndex(p => p.id === dragId);
+    if (from < 0) return;
+    const [it] = pages.splice(from, 1);
+    let to = pages.findIndex(p => p.id === overId);
+    if (to < 0) to = pages.length; else if (!before) to += 1;
+    pages.splice(to, 0, it);
+    this.setState({ pages, dragId: null, overId: null, sortApplied: false, orderEdited: true, saved: false });
+  }
+
+  renderVals() {
+    const S = this.state;
+        const blankMode = S.blankOverride || 'hide';
+    const conn = S.conn || null;
+    const foundDevs = this.foundDevices();
+    const opt = S.opt || {};
+    const curColor = opt.color || 'Оттенки серого';
+    const curDpi = opt.dpi || '300 dpi';
+    const curSize = opt.size || 'A4';
+    const showTags = true;
+    const pages = S.pages || [];
+    const hide = blankMode === 'hide' && !S.revealBlanks;
+    const vis = pages.filter(p => !(hide && p.blank));
+    const hiddenCount = pages.length - vis.length;
+    const blanksTotal = pages.filter(p => p.blank).length;
+    const selId = S.selId && vis.some(p => p.id === S.selId) ? S.selId : (vis[0] ? vis[0].id : null);
+    const selIdx = vis.findIndex(p => p.id === selId);
+    const sel = vis[selIdx];
+    const passColor = p => p === 1 || p === 2 ? 'var(--color-pass-1)' : (p === 3 || p === 4 ? 'var(--color-pass-2)' : 'var(--color-pass-3)');
+    const sheetNo = p => p.sheet > 100 ? p.sheet - 100 : p.sheet;
+
+    const splitIds = (S.splits || []).filter(id => vis.some(p => p.id === id) && vis[0] && vis[0].id !== id);
+    const selIds = (S.selIds || []).filter(id => vis.some(p => p.id === id));
+    const idxOf = id => vis.findIndex(p => p.id === id);
+    const docColors = ['var(--color-doc-1)', 'var(--color-doc-2)', 'var(--color-doc-3)', 'var(--color-doc-4)'];
+    const bounds = vis.length ? [0] : [];
+    vis.forEach((p, i) => { if (i > 0 && splitIds.indexOf(p.id) >= 0) bounds.push(i); });
+    const docCount = bounds.length;
+    const docEnd = di => (di + 1 < bounds.length ? bounds[di + 1] : vis.length);
+    const docIdxOfPage = i => { let d = 0; bounds.forEach((b, bi) => { if (i >= b) d = bi; }); return d; };
+    const docNameFor = di => (S.docNames && S.docNames[vis[bounds[di]].id]) || (di === 0 && docCount === 1 ? S.docName : 'Документ ' + (di + 1));
+
+    const mkThumb = (p, i) => {
+      const isSel = p.id === selId;
+      const inSel = selIds.length > 1 && selIds.indexOf(p.id) >= 0;
+      const isStart = i > 0 && splitIds.indexOf(p.id) >= 0;
+      return {
+        id: p.id, num: i + 1, lines: p.lines,
+        sideLabel: p.side === 'front' ? 'лицо' : 'оборот',
+        blankTag: p.blank,
+        numColor: isSel ? 'var(--color-accent)' : 'var(--color-text-muted)',
+        cardBorder: inSel ? 'var(--color-border-inverse)' : (isSel ? 'var(--color-border-focus)' : 'var(--color-border-default)'),
+        cardBg: isSel || inSel ? 'var(--color-bg-selected)' : 'var(--color-bg-surface)',
+        cardShadow: inSel ? 'var(--shadow-ring-selected)' : 'none',
+        cardOpacity: S.dragId === p.id ? 'var(--opacity-dragging)' : 1,
+        passTag: showTags && p.pass > 2 ? 'П' + p.pass : (showTags && p.side === 'back' ? 'об' : null),
+        passColor: passColor(p.pass),
+        markerBefore: S.overId === p.id && S.overBefore,
+        markerAfter: S.overId === p.id && !S.overBefore,
+        showSplitBar: i > 0,
+        splitBarLabel: isStart ? '⤺ Убрать границу' : '+ Новый документ',
+        splitBarBg: isStart ? 'var(--color-bg-inverse)' : 'var(--color-accent)',
+        splitBarColor: 'var(--color-text-on-accent)',
+        splitTitle: isStart ? 'Убрать границу — присоединить к предыдущему документу' : 'Начать новый документ с этой страницы',
+        splitToggle: e => {
+          e.stopPropagation();
+          if (isStart) this.unsplitAt(p.id); else this.splitAt(p.id);
+        },
+        select: e => this.clickPage(p.id, i, vis, e),
+        dragStart: () => this.setState({ dragId: p.id }),
+        dragOver: e => {
+          e.preventDefault();
+          const r = e.currentTarget.getBoundingClientRect();
+          const before = (e.clientX - r.left) < r.width / 2;
+          if (S.overId !== p.id || S.overBefore !== before) this.setState({ overId: p.id, overBefore: before });
+        },
+        drop: e => { e.preventDefault(); this.move(S.dragId, p.id, S.overBefore); },
+        dragEnd: () => this.setState({ dragId: null, overId: null })
+      };
+    };
+
+    const groups = bounds.map((start, di) => {
+      const pages = [];
+      for (let i = start; i < docEnd(di); i++) pages.push(mkThumb(vis[i], i));
+      const startId = vis[start].id;
+      return {
+        idx: di + 1, badgeBg: docColors[di % docColors.length], name: docNameFor(di),
+        countLabel: pages.length + ' стр.', hasDivider: di > 0,
+        rename: e => this.setState(st => ({ docNames: { ...st.docNames, [startId]: e.target.value }, saved: false })),
+        nameRef: el => {
+          if (el && S.focusDocId === startId) {
+            setTimeout(() => { el.focus(); el.select(); }, 0);
+            setTimeout(() => this.setState({ focusDocId: null }), 0);
+          }
+        },
+        unsplit: () => this.unsplitAt(startId),
+        pages
+      };
+    });
+
+    const selDocIdx = selIdx >= 0 ? docIdxOfPage(selIdx) : 0;
+    const fileSize = n => (n * 0.18).toFixed(1).replace('.', ',') + ' МБ';
+    const saveMode = S.saveMode || (docCount > 1 ? 'multi' : 'single');
+    const multi = saveMode === 'multi' && docCount > 1;
+    const fileCount = multi ? docCount : 1;
+
+    const passes = [];
+    pages.forEach(p => { const g = p.pass <= 2 ? 1 : p.pass; if (!passes.some(x => x.g === g)) passes.push({ g, n: 0, duplex: false }); });
+    passes.forEach(x => { x.n = pages.filter(p => (p.pass <= 2 ? 1 : p.pass) === x.g).length; x.duplex = pages.some(p => (p.pass <= 2 ? 1 : p.pass) === x.g && p.side === 'back'); });
+    const passList = passes.map((x, i) => ({
+      color: passColor(x.g), title: i === 0 ? 'Основная пачка' : 'Добавленный набор ' + i,
+      meta: (x.duplex ? 'два прохода · ' : 'один проход · ') + x.n + ' стр. · ' + curDpi,
+      remove: () => { this.setState(st => ({ pages: st.pages.filter(p => (p.pass <= 2 ? 1 : p.pass) !== x.g), saved: false })); this.flash('Набор убран'); }
+    }));
+
+    const kinds = [
+      { k: 'duplex', t: 'Двусторонняя пачка', d: 'Два прохода с разворотом на 180°, как основной документ' },
+      { k: 'simplex', t: 'Односторонние листы', d: 'Один проход, обороты не сканируем' },
+      { k: 'flatbed', t: 'Один лист', d: 'Сканер сам возьмёт его из податчика или со стекла' }
+    ];
+    const spots = [{ k: 'end', t: 'В конец документа' }, { k: 'after', t: 'После текущей страницы' }];
+    const pick = (cur, v) => ({
+      bg: cur === v ? 'var(--color-bg-selected)' : 'var(--color-bg-surface)',
+      border: cur === v ? 'var(--color-border-focus)' : 'var(--color-border-default)',
+      color: cur === v ? 'var(--color-accent)' : 'var(--color-text-secondary)'
+    });
+
+    const navDefs = [
+      { k: 'setup', t: 'Настройка' }, { k: 'device', t: 'Добавить сканер' }, { k: 'pass1', t: 'Проход 1' }, { k: 'flip', t: 'Разворот 180°' },
+      { k: 'pass2', t: 'Проход 2' }, { k: 'merge', t: 'Сборка' }, { k: 'editor', t: 'Сборка страниц' },
+      { k: 'add', t: 'Добавить скан' }, { k: 'save', t: 'Сохранение' },
+      { k: 'split', t: 'Несколько документов' },
+      { k: 'newscan', t: 'Новое сканирование' }, { k: 'mismatch', t: 'Не сошлись проходы' }
+    ];
+    const curNav = S.modal ? S.modal : (S.screen === 'scan' ? (S.activePass % 2 === 1 ? 'pass1' : 'pass2') : S.screen);
+    const nav = navDefs.map(d => {
+      const on = curNav === d.k;
+      return {
+        t: d.t, bg: on ? 'var(--color-bg-inverse)' : 'var(--color-bg-nav)', border: on ? 'var(--color-border-inverse)' : 'var(--color-border-strong)', color: on ? 'var(--color-text-on-inverse)' : 'var(--color-text-secondary)',
+        go: () => {
+          clearInterval(this.timer); clearTimeout(this.t2); clearTimeout(this.t3);
+          if (d.k === 'split') {
+            const pp = (this.state.pages && this.state.pages.length) ? this.state.pages : this.buildDoc();
+            const cand = pp.filter(p => !p.blank);
+            const ids = [6, 12, 18].map(i => cand[i] && cand[i].id).filter(Boolean);
+            const names = {};
+            const titles = ['Акт приёма-передачи', 'Опись вложений', 'Доверенность №12'];
+            ids.forEach((id, i) => { names[id] = titles[i]; });
+            this.setState({ screen: 'editor', modal: null, pages: pp, splits: ids, docNames: names, selId: ids[0], selIds: [ids[0]], anchorId: ids[0], saveMode: null, saved: false });
+            return;
+          }
+          if (d.k === 'device') { this.setState({ screen: 'setup' }); this.openDevice(); return; }
+          if (d.k === 'newscan') { this.setState(st => ({ screen: 'editor', modal: 'newscan', pages: (st.pages && st.pages.length) ? st.pages : this.buildDoc() })); return; }
+          if (d.k === 'pass1') this.setState({ screen: 'scan', modal: null, activePass: 1, scanned: 7, passTotal: 12, flow: { mode: 'initial', sheets: 12, duplex: true, insert: 'end' } });
+          else if (d.k === 'pass2') this.setState({ screen: 'scan', modal: null, activePass: 2, scanned: 4, passTotal: 12 });
+          else if (d.k === 'add' || d.k === 'save' || d.k === 'mismatch') this.setState(st => ({ screen: 'editor', modal: d.k, pages: (st.pages && st.pages.length) ? st.pages : this.buildDoc() }));
+          else if (d.k === 'editor') this.setState(st => ({ screen: 'editor', modal: null, pages: (st.pages && st.pages.length) ? st.pages : this.buildDoc(), selId: st.selId || 's1-front-p1' }));
+          else this.setState({ screen: d.k, modal: null });
+        }
+      };
+    });
+
+    const stripSrc = vis.length ? vis : this.buildDoc();
+    const scanStrip = [];
+    for (let i = 0; i < 5; i++) { const p = stripSrc[(S.scanned + i) % stripSrc.length]; scanStrip.push({ lines: this.mkLines(S.scanned * 3 + i, 5), op: 1 - i * .17 }); }
+
+    const totalSheets = Math.round(pages.length / 2) || 12;
+    const checks = [
+      { icon: '✓', color: 'var(--color-accent)', t: 'Пар «лицо + оборот»: ' + pages.filter(p => p.side === 'back').length + ' из ' + pages.filter(p => p.side === 'front').length },
+      { icon: hiddenCount ? '•' : '✓', color: hiddenCount ? 'var(--color-warning)' : 'var(--color-accent)', t: hiddenCount ? 'Пустых оборотов скрыто: ' + hiddenCount : 'Пустых оборотов не найдено' },
+      { icon: S.orderEdited ? '•' : '✓', color: S.orderEdited ? 'var(--color-warning)' : 'var(--color-accent)', t: S.orderEdited ? 'Порядок правили вручную — автосортировка отключена' : 'Порядок соответствует схеме двух проходов' }
+    ];
+
+    return {
+      isSetup: S.screen === 'setup', isScan: S.screen === 'scan', isFlip: S.screen === 'flip',
+      isMerge: S.screen === 'merge', isEditor: S.screen === 'editor',
+      isAdd: S.modal === 'add', isSave: S.modal === 'save', isMismatch: S.modal === 'mismatch',
+      isNewScan: S.modal === 'newscan',
+      newScanUnsaved: !S.saved && vis.length > 0,
+      newScanKicker: vis.length === 0 ? 'ДОКУМЕНТ ПУСТ' : (S.saved ? 'ТЕКУЩИЙ ДОКУМЕНТ СОХРАНЁН' : 'ЕСТЬ НЕСОХРАНЁННЫЕ СТРАНИЦЫ'),
+      newScanDotColor: !S.saved && vis.length > 0 ? 'var(--color-warning)' : 'var(--color-accent)',
+      newScanNote: vis.length === 0
+        ? 'В документе пока нет страниц — терять нечего. Заложите пачку в податчик и начните первый проход.'
+        : (S.saved
+          ? 'Файл «' + S.docName + '» уже сохранён. Можно освободить рабочую область и заложить в податчик новую пачку.'
+          : 'В документе ' + vis.length + ' стр., они ещё не сохранены в файл. Если начать новое сканирование, они будут потеряны.'),
+      newScanFreshNote: vis.length === 0
+        ? 'Перейдём к настройке сканирования'
+        : (S.saved ? 'Вернёмся к настройке сканирования с чистого листа' : 'Текущие ' + vis.length + ' стр. будут удалены без сохранения'),
+      askNewScan: () => { if (!pages.length) { this.resetForNewScan(); return; } this.setState({ modal: 'newscan' }); },
+      newScanFresh: () => { this.resetForNewScan(); this.flash('Рабочая область очищена — заложите новую пачку'); },
+      newScanSaveFirst: () => this.setState({ modal: 'save', pendingNew: true }),
+      blankLabel: blankMode === 'hide' ? 'Скрывать' : blankMode === 'mark' ? 'Помечать' : 'Оставлять',
+      deviceConnected: !!conn, deviceMissing: !conn,
+      deviceName: conn ? conn.n : '', deviceTray: conn ? (conn.ok ? 'готов' : 'занят') : '',
+      deviceStatusColor: conn && conn.ok ? 'var(--color-status-ready)' : 'var(--color-status-busy)',
+      cycleDevice: () => this.openDevice(),
+      openDevice: () => this.openDevice(),
+      isDevice: S.modal === 'device',
+      devSearching: S.devSearch === 'searching',
+      devList: (S.devSearch === 'searching' ? [] : foundDevs).map((d, i) => {
+        const on = S.devPick === i;
+        return {
+          n: d.n, ip: d.ip, st: d.adf ? d.st : 'нет автоподачи',
+          stColor: !d.adf ? 'var(--color-status-unavailable)' : (d.ok ? 'var(--color-status-ready)' : 'var(--color-status-busy)'),
+          op: d.adf ? 1 : 'var(--opacity-disabled)',
+          cursor: d.adf ? 'pointer' : 'not-allowed',
+          bg: on ? 'var(--color-bg-selected)' : 'var(--color-bg-surface)',
+          border: on ? 'var(--color-border-focus)' : 'var(--color-border-subtle)',
+          pick: () => { if (!d.adf) return; this.setState({ devPick: i, devAddr: '', devErr: null, devSearch: 'done' }); }
+        };
+      }),
+      devStatusLine: S.devSearch === 'searching' ? 'Идёт поиск сканеров в сети…'
+        : S.devSearch === 'error' ? S.devErr
+          : S.devSearch === 'empty' ? 'Ничего не нашлось. Проверьте, что сканер в одной сети с компьютером и в нём включён AirPrint / Bonjour, либо введите адрес вручную.'
+            : (S.devErr || 'Найдено ' + foundDevs.length + ' ' + this.plural(foundDevs.length, ['устройство', 'устройства', 'устройств']) + ' · поиск продолжается'),
+      devStatusColor: S.devSearch === 'error' || S.devErr ? 'var(--color-danger)' : 'var(--color-text-subtle)',
+      devAddr: S.devAddr || '',
+      setDevAddr: e => this.setState({ devAddr: e.target.value, devPick: null, devErr: null }),
+      devAdvOpen: !!S.devAdv, devAdvArrow: S.devAdv ? 180 : 0,
+      toggleDevAdv: () => this.setState(st => ({ devAdv: !st.devAdv })),
+      devFields: [
+        { k: 'Схема', v: S.devScheme || 'eSCL (HTTP)', set: e => this.setState({ devScheme: e.target.value }) },
+        { k: 'Порт', v: S.devPort || '80', set: e => this.setState({ devPort: e.target.value }) },
+        { k: 'Путь', v: S.devPath || '/eSCL', set: e => this.setState({ devPath: e.target.value }) }
+      ],
+      connectDevice: () => this.connectDevice(),
+      scanOpts: [
+        {
+          label: 'Цвет', cur: curColor, vals: ['Ч/б', 'Оттенки серого', 'Цвет'],
+          set: v => this.setState(st => ({ opt: { ...st.opt, color: v } }))
+        },
+        {
+          label: 'Разрешение', cur: curDpi, vals: ['200 dpi', '300 dpi', '600 dpi'],
+          titles: ['быстрее, мельче файл', 'обычный текст', 'мелкий шрифт и печати'],
+          set: v => this.setState(st => ({ opt: { ...st.opt, dpi: v } }))
+        },
+        {
+          label: 'Размер листа', cur: curSize, vals: ['A4', 'Letter', 'Авто'],
+          titles: ['210×297 мм', '216×279 мм', 'определять по листу'],
+          set: v => this.setState(st => ({ opt: { ...st.opt, size: v } }))
+        },
+        {
+          label: 'Пустые обороты', cur: blankMode, vals: ['hide', 'mark', 'none'],
+          labels: ['Скрывать', 'Помечать', 'Оставлять'],
+          titles: ['не попадут в файл', 'останутся, но с меткой', 'сохранить всё как есть'],
+          set: v => this.setState({ blankOverride: v })
+        }
+      ].map(o => ({
+        label: o.label,
+        choices: o.vals.map((v, vi) => ({
+          t: (o.labels || o.vals)[vi],
+          title: o.titles ? o.titles[vi] : (o.labels || o.vals)[vi],
+          ...pick(o.cur, v),
+          pick: () => o.set(v)
+        }))
+      })),
+      optsSummary: curColor.toLowerCase() + ' · ' + curDpi + ' · ' + curSize + ' · пустые обороты: ' + (blankMode === 'hide' ? 'скрывать' : blankMode === 'mark' ? 'помечать' : 'оставлять'),
+      resetOpts: () => this.setState({ opt: { color: 'Оттенки серого', dpi: '300 dpi', size: 'A4' }, blankOverride: null, deviceIdx: 0 }),
+      howto: [
+        { n: '1', t: 'Лицевые стороны', d: 'Пачка лицом вверх, первая страница сверху' },
+        { n: '2', t: 'Разворот на 180°', d: 'Пачку целиком, не переворачивая листы' },
+        { n: '3', t: 'Обратная сторона', d: 'Приложение знает, что они идут в обратном порядке' },
+        { n: '4', t: 'Проверка и сохранение', d: 'Правьте порядок перетаскиванием, если нужно' }
+      ],
+      scanTag: S.activePass % 2 === 1 ? 'ПРОХОД ' + S.activePass + ' · ЛИЦЕВЫЕ СТОРОНЫ' : 'ПРОХОД ' + S.activePass + ' · ОБОРОТЫ',
+      scanned: S.scanned, passTotal: S.passTotal,
+      scanCounter: S.activePass % 2 === 1 ? 'Отсканировано ' + S.scanned : 'Отсканировано ' + S.scanned + ' из ' + S.passTotal,
+      scanMeta: curDpi + ' · ' + curColor.toLowerCase() + ' · ' + curSize,
+      scanStrip,
+      cancelScan: () => { clearInterval(this.timer); clearTimeout(this.t2); this.setState({ screen: 'setup' }); },
+      skipScan: () => { clearInterval(this.timer); clearTimeout(this.t2); this.setState({ scanned: S.passTotal }, () => this.afterPass()); },
+      startInitial: () => { if (!conn) { this.openDevice(); return; } this.setState({ flow: { mode: 'initial', sheets: 12, duplex: true, insert: 'end' }, nextPass: 3 }); this.runScan(1, 12); },
+      startPass2: () => this.runScan(this.state.activePass + 1, this.state.passTotal),
+      skipBacks: () => { this.setState({ screen: 'merge' }); this.t3 = setTimeout(() => this.finish(), 1200); },
+      frontCount: S.passTotal + ' листов',
+      flipChecks: [
+        { t: 'Не переворачивайте листы — из податчика они вышли оборотами вверх' },
+        { t: 'Не разбирайте пачку: обороты придут в обратном порядке, приложение это учтёт' },
+        { t: 'Если один лист застрял — начните второй проход и вставьте его отдельно' }
+      ],
+      mergeCells: Array.from({ length: 12 }, (_, i) => ({ i })),
+      mergePairs: Array.from({ length: 24 }, (_, i) => ({ c: i % 2 ? 'var(--color-pass-2)' : 'var(--color-pass-1)' })),
+      mergeStatus: 'совпало пар: 12 · пустых оборотов: 3 · время 0,8 с',
+      docName: S.docName,
+      renameDoc: e => this.setState({ docName: e.target.value }),
+      docMeta: vis.length + ' стр. · ' + docCount + ' ' + this.plural(docCount, ['документ', 'документа', 'документов']),
+      sortApplied: S.sortApplied && !S.orderEdited, orderEdited: S.orderEdited,
+      resort: () => { this.setState(st => ({ pages: this.autoSort(st.pages), orderEdited: false, sortApplied: true })); this.flash('Автопорядок восстановлен'); },
+      pageCount: vis.length, groups,
+      railHint: 'Сортировка страниц, документы',
+      hasMultiSel: selIds.length > 1,
+      selCountLabel: 'Выделено ' + selIds.length + ' стр. · shift — диапазон, ⌘/ctrl — по одной',
+      clearSelection: () => this.setState({ selIds: [] }),
+      groupSelection: () => {
+        if (selIds.length < 2) return;
+        const idxs = selIds.map(idxOf).sort((a, b) => a - b);
+        if (idxs[idxs.length - 1] - idxs[0] !== idxs.length - 1) { this.flash('Выделите подряд идущие страницы'); return; }
+        const lo = idxs[0], hi = idxs[idxs.length - 1], add = [];
+        if (lo > 0) add.push(vis[lo].id);
+        if (hi + 1 < vis.length) add.push(vis[hi + 1].id);
+        this.setState(st => ({ splits: st.splits.concat(add.filter(x => st.splits.indexOf(x) < 0)), selIds: [], selId: vis[lo].id, saved: false }));
+        this.flash('Отдельный документ из ' + (hi - lo + 1) + ' стр. создан');
+      },
+      docCountLabel: docCount + ' ' + this.plural(docCount, ['документ', 'документа', 'документов']),
+      docList: bounds.map((start, di) => ({
+        idx: di + 1, color: docColors[di % docColors.length], name: docNameFor(di),
+        meta: (docEnd(di) - start) + ' стр. · стр. ' + (start + 1) + '–' + docEnd(di) + ' набора',
+        bg: di === selDocIdx ? 'var(--color-bg-paper)' : 'var(--color-bg-surface)',
+        border: di === selDocIdx ? 'var(--color-border-focus)' : 'var(--color-border-subtle)',
+        open: () => this.setState({ selId: vis[start].id, selIds: [vis[start].id], anchorId: vis[start].id })
+      })),
+      docsNote: docCount > 1
+        ? 'При сохранении получится ' + docCount + ' ' + this.plural(docCount, ['отдельный файл', 'отдельных файла', 'отдельных файлов']) + ' — по отмеченным границам.'
+        : 'Границы не отмечены: всё сохранится одним файлом. Наведите курсор на верх миниатюры и нажмите «+ Новый документ» на той странице, с которой начинается следующий документ.',
+      previewDocIdx: selDocIdx + 1,
+      previewDocColor: docColors[selDocIdx % docColors.length],
+      previewDocTitle: vis.length ? docNameFor(selDocIdx) : 'Нет страниц',
+      previewDocPos: vis.length ? 'документ ' + (selDocIdx + 1) + ' из ' + docCount + ' · стр. ' + (selIdx - bounds[selDocIdx] + 1) + ' из ' + (docEnd(selDocIdx) - bounds[selDocIdx]) : '',
+      previewIsDocStart: selIdx > 0 && splitIds.indexOf(selId) >= 0,
+      previewTopEdge: selIdx > 0 && splitIds.indexOf(selId) >= 0 ? 'var(--border-width-thick) solid var(--color-accent)' : 'var(--border-width) solid var(--color-border-subtle)',
+      canSplitHere: selIdx > 0 && splitIds.indexOf(selId) < 0,
+      canUnsplitHere: selIdx > 0 && splitIds.indexOf(selId) >= 0,
+      splitHere: () => this.splitAt(selId),
+      unsplitHere: () => this.unsplitAt(selId),
+      saveTitle: multi ? 'Сохранить ' + docCount + ' ' + this.plural(docCount, ['файл', 'файла', 'файлов']) : 'Сохранить документ',
+      saveBtn: 'Сохранить ' + fileCount + ' ' + this.plural(fileCount, ['файл', 'файла', 'файлов']),
+      saveBtnLabel: docCount > 1 ? 'Сохранить ' + docCount + ' ' + this.plural(docCount, ['файл', 'файла', 'файлов']) : 'Сохранить документ',
+      saveSummary: multi ? 'Папка «Сканы» · ' + docCount + ' ' + this.plural(docCount, ['файл', 'файла', 'файлов']) + ' · ' + fileSize(vis.length) + ' всего' : 'Папка «Сканы» · один файл · ' + fileSize(vis.length),
+      saveModes: [
+        { k: 'multi', t: 'Отдельные файлы', d: docCount > 1 ? 'по границам: ' + docCount + ' ' + this.plural(docCount, ['файл', 'файла', 'файлов']) : 'границы ещё не отмечены' },
+        { k: 'single', t: 'Один файл', d: 'все ' + vis.length + ' стр. подряд' }
+      ].map(m => ({
+        t: m.t, d: m.d, ...pick(saveMode, m.k),
+        pick: () => { if (m.k === 'multi' && docCount < 2) { this.flash('Сначала отметьте границы между документами'); return; } this.setState({ saveMode: m.k }); }
+      })),
+      fileListTitle: multi ? 'ФАЙЛЫ · ' + docCount : 'ИМЯ ФАЙЛА',
+      fileListMax: (multi && docCount > 10) ? '352px' : 'none',
+      fileListScroll: (multi && docCount > 10) ? 'auto' : 'visible',
+      fileList: multi
+        ? bounds.map((start, di) => ({
+          idx: di + 1, color: docColors[di % docColors.length], name: docNameFor(di),
+          meta: (docEnd(di) - start) + ' стр. · ' + fileSize(docEnd(di) - start),
+          rename: e => this.setState(st => ({ docNames: { ...st.docNames, [vis[start].id]: e.target.value } }))
+        }))
+        : [{ idx: 1, color: 'var(--color-doc-1)', name: S.docName, meta: vis.length + ' стр. · ' + fileSize(vis.length), rename: e => this.setState({ docName: e.target.value }) }],
+      blankTrack: S.revealBlanks ? 'var(--color-accent)' : 'var(--color-bg-control-off)',
+      blankKnob: S.revealBlanks ? 'calc(var(--size-toggle-w) - var(--size-toggle-knob) - var(--space-1))' : 'var(--space-1)',
+      blankCountLabel: S.revealBlanks
+        ? (blanksTotal ? blanksTotal + ' в наборе' : 'нет')
+        : (hiddenCount ? 'скрыто ' + hiddenCount : 'нет'),
+      blankToggleTitle: S.revealBlanks ? 'Пустые обороты показаны — они попадут в файл' : 'Пустые обороты скрыты — они не попадут в файл',
+      toggleBlanks: () => this.setState(st => ({ revealBlanks: !st.revealBlanks })),
+      previewLines: sel ? sel.plines : [], previewBlank: sel ? sel.blank : false,
+      previewRot: sel ? (S.rot[sel.id] || 0) : 0,
+      previewCorner: sel ? 'ЛИСТ ' + sheetNo(sel) + ' · ' + (sel.side === 'front' ? 'ЛИЦО' : 'ОБОРОТ') : '',
+      previewCounter: sel ? (selIdx + 1) + ' из ' + vis.length : '—',
+      prevPage: () => { const i = Math.max(0, selIdx - 1); if (vis[i]) this.setState({ selId: vis[i].id }); },
+      nextPage: () => { const i = Math.min(vis.length - 1, selIdx + 1); if (vis[i]) this.setState({ selId: vis[i].id }); },
+      rotateSel: () => sel && this.setState(st => ({ rot: { ...st.rot, [sel.id]: ((st.rot[sel.id] || 0) + 90) % 360 } })),
+      deleteSel: () => { if (!sel) return; this.setState(st => ({ pages: st.pages.filter(p => p.id !== sel.id), orderEdited: true, saved: false })); this.flash('Страница удалена'); },
+      rescanSel: () => this.setState({ rescanHover: false }),
+      rescanHover: !!S.rescanHover,
+      rescanHoverOn: () => this.setState({ rescanHover: true }),
+      rescanHoverOff: () => this.setState({ rescanHover: false }),
+      detailsOpen: !!S.detailsOpen,
+      detailsArrow: S.detailsOpen ? 180 : 0,
+      detailsSummary: sel ? 'стр. ' + (selIdx + 1) : '',
+      toggleDetails: () => this.setState(st => ({ detailsOpen: !st.detailsOpen })),
+      selTitle: sel ? 'Стр. ' + (selIdx + 1) + ' — ' + (sel.side === 'front' ? 'лицо' : 'оборот') + ' листа ' + sheetNo(sel) : 'Нет страниц',
+      selFacts: sel ? [
+        { k: 'Источник', v: 'проход ' + sel.pass },
+        { k: 'Лист', v: '№' + sheetNo(sel) }
+      ] : [],
+      pairNote: sel ? (sel.side === 'back' ? 'Оборот сопоставлен с лицом листа ' + sheetNo(sel) + ' по позиции во втором проходе.' : 'Лицо листа ' + sheetNo(sel) + '; оборот пришёл из второго прохода.') : null,
+      passList, checks,
+      openAdd: () => this.setState({ modal: 'add' }),
+      openSave: () => this.setState({ modal: 'save' }),
+      closeModal: () => this.setState({ modal: null }),
+      addKinds: kinds.map(k => {
+        const p = pick(S.addKind, k.k);
+        return { t: k.t, d: k.d, bg: p.bg, border: p.border, dotBorder: S.addKind === k.k ? 'var(--color-accent)' : 'var(--color-border-heavy)', dotBg: S.addKind === k.k ? 'var(--color-accent)' : 'var(--color-bg-paper)', pick: () => this.setState({ addKind: k.k }) };
+      }),
+      addSpots: spots.map(s => ({ t: s.t, ...pick(S.addSpot, s.k), pick: () => this.setState({ addSpot: s.k }) })),
+      addSummary: S.addKind === 'duplex' ? 'Два прохода · разворот на 180°' : S.addKind === 'simplex' ? 'Один проход · без разворота' : 'Один лист · 1 страница',
+      startAdd: () => {
+        const duplex = S.addKind === 'duplex';
+        const sheets = S.addKind === 'flatbed' ? 1 : 3;
+        this.setState({ flow: { mode: 'add', sheets, duplex, insert: S.addSpot } });
+        this.runScan(this.state.nextPass, sheets);
+      },
+      saveFolder: S.folder || '~/Документы/Сканы',
+      pickFolder: () => this.flash('Откроется системный выбор папки'),
+      saveFacts: [
+        { k: 'Файлов', v: String(fileCount) },
+        { k: 'Страниц всего', v: String(vis.length) },
+        { k: 'Формат', v: 'PDF · A4' }
+      ],
+      doSave: () => {
+        const folder = S.folder || '~/Документы/Сканы';
+        const done = multi
+          ? 'Сохранено ' + docCount + ' ' + this.plural(docCount, ['файл', 'файла', 'файлов']) + ' → ' + folder
+          : 'Сохранено: ' + S.docName + '.pdf → ' + folder;
+        if (S.pendingNew) { this.resetForNewScan(); this.flash(done + ' — можно закладывать новую пачку', 3600); return; }
+        clearTimeout(this.t4);
+        this.setState({ modal: null, saved: true, toast: done, toastKind: 'saved' });
+        this.t4 = setTimeout(() => this.setState({ toast: null }), 6000);
+      },
+      toastActionLabel: S.toast && S.toastKind === 'saved' ? 'Новое сканирование' : null,
+      toastAction: () => { this.resetForNewScan(); this.flash('Рабочая область очищена — заложите новую пачку'); },
+      fixes: [
+        { t: 'Досканировать пропущенный оборот', d: 'Положите лист на стекло — вставлю его на нужное место', pick: () => { this.setState({ modal: null }); this.flash('Положите лист на стекло'); } },
+        { t: 'Указать лист вручную', d: 'Покажу обороты по порядку, отметите, где пропуск', pick: () => { this.setState({ modal: null }); this.flash('Отметьте лист в панели миниатюр'); } },
+        { t: 'Оставить лист без оборота', d: 'Сохраню документ как есть, оборот будет пустым', pick: () => { this.setState({ modal: null }); this.flash('Лист оставлен без оборота'); } }
+      ],
+      toast: S.toast, nav
+    };
+  }
+}
+</script>
+</body>
+</html>

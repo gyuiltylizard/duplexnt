@@ -1,0 +1,565 @@
+# Duplexn't — дизайн-система
+
+Единый источник правды по визуальным токенам. Значения отсюда кодируются **один раз** как
+переменные; компоненты тянут переменные — хардкод значений запрещён. Новый токен из
+handoff'а заносится сюда и в файл токенов одним коммитом.
+
+**Файл токенов:** <не определено: стек не выбран.> До его появления источник значений —
+блок `:root` в конце документа.
+
+**Происхождение.** Извлечено из макета `mock/Сканер ADF.dc.html` (экраны setup / scan /
+flip / merge / editor, модалки device / add / save / mismatch / newscan). Сверено с макетом
+при переносе: 186 переменных, значения совпадают, литеральных цветов, кеглей, радиусов и
+теней в стилях макета не осталось, примитивы используются только через семантические
+токены. Протокол сведе́ния близких значений («было → стало») остался при моке —
+`mock/DESIGN_SYSTEM.md`, раздел «Нормализация».
+
+**Границы документа.** Здесь визуальный язык: токены и рецепты компонентов. Поэкранное
+поведение — `UI_SPEC.md`. Содержательные дефекты самого макета (дефолты подключения,
+захардкоженные разрешения, отсутствие настройки просвечивания, замечания к иллюстрации
+разворота) живут в `../duplexnt-tech.md` → «Что в макете нужно поправить», а не здесь.
+
+---
+
+## Принципы
+
+1. **Плотный, но не тесный десктоп.** Базовый кегль интерфейса 12.5–13 px, шаг сетки 2 px (реально используемые шаги 4 / 8 / 12 / 16 / 22 / 26). Панели разделяются не тенями, а сменой тона фона и волосяными линиями (`gap:1px` поверх тонированной подложки).
+2. **Тёплая бумага вместо белого.** Вся палитра — тёплые серо-бежевые «песочные» тона от `#e4e0d7` до `#fbfaf7`; чистый белый отдан только «бумаге» — страницам, полям ввода в фокусе, активному элементу списка. Чернильный `#1c1a16` вместо чёрного.
+3. **Один акцент, почти ахроматический.** Акцент интерфейса — тёмный тёплый серый `#4a463f`: им окрашены первичные кнопки, выделение, фокус, границы документов. Цвет как сигнал оставлен статусам: зелёный «готов», красный «занят / ошибка», янтарный «внимание / изменено», а также раскраске документов и проходов (акцент → янтарь → синий → фиолет).
+4. **Два голоса типографики.** Golos Text — всё, что читают; IBM Plex Mono — всё, что считают и маркируют: кикеры капсом с разрядкой .12em, счётчики, метаданные, статусы устройств, теги проходов.
+5. **Тихое движение.** Микропереходы 150–200 ms с `ease`; циклические иллюстрации (подача листа, пульс, разворот пачки) — 1.2 s и 3.8 s `ease-in-out`. Hover не меняет геометрию: только цвет границы/текста, подчёркивание или `filter: brightness(1.08)` у первичной кнопки.
+
+## Токены
+
+### Цвета — примитивы
+
+| Токен | Значение |
+|---|---|
+| `--color-ink-900` | `#1c1a16` |
+| `--color-ink-700` | `#4a463f` |
+| `--color-ink-600` | `#6f6a60` |
+| `--color-ink-500` | `#7c766b` |
+| `--color-ink-400` | `#8b857a` |
+| `--color-ink-300` | `#9b958a` |
+| `--color-ink-200` | `#b5afa4` |
+| `--color-ink-100` | `#cfc9bd` |
+| `--color-sand-500` | `#e4e0d7` |
+| `--color-sand-400` | `#e8e4db` |
+| `--color-sand-300` | `#eceae3` |
+| `--color-sand-200` | `#efece5` |
+| `--color-sand-100` | `#f2efe8` |
+| `--color-sand-50` | `#f7f5f1` |
+| `--color-sand-25` | `#fbfaf7` |
+| `--color-white` | `#fff` |
+| `--color-green-600` | `#0f7a5a` |
+| `--color-green-700` | `#0a5b43` |
+| `--color-green-500` | `#2e7d4f` |
+| `--color-red-600` | `#a3352a` |
+| `--color-amber-600` | `#a06a2a` |
+| `--color-blue-600` | `#3f6ea8` |
+| `--color-violet-600` | `#6b4ea8` |
+| `--alpha-ink-10` | `rgba(28,26,22,.1)` |
+| `--alpha-ink-13` | `rgba(28,26,22,.13)` |
+| `--alpha-ink-14` | `rgba(28,26,22,.14)` |
+| `--alpha-ink-16` | `rgba(28,26,22,.16)` |
+| `--alpha-ink-20` | `rgba(28,26,22,.2)` |
+| `--alpha-ink-25` | `rgba(28,26,22,.25)` |
+| `--alpha-ink-28` | `rgba(28,26,22,.28)` |
+| `--alpha-ink-34` | `rgba(28,26,22,.34)` |
+| `--alpha-ink-45` | `rgba(28,26,22,.45)` |
+| `--alpha-white-55` | `rgba(255,255,255,.55)` |
+| `--alpha-green-8` | `rgba(15,122,90,.08)` |
+| `--alpha-green-12` | `rgba(15,122,90,.12)` |
+| `--alpha-green-40` | `rgba(15,122,90,.4)` |
+| `--alpha-red-40` | `rgba(163,53,42,.4)` |
+
+### Цвета — семантика
+
+| Токен | Ссылается на | Семантика |
+|---|---|---|
+| `--color-accent` | `--color-ink-700` | Акцент интерфейса: фон первичной кнопки, границы выбранного/в фокусе, номер выбранной страницы, стрелка «ВЕРХ», пилюля и пунктир «Новый документ», дорожка включённого переключателя, полоса прогресса подачи, маркер drop-позиции |
+| `--color-link` | `--color-green-600` | Цвет ссылок `<a>` |
+| `--color-link-hover` | `--color-green-700` | Ссылки при hover |
+| `--color-success` | `--color-green-500` | Положительный статус |
+| `--color-danger` | `--color-red-600` | Ошибка подключения, hover иконки «Удалить», статус «занят» |
+| `--color-warning` | `--color-amber-600` | «Порядок изменён», кикер и точка «Не сходятся проходы», «есть несохранённые страницы», маркер «•» в списке проверок, ячейки оборотов в сборке |
+| `--color-status-ready` | `--color-success` | Точка и подпись «готов» у устройства |
+| `--color-status-busy` | `--color-danger` | Точка и подпись «занят» |
+| `--color-status-unavailable` | `--color-ink-300` | Подпись «нет автоподачи» |
+| `--color-doc-1` … `--color-doc-4` | accent / amber-600 / blue-600 / violet-600 | Бейджи и маркеры документов 1–4 в наборе (по кругу) |
+| `--color-pass-1` / `-2` / `-3` | accent / amber-600 / violet-600 | Теги проходов на миниатюрах и ячейки диаграммы сборки: проходы 1–2, 3–4, 5+ |
+| `--color-text-primary` | `--color-ink-900` | Основной текст, заголовки, значения полей |
+| `--color-text-secondary` | `--color-ink-700` | Текст вторичных кнопок, пункты проверок, невыбранные сегменты |
+| `--color-text-muted` | `--color-ink-600` | Лид-абзацы, подписи параметров, номера невыбранных страниц, описания в модалках |
+| `--color-text-subtle` | `--color-ink-500` | Подсказки, метаданные mono, «Сканер не подключён», статусная строка модалки |
+| `--color-text-hint` | `--color-ink-400` | Кикеры капсом, подписи полей, стрелки-шевроны |
+| `--color-text-faint` | `--color-ink-300` | Счётчики «N стр.», подпись «лицо/оборот», IP устройства, стрелка «→» в карточках выбора, «ПУСТО» |
+| `--color-text-ghost` | `--color-ink-200` | Угловая метка листа и текст пустой стороны на превью |
+| `--color-text-on-inverse` | `--color-sand-50` | Текст на тёмных плашках (тост, тултип, панель множественного выделения, активная кнопка навигации) |
+| `--color-text-on-inverse-muted` | `--color-ink-100` | Вторичная кнопка «Снять» на тёмной панели |
+| `--color-text-on-accent` | `--color-white` | Текст на акцентном и цветных фонах (кнопки, теги, бейджи) |
+| `--color-bg-canvas` | `--color-sand-500` | Фон страницы вокруг макета |
+| `--color-bg-app` | `--color-sand-100` | Фон окна приложения |
+| `--color-bg-surface` | `--color-sand-25` | Карточки, строки списков, вторичные кнопки, поля ввода, миниатюры |
+| `--color-bg-elevated` | `--color-sand-50` | Фон модального окна; верхний лист в иллюстрации разворота |
+| `--color-bg-paper` | `--color-white` | Страницы (превью, миниатюры, мок-листы), поле ввода в фокусе, активный документ в списке |
+| `--color-bg-panel` | `--color-sand-300` | Боковые панели редактора, футеры модалок, строка «Сбросить параметры» |
+| `--color-bg-toolbar` | `--color-sand-200` | Тулбар и статус-бар редактора, кнопки «Вернуть» и «Выбрать…», нижний лист иллюстрации |
+| `--color-bg-well` | `--color-sand-400` | Правая колонка setup, область превью; hover кнопки «Новый скан» |
+| `--color-bg-inverse` | `--color-ink-900` | Тост, тултип, панель выделения, кнопка «Убрать границу», активная кнопка навигации |
+| `--color-bg-tray` | `--color-ink-100` | Лоток сканера в иллюстрациях |
+| `--color-bg-selected` | `color-mix(in oklab, var(--color-accent) 9%, var(--color-bg-surface))` | Фон выбранной миниатюры, сегмента, карточки-радио, устройства в списке |
+| `--color-bg-accent-soft` | `--alpha-green-8` | Плашка-пояснение пары «лицо + оборот» в деталях |
+| `--color-bg-accent-hover` | `--alpha-green-12` | Hover кнопки «✕» на разделителе документов |
+| `--color-bg-overlay` | `--alpha-ink-34` | Затемнение под модалкой |
+| `--color-bg-nav` | `--alpha-white-55` | Кнопки навигации по экранам вне окна |
+| `--color-bg-control-off` | `--alpha-ink-20` | Дорожка выключенного переключателя |
+| `--color-border-subtle` | `--alpha-ink-10` | Разделители панелей и секций, подложка `gap:1px` у списков, границы карточек-опций, скелетоны |
+| `--color-border-default` | `--alpha-ink-14` | Границы вторичных кнопок в статус-баре, миниатюры, сегментов, мини-страниц в иллюстрациях, вертикальный разделитель |
+| `--color-border-strong` | `--alpha-ink-16` | Границы кнопок тулбара, полей ввода, «Остановить», мок-листов, hover поля названия |
+| `--color-border-emphasis` | `--alpha-ink-20` | Кружок шага, чекбокс, ползунок скроллбара |
+| `--color-border-heavy` | `--alpha-ink-25` | Невыбранная радио-точка, пиктограмма папки |
+| `--color-border-inverse` | `--color-ink-900` | Граница миниатюры в множественном выделении, активной кнопки навигации |
+| `--color-border-focus` | `--color-accent` | `:focus` полей ввода, выбранный элемент |
+| `--color-border-accent-soft` | `--alpha-green-40` | Граница кнопки «✕» на разделителе |
+| `--color-border-danger-soft` | `--alpha-red-40` | Hover-граница кнопки «Удалить» |
+| `--color-glyph-soft` | `--alpha-ink-13` | Строки-имитации текста: обычные строки превью, строки на листе в иллюстрации разворота |
+| `--color-glyph` | `--alpha-ink-20` | Строки на миниатюрах и в ленте сканирования |
+| `--color-glyph-strong` | `--alpha-ink-28` | Выделенные строки на превью |
+
+### Типографика
+
+| Токен | Значение | Где используется |
+|---|---|---|
+| `--font-family-sans` | `"Golos Text",system-ui,sans-serif` | Весь читаемый текст: заголовки, абзацы, кнопки, поля |
+| `--font-family-mono` | `"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace` | Кикеры, счётчики, метаданные, статусы, теги, адрес сканера |
+| `--font-weight-regular` | `400` | Абзацы, описания, поля ввода, стрелки-глифы |
+| `--font-weight-medium` | `500` | Кикеры, вторичные кнопки, названия элементов, метки |
+| `--font-weight-semibold` | `600` | Заголовки, первичные кнопки, названия документов, бейджи |
+| `--font-size-xxs` | `9.5px` | Теги проходов, «ПУСТО», подпись «лицо/оборот», надпись на split-баре, угловая метка листа, «ВЕРХ» |
+| `--font-size-xs` | `10.5px` | Кикеры капсом, счётчики страниц, номер бейджа документа, переключатель «добавить пустые», подписи полей адреса |
+| `--font-size-s` | `11.5px` | Метаданные mono, описания в карточках, тултип, панель выделения, сегменты параметров, плашка «Порядок изменён» |
+| `--font-size-m` | `12.5px` | Основной текст интерфейса: подписи, вторичные кнопки, поля ввода, лид-абзацы модалок, тост |
+| `--font-size-base` | `13px` | Кнопки тулбара и футера модалок, названия пунктов, поле адреса, «Остановить» |
+| `--font-size-l` | `14.5px` | Первичные кнопки, лид setup и flip, глифы-стрелки «→», «+» |
+| `--font-size-xl` | `17px` | Заголовок деталей страницы, счётчик на экране прохода, стрелка «↑» на листе |
+| `--font-size-2xl` | `19px` | Заголовки модалок |
+| `--font-size-3xl` | `21px` | Заголовок макета над окном |
+| `--font-size-4xl` | `24px` | Заголовок экрана сборки |
+| `--font-size-display-s` | `30px` | Заголовок экрана разворота |
+| `--font-size-display` | `33px` | Заголовок экрана настройки |
+| `--leading-none` | `1` | Однострочные метки, кнопки, кикеры |
+| `--leading-tight` | `1.15` | Display-заголовки |
+| `--leading-snug` | `1.2` | Заголовки модалок, названия, значения |
+| `--leading-normal` | `1.3` | Тег прохода, названия шагов, тултип, сегменты |
+| `--leading-relaxed` | `1.45` | Описания, подсказки, абзацы модалок |
+| `--leading-loose` | `1.55` | Лид setup, текст пустой стороны листа |
+| `--tracking-tight` | `-.02em` | Display-заголовки |
+| `--tracking-snug` | `-.01em` | Заголовок сборки и заголовок макета |
+| `--tracking-wide` | `.06em` | Пилюля «НОВЫЙ ДОКУМЕНТ», «ПУСТО», split-бар |
+| `--tracking-caps` | `.12em` | Все кикеры капсом, тег прохода, «ВЕРХ», угловая метка листа |
+
+### Отступы и размеры
+
+| Токен | Значение |
+|---|---|
+| `--space-px` | `1px` |
+| `--space-1` | `2px` |
+| `--space-2` | `4px` |
+| `--space-3` | `6px` |
+| `--space-4` | `8px` |
+| `--space-5` | `10px` |
+| `--space-6` | `12px` |
+| `--space-7` | `14px` |
+| `--space-8` | `16px` |
+| `--space-9` | `18px` |
+| `--space-10` | `20px` |
+| `--space-11` | `22px` |
+| `--space-12` | `26px` |
+| `--space-13` | `30px` |
+| `--space-14` | `34px` |
+| `--space-15` | `44px` |
+| `--space-16` | `54px` |
+| `--size-frame-w` | `1280px` |
+| `--size-frame-h` | `800px` |
+| `--size-rail` | `288px` |
+| `--size-inspector` | `300px` |
+| `--size-aside` | `470px` |
+| `--size-toolbar` | `50px` |
+| `--size-statusbar` | `46px` |
+| `--size-modal-s` | `500px` |
+| `--size-modal` | `560px` |
+| `--size-thumb` | `96px` |
+| `--size-label-col` | `118px` |
+| `--size-list-row` | `44px` |
+| `--size-control-w` | `30px` |
+| `--size-control-h` | `28px` |
+| `--size-step` | `24px` |
+| `--size-badge` | `20px` |
+| `--size-badge-s` | `17px` |
+| `--size-check` | `16px` |
+| `--size-toggle-w` | `22px` |
+| `--size-toggle-h` | `13px` |
+| `--size-toggle-knob` | `9px` |
+| `--size-dot` | `8px` |
+| `--size-scrollbar` | `10px` |
+
+### Радиусы, тени, границы
+
+| Токен | Значение | Где используется |
+|---|---|---|
+| `--radius-xs` | `2px` | Страницы (миниатюра, мок-лист, превью-строки), полоса прогресса, маркер drop |
+| `--radius-s` | `4px` | Чекбокс, бейджи 17 px, лоток, мок-листы иллюстраций, ячейки диаграммы |
+| `--radius-m` | `6px` | Кнопки в строках и статус-баре, сегменты, поля названия, бейдж документа 20 px, кнопка тоста, скроллбар |
+| `--radius-l` | `8px` | Первичная кнопка, кнопки тулбара, поля ввода, карточки списков и опций, миниатюра, тост, плашка «Порядок изменён», группа параметров |
+| `--radius-xl` | `12px` | Окно приложения, модалки, карточка иллюстрации разворота, пилюля «НОВЫЙ ДОКУМЕНТ» |
+| `--radius-round` | `50%` | Точки статуса, кружок шага, радио-точка, ползунок переключателя |
+| `--border-width` | `1px` | Все обычные границы и разделители |
+| `--border-width-dashed` | `1.5px` | Пунктир разделителя «Новый документ» |
+| `--border-width-thick` | `3px` | Верхняя кромка превью начала документа, маркер drop-позиции, крышка пиктограммы папки, рамка ползунка скроллбара |
+| `--shadow-frame` | `0 30px 70px rgba(28,26,22,.26)` | Окно приложения на канве |
+| `--shadow-modal` | `0 24px 60px rgba(28,26,22,.34)` | Все модалки |
+| `--shadow-float` | `0 12px 30px rgba(28,26,22,.3)` | Тост, тултип «Пересканировать» |
+| `--shadow-paper` | `0 8px 26px rgba(28,26,22,.16)` | Лист превью |
+| `--shadow-button` | `0 1px 2px rgba(28,26,22,.2)` | Первичная кнопка setup |
+| `--shadow-hairline` | `0 1px 0 rgba(28,26,22,.08)` | Нижний лист пачки в иллюстрации подачи |
+| `--shadow-ring-selected` | `0 0 0 2px rgba(28,26,22,.45)` | Кольцо миниатюры в множественном выделении |
+
+### Движение
+
+| Токен | Значение | Где используется |
+|---|---|---|
+| `--duration-fast` | `150ms` | Появление split-бара (opacity), переключатель (background, left) |
+| `--duration-base` | `200ms` | Поворот листа превью (transform) |
+| `--duration-loop` | `1200ms` | Циклы `feed` (подача листа), `pulse` (полоса прогресса, ячейки оборотов, скелетоны) |
+| `--duration-loop-long` | `3800ms` | Цикл `turn180` — разворот пачки |
+| `--delay-stagger` | `200ms` | Задержка между скелетонами списка устройств (×1, ×2) |
+| `--ease-standard` | `ease` | Все микропереходы |
+| `--ease-loop` | `ease-in-out` | Все циклические анимации |
+| `--z-raised` | `3` | Split-бар над миниатюрой |
+| `--z-tooltip` | `6` | Тултип над статус-баром |
+| `--opacity-soft` | `.85` | Ячейки диаграммы сборки |
+| `--opacity-disabled` | `.55` | Устройство без автоподачи |
+| `--opacity-dragging` | `.45` | Перетаскиваемая миниатюра |
+
+## Рецепты компонентов
+
+### Кнопка
+
+Анатомия: текст (опционально глиф-префикс `+`, `↺`, `←`), без иконочных шрифтов; `white-space:nowrap`, `cursor:pointer`, без обводки `outline`.
+
+**Первичная (CTA).** Фон `--color-accent`, текст `--color-text-on-accent`, `border:0`.
+- Крупная (setup, flip): `--font-weight-semibold --font-size-l/--leading-none --font-family-sans`, padding `--space-8 --space-12`, `--radius-l`, на setup тень `--shadow-button`.
+- Компактная (тулбар, футер модалок, «Добавить сканер»): `--font-weight-semibold --font-size-base`, padding `--space-6 --space-9` (тулбар: `--space-6 --space-9`, «Добавить сканер»: `--font-weight-medium --font-size-m`, padding `--space-4 --space-6`, `--radius-m`), `--radius-l`.
+- Hover: `filter:brightness(1.08)` (только крупная на setup). Active / focus-visible / disabled — не определены в макете.
+
+**Вторичная (обводка).** Фон `--color-bg-surface`, граница `--border-width solid --color-border-strong` (тулбар, «Остановить») или `--color-border-default` (статус-бар), текст `--color-text-primary` или `--color-text-secondary`, `--radius-l` (тулбар) / `--radius-m` (статус-бар, строки), `--font-weight-medium --font-size-base` (тулбар) / `--font-weight-regular --font-size-m` («Пересканировать»).
+- Hover варианты: `border-color:--color-accent; color:--color-accent` («Добавить», «Выбрать…», «↻»); `background:--color-bg-well; color:--color-text-primary` («Новый скан»); `color:--color-danger; border-color:--color-border-danger-soft` («Удалить»).
+- Тонированная: фон `--color-bg-toolbar`, граница `--color-border-strong`, `--font-weight-medium --font-size-m`, padding `--space-4 --space-6`, `--radius-m` («Вернуть», «Выбрать…»).
+
+**Иконочная.** `--size-control-w × --size-control-h`, padding 0, фон `--color-bg-surface`, граница `--color-border-default`, `--radius-m`, глиф `--font-size-base`/`--font-size-l` `--color-text-secondary`; SVG-иконка 14 px `stroke:currentColor`.
+
+**Текстовая (ghost).** `background:none; border:0`, `--font-weight-medium`, `--font-size-m` («Сменить», «Отмена» `--font-size-base`), текст `--color-accent` (действие) / `--color-text-secondary` (отмена) / `--color-text-subtle` («Сбросить параметры») / `--color-text-muted` («Обороты не нужны»). Hover: `text-decoration:underline` («Сменить») или `color:--color-accent` / `--color-text-primary`.
+
+**Инверсная (на тёмной плашке).** Фон `--color-text-on-inverse`, текст `--color-text-primary`, `--font-weight-semibold --font-size-s`/`--font-size-m`, padding `--space-4 --space-4` / `--space-4 --space-6`, `--radius-m`, `border:0`. Рядом ghost `--color-text-on-inverse-muted`.
+
+### Поле ввода
+
+Анатомия: `<input>` без обёртки, `outline:none`.
+- **Обычное** (адрес, порт): фон `--color-bg-surface`, граница `--border-width solid --color-border-strong` (мелкие поля — `--color-border-default`), `--radius-l` (мелкие — `--radius-m`), padding `--space-6 --space-6` (мелкие `--space-4 --space-5`), `--font-weight-regular --font-size-base/--leading-snug --font-family-mono` (мелкие `--font-size-m`), текст `--color-text-primary`. Подпись сверху: `--font-size-xs --font-family-mono --color-text-hint`, зазор `--space-2`.
+- **Inline-название документа**: фон `none`, граница `--border-width solid transparent`, `--radius-m`, padding `--space-2 --space-3`, `--font-weight-semibold --font-size-m` (в списке файлов — `--font-weight-regular`). Hover: `border-color:--color-border-strong; background:--color-bg-surface` (в списке файлов `--color-bg-paper`).
+- Focus: `border-color:--color-border-focus; background:--color-bg-paper`. Disabled и ошибка поля — не определены (ошибка выводится строкой статуса `--color-danger`).
+
+### Переключатель (toggle)
+
+Кнопка-строка в подвале панели: `padding --space-4 --space-7 --space-4`, верхняя граница `--color-border-subtle`, `gap --space-4`. Дорожка `--size-toggle-w × --size-toggle-h`, `border-radius --radius-l`; ползунок `--size-toggle-knob`, `--radius-round`, `--color-bg-paper`, `top --space-1`. Off: дорожка `--color-bg-control-off`, ползунок `left:--space-1`. On: дорожка `--color-accent`, `left: calc(--size-toggle-w − --size-toggle-knob − --space-1)`. Переход `background`/`left` `--duration-fast --ease-standard`. Подпись `--font-size-xs --font-family-mono --color-text-subtle`, счётчик справа `--font-size-xs --color-text-faint`.
+
+### Сегментированный выбор
+
+Ряд кнопок `gap --space-2` (параметры) / `--space-4` («Куда вставить», режимы сохранения). Сегмент: `--font-weight-medium --font-size-s/--leading-none` (крупные — `--font-size-m/--leading-normal`), padding `--space-4 --space-4` (крупные `--space-6 --space-6` / `--space-5 --space-6`), `--radius-m` (крупные `--radius-l`), граница `--border-width solid`.
+- Rest: фон `--color-bg-surface`, граница `--color-border-default`, текст `--color-text-secondary`.
+- Hover: `border-color:--color-accent` (только в параметрах setup).
+- Selected: фон `--color-bg-selected`, граница `--color-border-focus`, текст `--color-accent`. Вторая строка в крупном сегменте: `--font-size-s/--leading-normal --color-text-subtle`.
+
+### Карточка-радио («Что сканируем»)
+
+Строка `gap --space-6`, padding `--space-6 --space-6`, `--radius-l`, граница `--border-width solid`; точка `--size-check`, `--radius-round`. Rest: фон `--color-bg-surface`, граница `--color-border-default`, точка `--color-bg-paper` с границей `--color-border-heavy`. Selected: фон `--color-bg-selected`, граница `--color-border-focus`, точка заливка и граница `--color-accent`. Заголовок `--font-weight-medium --font-size-base`, описание `--font-size-s/--leading-relaxed --color-text-muted`.
+
+### Миниатюра страницы
+
+Карточка `draggable`: `padding --space-3`, `gap --space-2`, `--radius-l`, `cursor:grab`, граница `--border-width solid`. Внутри лист `aspect-ratio:1/1.414`, фон `--color-bg-paper`, граница `--color-border-default`, `--radius-xs`, padding `--space-4 --space-4`, строки высотой 2 px `--color-glyph` с `--radius-xs`. Подвал: номер `--font-weight-medium --font-size-s --font-family-mono`, сторона `--font-size-xxs --color-text-faint`. Тег прохода: `top/left --space-5`, padding `--space-1 --space-2`, `--radius-s`, `--font-weight-medium --font-size-xxs`, фон `--color-pass-N`, текст `--color-text-on-accent`. Сетка: `repeat(auto-fill, minmax(--size-thumb, 1fr))`, `gap --space-6`.
+- Rest: фон `--color-bg-surface`, граница `--color-border-default`, номер `--color-text-muted`.
+- Selected: фон `--color-bg-selected`, граница `--color-border-focus`, номер `--color-accent`.
+- Multi-selected: граница `--color-border-inverse`, `box-shadow:--shadow-ring-selected`, фон `--color-bg-selected`.
+- Dragging: `opacity:--opacity-dragging`. Drop-маркер: полоса `--border-width-thick` шириной, `--radius-xs`, `--color-accent`, слева/справа от карточки на 7 px.
+- Blank: по центру листа «ПУСТО» `--font-size-xxs --font-family-mono --color-text-faint --tracking-wide`.
+- Hover: split-бар (см. ниже) появляется `opacity 0→1` за `--duration-fast`.
+
+### Разделитель «Новый документ»
+
+**Split-бар на миниатюре** (появляется при hover, `z-index --z-raised`): `left/right/top --space-3`, высота 30 px, `border-radius --radius-m --radius-m --radius-s --radius-s`, padding `0 --space-2`, `--font-weight-semibold --font-size-xxs/--leading-normal --font-family-mono --tracking-wide`, текст `--color-text-on-accent`. Вариант «+ Новый документ»: фон `--color-accent`; «⤺ Убрать границу»: фон `--color-bg-inverse`.
+
+**Разделитель в панели**: строка `gap --space-3`, padding `--space-1 0 --space-5`. Пилюля: padding `--space-2 --space-4`, `--radius-xl`, фон `--color-accent`, текст `--color-text-on-accent` `--font-weight-semibold --font-size-xxs --font-family-mono --tracking-wide`. Линия: `border-top: --border-width-dashed dashed --color-accent`. Кнопка «✕»: `--size-badge`, `--radius-m`, граница `--color-border-accent-soft`, текст `--color-accent` `--font-size-s`; hover `background:--color-bg-accent-hover`.
+
+**Заголовок документа в панели**: бейдж `--size-badge`, `--radius-m`, фон `--color-doc-N`, номер `--font-weight-semibold --font-size-xs --font-family-mono --color-text-on-accent`; название — inline-поле; счётчик `--font-size-xs --font-family-mono --color-text-faint`. На превью начало документа — `border-top: --border-width-thick solid --color-accent` и метка `--font-size-xxs --tracking-caps --color-accent`.
+
+### Плашка-уведомление
+
+**Тост** (низ окна, по центру, `bottom 26px`): фон `--color-bg-inverse`, `--radius-l`, тень `--shadow-float`, padding `--space-6 --space-6 --space-6 --space-9`, `gap --space-7`; текст `--font-weight-medium --font-size-m --color-text-on-inverse`; опциональная инверсная кнопка. Показывается 2.6 с (после сохранения — 6 с), анимации появления нет.
+
+**Тултип**: `bottom calc(100% + 9px)`, `z-index --z-tooltip`, фон `--color-bg-inverse`, `--radius-l`, тень `--shadow-float`, padding `--space-4 --space-6`, `--font-weight-medium --font-size-s/--leading-normal --color-text-on-inverse`, `pointer-events:none`.
+
+**Информационная плашка** («Порядок изменён»): фон `--color-bg-surface`, граница `--color-border-default`, `--radius-l`, padding `--space-4 --space-4 --space-4 --space-6`, текст `--font-weight-medium --font-size-s --color-warning`, справа тонированная кнопка «Вернуть».
+
+**Плашка-пояснение** (детали): фон `--color-bg-accent-soft`, `--radius-l`, padding `--space-5 --space-6`, `--font-size-s/--leading-relaxed --color-text-primary`.
+
+**Панель множественного выделения**: фон `--color-bg-inverse`, `--radius-l`, padding `--space-4 --space-5`, `gap --space-4`; текст `--font-weight-medium --font-size-s/--leading-normal --color-text-on-inverse`; инверсная кнопка + ghost `--color-text-on-inverse-muted`.
+
+### Строка статуса устройства
+
+Первая строка группы параметров: padding `--space-7 --space-8`, фон `--color-bg-surface`, `gap --space-6`. Подключено: имя `--font-weight-medium --font-size-base/--leading-snug`, точка `--size-dot --radius-round` и подпись `--font-size-s --font-family-mono` цветом `--color-status-ready` («готов») или `--color-status-busy` («занят»); справа ghost «Сменить» `--color-accent`. Не подключено: «Сканер не подключён» `--font-size-m --color-text-subtle` и компактная первичная кнопка «+ Добавить сканер».
+
+### Модалка
+
+Оверлей `position:absolute; inset:0`, фон `--color-bg-overlay`, содержимое по центру. Окно: ширина `--size-modal` (newscan — `--size-modal-s`), `max-height: calc(100% − 60px)` для прокручиваемых, фон `--color-bg-elevated`, `--radius-xl`, тень `--shadow-modal`, `overflow:hidden`.
+- Шапка: padding `--space-11 --space-12 --space-8`, нижняя граница `--color-border-subtle`; заголовок `--font-weight-semibold --font-size-2xl/--leading-snug`; подзаголовок `--font-size-m/--leading-relaxed --color-text-muted`; опциональный кикер со статусной точкой `--size-dot` цветом `--color-warning`/`--color-accent`.
+- Тело: padding `--space-10 --space-12` (короткие — `--space-9 --space-12`), `gap --space-9`/`--space-8`/`--space-7`; секции с кикером `--font-weight-medium --font-size-xs --font-family-mono --tracking-caps --color-text-hint`, `gap --space-4`/`--space-4`.
+- Футер: фон `--color-bg-panel`, верхняя граница `--color-border-subtle`, padding `--space-8 --space-12` (короткие — `--space-7 --space-12`), слева статусная строка `--font-size-s/--leading-relaxed` (`--color-text-subtle`, при ошибке `--color-danger`), справа ghost «Отмена» + компактная первичная кнопка.
+- Карточка-вариант (mismatch, newscan): `gap --space-6`, padding `--space-6`, `--radius-l`, фон `--color-bg-surface`, граница `--color-border-subtle`; мини-лист 30×42 px `--color-bg-paper` с границей `--color-border-strong` (рекомендуемый — `--color-accent`); заголовок `--font-weight-medium --font-size-base`, описание `--font-size-s --color-text-muted`; стрелка `→` `--font-size-l --color-text-faint`. Hover: `border-color:--color-accent`.
+- Анимации открытия нет.
+
+### Элемент списка устройств
+
+Строка `gap --space-6`, padding `--space-6 --space-6`, `--radius-l`, граница `--border-width solid`. Имя `--font-weight-medium --font-size-base/--leading-snug` с `ellipsis`; IP `--font-size-s --font-family-mono --color-text-faint`; статус справа `--font-size-s --font-family-mono` цветом `--color-status-ready` / `--color-status-busy` / `--color-status-unavailable`.
+- Rest: фон `--color-bg-surface`, граница `--color-border-subtle`, `cursor:pointer`.
+- Selected: фон `--color-bg-selected`, граница `--color-border-focus`.
+- Disabled (нет автоподачи): `opacity:--opacity-disabled`, `cursor:not-allowed`, статус `--color-status-unavailable`.
+- Loading: три скелетона `--size-list-row` высотой, `--radius-l`, фон `--color-bg-surface`, граница `--color-border-subtle`, `animation: pulse --duration-loop --ease-loop infinite` с задержками 0 / `--delay-stagger` / `calc(--delay-stagger × 2)`.
+
+### Индикатор прогресса прохода
+
+Экран scan: тег прохода — padding `--space-2 --space-5`, `--radius-m`, фон `--color-accent`, `--font-weight-medium --font-size-xs/--leading-normal --font-family-mono --tracking-caps --color-text-on-accent`. Иллюстрация 150×186 px: мок-листы 118×150 px `--color-bg-paper`, граница `--color-border-strong`, `--radius-s`, нижний — тень `--shadow-hairline`; подаваемый лист `animation: feed --duration-loop --ease-loop infinite`; лоток 150×30 px `--color-bg-tray --radius-s`; полоса 126×4 px `--color-accent --radius-xs` с `pulse --duration-loop --ease-loop infinite`. Метаданные `--font-size-m --font-family-mono --color-text-subtle`. Лента отсканированных: карточки 50×70 px `--color-bg-paper`, граница `--color-border-default`, `--radius-xs`, строки `--color-glyph`, затухание `opacity 1 → .83 → .66 → .49 → .32` (шаг .17). Внизу вторичная кнопка «Остановить».
+
+Экран merge: заголовок `--font-weight-semibold --font-size-4xl/--leading-snug --tracking-snug`; ряды `gap --space-6`, подпись `--font-size-s --font-family-mono --color-text-subtle`; ячейки высотой 22 px, `gap --space-2`, `--radius-s`, `opacity --opacity-soft`, лица `--color-pass-1`, обороты `--color-pass-2` с `pulse --duration-loop`; итоговая строка `gap --space-1`, `--radius-xs`, чередование `--color-pass-1` / `--color-pass-2`.
+
+## Открытые вопросы
+
+1. **Два акцента.** Эффективный акцент интерфейса — `#4a463f` (задавался из логики), но `<a>` окрашены зелёным `#0f7a5a`/`#0a5b43`, а три полупрозрачных тона (`rgba(15,122,90,…)` — плашка пояснения, кнопка «✕» разделителя) выведены из того же зелёного. Сейчас они закреплены как `--color-link*`, `--color-bg-accent-soft/-hover`, `--color-border-accent-soft` и не следуют за `--color-accent`. Решить: либо перевести их на `color-mix` от акцента, либо признать зелёный вторым акцентом.
+2. **Янтарный в двух ролях.** `#a06a2a` одновременно `--color-warning` («Порядок изменён», «не сходятся проходы») и `--color-doc-2` / `--color-pass-2` (нейтральная раскраска второго документа/прохода). Предупреждающая семантика может считываться на оборотах диаграммы сборки.
+3. **Два display-кегля** — 30 px (flip) и 33 px (setup). Не сливал: разница 3 px заметна на заголовке; возможно, стоит договориться об одном.
+4. **Кнопки тулбара vs статус-бара** используют разные границы (`--color-border-strong` .16 vs `--color-border-default` .14) и радиусы (`--radius-l` vs `--radius-m`) при одинаковой роли «вторичная кнопка». Оставлено как в макете.
+5. **Иконочная кнопка 30×28** — не квадратная; в статус-баре высота 28 при высоте текстовых кнопок ~30. Не выравнивал.
+6. **Focus-visible, active, disabled для кнопок** в макете не заданы (есть только `:focus` у полей). Нужны решения при реализации.
+7. **Геометрия иллюстраций** (мок-листы 118×150 / 114×146 / 150×186, лоток 150×30, карточки ленты 50×70, диаграмма сборки 560 px, мини-листы 30×42, ширины колонок текста 440–520 px, позиционные `left/top/bottom`) оставлена литералами — это не токены интерфейса.
+8. **Скругление пилюли «НОВЫЙ ДОКУМЕНТ»** было 11 px при высоте ~19 px (полная пилюля); сведено к `--radius-xl` 12 px — визуально то же, но по смыслу это `pill`. Отдельный `--radius-pill` не вводил, т.к. другие пилюли в макете отсутствуют.
+9. **Тайминги логики** (интервал подачи 300 ms, пауза 520 ms, поиск устройств 1500 ms, сборка 1600 ms, тост 2600 / 6000 ms) живут в коде поведения и в токены не вынесены.
+
+10. **Контраст ниже нормы WCAG AA.** На фоне `--color-bg-surface`: `--color-text-faint`
+    даёт 2.85:1, `--color-text-ghost` — 2.09:1, `--color-text-hint` — 3.51:1,
+    `--color-text-subtle` — 4.32:1 при норме 4.5:1. Кегли в этих местах 9.5–11.5 px, то
+    есть послабление для крупного текста не применимо, а `text-faint` несёт счётчики
+    страниц, подписи «лицо / оборот», IP устройства и метку «ПУСТО». Решать затемнением
+    примитивов `--color-ink-300/400` или подъёмом кегля. Посчитано при переносе, пункт
+    заведён в `../backlog.md` → «Входящие».
+11. **Неиспользуемые keyframes `sweep`** объявлены в макете, но ни к чему не применены и в
+    токенах движения не описаны. При переносе анимаций в код — не тащить.
+
+## Блок :root
+
+```css
+:root{
+/* — примитивы: цвет — */
+--color-ink-900:#1c1a16;
+--color-ink-700:#4a463f;
+--color-ink-600:#6f6a60;
+--color-ink-500:#7c766b;
+--color-ink-400:#8b857a;
+--color-ink-300:#9b958a;
+--color-ink-200:#b5afa4;
+--color-ink-100:#cfc9bd;
+--color-sand-500:#e4e0d7;
+--color-sand-400:#e8e4db;
+--color-sand-300:#eceae3;
+--color-sand-200:#efece5;
+--color-sand-100:#f2efe8;
+--color-sand-50:#f7f5f1;
+--color-sand-25:#fbfaf7;
+--color-white:#fff;
+--color-green-600:#0f7a5a;
+--color-green-700:#0a5b43;
+--color-green-500:#2e7d4f;
+--color-red-600:#a3352a;
+--color-amber-600:#a06a2a;
+--color-blue-600:#3f6ea8;
+--color-violet-600:#6b4ea8;
+--alpha-ink-10:rgba(28,26,22,.1);
+--alpha-ink-13:rgba(28,26,22,.13);
+--alpha-ink-14:rgba(28,26,22,.14);
+--alpha-ink-16:rgba(28,26,22,.16);
+--alpha-ink-20:rgba(28,26,22,.2);
+--alpha-ink-25:rgba(28,26,22,.25);
+--alpha-ink-28:rgba(28,26,22,.28);
+--alpha-ink-34:rgba(28,26,22,.34);
+--alpha-ink-45:rgba(28,26,22,.45);
+--alpha-white-55:rgba(255,255,255,.55);
+--alpha-green-8:rgba(15,122,90,.08);
+--alpha-green-12:rgba(15,122,90,.12);
+--alpha-green-40:rgba(15,122,90,.4);
+--alpha-red-40:rgba(163,53,42,.4);
+/* — семантика: цвет — */
+--color-accent:var(--color-ink-700);
+--color-link:var(--color-green-600);
+--color-link-hover:var(--color-green-700);
+--color-success:var(--color-green-500);
+--color-danger:var(--color-red-600);
+--color-warning:var(--color-amber-600);
+--color-status-ready:var(--color-success);
+--color-status-busy:var(--color-danger);
+--color-status-unavailable:var(--color-ink-300);
+--color-doc-1:var(--color-accent);
+--color-doc-2:var(--color-amber-600);
+--color-doc-3:var(--color-blue-600);
+--color-doc-4:var(--color-violet-600);
+--color-pass-1:var(--color-accent);
+--color-pass-2:var(--color-amber-600);
+--color-pass-3:var(--color-violet-600);
+--color-text-primary:var(--color-ink-900);
+--color-text-secondary:var(--color-ink-700);
+--color-text-muted:var(--color-ink-600);
+--color-text-subtle:var(--color-ink-500);
+--color-text-hint:var(--color-ink-400);
+--color-text-faint:var(--color-ink-300);
+--color-text-ghost:var(--color-ink-200);
+--color-text-on-inverse:var(--color-sand-50);
+--color-text-on-inverse-muted:var(--color-ink-100);
+--color-text-on-accent:var(--color-white);
+--color-bg-canvas:var(--color-sand-500);
+--color-bg-app:var(--color-sand-100);
+--color-bg-surface:var(--color-sand-25);
+--color-bg-elevated:var(--color-sand-50);
+--color-bg-paper:var(--color-white);
+--color-bg-panel:var(--color-sand-300);
+--color-bg-toolbar:var(--color-sand-200);
+--color-bg-well:var(--color-sand-400);
+--color-bg-inverse:var(--color-ink-900);
+--color-bg-tray:var(--color-ink-100);
+--color-bg-selected:color-mix(in oklab, var(--color-accent) 9%, var(--color-bg-surface));
+--color-bg-accent-soft:var(--alpha-green-8);
+--color-bg-accent-hover:var(--alpha-green-12);
+--color-bg-overlay:var(--alpha-ink-34);
+--color-bg-nav:var(--alpha-white-55);
+--color-bg-control-off:var(--alpha-ink-20);
+--color-border-subtle:var(--alpha-ink-10);
+--color-border-default:var(--alpha-ink-14);
+--color-border-strong:var(--alpha-ink-16);
+--color-border-emphasis:var(--alpha-ink-20);
+--color-border-heavy:var(--alpha-ink-25);
+--color-border-inverse:var(--color-ink-900);
+--color-border-focus:var(--color-accent);
+--color-border-accent-soft:var(--alpha-green-40);
+--color-border-danger-soft:var(--alpha-red-40);
+--color-glyph-soft:var(--alpha-ink-13);
+--color-glyph:var(--alpha-ink-20);
+--color-glyph-strong:var(--alpha-ink-28);
+/* — типографика — */
+--font-family-sans:"Golos Text",system-ui,sans-serif;
+--font-family-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+--font-weight-regular:400;
+--font-weight-medium:500;
+--font-weight-semibold:600;
+--font-size-xxs:9.5px;
+--font-size-xs:10.5px;
+--font-size-s:11.5px;
+--font-size-m:12.5px;
+--font-size-base:13px;
+--font-size-l:14.5px;
+--font-size-xl:17px;
+--font-size-2xl:19px;
+--font-size-3xl:21px;
+--font-size-4xl:24px;
+--font-size-display-s:30px;
+--font-size-display:33px;
+--leading-none:1;
+--leading-tight:1.15;
+--leading-snug:1.2;
+--leading-normal:1.3;
+--leading-relaxed:1.45;
+--leading-loose:1.55;
+--tracking-tight:-.02em;
+--tracking-snug:-.01em;
+--tracking-wide:.06em;
+--tracking-caps:.12em;
+/* — отступы — */
+--space-px:1px;
+--space-1:2px;
+--space-2:4px;
+--space-3:6px;
+--space-4:8px;
+--space-5:10px;
+--space-6:12px;
+--space-7:14px;
+--space-8:16px;
+--space-9:18px;
+--space-10:20px;
+--space-11:22px;
+--space-12:26px;
+--space-13:30px;
+--space-14:34px;
+--space-15:44px;
+--space-16:54px;
+/* — размеры — */
+--size-frame-w:1280px;
+--size-frame-h:800px;
+--size-rail:288px;
+--size-inspector:300px;
+--size-aside:470px;
+--size-toolbar:50px;
+--size-statusbar:46px;
+--size-modal-s:500px;
+--size-modal:560px;
+--size-thumb:96px;
+--size-label-col:118px;
+--size-list-row:44px;
+--size-control-w:30px;
+--size-control-h:28px;
+--size-step:24px;
+--size-badge:20px;
+--size-badge-s:17px;
+--size-check:16px;
+--size-toggle-w:22px;
+--size-toggle-h:13px;
+--size-toggle-knob:9px;
+--size-dot:8px;
+--size-scrollbar:10px;
+/* — радиусы, границы, тени — */
+--radius-xs:2px;
+--radius-s:4px;
+--radius-m:6px;
+--radius-l:8px;
+--radius-xl:12px;
+--radius-round:50%;
+--border-width:1px;
+--border-width-dashed:1.5px;
+--border-width-thick:3px;
+--shadow-frame:0 30px 70px rgba(28,26,22,.26);
+--shadow-modal:0 24px 60px rgba(28,26,22,.34);
+--shadow-float:0 12px 30px rgba(28,26,22,.3);
+--shadow-paper:0 8px 26px rgba(28,26,22,.16);
+--shadow-button:0 1px 2px rgba(28,26,22,.2);
+--shadow-hairline:0 1px 0 rgba(28,26,22,.08);
+--shadow-ring-selected:0 0 0 2px rgba(28,26,22,.45);
+/* — движение, слои, прозрачность — */
+--duration-fast:150ms;
+--duration-base:200ms;
+--duration-loop:1200ms;
+--duration-loop-long:3800ms;
+--delay-stagger:200ms;
+--ease-standard:ease;
+--ease-loop:ease-in-out;
+--z-raised:3;
+--z-tooltip:6;
+--opacity-soft:.85;
+--opacity-disabled:.55;
+--opacity-dragging:.45;
+}
+```
