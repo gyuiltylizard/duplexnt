@@ -1,4 +1,11 @@
-# --- Стековое: дополнить после выбора стека (node_modules/, __pycache__/, dist/, *.log, …) ---
+# --- Стековое (Electron + electron-vite + electron-builder) ---
+node_modules/
+out/
+dist/
+release/
+*.log
+*.tsbuildinfo
+.eslintcache
 
 
 # --- Процессное (из playbook, раздел 2.2) ---

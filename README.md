@@ -12,13 +12,22 @@
 - Решения: [`docs/decisions/`](docs/decisions/) · журналы реализации:
   [`docs/solutions/`](docs/solutions/)
 
+Стек: Electron, TypeScript, React — [`docs/decisions/`](docs/decisions/), ADR 0001–0003.
+
 ## Запуск
 
-<не определено: стек не выбран — команды установки и запуска появятся в M0>
+Каркас ещё не заведён (веха M0). Команды после неё:
+
+```
+npm install
+npm run dev
+```
 
 ## Качество
 
-<не определено: команды typecheck / lint / format:check / test / test:integration / test:all
-заводятся в M0>
+```
+npm run typecheck        npm run lint        npm run format:check
+npm run test             npm run test:integration            npm run test:all
+```
 
 Подробности и назначение каждой команды — спека → «Команды».
