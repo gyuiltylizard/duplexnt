@@ -45,9 +45,9 @@ nsis:
   artifactName: duplexnt-${version}-setup.${ext}
 
 electronFuses:
-  # ВРЕМЕННО включён: на нём стоит проверка файрвола из установленного exe (U11).
-  # Пересборка в U12 его выключает — принимается установщик уже с `false`.
-  runAsNode: true
+  # Выключен с U12. В сессии 4 был временно включён: на нём стояла проверка файрвола из
+  # установленного exe (U11). Остальные fuses — гейт первого публичного релиза (KTD-35).
+  runAsNode: false
   enableNodeOptionsEnvironmentVariable: false
   enableNodeCliInspectArguments: false
   onlyLoadAppFromAsar: true
