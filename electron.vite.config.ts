@@ -50,5 +50,10 @@ export default defineConfig({
   renderer: {
     resolve: { alias: aliases },
     plugins: [react(), cspMeta()],
+    build: {
+      // Vite превращает ассеты меньше 4 КБ в data:-URI, а `font-src 'self'` их блокирует —
+      // как раз на редких подмножествах шрифтов, где это всплыло бы не сразу.
+      assetsInlineLimit: 0,
+    },
   },
 });
