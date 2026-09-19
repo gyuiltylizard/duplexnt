@@ -1,0 +1,4 @@
+{
+  "//": "Только тип модуля для каталога scripts/: Node запускает эти файлы напрямую. В корневом package.json поля type нет намеренно (см. electron.vite.config.ts).",
+  "type": "module"
+}
