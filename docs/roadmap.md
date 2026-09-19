@@ -14,8 +14,8 @@
 сразу с тест-политикой. UI-соблазн начать с богатой дизайн-системы игнорируем: оболочка без
 ядра пуста.
 
-> **Черновик.** Нарезка сделана при бутстрапе и уточнена после выбора стека (ADR 0001–0003);
-> состав вех ждёт подтверждения автора. Блокеров у M0 нет.
+> Нарезка сделана при бутстрапе, уточнена после выбора стека (ADR 0001–0003) и подтверждена
+> автором 2026-09-19. Блокеров у M0 нет.
 
 ---
 
@@ -40,7 +40,8 @@
 > Входы: требования к стеку —
 > [brainstorms/2026-09-17-stack-requirements.md](brainstorms/2026-09-17-stack-requirements.md);
 > решения — ADR [0001](decisions/0001-test-framework.md),
-> [0002](decisions/0002-language.md), [0003](decisions/0003-shell-build-delivery.md).
+> [0002](decisions/0002-language.md), [0003](decisions/0003-shell-build-delivery.md); план —
+> [plans/2026-09-19-001-feat-m0-scaffold-foundation-plan.md](plans/2026-09-19-001-feat-m0-scaffold-foundation-plan.md).
 
 Проект собирается и запускается пустым окном; заведены команды качества и pre-commit hook;
 канонические фикстуры (`ScannerCapabilities` и `ScannerStatus` ET-3850) и конвенция
