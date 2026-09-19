@@ -1,6 +1,7 @@
 import type { Api, ProbeResult } from '@shared';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import './i18n';
 import { App } from './App';
 
 const RESULT: ProbeResult = {
@@ -25,19 +26,39 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('App', () => {
-  it('монтируется в jsdom и показывает результат пробы', async () => {
-    stubApi({ probe: vi.fn(() => Promise.resolve(RESULT)) });
+describe('proof-shell', () => {
+  it('показывает название и версию libvips из ответа пробы', async () => {
+    const probe = vi.fn(() => Promise.resolve(RESULT));
+    stubApi({ probe });
     render(<App />);
 
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe("Duplexn't");
-    expect((await screen.findByText(/8\.17\.9/)).textContent).toContain('proof-shell');
+    const status = await screen.findByText('Обработка изображений работает — libvips 8.17.9');
+    expect(status.getAttribute('role')).toBe('status');
+    expect(screen.getByText('44.0.0')).toBeDefined();
+    expect(probe).toHaveBeenCalledWith({ token: 'proof-shell' });
   });
 
-  it('отклонённая проба даёт строку об ошибке, а не необработанное исключение', async () => {
+  it('пока проба идёт — строка ожидания, без версий', () => {
+    stubApi({ probe: vi.fn(() => new Promise<ProbeResult>(() => undefined)) });
+    render(<App />);
+
+    expect(screen.getByRole('status').textContent).toBe('Проверяю обработку изображений…');
+    expect(screen.queryByText('Electron')).toBeNull();
+  });
+
+  it('отклонённая проба даёт строку об ошибке через t(), без необработанного исключения', async () => {
     stubApi({ probe: vi.fn(() => Promise.reject(new TypeError('поле token'))) });
     render(<App />);
 
-    expect((await screen.findByRole('alert')).textContent).toContain('поле token');
+    expect((await screen.findByRole('alert')).textContent).toBe('Проба не прошла: поле token');
+  });
+
+  it('счётчик для 1, 2 и 5 даёт три разные формы слова', () => {
+    stubApi({ probe: vi.fn(() => Promise.resolve(RESULT)) });
+    render(<App />);
+
+    const items = screen.getAllByRole('listitem').map((item) => item.textContent);
+    expect(items).toEqual(['1 лист', '2 листа', '5 листов']);
   });
 });

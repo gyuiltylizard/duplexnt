@@ -3,6 +3,24 @@
     "title": "Duplexn't",
     "tagline": "Каркас M0 — технический экран"
   },
+  "probe": {
+    "heading": "Проба сквозного среза",
+    "pending": "Проверяю обработку изображений…",
+    "ok": "Обработка изображений работает — libvips {{libvips}}",
+    "failed": "Проба не прошла: {{message}}",
+    "image": "Тестовое изображение: {{format}}, {{width}}×{{height}}, {{bytes}} байт"
+  },
+  "versions": {
+    "electron": "Electron",
+    "chrome": "Chromium",
+    "node": "Node",
+    "sharp": "sharp",
+    "libvips": "libvips",
+    "unknown": "—"
+  },
+  "plurals": {
+    "heading": "Плюрализация"
+  },
   "sheets_one": "{{count}} лист",
   "sheets_few": "{{count}} листа",
   "sheets_many": "{{count}} листов",

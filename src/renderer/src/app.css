@@ -1,0 +1,119 @@
+/* Proof-shell M0. Значения — только переменные из tokens.css, ни одного литерала цвета,
+   размера или отступа. */
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  min-height: 100%;
+  max-width: var(--size-modal);
+  margin: 0 auto;
+  padding: var(--space-13) var(--space-10);
+}
+
+.shell__header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.shell__title {
+  margin: 0;
+  font-size: var(--font-size-display-s);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+}
+
+.shell__tagline {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding: var(--space-8) var(--space-10);
+  background: var(--color-bg-surface);
+  border: var(--border-width) solid var(--color-border-default);
+  border-radius: var(--radius-l);
+  box-shadow: var(--shadow-hairline);
+}
+
+.card__heading {
+  margin: 0;
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+}
+
+.card__note {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-s);
+}
+
+.status {
+  margin: 0;
+  font-size: var(--font-size-l);
+  font-weight: var(--font-weight-medium);
+  overflow-wrap: anywhere;
+}
+
+.status--pending {
+  color: var(--color-text-muted);
+}
+
+.status--ok {
+  color: var(--color-status-ready);
+}
+
+.status--failed {
+  color: var(--color-danger);
+}
+
+.versions {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+}
+
+.versions__row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-8);
+  padding: var(--space-3) 0;
+  border-top: var(--border-width) solid var(--color-border-subtle);
+}
+
+.versions dt {
+  color: var(--color-text-secondary);
+}
+
+.versions dd {
+  margin: 0;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-m);
+  overflow-wrap: anywhere;
+}
+
+.samples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.samples li {
+  padding: var(--space-2) var(--space-5);
+  background: var(--color-bg-elevated);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-m);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-m);
+}
