@@ -2,15 +2,17 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  DESIGN_SYSTEM_PATH,
+  TOKENS_CSS_PATH,
   describeDrift,
   extractRootBlock,
   parseCustomProperties,
 } from '../../scripts/design-tokens';
 
-// Источник правды по токенам — блок `:root` в docs/design/DESIGN_SYSTEM.md. CSS — его копия.
+// Источник правды по токенам — блок `:root` в дизайн-системе. CSS — его копия.
 // Сравниваются разобранные пары «имя — значение», а не текст: форматирование не дрейф.
-const designSystem = readFileSync(resolve('docs/design/DESIGN_SYSTEM.md'), 'utf8');
-const tokensCss = readFileSync(resolve('src/renderer/src/styles/tokens.css'), 'utf8');
+const designSystem = readFileSync(resolve(DESIGN_SYSTEM_PATH), 'utf8');
+const tokensCss = readFileSync(resolve(TOKENS_CSS_PATH), 'utf8');
 
 describe('дрейф токенов', () => {
   it('файл токенов совпадает с блоком :root дизайн-системы по именам и значениям', () => {

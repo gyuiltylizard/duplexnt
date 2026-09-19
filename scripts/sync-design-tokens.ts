@@ -3,18 +3,15 @@
 // test/design/tokens-drift.test.ts.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { extractRootBlock } from './design-tokens.ts';
-
-const SOURCE = 'docs/design/DESIGN_SYSTEM.md';
-const TARGET = 'src/renderer/src/styles/tokens.css';
+import { DESIGN_SYSTEM_PATH, TOKENS_CSS_PATH, extractRootBlock } from './design-tokens.ts';
 
 const header = `/*
- * Токены дизайн-системы. СГЕНЕРИРОВАНО из блока \`:root\` в ${SOURCE} —
+ * Токены дизайн-системы. СГЕНЕРИРОВАНО из блока \`:root\` в ${DESIGN_SYSTEM_PATH} —
  * источник правды там. Руками не править: \`npm run tokens:sync\`.
  * Расхождение с документом ловит test/design/tokens-drift.test.ts.
  */
 `;
 
-const block = extractRootBlock(readFileSync(resolve(SOURCE), 'utf8'));
-writeFileSync(resolve(TARGET), `${header}${block}\n`);
-console.log(`${TARGET} обновлён из ${SOURCE}`);
+const block = extractRootBlock(readFileSync(resolve(DESIGN_SYSTEM_PATH), 'utf8'));
+writeFileSync(resolve(TOKENS_CSS_PATH), `${header}${block}\n`);
+console.log(`${TOKENS_CSS_PATH} обновлён из ${DESIGN_SYSTEM_PATH}`);

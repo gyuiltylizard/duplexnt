@@ -4,12 +4,12 @@ import { BRIDGE_CHANNELS, type BridgeCommand, type BridgeHandlers } from '@share
 // здесь не импортируется: `ipcMain` и окно приходят аргументами и описаны структурно, поэтому
 // проверка отправителя тестируется подставным событием под обычным Node.
 
-export interface BridgeSenderEvent {
+interface BridgeSenderEvent {
   readonly sender: unknown;
   readonly senderFrame: unknown;
 }
 
-export interface BridgeWindow {
+interface BridgeWindow {
   isDestroyed(): boolean;
   readonly webContents: { readonly mainFrame: unknown };
 }

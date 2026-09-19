@@ -3,6 +3,10 @@
 // пользуются тест дрейфа (test/design/tokens-drift.test.ts) и скрипт переноса
 // (scripts/sync-design-tokens.ts).
 
+/** Пути от корня репозитория: источник правды и его сгенерированная копия. */
+export const DESIGN_SYSTEM_PATH = 'docs/design/DESIGN_SYSTEM.md';
+export const TOKENS_CSS_PATH = 'src/renderer/src/styles/tokens.css';
+
 const ROOT_HEADING = '## Блок :root';
 
 /** Содержимое css-блока под заголовком «Блок :root» — вместе с `:root { … }`. */

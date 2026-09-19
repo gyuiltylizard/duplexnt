@@ -150,10 +150,12 @@ function scanLine(text: string): { kind: ViolationKind; excerpt: string }[] {
   return found;
 }
 
+const splitLines = (text: string): string[] => text.split(/\r?\n/);
+
 export function scanText(text: string, file: string): Violation[] {
-  return text
-    .split(/\r?\n/)
-    .flatMap((line, index) => scanLine(line).map((found) => ({ file, line: index + 1, ...found })));
+  return splitLines(text).flatMap((line, index) =>
+    scanLine(line).map((found) => ({ file, line: index + 1, ...found })),
+  );
 }
 
 export function scanForKnownValues(
@@ -162,7 +164,7 @@ export function scanForKnownValues(
   values: readonly string[],
 ): Violation[] {
   const needles = values.map((value) => value.toLowerCase());
-  return text.split(/\r?\n/).flatMap((line, index) => {
+  return splitLines(text).flatMap((line, index) => {
     const haystack = line.toLowerCase();
     return needles
       .filter((needle) => haystack.includes(needle))
@@ -180,8 +182,7 @@ export function loadKnownValues(root: string): string[] | null {
   if (!existsSync(path)) {
     return null;
   }
-  return readFileSync(path, 'utf8')
-    .split(/\r?\n/)
+  return splitLines(readFileSync(path, 'utf8'))
     .map((line) => line.trim())
     .filter((line) => line.length >= MIN_VALUE_LENGTH && !line.startsWith('#'));
 }
