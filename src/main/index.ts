@@ -1,10 +1,12 @@
-import { app, BrowserWindow, session } from 'electron';
+import { app, BrowserWindow, ipcMain, session } from 'electron';
 import { join } from 'node:path';
+import { handleProbe } from '@core';
 import { APP_NAME } from '@shared';
+import { registerBridge } from './bridge';
 import { denyAllPermissions, installShellGuards } from './shell/guards';
 import { buildWebPreferences } from './shell/web-preferences';
 
-function createWindow(): void {
+function createWindow(): BrowserWindow {
   const window = new BrowserWindow({
     width: 1100,
     height: 760,
@@ -22,6 +24,10 @@ function createWindow(): void {
     console.error(`[main] preload не загрузился: ${preloadPath}`, error);
   });
 
+  return window;
+}
+
+function loadRenderer(window: BrowserWindow): void {
   const devServerUrl = process.env.ELECTRON_RENDERER_URL;
   if (!app.isPackaged && devServerUrl !== undefined) {
     void window.loadURL(devServerUrl);
@@ -35,7 +41,14 @@ installShellGuards(app);
 
 void app.whenReady().then(() => {
   denyAllPermissions(session.defaultSession);
-  createWindow();
+
+  // Мост регистрируется до загрузки страницы и получает окно: без него нечем проверить
+  // отправителя. Обработчики зовут ядро с сырым входом — проверка входа живёт в ядре.
+  const window = createWindow();
+  registerBridge(ipcMain, window, {
+    probe: (rawRequest) => handleProbe(rawRequest),
+  });
+  loadRenderer(window);
 });
 
 app.on('window-all-closed', () => {

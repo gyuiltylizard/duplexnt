@@ -13,7 +13,7 @@
     "typecheck": "tsc -b",
     "lint": "eslint .",
     "test": "vitest run --project node --project jsdom",
-    "test:integration": "vitest run --project integration --passWithNoTests",
+    "test:integration": "vitest run --project integration",
     "test:all": "npm run test && npm run test:integration",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -45,5 +45,8 @@
     "typescript-eslint": "8.70.0",
     "vite": "7.3.6",
     "vitest": "5.0.1"
+  },
+  "dependencies": {
+    "sharp": "0.35.4"
   }
 }
