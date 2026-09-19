@@ -1,0 +1,10 @@
+{
+  "app": {
+    "title": "Duplexn't",
+    "tagline": "Каркас M0 — технический экран"
+  },
+  "sheets_one": "{{count}} лист",
+  "sheets_few": "{{count}} листа",
+  "sheets_many": "{{count}} листов",
+  "sheets_other": "{{count}} листа"
+}
