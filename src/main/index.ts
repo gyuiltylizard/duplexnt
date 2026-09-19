@@ -1,6 +1,8 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, session } from 'electron';
 import { join } from 'node:path';
 import { APP_NAME } from '@shared';
+import { denyAllPermissions, installShellGuards } from './shell/guards';
+import { buildWebPreferences } from './shell/web-preferences';
 
 function createWindow(): void {
   const window = new BrowserWindow({
@@ -8,9 +10,7 @@ function createWindow(): void {
     height: 760,
     show: false,
     title: APP_NAME,
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-    },
+    webPreferences: buildWebPreferences(join(__dirname, '../preload/index.js')),
   });
 
   window.once('ready-to-show', () => {
@@ -30,7 +30,11 @@ function createWindow(): void {
   }
 }
 
+// Гварды ставятся до первого окна: событие `web-contents-created` не повторяется.
+installShellGuards(app);
+
 void app.whenReady().then(() => {
+  denyAllPermissions(session.defaultSession);
   createWindow();
 });
 
