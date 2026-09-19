@@ -1,0 +1,18 @@
+# Общее правило идёт первым: в .gitattributes выигрывает последнее совпадение.
+* text=auto eol=lf
+
+# Бинарные типы — без конвертации и без текстового диффа.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.icns binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+
+# Фикстуры — байт в байт: ни git, ни форматер их не трогают.
+test/fixtures/** -text

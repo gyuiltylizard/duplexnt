@@ -1,0 +1,28 @@
+/* Подложка mermaid-диаграмм в превью markdown.
+   Подключается через "markdown.styles" в .vscode/settings.json.
+   Тема редактора (Solarized Dark) не затрагивается — только превью. */
+
+/* Карточка появляется ТОЛЬКО когда svg уже отрисован: иначе на месте
+   ещё не готовой диаграммы висел бы белый прямоугольник (рендер небыстрый).
+   Стилизуется именно .mermaid, а не .mermaid-wrapper: wrapper — контейнер
+   расширения для зума и ресайза, у него overflow:hidden и своя высота. */
+.mermaid:has(svg) {
+  background-color: #fbfaf7;
+  border: 1px solid #ded8c8;
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+
+/* фон даёт карточка, сам svg прозрачный */
+.mermaid > svg {
+  background: transparent;
+}
+
+/* блок с ошибкой mermaid — заметный, а не молча пустой */
+.mermaid-error {
+  background-color: #fdf2f2;
+  border: 1px solid #d99c9c;
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: #6b1b1b;
+}

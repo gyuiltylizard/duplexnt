@@ -1,0 +1,22 @@
+{
+  "name": "duplexnt",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Двусторонний скан на сканере без дуплекса: два прохода по eSCL и сборка в PDF",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*": "prettier --write --ignore-unknown"
+  },
+  "devDependencies": {
+    "husky": "9.1.7",
+    "lint-staged": "17.5.1",
+    "prettier": "3.9.8"
+  }
+}

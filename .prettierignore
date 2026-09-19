@@ -1,0 +1,13 @@
+# Макет — замороженный артефакт дизайна, не наш код.
+docs/design/mock/
+
+# Фикстуры — байт в байт (см. .gitattributes).
+test/fixtures/
+
+# Выходы сборки и установщика.
+out/
+dist/
+release/
+
+# Генерируется npm.
+package-lock.json

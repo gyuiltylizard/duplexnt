@@ -1,0 +1,11 @@
+{
+  // Свой CSS только для превью markdown (фон mermaid-диаграмм).
+  "markdown.styles": [".vscode/markdown-preview.css"],
+  // Тема редактора тёмная, но диаграммы рисуем светлой схемой — под светлую карточку.
+  "markdown-mermaid.darkModeTheme": "default",
+  // Концы строк — LF: третий слой защиты рядом с .gitattributes и prettier.
+  "files.eol": "\n",
+  // Форматирование — prettier, при сохранении.
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.formatOnSave": true
+}
