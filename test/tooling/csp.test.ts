@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildCsp, parseCsp } from './csp';
+import { buildCsp, parseCsp } from '../../tooling/csp';
 
 const DEV_ORIGIN = 'http://localhost:5173';
 

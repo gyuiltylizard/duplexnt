@@ -21,7 +21,11 @@ export function App() {
   useEffect(() => {
     let cancelled = false;
 
-    window.api.probe({ token: 'proof-shell' }).then(
+    // Вызов идёт изнутри промиса: если preload не загрузился и `window.api` нет, синхронный
+    // TypeError попадает в ту же ветку отказа, а не оставляет окно навсегда в «Проверяю…».
+    const probing = Promise.resolve().then(() => window.api.probe({ token: 'proof-shell' }));
+
+    probing.then(
       (result) => {
         if (!cancelled) {
           setProbe({ status: 'ok', result });

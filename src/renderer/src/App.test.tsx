@@ -54,6 +54,13 @@ describe('proof-shell', () => {
     expect((await screen.findByRole('alert')).textContent).toBe('Проба не прошла: поле token');
   });
 
+  it('preload не загрузился, window.api нет — строка об ошибке, а не вечное ожидание', async () => {
+    render(<App />);
+
+    expect((await screen.findByRole('alert')).textContent).toContain('Проба не прошла');
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
   it('счётчик для 1, 2 и 5 даёт три разные формы слова', () => {
     stubApi({ probe: vi.fn(() => Promise.resolve(RESULT)) });
     render(<App />);

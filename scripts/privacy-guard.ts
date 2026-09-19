@@ -16,7 +16,7 @@
 // parameter properties, а импорты — только `node:*`.
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -49,7 +49,8 @@ export const EXEMPT_FILES = ['docs/duplexnt-tech.md'];
 
 // --- Паттерны ------------------------------------------------------------------------------
 
-export type ViolationKind = 'uuid' | 'ipv4' | 'ipv6' | 'mac' | 'hostname' | 'known-value';
+export type ViolationKind =
+  'uuid' | 'ipv4' | 'ipv6' | 'mac' | 'fingerprint' | 'hostname' | 'known-value';
 
 export interface Violation {
   readonly file: string;
@@ -58,8 +59,11 @@ export interface Violation {
   readonly excerpt: string;
 }
 
+// Окружение отсекает только продолжение hex-цепочки: UUID в имени файла (`scan-<uuid>.xml`),
+// перед суффиксом (`<uuid>-caps`) и в URL-кодировке (`urn%3Auuid%3A<uuid>`) — тоже UUID.
+// `%3A` кончается на hex-цифру, поэтому процентная кодировка слева разрешена отдельно.
 const UUID =
-  /(?<![0-9a-f-])[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![0-9a-f-])/gi;
+  /(?:(?<![0-9a-f])|(?<=%[0-9a-f]{2}))[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![0-9a-f])/gi;
 
 // Ровно четыре части: ни слева, ни справа нет продолжения вида «.5» — иначе это версия 1.2.3.4.5.
 const IPV4 = /(?<![\d.])(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?!\.?\d)/g;
@@ -68,12 +72,19 @@ const IPV4 = /(?<![\d.])(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?!\.?\d)/g;
 const IPV6 =
   /(?<![\w:.])(?:(?:[0-9a-f]{1,4}:){7}[0-9a-f]{1,4}|(?:[0-9a-f]{1,4}:){1,7}:(?:[0-9a-f]{1,4}(?::[0-9a-f]{1,4}){0,6})?|::(?:[0-9a-f]{1,4}(?::[0-9a-f]{1,4}){0,6})?)(?![\w:])/gi;
 
-const MAC = /(?<![0-9a-f:-])[0-9a-f]{2}([:-])[0-9a-f]{2}(?:\1[0-9a-f]{2}){4}(?![0-9a-f:-])/gi;
+// Цепочка hex-пар через `:` или `-`: шесть пар — MAC, шестнадцать и больше — отпечаток
+// сертификата (MD5, SHA-1, SHA-256). Берётся вся цепочка целиком, поэтому `MAC:00:1A:…`, где
+// метка сама похожа на hex-пару, тоже ловится. Время вида 12:34:56 — три пары, не цепочка.
+const HEX_PAIR_CHAIN =
+  /(?<![0-9a-f])[0-9a-f]{2}([:-])(?:[0-9a-f]{2}\1){4,}[0-9a-f]{2}(?![0-9a-f])/gi;
+const FINGERPRINT_MIN_PAIRS = 16;
 
-// Заводские имена Epson (EPSON + шесть hex) и любые имена `.local`. Имена файлов вроде
-// `.env.local` и `config.local.yaml` отсекаются окружением.
+// Две ветки с РАЗНЫМ окружением. Заводское имя Epson (EPSON + шесть hex — последние байты MAC)
+// идентифицирует устройство с любым суффиксом и в любом соседстве: `.lan`, `.fritz.box`,
+// `._uscan._tcp.local`, `-2`, `usb-…_caps`. Произвольные имена `.local` ловятся осторожнее:
+// имена файлов вроде `.env.local` и `config.local.yaml` отсекаются окружением.
 const HOSTNAME =
-  /(?<![\w.-])(?:EPSON[0-9a-f]{6}(?:\.local)?|[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.local)(?!\.?[\w-])/gi;
+  /(?<![0-9a-z])EPSON[0-9a-f]{6}(?![0-9a-f])(?:\.local(?![\w-]))?|(?<![\w.-])[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.local(?!\.?[\w-])/gi;
 
 // Слева от четырёхчастного числа стоит слово «версия» и подобные, `v`, `@` — это номер версии.
 // Частные адреса эта поблажка не покрывает: домашняя сеть — главный канал утечки.
@@ -137,8 +148,9 @@ function scanLine(text: string): { kind: ViolationKind; excerpt: string }[] {
     }
   }
 
-  for (const match of text.matchAll(MAC)) {
-    found.push({ kind: 'mac', excerpt: match[0] });
+  for (const match of text.matchAll(HEX_PAIR_CHAIN)) {
+    const pairs = (match[0].length + 1) / 3;
+    found.push({ kind: pairs >= FINGERPRINT_MIN_PAIRS ? 'fingerprint' : 'mac', excerpt: match[0] });
   }
 
   for (const match of text.matchAll(HOSTNAME)) {
@@ -158,17 +170,40 @@ export function scanText(text: string, file: string): Violation[] {
   );
 }
 
+// Вторая форма значения — без разделителей: MAC через дефис вместо двоеточия, отпечаток
+// сплошным hex, UUID без дефисов. Только для достаточно длинных чисто шестнадцатеричных
+// значений: у слов и имён склейка строки дала бы случайные совпадения.
+const SEPARATORS = /[\s:.-]/g;
+const MIN_COMPACT_LENGTH = 8;
+
+function compactForm(value: string): string | null {
+  const compact = value.replace(SEPARATORS, '');
+  return compact.length >= MIN_COMPACT_LENGTH && /^[0-9a-f]+$/.test(compact) ? compact : null;
+}
+
 export function scanForKnownValues(
   text: string,
   file: string,
   values: readonly string[],
 ): Violation[] {
-  const needles = values.map((value) => value.toLowerCase());
+  const needles = values.map((value) => {
+    const exact = value.toLowerCase();
+    return { exact, compact: compactForm(exact) };
+  });
   return splitLines(text).flatMap((line, index) => {
     const haystack = line.toLowerCase();
+    const compactHaystack = haystack.replace(SEPARATORS, '');
     return needles
-      .filter((needle) => haystack.includes(needle))
-      .map((needle) => ({ file, line: index + 1, kind: 'known-value' as const, excerpt: needle }));
+      .filter(
+        ({ exact, compact }) =>
+          haystack.includes(exact) || (compact !== null && compactHaystack.includes(compact)),
+      )
+      .map(({ exact }) => ({
+        file,
+        line: index + 1,
+        kind: 'known-value' as const,
+        excerpt: exact,
+      }));
   });
 }
 
@@ -176,13 +211,28 @@ export function scanForKnownValues(
 
 const MIN_VALUE_LENGTH = 4;
 
-/** `null` — списка нет. Пустые строки, комментарии `#` и слишком короткие значения пропускаются. */
+// Windows PowerShell 5.1 пишет перенаправленный вывод в UTF-16LE с BOM. Без декодирования такой
+// журнал спайка выглядел бы бинарным и проходил мимо обоих механизмов. `null` — бинарный файл.
+function decodeText(content: Buffer): string | null {
+  if (content.length >= 2 && content[0] === 0xff && content[1] === 0xfe) {
+    return content.subarray(2).toString('utf16le');
+  }
+  if (content.length >= 2 && content[0] === 0xfe && content[1] === 0xff) {
+    return Buffer.from(content.subarray(2)).swap16().toString('utf16le');
+  }
+  return content.subarray(0, 8000).includes(0) ? null : content.toString('utf8');
+}
+
+/**
+ * `null` — списка нет. Пустые строки, комментарии `#` и слишком короткие значения пропускаются;
+ * список, в котором после этого ничего не осталось, возвращается пустым массивом.
+ */
 export function loadKnownValues(root: string): string[] | null {
   const path = join(root, VALUES_FILE);
   if (!existsSync(path)) {
     return null;
   }
-  return splitLines(readFileSync(path, 'utf8'))
+  return splitLines(decodeText(readFileSync(path)) ?? '')
     .map((line) => line.trim())
     .filter((line) => line.length >= MIN_VALUE_LENGTH && !line.startsWith('#'));
 }
@@ -207,38 +257,68 @@ export interface GuardReport {
   readonly ok: boolean;
   readonly violations: Violation[];
   readonly exempted: string[];
+  /** Бинарные файлы: паттерны по ним не идут, список значений — идёт. */
+  readonly skippedBinary: string[];
   readonly valuesCheck: 'ran' | 'skipped';
   readonly fatal: string | null;
 }
-
-const isBinary = (content: Buffer): boolean => content.subarray(0, 8000).includes(0);
 
 export function runGuard(options: GuardOptions): GuardReport {
   const { root, files } = options;
   const read = options.read ?? ((file: string) => readFileSync(join(root, file)));
 
-  const values = loadKnownValues(root);
+  // Пустой список — то же, что отсутствующий: иначе файл из одних комментариев рапортовал бы
+  // «список значений проверен», ничего не проверив.
+  const loaded = loadKnownValues(root);
+  const values = loaded !== null && loaded.length > 0 ? loaded : null;
   const fatal =
     values === null && hasRawCaptures(root)
-      ? `В ${RAW_DIR}/ лежат сырые данные устройства, а списка значений ${VALUES_FILE} нет. ` +
+      ? `В ${RAW_DIR}/ лежат сырые данные устройства, а списка значений ${VALUES_FILE} нет или он пуст. ` +
         'Заполни список (UUID, серийный номер, адреса, MAC, имя хоста, отпечаток и субъект ' +
         'сертификата) — по строке на значение.'
       : null;
 
   const violations: Violation[] = [];
   const exempted: string[] = [];
+  const skippedBinary: string[] = [];
+
+  // Находки не в строке текста: номер строки 0, в выдержке — где именно нашлось.
+  const located =
+    (where: string) =>
+    (violation: Violation): Violation => ({
+      ...violation,
+      line: 0,
+      excerpt: `${where}: ${violation.excerpt}`,
+    });
 
   for (const file of files) {
     if (EXEMPT_FILES.includes(file)) {
       exempted.push(file);
       continue;
     }
+    const inPatternScope = PATTERN_SCOPE.some((prefix) => file.startsWith(prefix));
+
+    // Имя файла и каталога попадает в публичную историю так же, как содержимое.
+    if (inPatternScope) {
+      violations.push(...scanText(file, file).map(located('в имени файла')));
+    }
+    if (values !== null) {
+      violations.push(...scanForKnownValues(file, file, values).map(located('в имени файла')));
+    }
+
     const content = read(file);
-    if (isBinary(content)) {
+    const text = decodeText(content);
+    if (text === null) {
+      skippedBinary.push(file);
+      // Метаданные PDF и JPEG могут нести серийный номер и имя устройства.
+      if (values !== null) {
+        const asBytes = `${content.toString('latin1')}\n${content.toString('utf16le')}`;
+        const hits = scanForKnownValues(asBytes, file, values).map(located('в бинарном файле'));
+        violations.push(...hits);
+      }
       continue;
     }
-    const text = content.toString('utf8');
-    if (PATTERN_SCOPE.some((prefix) => file.startsWith(prefix))) {
+    if (inPatternScope) {
       violations.push(...scanText(text, file));
     }
     if (values !== null) {
@@ -250,6 +330,7 @@ export function runGuard(options: GuardOptions): GuardReport {
     ok: fatal === null && violations.length === 0,
     violations,
     exempted,
+    skippedBinary,
     valuesCheck: values === null ? 'skipped' : 'ran',
     fatal,
   };
@@ -287,6 +368,9 @@ function main(argv: readonly string[]): number {
   for (const file of report.exempted) {
     console.log(`страж приватности: исключение — ${file} (см. EXEMPT_FILES)`);
   }
+  for (const file of report.skippedBinary) {
+    console.log(`страж приватности: бинарный файл, паттерны не применялись — ${file}`);
+  }
   if (report.fatal !== null) {
     console.error(`страж приватности: ${report.fatal}`);
   }
@@ -308,7 +392,13 @@ function main(argv: readonly string[]): number {
   return 0;
 }
 
+// Сравниваются настоящие пути: через junction или symlink Node отдаёт `import.meta.url` уже
+// разрешённым, простое сравнение строк не совпало бы — и hook молча вышел бы с нулём.
 const entry = process.argv[1];
-if (entry !== undefined && resolve(entry) === fileURLToPath(import.meta.url)) {
+const isCli =
+  entry !== undefined &&
+  existsSync(entry) &&
+  realpathSync(resolve(entry)) === realpathSync(fileURLToPath(import.meta.url));
+if (isCli) {
   process.exitCode = main(process.argv.slice(2));
 }

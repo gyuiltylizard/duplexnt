@@ -10,6 +10,7 @@ import {
   VALUES_FILE,
   listTrackedFiles,
   runGuard,
+  scanForKnownValues,
   scanText,
 } from '../../scripts/privacy-guard';
 
@@ -43,8 +44,23 @@ describe('scanText — паттерны', () => {
     ['hostname', 'EPSON1A2B3C.local'],
     ['hostname', 'ty=EPSON1a2b3c'],
     ['hostname', 'нашёлся my-printer.local'],
+    // Находки ревью M0: идентификатор рядом с `-`, `_`, расширением или чужим суффиксом.
+    ['uuid', `scan-${SYNTHETIC_UUID}.xml`],
+    ['uuid', `${SYNTHETIC_UUID}-caps`],
+    ['uuid', `urn%3Auuid%3A${SYNTHETIC_UUID}`],
+    ['hostname', 'EPSON1A2B3C.lan'],
+    ['hostname', 'EPSON1A2B3C.fritz.box'],
+    ['hostname', 'сервис EPSON1A2B3C._uscan._tcp.local'],
+    ['hostname', 'EPSON1A2B3C-2'],
+    ['hostname', 'usb-EPSON1A2B3C_caps'],
+    ['mac', 'MAC:00:1A:2B:3C:4D:5E'],
+    ['fingerprint', 'SHA1 AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89:AB:CD:EF:01'],
   ])('ловит %s: %s', (kind, text) => {
     expect(kinds(text)).toEqual([kind]);
+  });
+
+  it('заводское имя Epson с лишним hex-знаком — не имя хоста', () => {
+    expect(kinds('артикул EPSON1A2B3C4')).toEqual([]);
   });
 
   it('называет файл и строку', () => {
@@ -179,6 +195,74 @@ describe('runGuard — области и список значений', () => {
     expect(report.ok).toBe(true);
   });
 
+  it('идентификатор в имени файла или каталога — нарушение, даже при чистом содержимом', () => {
+    const root = repo({
+      'docs/solutions/EPSON1A2B3C-192.168.1.50.md': 'чисто',
+      'test/fixtures/escl/EPSON1A2B3C/a.xml': '<x/>',
+    });
+    const report = runGuard({
+      root,
+      files: ['docs/solutions/EPSON1A2B3C-192.168.1.50.md', 'test/fixtures/escl/EPSON1A2B3C/a.xml'],
+    });
+
+    expect(report.ok).toBe(false);
+    expect(report.violations.map((violation) => violation.kind).sort()).toEqual([
+      'hostname',
+      'hostname',
+      'ipv4',
+    ]);
+  });
+
+  it('UTF-16 из PowerShell читается как текст, а не пропускается как бинарный', () => {
+    const root = repo({});
+    const path = 'spikes/log.txt';
+    mkdirSync(dirname(join(root, path)), { recursive: true });
+    writeFileSync(
+      join(root, path),
+      Buffer.from(
+        `${String.fromCharCode(0xfeff)}сканер EPSON1A2B3C.local на 192.168.1.50`,
+        'utf16le',
+      ),
+    );
+    const report = runGuard({ root, files: [path] });
+
+    expect(report.violations.map((violation) => violation.kind).sort()).toEqual([
+      'hostname',
+      'ipv4',
+    ]);
+    expect(report.skippedBinary).toEqual([]);
+  });
+
+  it('значение из списка ловится и внутри бинарного файла; пропуск виден в отчёте', () => {
+    const root = repo({ [VALUES_FILE]: 'X7QZ012345' });
+    const path = 'docs/solutions/scan.pdf';
+    mkdirSync(dirname(join(root, path)), { recursive: true });
+    writeFileSync(
+      join(root, path),
+      Buffer.concat([
+        Buffer.from([0x25, 0x50, 0x44, 0x46, 0x00]),
+        Buffer.from('/Serial (X7QZ012345)'),
+      ]),
+    );
+    const report = runGuard({ root, files: [path] });
+
+    expect(report.skippedBinary).toEqual([path]);
+    expect(report.violations.map((violation) => violation.kind)).toEqual(['known-value']);
+  });
+
+  it('список есть, но пуст, а сырые данные лежат — страж падает, а не рапортует «проверен»', () => {
+    const root = repo({
+      [VALUES_FILE]: ['# только комментарий', '', 'ab', ''].join('\n'),
+      [`${RAW_DIR}/ScannerCapabilities.xml`]: '<сырой ответ/>',
+      'docs/solutions/a.md': 'чисто',
+    });
+    const report = runGuard({ root, files: ['docs/solutions/a.md'] });
+
+    expect(report.valuesCheck).toBe('skipped');
+    expect(report.ok).toBe(false);
+    expect(report.fatal).toContain(VALUES_FILE);
+  });
+
   it('бинарные файлы пропускаются', () => {
     const root = repo({ 'docs/solutions/a.png': `PNG${String.fromCharCode(0)} 192.168.1.50` });
 
@@ -195,5 +279,20 @@ describe('страж на самом репозитории', () => {
     expect(
       report.violations.map((v) => `${v.file}:${String(v.line)} [${v.kind}] ${v.excerpt}`),
     ).toEqual([]);
+  });
+});
+
+describe('scanForKnownValues — другая запись того же значения', () => {
+  it('MAC и отпечаток ловятся с другими разделителями и без них', () => {
+    const values = ['00:1A:2B:3C:4D:5E'];
+
+    expect(scanForKnownValues('mac 00-1a-2b-3c-4d-5e', 'a', values)).toHaveLength(1);
+    expect(scanForKnownValues('mac 001a2b3c4d5e', 'a', values)).toHaveLength(1);
+    expect(scanForKnownValues('mac 00:1A:2B:3C:4D:5E', 'a', values)).toHaveLength(1);
+  });
+
+  it('короткие и нехексовые значения сравниваются только буквально', () => {
+    expect(scanForKnownValues('имя my home scanner', 'a', ['My-Home-Scanner'])).toHaveLength(0);
+    expect(scanForKnownValues('хост My-Home-Scanner', 'a', ['My-Home-Scanner'])).toHaveLength(1);
   });
 });

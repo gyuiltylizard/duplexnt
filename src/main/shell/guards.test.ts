@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
-import type { WebContents } from 'electron';
+import type { App, Session, WebContents } from 'electron';
 import { describe, expect, it, vi } from 'vitest';
-import { guardWebContents, isSameDocument } from './guards';
+import { denyAllPermissions, guardWebContents, installShellGuards, isSameDocument } from './guards';
 
 function fakeContents(currentUrl: string) {
   const emitter = new EventEmitter();
@@ -51,5 +51,49 @@ describe('guardWebContents', () => {
 
     const handler = setWindowOpenHandler.mock.calls[0]?.[0] as () => { action: string };
     expect(handler()).toEqual({ action: 'deny' });
+  });
+});
+
+describe('installShellGuards', () => {
+  it('вешает гварды на каждое новое webContents', () => {
+    const app = new EventEmitter();
+    installShellGuards(app as unknown as App);
+
+    const first = fakeContents('file:///app/index.html');
+    const second = fakeContents('file:///app/index.html');
+    app.emit('web-contents-created', {}, first.contents);
+    app.emit('web-contents-created', {}, second.contents);
+
+    for (const { emitter, setWindowOpenHandler } of [first, second]) {
+      const event = { preventDefault: vi.fn() };
+      emitter.emit('will-navigate', event, 'https://example.com/');
+      expect(event.preventDefault).toHaveBeenCalledOnce();
+      expect(setWindowOpenHandler).toHaveBeenCalledOnce();
+    }
+  });
+});
+
+describe('denyAllPermissions', () => {
+  it('отвечает отказом на запрос, проверку и доступ к устройству', () => {
+    const session = {
+      setPermissionRequestHandler: vi.fn(),
+      setPermissionCheckHandler: vi.fn(),
+      setDevicePermissionHandler: vi.fn(),
+    };
+    denyAllPermissions(session as unknown as Session);
+
+    const onRequest = session.setPermissionRequestHandler.mock.calls[0]?.[0] as (
+      contents: unknown,
+      permission: string,
+      callback: (granted: boolean) => void,
+    ) => void;
+    const callback = vi.fn();
+    onRequest({}, 'media', callback);
+    expect(callback).toHaveBeenCalledExactlyOnceWith(false);
+
+    const onCheck = session.setPermissionCheckHandler.mock.calls[0]?.[0] as () => boolean;
+    const onDevice = session.setDevicePermissionHandler.mock.calls[0]?.[0] as () => boolean;
+    expect(onCheck()).toBe(false);
+    expect(onDevice()).toBe(false);
   });
 });

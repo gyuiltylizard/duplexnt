@@ -136,9 +136,78 @@ describe('глобальное ослабление TLS', () => {
     }
   });
 
+  it('ключи Chromium, шаблонные строки и доступ по строковому ключу — тоже ошибка', async () => {
+    const samples = [
+      "declare const app: { commandLine: { appendSwitch(s: string): void } };\napp.commandLine.appendSwitch('ignore-certificate-errors');\n",
+      "export const flag = '--ignore-certificate-errors';\n",
+      "export const flag = 'allow-insecure-localhost';\n",
+      'declare const app: { on(n: string, f: unknown): void };\napp.on(`certificate-error`, null);\n',
+      "declare const s: Record<string, (f: unknown) => void>;\ns['setCertificateVerifyProc']?.(null);\n",
+      'export const options = { checkServerIdentity: () => undefined };\n',
+    ];
+    for (const code of samples) {
+      const messages = await lint('src/main/x.ts', code);
+      expect(messages.length, code).toBeGreaterThan(0);
+      expect(messages[0]).toContain('no-restricted-syntax');
+    }
+  });
+
+  it('запрет действует в каждом слое — блок слоя его не затирает', async () => {
+    for (const file of [
+      'src/shared/x.ts',
+      'src/core/x.ts',
+      'src/main/x.ts',
+      'src/preload/x.ts',
+      'src/renderer/src/x.tsx',
+      'src/core/x.test.ts',
+    ]) {
+      const messages = await lint(file, 'export const o = { rejectUnauthorized: false };\n');
+      expect(messages, file).toHaveLength(1);
+    }
+  });
+
   it('обычный сетевой код — чисто', async () => {
     const code =
       "import { Agent } from 'node:https';\nexport const agent = new Agent({ keepAlive: true });\n";
     expect(await lint('src/core/net/x.ts', code)).toEqual([]);
+  });
+});
+
+describe('обходы статического импорта', () => {
+  it('динамический import() через границу слоя — ошибка', async () => {
+    expect(
+      await lint('src/core/x.ts', "export const e = await import('electron');\n"),
+    ).toHaveLength(1);
+    expect(
+      await lint('src/renderer/src/x.tsx', "export const c = import('@core');\n"),
+    ).toHaveLength(1);
+    expect(
+      await lint('src/renderer/src/x.tsx', "export const c = import('../../core/index');\n"),
+    ).toHaveLength(1);
+  });
+
+  it('require() через границу слоя — ошибка', async () => {
+    const code =
+      "declare const require: (id: string) => unknown;\nexport const e = require('electron');\n";
+    expect(await lint('src/core/x.ts', code)).toHaveLength(1);
+  });
+
+  it('разрешённый динамический импорт — чисто', async () => {
+    expect(await lint('src/main/x.ts', "export const c = import('@core');\n")).toEqual([]);
+    expect(await lint('src/core/x.ts', "export const h = import('node:https');\n")).toEqual([]);
+  });
+
+  it("голое имя встроенного модуля — то же, что 'node:'", async () => {
+    expect(await lint('src/preload/index.ts', "import 'fs';\n")).toHaveLength(1);
+    expect(await lint('src/renderer/src/x.tsx', "import 'fs/promises';\n")).toHaveLength(1);
+    expect(await lint('src/shared/x.ts', "import 'path';\n")).toHaveLength(1);
+    expect(await lint('src/main/x.ts', "import 'path';\nimport 'fs/promises';\n")).toEqual([]);
+    expect(await lint('src/core/x.ts', "import 'path';\n")).toEqual([]);
+  });
+
+  it('пакет с именем, похожим на встроенный модуль, не задет', async () => {
+    expect(await lint('src/renderer/src/x.tsx', "import 'react';\nimport 'fs-extra';\n")).toEqual(
+      [],
+    );
   });
 });

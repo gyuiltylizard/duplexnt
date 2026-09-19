@@ -3,7 +3,7 @@ title: 'feat: Каркас и фундамент (M0)'
 type: feat
 date: 2026-09-19
 deepened: 2026-09-19
-status: заморожен # заморожен — готов, не начат → в работе → done
+status: в работе # заморожен — готов, не начат → в работе → done
 origin: docs/brainstorms/2026-09-17-stack-requirements.md
 ---
 

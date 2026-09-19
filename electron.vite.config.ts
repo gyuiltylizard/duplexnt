@@ -1,7 +1,7 @@
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'electron-vite';
 import type { Plugin } from 'vite';
-import { buildCsp } from './src/main/shell/csp';
+import { buildCsp } from './tooling/csp';
 import { aliases } from './tooling/aliases';
 
 // Терминал редактора на машине автора наследует ELECTRON_RUN_AS_NODE=1: с ней Electron

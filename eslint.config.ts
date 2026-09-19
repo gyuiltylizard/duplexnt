@@ -1,3 +1,4 @@
+import { builtinModules } from 'node:module';
 import js from '@eslint/js';
 import reactHooks from 'eslint-plugin-react-hooks';
 import { defineConfig } from 'eslint/config';
@@ -32,8 +33,11 @@ const ELECTRON: Restriction = {
   message:
     'Electron сюда нельзя. Адаптеры к Electron живут в src/main; ядро получает зависимости аргументами.',
 };
+// И `node:fs`, и голое `fs`: в renderer и shared голое имя ловит typecheck (там нет типов Node),
+// а в preload — ничто, кроме этого правила; под sandbox оно всплыло бы только ошибкой в рантайме.
+const BUILTINS = builtinModules.filter((name) => !name.startsWith('_')).join('|');
 const NODE: Restriction = {
-  regex: '^node:',
+  regex: `^(node:.*|(${BUILTINS})(/.*)?)$`,
   message: 'Node-модули сюда нельзя: сеть и файлы — работа ядра (src/core), доступ — через мост.',
 };
 const CORE: Restriction = {
@@ -63,9 +67,45 @@ const TEST: Restriction = {
 
 const TEST_FILES = ['**/*.test.ts', '**/*.test.tsx'];
 
+// Глобальные механизмы ослабления TLS запрещены по всему src/ (план M0, KTD-20). M1 откроет
+// исключение ровно для одного файла транспорта сканера.
+const TLS_MESSAGE =
+  'Проверка TLS ослабляется только выделенным агентом профиля сканера, глобально — никогда.';
+const TLS_NAMES =
+  'rejectUnauthorized|NODE_TLS_REJECT_UNAUTHORIZED|setCertificateVerifyProc|checkServerIdentity';
+// Событие Electron и ключи командной строки Chromium, выключающие проверку сертификатов.
+const TLS_STRINGS = `${TLS_NAMES}|certificate-error|ignore-certificate-errors|allow-insecure-localhost`;
+
+interface SyntaxRestriction {
+  readonly selector: string;
+  readonly message: string;
+}
+
+const TLS_SELECTORS: readonly SyntaxRestriction[] = [
+  { selector: `Identifier[name=/^(${TLS_NAMES})$/]`, message: TLS_MESSAGE },
+  { selector: `Literal[value=/${TLS_STRINGS}/]`, message: TLS_MESSAGE },
+  { selector: `TemplateElement[value.cooked=/${TLS_STRINGS}/]`, message: TLS_MESSAGE },
+];
+
+// `no-restricted-imports` видит только статические import и export-from. Динамический
+// `import()` и `require()` закрываются селекторами по тому же регулярному выражению. В грамматике
+// селекторов внутри `/…/` слэш недопустим даже экранированным — он записывается hex-кодом.
+const SLASH_AS_HEX = String.fromCharCode(92) + 'x2f';
+const dynamicImportSelectors = (restrictions: readonly Restriction[]): SyntaxRestriction[] =>
+  restrictions.flatMap(({ regex, message }) => {
+    const pattern = regex.replaceAll('/', SLASH_AS_HEX);
+    return [
+      { selector: `ImportExpression > Literal[value=/${pattern}/]`, message },
+      { selector: `CallExpression[callee.name='require'] > Literal[value=/${pattern}/]`, message },
+    ];
+  });
+
 function layer(dir: string, forbidden: readonly Restriction[]): Linter.Config[] {
+  // Flat config не сливает опции правила между блоками, а `no-restricted-syntax` нужен и границам,
+  // и запрету TLS — поэтому каждый блок слоя несёт оба набора селекторов.
   const rule = (restrictions: readonly Restriction[]): Linter.RulesRecord => ({
     'no-restricted-imports': ['error', { patterns: [...restrictions] }],
+    'no-restricted-syntax': ['error', ...TLS_SELECTORS, ...dynamicImportSelectors(restrictions)],
   });
 
   return [
@@ -79,32 +119,19 @@ function layer(dir: string, forbidden: readonly Restriction[]): Linter.Config[] 
   ];
 }
 
-// Глобальные механизмы ослабления TLS запрещены по всему src/ (план M0, KTD-20). M1 откроет
-// исключение ровно для одного файла транспорта сканера.
-const TLS_MESSAGE =
-  'Проверка TLS ослабляется только выделенным агентом профиля сканера, глобально — никогда.';
-
 export const layerBoundaryConfigs: Linter.Config[] = [
+  // Страховка для файла под src/, не попавшего ни в один слой. Стоит ПЕРВОЙ: блоки слоёв ниже
+  // переопределяют `no-restricted-syntax` своим, более полным набором.
+  {
+    name: 'duplexnt/tls-global-relaxation',
+    files: ['src/**'],
+    rules: { 'no-restricted-syntax': ['error', ...TLS_SELECTORS] },
+  },
   ...layer('shared', [ELECTRON, NODE, CORE, MAIN, PRELOAD, RENDERER, LOCALES]),
   ...layer('core', [ELECTRON, MAIN, PRELOAD, RENDERER, LOCALES]),
   ...layer('main', [PRELOAD, RENDERER]),
   ...layer('preload', [NODE, CORE, MAIN, RENDERER, LOCALES]),
   ...layer('renderer', [ELECTRON, NODE, CORE, MAIN, PRELOAD]),
-  {
-    name: 'duplexnt/tls-global-relaxation',
-    files: ['src/**'],
-    rules: {
-      'no-restricted-syntax': [
-        'error',
-        { selector: "Identifier[name='rejectUnauthorized']", message: TLS_MESSAGE },
-        { selector: "Literal[value='rejectUnauthorized']", message: TLS_MESSAGE },
-        { selector: "Identifier[name='NODE_TLS_REJECT_UNAUTHORIZED']", message: TLS_MESSAGE },
-        { selector: "Literal[value='NODE_TLS_REJECT_UNAUTHORIZED']", message: TLS_MESSAGE },
-        { selector: "Identifier[name='setCertificateVerifyProc']", message: TLS_MESSAGE },
-        { selector: "Literal[value='certificate-error']", message: TLS_MESSAGE },
-      ],
-    },
-  },
 ];
 
 // ---------------------------------------------------------------------------------------------
