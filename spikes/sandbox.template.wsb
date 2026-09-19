@@ -1,0 +1,24 @@
+<!--
+  Шаблон конфигурации Windows Sandbox для проверки установщика на чистой машине
+  (план M0, U16; критерий 3 спайка ADR 0003).
+
+  Конфигу нужен АБСОЛЮТНЫЙ путь хоста, поэтому в git лежит шаблон, а рабочий файл
+  генерируется в release/ (вне git): `node spikes/make-sandbox-config.mjs`.
+
+  Sandbox получает только каталог с установщиком и только на чтение. Сеть выключена:
+  критерию 3 она не нужна, а mDNS проверяется на основной машине (KTD-26).
+-->
+<Configuration>
+  <Networking>Disable</Networking>
+  <ClipboardRedirection>Disable</ClipboardRedirection>
+  <MappedFolders>
+    <MappedFolder>
+      <HostFolder>{{RELEASE_DIR}}</HostFolder>
+      <SandboxFolder>C:\installer</SandboxFolder>
+      <ReadOnly>true</ReadOnly>
+    </MappedFolder>
+  </MappedFolders>
+  <LogonCommand>
+    <Command>explorer.exe C:\installer</Command>
+  </LogonCommand>
+</Configuration>
