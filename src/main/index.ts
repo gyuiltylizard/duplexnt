@@ -22,7 +22,7 @@ function createWindow(): void {
     console.error(`[main] preload не загрузился: ${preloadPath}`, error);
   });
 
-  const devServerUrl = process.env['ELECTRON_RENDERER_URL'];
+  const devServerUrl = process.env.ELECTRON_RENDERER_URL;
   if (!app.isPackaged && devServerUrl !== undefined) {
     void window.loadURL(devServerUrl);
   } else {

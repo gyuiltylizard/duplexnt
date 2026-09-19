@@ -6,7 +6,7 @@
 export type CspOptions =
   { readonly profile: 'build' } | { readonly profile: 'dev'; readonly devServerOrigin: string };
 
-type Directives = ReadonlyArray<readonly [name: string, sources: readonly string[]]>;
+type Directives = readonly (readonly [name: string, sources: readonly string[]])[];
 
 // `default-src` не покрывает base-uri, form-action и object-src — они закрыты явно.
 const BUILD_DIRECTIVES: Directives = [

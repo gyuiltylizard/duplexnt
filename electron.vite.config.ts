@@ -7,7 +7,7 @@ import { aliases } from './tooling/aliases';
 // Терминал редактора на машине автора наследует ELECTRON_RUN_AS_NODE=1: с ней Electron
 // стартует как обычный Node и окна нет. Конфиг грузится в процессе electron-vite до запуска
 // Electron, а дочерний процесс наследует это окружение — поэтому снимаем переменную здесь.
-delete process.env['ELECTRON_RUN_AS_NODE'];
+delete process.env.ELECTRON_RUN_AS_NODE;
 
 // CSP едет мета-тегом в index.html. Профиль выбирается по наличию dev-сервера: у `build` его
 // нет, поэтому ослабленный профиль разработки в сборку попасть не может.
