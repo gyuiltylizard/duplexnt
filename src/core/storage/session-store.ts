@@ -349,7 +349,9 @@ export function createSessionStore(
     incompatible,
 
     snapshot() {
-      if (journal === null) {
+      // Пустая сессия равна отсутствию сессии: журнал без единой страницы может остаться на
+      // диске только ради пометки об удалении.
+      if (journal === null || (pageCountOf(journal) === 0 && runningSegmentOf(journal) === null)) {
         return null;
       }
       return {

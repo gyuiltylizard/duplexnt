@@ -51,7 +51,15 @@ export function interceptFs<T extends object>(
         const wrap =
           (op: 'write' | 'sync' | 'close') =>
           async (...handleArgs: unknown[]) => {
-            step({ op, path });
+            try {
+              step({ op, path });
+            } catch (error) {
+              // Дескриптор закрывается и при «сбое»: иначе открытый файл держал бы каталог теста.
+              if (op === 'close') {
+                await (result.close() as Promise<unknown>);
+              }
+              throw error;
+            }
             return await (result[op](...handleArgs) as Promise<unknown>);
           };
         return { write: wrap('write'), sync: wrap('sync'), close: wrap('close') };
