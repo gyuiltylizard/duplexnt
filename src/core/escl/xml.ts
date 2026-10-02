@@ -42,7 +42,19 @@ export type XmlFailure =
   'tooLarge' | 'notUtf8' | 'doctype' | 'malformed' | 'tooDeep' | 'tooManyNodes';
 
 /** Все причины отказа `scannerBadResponse` — одним списком: опечатка в причине не компилируется. */
-export type BadResponseReason = XmlFailure | 'adfRegion' | 'adfProfile' | 'http' | 'foreignPath';
+export type BadResponseReason =
+  | XmlFailure
+  | 'adfRegion'
+  | 'adfProfile'
+  | 'http'
+  | 'foreignPath'
+  // Задание (./scan-job.ts): неожиданный статус, негодный `Location`, страница не JPEG или
+  // пустая, страниц больше потолка.
+  | 'status'
+  | 'location'
+  | 'notJpeg'
+  | 'emptyPage'
+  | 'tooManyPages';
 
 export const badResponse = (reason: BadResponseReason): Result<never> =>
   fail('scannerBadResponse', { reason });

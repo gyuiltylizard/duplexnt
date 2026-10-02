@@ -19,6 +19,9 @@
     "scanParamsUnsupported": "сканер не поддерживает выбранные параметры сканирования",
     "scannerUnreachable": "сканер не отвечает",
     "scannerCertificateChanged": "по этому адресу отвечает другое устройство",
+    "scannerBusy": "сканер занят",
+    "scanParamsRejected": "сканер отклонил параметры сканирования",
+    "scanFeedFailed": "сканер прервал подачу бумаги",
     "canceled": "операция отменена"
   },
   "versions": {
