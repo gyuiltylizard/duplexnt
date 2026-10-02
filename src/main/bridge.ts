@@ -44,7 +44,18 @@ export function registerBridge(
       if (!isFromMainFrame(event, window)) {
         throw new Error(`мост: отправитель команды «${command}» — не главный фрейм окна`);
       }
-      return handlers[command](rawRequest);
+      try {
+        return await handlers[command](rawRequest);
+      } catch (error) {
+        // Доменный отказ приходит значением в конверте; исключение — ошибка программы. Его
+        // сообщение Electron передал бы в окно дословно, а в нём бывают пути и адреса: полная
+        // ошибка остаётся в журнале main, в окно уходит только имя команды (`cause` через
+        // границу процессов не передаётся).
+        console.error(`[main] мост: команда «${command}» упала`, error);
+        throw new Error(`мост: команда «${command}» завершилась ошибкой программы`, {
+          cause: error,
+        });
+      }
     });
   }
 }

@@ -67,6 +67,27 @@ describe('registerBridge', () => {
     expect(handlers.probe).toHaveBeenCalledExactlyOnceWith({ token: 't' });
   });
 
+  it('исключение обработчика доходит до окна без своего сообщения: в нём бывают пути', async () => {
+    const { mainFrame, webContents, handlers, probe } = setup();
+    const secret = 'ENOSPC: no space left on device, open C:/Users/u/AppData/data/session.json';
+    handlers.probe.mockRejectedValueOnce(new Error(secret));
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const failure: unknown = await probe(
+      { sender: webContents, senderFrame: mainFrame },
+      { token: 't' },
+    ).catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).message).toContain('probe');
+    expect((failure as Error).message).not.toContain('Users');
+    expect((failure as Error).message).not.toContain('ENOSPC');
+    // Полная ошибка не теряется: она в журнале main.
+    expect(logged).toHaveBeenCalledOnce();
+    expect(String(logged.mock.calls[0]?.[1])).toContain('ENOSPC');
+    logged.mockRestore();
+  });
+
   it('чужой отправитель получает отказ, обработчик ядра не вызван', async () => {
     const { webContents, handlers, probe } = setup();
 

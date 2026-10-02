@@ -1,4 +1,4 @@
-import { readdirSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { posix } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { TEST_PROJECTS, type TestProject } from '../../tooling/test-projects';
@@ -59,6 +59,18 @@ describe('тестовые прогоны', () => {
     expect(projectsOf('test/integration/imaging-probe.test.ts', TEST_PROJECTS)).toEqual([
       'integration',
     ]);
+  });
+
+  it('скрипты package.json называют каждый проект, и только существующие', () => {
+    // Проекты перечислены в скриптах поимённо: новый проект без строки в скрипте не запустился бы.
+    const { scripts } = JSON.parse(readFileSync('package.json', 'utf8')) as {
+      scripts: Record<string, string>;
+    };
+    const named = [scripts.test, scripts['test:integration']].flatMap((script) =>
+      [...(script ?? '').matchAll(/--project (\S+)/g)].map((match) => match[1]),
+    );
+
+    expect(named.sort()).toEqual(TEST_PROJECTS.map((project) => project.name).sort());
   });
 
   it('тестовый файл вне всех проектов ловится', () => {

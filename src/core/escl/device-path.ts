@@ -71,9 +71,10 @@ export function jobPathFromLocation(
   if (location.length > DEVICE_PATH_MAX_LENGTH) {
     return null;
   }
-  // Эти проверки идут по сырому значению: разборщик URL молча схлопывает точечные сегменты,
-  // превращает обратный слэш в прямой и выбрасывает табуляцию с переводами строк.
-  if (location.split('/').some(isDotSegment) || !isPlainAscii(location)) {
+  // Эти проверки идут по сырому значению: разборщик URL молча схлопывает точечные сегменты —
+  // и записанные через `%2e` тоже, — превращает обратный слэш в прямой и выбрасывает табуляцию
+  // с переводами строк. Простому пути знак `%` не нужен.
+  if (location.includes('%') || location.split('/').some(isDotSegment) || !isPlainAscii(location)) {
     return null;
   }
 

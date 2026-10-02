@@ -46,22 +46,32 @@ resolveDataRoot(app);
 
 let mainWindow: BrowserWindow | null = null;
 
+// Исключение при запуске оставило бы процесс без окна, но с блокировкой экземпляра: приложение
+// не открылось бы и повторным запуском, пока процесс не снят вручную.
+function startupFailed(error: unknown): void {
+  console.error('[main] запуск не удался', error);
+  app.exit(1);
+}
+
 if (acquireSingleInstance(app, () => mainWindow)) {
   // Гварды ставятся до первого окна: событие `web-contents-created` не повторяется.
   installShellGuards(app);
 
-  void app.whenReady().then(() => {
-    denyAllPermissions(session.defaultSession);
+  app
+    .whenReady()
+    .then(() => {
+      denyAllPermissions(session.defaultSession);
 
-    // Мост регистрируется до загрузки страницы и получает окно: без него нечем проверить
-    // отправителя. Обработчики зовут ядро с сырым входом — проверка входа живёт в ядре.
-    const window = createWindow();
-    mainWindow = window;
-    registerBridge(ipcMain, window, {
-      probe: (rawRequest) => handleProbe(rawRequest),
-    });
-    loadRenderer(window);
-  });
+      // Мост регистрируется до загрузки страницы и получает окно: без него нечем проверить
+      // отправителя. Обработчики зовут ядро с сырым входом — проверка входа живёт в ядре.
+      const window = createWindow();
+      mainWindow = window;
+      registerBridge(ipcMain, window, {
+        probe: (rawRequest) => handleProbe(rawRequest),
+      });
+      loadRenderer(window);
+    })
+    .catch(startupFailed);
 
   app.on('window-all-closed', () => {
     app.quit();

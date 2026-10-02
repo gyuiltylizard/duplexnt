@@ -178,6 +178,11 @@ export async function removeByPrefix(
   if (prefix === '') {
     throw new Error('удаление по префиксу: пустой префикс удалил бы все страницы каталога');
   }
+  // Такой шаблон помнит позицию между вызовами `test`: часть файлов была бы молча пропущена,
+  // а отчёт показал бы, что неудалённых нет.
+  if (pattern.global || pattern.sticky) {
+    throw new Error('удаление по префиксу: шаблон ключа с флагом g или y пропускает файлы');
+  }
   const fs = options.fs ?? realFs;
 
   let names: string[];

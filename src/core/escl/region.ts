@@ -41,6 +41,10 @@ function sheetOf(paper: PaperSize): { readonly width: number; readonly height: n
  * начала поля: лист подаётся верхним краем.
  */
 export function regionFor(paper: PaperSize, adf: InputCaps): Result<ScanRegion> {
+  // Значение приходит из настроек на диске и с моста: мимо типов может прийти что угодно.
+  if (!PAPER_SIZES.includes(paper)) {
+    return fail('scanParamsUnsupported', { field: 'paperSize' });
+  }
   const { width, height } = sheetOf(paper);
   const fits =
     width >= adf.minWidth &&

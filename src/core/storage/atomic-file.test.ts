@@ -474,6 +474,18 @@ describe('removeByPrefix', () => {
     expect(await nodeFs.readdir(root)).toEqual(['p01-s01-0001.jpg']);
   });
 
+  it('шаблон с флагом g или y — ошибка программы: он пропускал бы файлы', async () => {
+    const root = await makeTempDataRoot();
+    await seed(root, ['p01-s01-0001.jpg', 'p01-s01-0002.jpg', 'p01-s01-0003.jpg']);
+
+    for (const flags of ['g', 'y', 'gy']) {
+      await expect(
+        removeByPrefix(root, 'p01-s01-', new RegExp(PAGE_FILE.source, flags)),
+      ).rejects.toThrow(/шаблон/);
+    }
+    expect(await nodeFs.readdir(root)).toHaveLength(3);
+  });
+
   it('ошибка листинга, отличная от «каталога нет», не проглатывается', async () => {
     const root = await makeTempDataRoot();
     const { fs } = recordingFs({ readdir: () => Promise.reject(fsError('EACCES')) });

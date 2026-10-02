@@ -1,7 +1,17 @@
+import { ERROR_CODES } from '@shared';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_LOCALE, i18n, resources } from './i18n';
 
 describe('i18n', () => {
+  it('у каждого кода доменной ошибки есть строка в локали, и лишних строк нет', () => {
+    for (const [locale, { common }] of Object.entries(resources)) {
+      expect(Object.keys(common.errors).sort(), locale).toEqual([...ERROR_CODES].sort());
+      for (const text of Object.values(common.errors)) {
+        expect(text.trim(), locale).not.toBe('');
+      }
+    }
+  });
+
   it('инициализирован синхронно русской локалью', () => {
     expect(i18n.isInitialized).toBe(true);
     expect(i18n.language).toBe(DEFAULT_LOCALE);

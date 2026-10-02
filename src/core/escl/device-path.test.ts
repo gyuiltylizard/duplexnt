@@ -83,6 +83,12 @@ describe('jobPathFromLocation', () => {
     expect(jobPathFromLocation(`https://user:pass@evil.example${JOB}`, BASE)).toBe(JOB);
   });
 
+  it('схема значения не важна: берётся только путь', () => {
+    for (const scheme of ['javascript:', 'file://', 'data:', 'ftp://host']) {
+      expect(jobPathFromLocation(`${scheme}${JOB}`, BASE), scheme).toBe(JOB);
+    }
+  });
+
   it('относительное значение разрешается от коллекции заданий', () => {
     expect(jobPathFromLocation('ScanJobs/abc', BASE)).toBe('/eSCL/ScanJobs/abc');
     // По правилам URL «abc» от «/eSCL/ScanJobs» — это «/eSCL/abc»: не под коллекцией.
@@ -101,6 +107,10 @@ describe('jobPathFromLocation', () => {
     ['точечный сегмент внутри', '/eSCL/ScanJobs/x/../y'],
     ['точечный сегмент до базы', '/x/../eSCL/ScanJobs/y'],
     ['кодированные точки', '/eSCL/ScanJobs/%2e%2e/admin'],
+    ['кодированные точки, путь остаётся под коллекцией', '/eSCL/ScanJobs/x/%2e%2e/y'],
+    ['кодированная точка', '/eSCL/ScanJobs/%2e/y'],
+    ['кодированные точки с возвратом в коллекцию', '/eSCL/ScanJobs/%2e%2e/ScanJobs/abc'],
+    ['кодированный пробел', '/eSCL/ScanJobs/a%20b'],
     ['кодированный слэш', '/eSCL/ScanJobs/a%2fb'],
     ['кодированный слэш заглавными', '/eSCL/ScanJobs/a%2Fb'],
     ['обратный слэш', '/eSCL/ScanJobs\\..\\admin'],

@@ -98,6 +98,12 @@ describe('regionFor: пределы автоподачи', () => {
     expect(regionFor('A4', withLimits({ minHeight: 3508 }))).toEqual(rejected);
   });
 
+  it('лист, которого нет в перечислении, — отказ, а не исключение', () => {
+    for (const forged of ['A3', '', '__proto__', 'a4']) {
+      expect(regionFor(forged as never, ADF), forged).toEqual(rejected);
+    }
+  });
+
   it('лист ровно в пределах принимается', () => {
     const exact = withLimits({ minWidth: 2550, maxWidth: 2550, minHeight: 3300, maxHeight: 3300 });
 
