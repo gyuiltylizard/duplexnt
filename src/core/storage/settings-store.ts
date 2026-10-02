@@ -4,7 +4,7 @@ import { probeScanner, type ConnectedScanner, type ConnectorOptions } from '../e
 import { resolveScanParams, type ScanParams } from '../escl/scan-settings';
 import { scanParamsSchema } from './journal';
 import { layoutOf } from './layout';
-import { realStorageFs, storageFailure, type StorageOptions } from './storage-fs';
+import { ioOf, serialQueue, storageFailure, type StorageOptions } from './storage-fs';
 import {
   profileOf,
   sameScanner,
@@ -52,8 +52,8 @@ export async function openSettingsStore(
   options: StorageOptions = {},
 ): Promise<SettingsStore> {
   const { root, settingsFile } = layoutOf(dataRoot);
-  const fs = options.fs ?? realStorageFs;
-  const io = options.retry === undefined ? { fs } : { fs, retry: options.retry };
+  const io = ioOf(options);
+  const { fs } = io;
 
   let settings: Settings = { scanner: null, params: null };
   let notice: SettingsStore['notice'] = null;
@@ -76,9 +76,9 @@ export async function openSettingsStore(
     frozen = true;
   }
 
-  let tail: Promise<unknown> = Promise.resolve();
-  function update(change: Partial<Settings>): Promise<Result<void>> {
-    const run = tail.then(async (): Promise<Result<void>> => {
+  const enqueue = serialQueue();
+  const update = (change: Partial<Settings>): Promise<Result<void>> =>
+    enqueue(async (): Promise<Result<void>> => {
       settings = { ...settings, ...change };
       if (frozen) {
         return ok(undefined);
@@ -91,9 +91,6 @@ export async function openSettingsStore(
         return { ok: false, error: storageFailure(error) };
       }
     });
-    tail = run;
-    return run;
-  }
 
   return {
     notice,

@@ -27,7 +27,7 @@ import {
   type SessionStore,
   type SessionStoreOptions,
 } from './session-store';
-import { isMissing, listDir, realStorageFs } from './storage-fs';
+import { ioOf, isMissing, listDir } from './storage-fs';
 import { setAside, writeVersioned } from './versioned-file';
 
 // Сверка при запуске (план M1, U14; ADR 0004): журнал сверяется с файлами по таблице плана.
@@ -138,8 +138,8 @@ export async function reconcileSession(
   options: SessionStoreOptions = {},
 ): Promise<ReconcileOutcome> {
   const layout = layoutOf(dataRoot);
-  const fs = options.fs ?? realStorageFs;
-  const io = options.retry === undefined ? { fs } : { fs, retry: options.retry };
+  const io = ioOf(options);
+  const { fs } = io;
   const newSessionId = options.newSessionId ?? (() => randomBytes(8).toString('hex'));
 
   // Журнал читается первым: данные более новой версии отменяют всё остальное (KTD-35).

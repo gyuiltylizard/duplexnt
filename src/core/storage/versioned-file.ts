@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import type { z } from 'zod';
 import { renameWithRetry, writeFileAtomic } from './atomic-file';
-import { isMissing, type StorageFs, type StorageOptions } from './storage-fs';
+import { isMissing, type StorageFs, type StorageIo, type StorageOptions } from './storage-fs';
 
 // Файл с маркером версии: журнал сессии, настройки, незакрытые задания (ADR 0004; план M1,
 // KTD-34, KTD-35). Правила одни на все три:
@@ -97,10 +97,7 @@ export function isSetAsideName(name: string, baseName: string): boolean {
  * Отодвигает нечитаемый файл под уникальным именем рядом с прежним. Файла уже нет — не ошибка:
  * повторная сверка после сбоя приходит сюда второй раз.
  */
-export async function setAside(
-  path: string,
-  options: StorageOptions & { fs: StorageFs },
-): Promise<void> {
+export async function setAside(path: string, options: StorageIo): Promise<void> {
   try {
     await renameWithRetry(path, `${path}.unreadable-${randomBytes(6).toString('hex')}`, options);
   } catch (error) {

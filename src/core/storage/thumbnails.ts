@@ -6,7 +6,7 @@ import { REGION_UNITS_PER_INCH } from '../escl/region';
 import { writeFileAtomic } from './atomic-file';
 import { pageFileName, thumbsDirIn } from './layout';
 import type { PageInfo } from './session-store';
-import { realStorageFs, type StorageOptions } from './storage-fs';
+import { ioOf, type StorageOptions } from './storage-fs';
 
 // Миниатюры — производное (ADR 0004; план M1, U16, KTD-22, KTD-37). Строятся по требованию из
 // исходника и кэшируются вне каталога сессии, под её идентификатором: кэш прошлой сессии не
@@ -103,8 +103,8 @@ export function createThumbnails(
   source: ThumbnailSource,
   options: ThumbnailOptions = {},
 ): Thumbnails {
-  const fs = options.fs ?? realStorageFs;
-  const io = options.retry === undefined ? { fs } : { fs, retry: options.retry };
+  const io = ioOf(options);
+  const { fs } = io;
   const concurrency = Math.max(1, options.concurrency ?? DEFAULT_CONCURRENCY);
 
   // Ограничение одновременных построений: освободившееся место передаётся ждущему напрямую.

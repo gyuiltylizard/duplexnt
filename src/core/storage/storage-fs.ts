@@ -47,6 +47,28 @@ export interface StorageOptions {
   readonly retry?: Partial<RetryPolicy>;
 }
 
+export type StorageIo = StorageOptions & { readonly fs: StorageFs };
+
+/** Опции для помощников записи: файловая система и, если задана, политика повторов. */
+export function ioOf(options: StorageOptions): StorageIo {
+  const fs = options.fs ?? realStorageFs;
+  return options.retry === undefined ? { fs } : { fs, retry: options.retry };
+}
+
+/**
+ * Очередь операций: следующая начинается, когда предыдущая закончилась — успехом или отказом.
+ * Запись в один файл идёт строго по одной: одновременные атомарные записи заканчиваются в
+ * произвольном порядке.
+ */
+export function serialQueue(): <T>(operation: () => Promise<T>) => Promise<T> {
+  let tail: Promise<unknown> = Promise.resolve();
+  return (operation) => {
+    const run = tail.then(operation);
+    tail = run.catch(() => undefined);
+    return run;
+  };
+}
+
 export function fsErrorCode(error: unknown): string {
   const code = (error as { code?: unknown } | null)?.code;
   return typeof code === 'string' ? code : 'UNKNOWN';

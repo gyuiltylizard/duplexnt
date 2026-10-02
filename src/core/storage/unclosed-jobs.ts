@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { ok, type Result } from '@shared';
 import { DEVICE_PATH_MAX_LENGTH } from '../escl/device-path';
 import { layoutOf } from './layout';
-import { realStorageFs, storageFailure, type StorageOptions } from './storage-fs';
+import { ioOf, serialQueue, storageFailure, type StorageOptions } from './storage-fs';
 import { sameScanner, storedScannerSchema, type StoredScanner } from './stored-scanner';
 import { readVersioned, setAside, writeVersioned } from './versioned-file';
 
@@ -46,8 +46,8 @@ export async function openUnclosedJobs(
   options: StorageOptions = {},
 ): Promise<UnclosedJobs> {
   const { root, unclosedJobsFile } = layoutOf(dataRoot);
-  const fs = options.fs ?? realStorageFs;
-  const io = options.retry === undefined ? { fs } : { fs, retry: options.retry };
+  const io = ioOf(options);
+  const { fs } = io;
 
   let jobs: readonly UnclosedJob[] = [];
   // Файл более новой версии не переписывается: список живёт только в памяти.
@@ -70,9 +70,9 @@ export async function openUnclosedJobs(
     // Список — подсказка, а не данные пользователя: без него задание снимет само устройство.
   }
 
-  let tail: Promise<unknown> = Promise.resolve();
-  function update(change: (current: readonly UnclosedJob[]) => readonly UnclosedJob[]) {
-    const run = tail.then(async (): Promise<Result<void>> => {
+  const enqueue = serialQueue();
+  const update = (change: (current: readonly UnclosedJob[]) => readonly UnclosedJob[]) =>
+    enqueue(async (): Promise<Result<void>> => {
       jobs = change(jobs);
       if (frozen) {
         return ok(undefined);
@@ -85,9 +85,6 @@ export async function openUnclosedJobs(
         return { ok: false, error: storageFailure(error) };
       }
     });
-    tail = run;
-    return run;
-  }
 
   const isJob = (job: UnclosedJob, scanner: StoredScanner, jobPath: string): boolean =>
     job.jobPath === jobPath && sameScanner(job.scanner, scanner);

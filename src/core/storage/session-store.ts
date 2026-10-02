@@ -34,8 +34,9 @@ import {
 import {
   fsErrorCode,
   isMissing,
+  ioOf,
   listDir,
-  realStorageFs,
+  serialQueue,
   StorageError,
   storageFailure,
   type StorageFs,
@@ -199,8 +200,8 @@ export function createSessionStore(
   options: SessionStoreOptions = {},
 ): SessionStore {
   const layout = layoutOf(dataRoot);
-  const fs = options.fs ?? realStorageFs;
-  const io = options.retry === undefined ? { fs } : { fs, retry: options.retry };
+  const io = ioOf(options);
+  const { fs } = io;
   const newSessionId = options.newSessionId ?? (() => randomBytes(8).toString('hex'));
   const minFreeBytes = options.minFreeBytes ?? MIN_FREE_BYTES;
   const { incompatible } = initial;
@@ -209,13 +210,7 @@ export function createSessionStore(
   let unsaved = initial.unsaved;
   const lost = new Set(initial.lost);
 
-  // Очередь операций: следующая начинается, когда предыдущая закончилась — успехом или отказом.
-  let tail: Promise<unknown> = Promise.resolve();
-  function enqueue<T>(operation: () => Promise<T>): Promise<T> {
-    const run = tail.then(operation);
-    tail = run.catch(() => undefined);
-    return run;
-  }
+  const enqueue = serialQueue();
 
   // Идущие чтения страниц: закрытие сессии и удаление сегмента их дожидаются.
   const reads = new Set<Promise<unknown>>();
