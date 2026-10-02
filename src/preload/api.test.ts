@@ -29,7 +29,7 @@ describe('buildApi', () => {
   it('наружу — только функции команд и подписок, без ipcRenderer и сквозного канала', () => {
     const { api } = setup();
 
-    expect(Object.keys(api).sort()).toEqual(['onSnapshotChanged', 'probe']);
+    expect(Object.keys(api).sort()).toEqual(['onDiscoveryChanged', 'onSnapshotChanged', 'probe']);
     expect(Object.values(api).every((member) => typeof member === 'function')).toBe(true);
   });
 

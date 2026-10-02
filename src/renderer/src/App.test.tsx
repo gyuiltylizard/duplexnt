@@ -19,7 +19,11 @@ const VALUE: ProbeResult = {
 const RESULT = ok(VALUE);
 
 function stubApi(probe: Api['probe']): void {
-  const api: Api = { probe, onSnapshotChanged: () => () => undefined };
+  const api: Api = {
+    probe,
+    onSnapshotChanged: () => () => undefined,
+    onDiscoveryChanged: () => () => undefined,
+  };
   vi.stubGlobal('api', api);
 }
 

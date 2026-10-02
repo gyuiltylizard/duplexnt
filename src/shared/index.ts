@@ -21,6 +21,8 @@ export {
   type Unsubscribe,
 } from './bridge';
 
+export type { DiscoveredScanner, DiscoveryState } from './discovery';
+
 export {
   ERROR_CODES,
   fail,

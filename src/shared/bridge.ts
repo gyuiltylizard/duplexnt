@@ -74,12 +74,15 @@ export type BridgeHandlers = {
 export interface BridgeEvents {
   /** Снимок состояния изменился; `seq` — номер нового снимка. Берётся позднейшее по номеру. */
   readonly snapshotChanged: { readonly seq: number };
+  /** Список найденных сканеров изменился; сам список берётся командой. */
+  readonly discoveryChanged: { readonly seq: number };
 }
 
 export type BridgeEvent = keyof BridgeEvents;
 
 export const BRIDGE_EVENT_CHANNELS = {
   snapshotChanged: 'duplexnt:event:snapshot-changed',
+  discoveryChanged: 'duplexnt:event:discovery-changed',
 } as const satisfies Record<BridgeEvent, string>;
 
 export type Unsubscribe = () => void;

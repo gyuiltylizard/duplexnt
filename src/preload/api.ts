@@ -50,5 +50,6 @@ export function buildApi(ipcRenderer: PreloadIpcRenderer): Api {
   return {
     probe: command(ipcRenderer, 'probe'),
     onSnapshotChanged: subscription(ipcRenderer, 'snapshotChanged'),
+    onDiscoveryChanged: subscription(ipcRenderer, 'discoveryChanged'),
   };
 }
