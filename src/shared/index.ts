@@ -5,11 +5,28 @@ export const APP_NAME = "Duplexn't";
 
 export {
   BRIDGE_CHANNELS,
+  BRIDGE_EVENT_CHANNELS,
   PROBE_TOKEN_MAX_LENGTH,
   type Api,
   type BridgeCommand,
   type BridgeCommands,
+  type BridgeEvent,
+  type BridgeEvents,
   type BridgeHandlers,
+  type CommandResult,
+  type CommandsApi,
+  type EventsApi,
   type ProbeRequest,
   type ProbeResult,
+  type Unsubscribe,
 } from './bridge';
+
+export {
+  ERROR_CODES,
+  fail,
+  ok,
+  type DomainError,
+  type ErrorCode,
+  type ErrorDetails,
+  type Result,
+} from './errors';

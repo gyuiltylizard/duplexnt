@@ -1,6 +1,6 @@
-import type { ProbeResult } from '@shared';
+import { ok, type ProbeResult, type Result } from '@shared';
+import { parseInput, probeRequestSchema } from '../commands/schemas';
 import { imagingProbe, type ImagingProbeResult } from './imaging-probe';
-import { validateProbeRequest } from './validate-probe-request';
 
 // Обработчик команды-пробы. Вход приходит с моста непроверенным — отсюда `unknown`. Операция
 // над изображением передаётся аргументом: тест проверяет, что при мусоре на входе до `sharp`
@@ -8,16 +8,19 @@ import { validateProbeRequest } from './validate-probe-request';
 export async function handleProbe(
   rawRequest: unknown,
   runImagingProbe: () => Promise<ImagingProbeResult> = imagingProbe,
-): Promise<ProbeResult> {
-  const request = validateProbeRequest(rawRequest);
+): Promise<Result<ProbeResult>> {
+  const request = parseInput(probeRequestSchema, rawRequest);
+  if (!request.ok) {
+    return request;
+  }
   const imaging = await runImagingProbe();
 
   // Версии Electron и Chromium берутся из `process.versions` — без импорта Electron. Под
   // обычным Node (тесты) их нет.
   const versions: Record<string, string | undefined> = process.versions;
 
-  return {
-    echo: request.token,
+  return ok({
+    echo: request.value.token,
     versions: {
       electron: versions.electron ?? null,
       chrome: versions.chrome ?? null,
@@ -26,5 +29,5 @@ export async function handleProbe(
       libvips: imaging.libvips,
     },
     image: imaging.image,
-  };
+  });
 }

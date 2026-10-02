@@ -10,6 +10,9 @@
     "failed": "Проба не прошла: {{message}}",
     "image": "Тестовое изображение: {{format}}, {{width}}×{{height}}, {{bytes}} байт"
   },
+  "errors": {
+    "invalidInput": "приложение отправило некорректный запрос"
+  },
   "versions": {
     "electron": "Electron",
     "chrome": "Chromium",

@@ -27,9 +27,15 @@ export function App() {
 
     probing.then(
       (result) => {
-        if (!cancelled) {
-          setProbe({ status: 'ok', result });
+        if (cancelled) {
+          return;
         }
+        // Доменный отказ приходит значением с кодом; текст выбирается по коду из локали.
+        setProbe(
+          result.ok
+            ? { status: 'ok', result: result.value }
+            : { status: 'failed', message: t(`errors.${result.error.code}`) },
+        );
       },
       (error: unknown) => {
         if (!cancelled) {
@@ -44,7 +50,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [t]);
 
   return (
     <main className="shell">

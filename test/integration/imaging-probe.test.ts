@@ -19,17 +19,26 @@ describe('handleProbe целиком', () => {
   it('годный вход → эхо токена и версия libvips', async () => {
     const result = await handleProbe({ token: 'integration' });
 
-    expect(result.echo).toBe('integration');
-    expect(result.versions.libvips).toMatch(/^\d+\.\d+\.\d+/);
-    expect(result.versions.node).toBe(process.versions.node);
-    expect(result.versions.electron).toBeNull();
+    if (!result.ok) {
+      throw new Error(`проба отказала: ${result.error.code}`);
+    }
+    expect(result.value.echo).toBe('integration');
+    expect(result.value.versions.libvips).toMatch(/^\d+\.\d+\.\d+/);
+    expect(result.value.versions.node).toBe(process.versions.node);
+    expect(result.value.versions.electron).toBeNull();
   });
 
-  it('мусор на входе → TypeError, до sharp дело не доходит', async () => {
+  it('мусор на входе → отказ с кодом неверного входа, до sharp дело не доходит', async () => {
     const runImagingProbe = vi.fn(imagingProbe);
 
-    await expect(handleProbe(42, runImagingProbe)).rejects.toThrow(TypeError);
-    await expect(handleProbe({ token: '' }, runImagingProbe)).rejects.toThrow(/token/);
+    await expect(handleProbe(42, runImagingProbe)).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'invalidInput' },
+    });
+    await expect(handleProbe({ token: '' }, runImagingProbe)).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'invalidInput', details: { field: 'token' } },
+    });
     expect(runImagingProbe).not.toHaveBeenCalled();
   });
 });

@@ -1,12 +1,13 @@
-import { BRIDGE_CHANNELS, type BridgeHandlers, type ProbeResult } from '@shared';
+import { BRIDGE_CHANNELS, ok, type BridgeHandlers, type ProbeResult } from '@shared';
 import { describe, expect, it, vi } from 'vitest';
 import { isFromMainFrame, registerBridge, type BridgeIpcMain } from './bridge';
 
-const RESULT: ProbeResult = {
+const VALUE: ProbeResult = {
   echo: 't',
   versions: { electron: null, chrome: null, node: '24.0.0', sharp: '0.35.0', libvips: '8.17.0' },
   image: { format: 'jpeg', width: 8, height: 8, bytes: 100 },
 };
+const RESULT = ok(VALUE);
 
 function setup() {
   const mainFrame = { name: 'main' };
@@ -57,7 +58,7 @@ describe('registerBridge', () => {
     expect([...listeners.keys()].sort()).toEqual(Object.values(BRIDGE_CHANNELS).sort());
   });
 
-  it('вызов из главного фрейма доходит до обработчика с сырым входом', async () => {
+  it('вызов из главного фрейма доходит до обработчика с сырым входом, ответ — конверт', async () => {
     const { mainFrame, webContents, handlers, probe } = setup();
 
     const result = await probe({ sender: webContents, senderFrame: mainFrame }, { token: 't' });
