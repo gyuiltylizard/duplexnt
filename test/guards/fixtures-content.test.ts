@@ -1,5 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   PLACEHOLDER_IPV4,
@@ -7,10 +6,11 @@ import {
   PLACEHOLDER_UUID,
   scanText,
 } from '../../scripts/privacy-guard';
+import { ET_3850, fixturePath, fixtureRepoPath, readFixtureText } from '../support/fixtures';
 
 // Разбор XML — дело M1; здесь фикстуры проверяются по тексту, парсер не нужен.
-const DIR = 'test/fixtures/escl/et-3850';
-const read = (name: string): string => readFileSync(resolve(DIR, name), 'utf8');
+const DIR = fixtureRepoPath(...ET_3850);
+const read = (name: string): string => readFixtureText(...ET_3850, name);
 
 const tagValues = (xml: string, tag: string): string[] =>
   [...xml.matchAll(new RegExp(`<${tag}>([^<]*)</${tag}>`, 'g'))].map((match) => match[1] ?? '');
@@ -144,7 +144,9 @@ interface Trace {
 }
 
 describe('следы заданий (M1, U1)', () => {
-  const names = readdirSync(resolve(DIR, 'traces')).filter((name) => name.endsWith('.json'));
+  const names = readdirSync(fixturePath(...ET_3850, 'traces')).filter((name) =>
+    name.endsWith('.json'),
+  );
   const load = (name: string): Trace => JSON.parse(read(`traces/${name}`)) as Trace;
   const pages = (name: string): TraceExchange[] =>
     load(name).exchanges.filter((exchange) => exchange.path.endsWith('/NextDocument'));

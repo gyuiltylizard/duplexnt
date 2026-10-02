@@ -119,6 +119,31 @@ function layer(dir: string, forbidden: readonly Restriction[]): Linter.Config[] 
   ];
 }
 
+// Эмулятор сканера не видит код приложения (план M1, KTD-4): клиент проверяется против
+// эмулятора, и эмулятор, собранный из тех же модулей, проверял бы клиент самим клиентом. Общее у
+// них одно — фикстуры. Исключения для тестовых файлов нет: тесты «клиент против эмулятора» живут
+// в test/integration.
+const EMULATOR_MESSAGE =
+  'Эмулятор сканера не импортирует код приложения: общее у него с клиентом — только фикстуры.';
+const APP_ALIASES: Restriction = {
+  regex: '^(@shared|@core|@locales)(/.*)?$',
+  message: EMULATOR_MESSAGE,
+};
+const APP_SOURCES: Restriction = {
+  regex: String.raw`^(\.\./)+(.*/)?src(/.*)?$`,
+  message: EMULATOR_MESSAGE,
+};
+const EMULATOR_FORBIDDEN = [APP_ALIASES, APP_SOURCES, ELECTRON];
+
+const emulatorIsolation: Linter.Config = {
+  name: 'duplexnt/emulator-isolation',
+  files: ['test/emulator/**'],
+  rules: {
+    'no-restricted-imports': ['error', { patterns: [...EMULATOR_FORBIDDEN] }],
+    'no-restricted-syntax': ['error', ...dynamicImportSelectors(EMULATOR_FORBIDDEN)],
+  },
+};
+
 export const layerBoundaryConfigs: Linter.Config[] = [
   // Страховка для файла под src/, не попавшего ни в один слой. Стоит ПЕРВОЙ: блоки слоёв ниже
   // переопределяют `no-restricted-syntax` своим, более полным набором.
@@ -132,6 +157,7 @@ export const layerBoundaryConfigs: Linter.Config[] = [
   ...layer('main', [PRELOAD, RENDERER]),
   ...layer('preload', [NODE, CORE, MAIN, RENDERER, LOCALES]),
   ...layer('renderer', [ELECTRON, NODE, CORE, MAIN, PRELOAD]),
+  emulatorIsolation,
 ];
 
 // ---------------------------------------------------------------------------------------------

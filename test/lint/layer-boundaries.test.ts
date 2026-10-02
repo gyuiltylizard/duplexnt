@@ -211,3 +211,46 @@ describe('обходы статического импорта', () => {
     );
   });
 });
+
+describe('изоляция эмулятора сканера', () => {
+  it('импорт из кода приложения — ошибка: алиасом, относительным путём и динамически', async () => {
+    const samples = [
+      "import '@core';\n",
+      "import { parseCapabilities } from '@core/escl/capabilities';\nvoid parseCapabilities;\n",
+      "import '@shared';\n",
+      "import '@locales/ru/common.json';\n",
+      "import '../../src/core/escl/transport';\n",
+      "import type { Result } from '../../src/shared/errors';\nexport type R = Result<number>;\n",
+      "export const c = import('../../src/core/index');\n",
+      "export const c = import('@core');\n",
+    ];
+    for (const code of samples) {
+      const messages = await lint('test/emulator/server.ts', code);
+      expect(messages, code).toHaveLength(1);
+      expect(messages[0], code).toContain('фикстуры');
+    }
+  });
+
+  it('вложенный файл эмулятора и его тест — под тем же запретом', async () => {
+    expect(
+      await lint('test/emulator/scenarios/pass.ts', "import '../../../src/core';\n"),
+    ).toHaveLength(1);
+    expect(await lint('test/emulator/server.test.ts', "import '@core';\n")).toHaveLength(1);
+    expect(await lint('test/emulator/cli.ts', "import 'electron';\n")).toHaveLength(1);
+  });
+
+  it('node:*, помощник фикстур и соседние модули эмулятора — чисто', async () => {
+    const code =
+      "import 'node:http';\nimport 'node:https';\nimport '../support/fixtures';\nimport './scenarios';\n";
+    expect(await lint('test/emulator/server.ts', code)).toEqual([]);
+  });
+
+  it('каталог с src в имени за код приложения не принимается', async () => {
+    expect(await lint('test/emulator/server.ts', "import '../support/src-map';\n")).toEqual([]);
+  });
+
+  it('запрет не задевает остальные тесты: интеграционные берут и ядро, и эмулятор', async () => {
+    const code = "import '../../src/core/index';\nimport '../emulator/server';\n";
+    expect(await lint('test/integration/scan-job.test.ts', code)).toEqual([]);
+  });
+});
