@@ -1,6 +1,5 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import * as https from 'node:https';
-import { join } from 'node:path';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { createTransport } from '../../src/core/escl/transport';
 import { startLoopbackServer, type LoopbackServer } from '../support/loopback-server';
@@ -124,20 +123,11 @@ describe('изоляция TLS', () => {
 });
 
 describe('ослабление TLS в исходниках', () => {
-  function sourceFiles(directory: string): string[] {
-    return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-      const path = join(directory, entry.name).replaceAll('\\', '/');
-      if (entry.isDirectory()) {
-        return sourceFiles(path);
-      }
-      return /\.(ts|tsx)$/.test(entry.name) ? [path] : [];
-    });
-  }
-
   it('встречается в src/ ровно в одном файле — транспорте сканера', () => {
-    const relaxing = sourceFiles('src').filter((path) =>
-      readFileSync(path, 'utf8').includes('rejectUnauthorized'),
-    );
+    const relaxing = readdirSync('src', { recursive: true, encoding: 'utf8' })
+      .filter((path) => /\.(ts|tsx)$/.test(path))
+      .map((path) => `src/${path.replaceAll('\\', '/')}`)
+      .filter((path) => readFileSync(path, 'utf8').includes('rejectUnauthorized'));
 
     expect(relaxing).toEqual(['src/core/escl/transport.ts']);
   });

@@ -8,12 +8,12 @@ import { TEST_PROJECTS, type TestProject } from '../../tooling/test-projects';
 
 const SKIPPED_DIRS = new Set([
   'node_modules',
-  '.git',
   'out',
   'dist',
   'release',
   'temp',
   'local-test-data',
+  'coverage',
 ]);
 const TEST_FILE = /\.(test|spec)\.[cm]?[jt]sx?$/;
 
@@ -21,7 +21,8 @@ function listTestFiles(directory = '.'): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = posix.join(directory, entry.name);
     if (entry.isDirectory()) {
-      return SKIPPED_DIRS.has(entry.name) ? [] : listTestFiles(path);
+      // Каталоги с точкой — служебные (.git, .husky, .claude с копиями репозитория).
+      return SKIPPED_DIRS.has(entry.name) || entry.name.startsWith('.') ? [] : listTestFiles(path);
     }
     return TEST_FILE.test(entry.name) ? [path] : [];
   });

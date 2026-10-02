@@ -41,7 +41,11 @@ export const XML_LIMITS: XmlLimits = {
 export type XmlFailure =
   'tooLarge' | 'notUtf8' | 'doctype' | 'malformed' | 'tooDeep' | 'tooManyNodes';
 
-const badResponse = (reason: XmlFailure): Result<never> => fail('scannerBadResponse', { reason });
+/** Все причины отказа `scannerBadResponse` — одним списком: опечатка в причине не компилируется. */
+export type BadResponseReason = XmlFailure | 'adfRegion' | 'adfProfile' | 'http' | 'foreignPath';
+
+export const badResponse = (reason: BadResponseReason): Result<never> =>
+  fail('scannerBadResponse', { reason });
 
 class Rejected extends Error {
   constructor(readonly reason: XmlFailure) {

@@ -1,5 +1,6 @@
 import { fail, ok, type Result } from '@shared';
 import {
+  badResponse,
   childOf,
   childrenOf,
   descendantOf,
@@ -92,9 +93,8 @@ const inRange = (range: Range, value: number): boolean =>
   value >= range.min && value <= range.max && (value - range.min) % range.step === 0;
 
 function rangeResolutions(supported: XmlElement): number[] {
-  const range = childOf(supported, NS_SCAN, 'ResolutionRange');
-  const x = rangeOf(range === null ? null : childOf(range, NS_SCAN, 'XResolutionRange'));
-  const y = rangeOf(range === null ? null : childOf(range, NS_SCAN, 'YResolutionRange'));
+  const x = rangeOf(descendantOf(supported, NS_SCAN, 'ResolutionRange', 'XResolutionRange'));
+  const y = rangeOf(descendantOf(supported, NS_SCAN, 'ResolutionRange', 'YResolutionRange'));
   if (x === null || y === null) {
     return [];
   }
@@ -176,7 +176,7 @@ export function parseCapabilities(bytes: Uint8Array): Result<ScannerCapabilities
   const maxWidth = extentOf(adfCaps, 'MaxWidth');
   const maxHeight = extentOf(adfCaps, 'MaxHeight');
   if (maxWidth === null || maxHeight === null) {
-    return fail('scannerBadResponse', { reason: 'adfRegion' });
+    return badResponse('adfRegion');
   }
 
   const jpegProfiles = profilesOf(adfCaps).filter(hasJpeg);
@@ -185,7 +185,7 @@ export function parseCapabilities(bytes: Uint8Array): Result<ScannerCapabilities
   }
   const profile = jpegProfiles.find((it) => it.colorModes.length > 0 && it.resolutions.length > 0);
   if (profile === undefined) {
-    return fail('scannerBadResponse', { reason: 'adfProfile' });
+    return badResponse('adfProfile');
   }
 
   return ok({

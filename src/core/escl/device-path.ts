@@ -25,13 +25,10 @@ function isPlainAscii(value: string): boolean {
   return true;
 }
 
-function cleanSegments(path: string): string[] | null {
-  const segments = path.split('/');
-  // Путь начинается со слэша: первый элемент — пустой, остальные — сегменты.
-  if (segments.shift() !== '') {
-    return null;
-  }
-  return segments.every((it) => SEGMENT.test(it) && !isDotSegment(it)) ? segments : null;
+// Простой путь: начинается со слэша, каждый сегмент — из разрешённых символов и не точечный.
+function isCleanPath(path: string): boolean {
+  const [first, ...segments] = path.split('/');
+  return first === '' && segments.every((it) => SEGMENT.test(it) && !isDotSegment(it));
 }
 
 /**
@@ -48,12 +45,12 @@ export function normalizeBasePath(input: string): string | null {
     return '';
   }
   const path = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
-  return cleanSegments(path) === null ? null : path;
+  return isCleanPath(path) ? path : null;
 }
 
 /** Путь лежит строго под базой — по границе сегмента: `/eSCLx/…` под `/eSCL` не лежит. */
 export function isUnderBase(path: string, basePath: string): boolean {
-  if (path.length > DEVICE_PATH_MAX_LENGTH || cleanSegments(path) === null) {
+  if (path.length > DEVICE_PATH_MAX_LENGTH || !isCleanPath(path)) {
     return false;
   }
   return path.startsWith(`${basePath}/`) && path.length > basePath.length + 1;
@@ -93,7 +90,7 @@ export function jobPathFromLocation(
   }
 
   const path = url.pathname;
-  if (!path.startsWith(`${collection}/`) || !isUnderBase(path, collection)) {
+  if (!isUnderBase(path, collection)) {
     return null;
   }
   return path;

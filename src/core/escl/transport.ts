@@ -4,7 +4,7 @@ import * as https from 'node:https';
 import type { TLSSocket } from 'node:tls';
 import { fail, ok, type DomainError, type Result } from '@shared';
 import { isUnderBase } from './device-path';
-import { XML_LIMITS } from './xml';
+import { badResponse, XML_LIMITS, type BadResponseReason } from './xml';
 
 // Сетевой слой клиента сканера (план M1, KTD-6, KTD-7, KTD-40).
 //
@@ -103,7 +103,7 @@ export type UnreachableReason =
 
 const unreachable = (reason: UnreachableReason): TransportError =>
   new TransportError({ code: 'scannerUnreachable', details: { reason } });
-const badResponse = (reason: string): TransportError =>
+const badResponseError = (reason: BadResponseReason): TransportError =>
   new TransportError({ code: 'scannerBadResponse', details: { reason } });
 
 const REASON_BY_CODE = new Map<string, UnreachableReason>([
@@ -127,7 +127,7 @@ function toTransportError(error: unknown): TransportError {
   const raw = (error as { code?: unknown } | null)?.code;
   const code = typeof raw === 'string' ? raw : '';
   if (code.startsWith('HPE_')) {
-    return badResponse('http');
+    return badResponseError('http');
   }
   if (code.startsWith('ERR_SSL_') || code.startsWith('ERR_TLS_')) {
     return unreachable('tls');
@@ -253,7 +253,9 @@ export function createTransport(profile: ScannerProfile): ScannerTransport {
           release,
         });
       });
-      request.once('error', (error) => {
+      // `on`, а не `once`: ошибка сокета после заголовков приходит и сюда; без слушателя она
+      // стала бы необработанным исключением в main. Причину тогда несёт поток ответа.
+      request.on('error', (error) => {
         if (response === null) {
           release();
           reject(toTransportError(error));
@@ -267,7 +269,7 @@ export function createTransport(profile: ScannerProfile): ScannerTransport {
   return {
     async request(options) {
       if (foreignPath(options.path)) {
-        return fail('scannerBadResponse', { reason: 'foreignPath' });
+        return badResponse('foreignPath');
       }
       const maxBytes = options.maxBytes ?? TRANSPORT_DEFAULTS.maxXmlBytes;
 
@@ -280,14 +282,14 @@ export function createTransport(profile: ScannerProfile): ScannerTransport {
       try {
         const declared = Number(headerOf(opened.response.headers['content-length']) ?? 0);
         if (declared > maxBytes) {
-          throw badResponse('tooLarge');
+          throw badResponseError('tooLarge');
         }
         const chunks: Uint8Array[] = [];
         let received = 0;
         for await (const chunk of opened.response as AsyncIterable<Uint8Array>) {
           received += chunk.byteLength;
           if (received > maxBytes) {
-            throw badResponse('tooLarge');
+            throw badResponseError('tooLarge');
           }
           chunks.push(chunk);
         }
@@ -302,7 +304,7 @@ export function createTransport(profile: ScannerProfile): ScannerTransport {
 
     async stream(options) {
       if (foreignPath(options.path)) {
-        return fail('scannerBadResponse', { reason: 'foreignPath' });
+        return badResponse('foreignPath');
       }
 
       let opened: Opened;
@@ -325,7 +327,7 @@ export function createTransport(profile: ScannerProfile): ScannerTransport {
           for await (const chunk of response as AsyncIterable<Uint8Array>) {
             received += chunk.byteLength;
             if (received > maxBytes) {
-              throw badResponse('tooLarge');
+              throw badResponseError('tooLarge');
             }
             yield chunk;
           }
