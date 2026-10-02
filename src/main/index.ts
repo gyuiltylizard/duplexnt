@@ -3,8 +3,10 @@ import { join } from 'node:path';
 import { handleProbe } from '@core';
 import { APP_NAME } from '@shared';
 import { registerBridge } from './bridge';
+import { resolveDataRoot } from './data-root';
 import { denyAllPermissions, installShellGuards } from './shell/guards';
 import { buildWebPreferences } from './shell/web-preferences';
+import { acquireSingleInstance } from './single-instance';
 
 function createWindow(): BrowserWindow {
   const window = new BrowserWindow({
@@ -36,21 +38,32 @@ function loadRenderer(window: BrowserWindow): void {
   }
 }
 
-// Гварды ставятся до первого окна: событие `web-contents-created` не повторяется.
-installShellGuards(app);
+// Порядок запуска задан явно (план M1, KTD-21): каталог данных → блокировка экземпляра → всё
+// остальное. Блокировка лежит в `userData`, поэтому каталог `dev` выбирается до неё.
+//
+// Корень данных пока никто не берёт: первым его получит хранилище сессии (U13).
+resolveDataRoot(app);
 
-void app.whenReady().then(() => {
-  denyAllPermissions(session.defaultSession);
+let mainWindow: BrowserWindow | null = null;
 
-  // Мост регистрируется до загрузки страницы и получает окно: без него нечем проверить
-  // отправителя. Обработчики зовут ядро с сырым входом — проверка входа живёт в ядре.
-  const window = createWindow();
-  registerBridge(ipcMain, window, {
-    probe: (rawRequest) => handleProbe(rawRequest),
+if (acquireSingleInstance(app, () => mainWindow)) {
+  // Гварды ставятся до первого окна: событие `web-contents-created` не повторяется.
+  installShellGuards(app);
+
+  void app.whenReady().then(() => {
+    denyAllPermissions(session.defaultSession);
+
+    // Мост регистрируется до загрузки страницы и получает окно: без него нечем проверить
+    // отправителя. Обработчики зовут ядро с сырым входом — проверка входа живёт в ядре.
+    const window = createWindow();
+    mainWindow = window;
+    registerBridge(ipcMain, window, {
+      probe: (rawRequest) => handleProbe(rawRequest),
+    });
+    loadRenderer(window);
   });
-  loadRenderer(window);
-});
 
-app.on('window-all-closed', () => {
-  app.quit();
-});
+  app.on('window-all-closed', () => {
+    app.quit();
+  });
+}
