@@ -7,7 +7,6 @@ import {
   type PassReport,
   type Result,
   type ScanParams,
-  type ScannerInfo,
   type ScannerState,
   type Snapshot,
   type StartupNotice,
@@ -33,7 +32,12 @@ import {
   openSettingsStore,
   type SettingsStore,
 } from '../storage/settings-store';
-import { sameScanner, storedScannerOf, type StoredScanner } from '../storage/stored-scanner';
+import {
+  sameScanner,
+  scannerInfoOf,
+  storedScannerOf,
+  type StoredScanner,
+} from '../storage/stored-scanner';
 import { storageFailure } from '../storage/storage-fs';
 import { pagePixelLimit } from '../storage/thumbnails';
 import { openUnclosedJobs, type UnclosedJobs } from '../storage/unclosed-jobs';
@@ -124,13 +128,6 @@ interface Run {
 
 const conflict = (reason: string): Result<never> => fail('sessionConflict', { reason });
 
-const infoOf = ({ name, scheme, host, port }: StoredScanner): ScannerInfo => ({
-  name,
-  scheme,
-  host,
-  port,
-});
-
 /** Причина обрыва задания — кодом: отказ устройства как есть, отказ приёмника — через хранилище. */
 export function interruptionError(end: ScanJobEnd): DomainError | null {
   if (end.kind !== 'interrupted') {
@@ -175,18 +172,26 @@ export function createPassService(
       case 'none':
         return { kind: 'none' };
       case 'checking':
-        return { kind: 'checking', scanner: infoOf(scanner.stored) };
+        return { kind: 'checking', scanner: scannerInfoOf(scanner.stored) };
       case 'ready':
         return {
           kind: 'ready',
-          scanner: infoOf(storedScannerOf(scanner.connected)),
+          scanner: scannerInfoOf(storedScannerOf(scanner.connected)),
           options: scanner.connected.options,
           params: scanner.params,
         };
       case 'unreachable':
-        return { kind: 'unreachable', scanner: infoOf(scanner.stored), error: scanner.error };
+        return {
+          kind: 'unreachable',
+          scanner: scannerInfoOf(scanner.stored),
+          error: scanner.error,
+        };
       case 'otherDevice':
-        return { kind: 'otherDevice', scanner: infoOf(scanner.stored), error: scanner.error };
+        return {
+          kind: 'otherDevice',
+          scanner: scannerInfoOf(scanner.stored),
+          error: scanner.error,
+        };
     }
   };
 

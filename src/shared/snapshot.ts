@@ -30,6 +30,8 @@ export interface PassSnapshot {
    * досканировать его нельзя.
    */
   readonly paramsKnown: boolean;
+  /** Сканер, на котором шёл проход (KTD-27); `null`, когда параметры неизвестны. */
+  readonly scanner: ScannerInfo | null;
   readonly pages: readonly PageSnapshot[];
 }
 

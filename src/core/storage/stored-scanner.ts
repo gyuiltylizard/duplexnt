@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { ScannerInfo } from '@shared';
 import type { ConnectedScanner } from '../escl/connect';
 import { normalizeBasePath } from '../escl/device-path';
 import type { ScannerProfile } from '../escl/transport';
@@ -39,6 +40,11 @@ export function storedScannerOf({ profile, capabilities }: ConnectedScanner): St
     uuid: capabilities.uuid,
     name: capabilities.makeAndModel,
   };
+}
+
+/** Сканер, как его показывает интерфейс: имя и адрес, без отпечатка и UUID. */
+export function scannerInfoOf({ name, scheme, host, port }: StoredScanner): ScannerInfo {
+  return { name, scheme, host, port };
 }
 
 export function profileOf(scanner: StoredScanner): ScannerProfile {

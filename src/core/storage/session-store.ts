@@ -44,6 +44,7 @@ import {
   type StorageFs,
   type StorageOptions,
 } from './storage-fs';
+import { scannerInfoOf } from './stored-scanner';
 import { isSetAsideName, setAside, writeVersioned } from './versioned-file';
 
 // Хранилище сессии: журнал, страницы, проходы и сегменты (ADR 0004 с амендментом; план M1, U13).
@@ -380,6 +381,7 @@ export function createSessionStore(
           number: pass.number,
           state: passStateOf(pass),
           paramsKnown: pass.origin !== null,
+          scanner: pass.origin === null ? null : scannerInfoOf(pass.origin.scanner),
           pages: pagesOf(pass).map(({ key, number }) => ({ key, number, lost: lost.has(key) })),
         })),
       };

@@ -105,6 +105,7 @@ describe('хранилище сессии: проход', () => {
           number: 1,
           state: 'completed',
           paramsKnown: true,
+          scanner: { name: 'Test Scanner', scheme: 'https', host: 'scanner.test', port: 443 },
           pages: [
             { key: 'p01-s01-0001', number: 1, lost: false },
             { key: 'p01-s01-0002', number: 2, lost: false },
