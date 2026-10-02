@@ -67,8 +67,13 @@ export function derivedDirOf(layout: DataLayout, sessionId: string): string {
   return join(layout.derivedDir, sessionId);
 }
 
+/** Каталог миниатюр сессии от корня производного кэша — для модуля, который знает только его. */
+export function thumbsDirIn(derivedDir: string, sessionId: string): string {
+  return join(derivedDir, sessionId, 'thumbs');
+}
+
 export function thumbsDirOf(layout: DataLayout, sessionId: string): string {
-  return join(derivedDirOf(layout, sessionId), 'thumbs');
+  return thumbsDirIn(layout.derivedDir, sessionId);
 }
 
 export interface PageAddress {
