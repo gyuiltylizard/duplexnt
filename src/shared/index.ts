@@ -23,11 +23,24 @@ export {
 
 export type { DiscoveredScanner, DiscoveryState } from './discovery';
 
+export {
+  COLOR_MODES,
+  PAPER_SIZES,
+  type ColorMode,
+  type PaperSize,
+  type ScanOptions,
+  type ScanParams,
+} from './scan-params';
+
 export type {
   PageSnapshot,
+  PassProgress,
   PassSnapshot,
   PassState,
+  ScannerInfo,
+  ScannerState,
   SessionSnapshot,
+  Snapshot,
   StartupNotice,
 } from './snapshot';
 

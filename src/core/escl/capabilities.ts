@@ -1,4 +1,4 @@
-import { fail, ok, type Result } from '@shared';
+import { COLOR_MODES, fail, ok, type ColorMode, type Result } from '@shared';
 import {
   badResponse,
   childOf,
@@ -21,9 +21,6 @@ import {
 // `BlackAndWhite1` и отклоняет его с JPEG, заявляет юстировку вправо и кладёт лист по центру.
 // Здесь — то, что устройство заявило; что из этого предлагать пользователю, решает
 // ./scan-settings.ts.
-
-export const COLOR_MODES = ['BlackAndWhite1', 'Grayscale8', 'RGB24'] as const;
-export type ColorMode = (typeof COLOR_MODES)[number];
 
 export const DOCUMENT_FORMATS = ['image/jpeg', 'application/pdf'] as const;
 export type DocumentFormat = (typeof DOCUMENT_FORMATS)[number];

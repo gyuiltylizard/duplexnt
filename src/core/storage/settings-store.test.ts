@@ -1,11 +1,10 @@
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
-import { fail, ok, type Result } from '@shared';
+import { fail, ok, type Result, type ScanParams } from '@shared';
 import { ET_3850, readFixtureText } from '../../../test/support/fixtures';
 import { fsError, interceptFs } from '../../../test/support/intercept-fs';
 import { makeTempDataRoot } from '../../../test/support/temp-data-root';
 import { createConnector, parseScannerAddress } from '../escl/connect';
-import type { ScanParams } from '../escl/scan-settings';
 import type { BufferedResponse, ScannerProfile, ScannerTransport } from '../escl/transport';
 import { layoutOf } from './layout';
 import { createSessionStore } from './session-store';

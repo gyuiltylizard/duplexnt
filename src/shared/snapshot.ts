@@ -1,8 +1,12 @@
 // Снимок состояния — то, из чего интерфейс выводит экран (план M1, KTD-23; ADR 0005). Renderer
-// своей копии состояния сессии не ведёт. Здесь — часть снимка, которую отдаёт хранилище сессии;
-// сканер, параметры и ход прохода добавляет служба прохода.
+// своей копии состояния сессии не ведёт. Сессию отдаёт хранилище сессии (`SessionSnapshot`);
+// сканер, параметры, ход прохода, режим отказа и уведомления запуска добавляет служба прохода
+// (`Snapshot`).
 //
 // В снимке нет абсолютных путей и адресов заданий (KTD-39): страница адресуется ключом.
+
+import type { DomainError } from './errors';
+import type { ScanOptions, ScanParams } from './scan-params';
 
 /**
  * Состояние прохода (ADR 0004, амендмент): идёт, завершён, прерван, прерван и принят как есть.
@@ -44,3 +48,75 @@ export type StartupNotice =
   | 'settingsIncompatible'
   /** Файл настроек не читался: отодвинут, работают значения по умолчанию. */
   | 'settingsUnreadable';
+
+/** Сканер, как его показывает строка устройства: адрес виден всегда (журнал M1, сессия 4). */
+export interface ScannerInfo {
+  readonly name: string | null;
+  /** Схема видна: по HTTP отпечатка сертификата нет (KTD-8, KTD-40). */
+  readonly scheme: 'https' | 'http';
+  readonly host: string;
+  readonly port: number;
+}
+
+/** Сканер в приложении: подключённый или запомненный, с исходом его проверки при запуске. */
+export type ScannerState =
+  /** Сканер ещё не подключали. */
+  | { readonly kind: 'none' }
+  /** Запомненный сканер проверяется запросом capabilities. */
+  | { readonly kind: 'checking'; readonly scanner: ScannerInfo }
+  /** Подключён; варианты параметров — из его capabilities, параметры — выбранные (KTD-13). */
+  | {
+      readonly kind: 'ready';
+      readonly scanner: ScannerInfo;
+      readonly options: ScanOptions;
+      readonly params: ScanParams;
+    }
+  /** Запомненный сканер молчит, занят или отвечает невнятно; причина — кодом. */
+  | { readonly kind: 'unreachable'; readonly scanner: ScannerInfo; readonly error: DomainError }
+  /**
+   * По адресу отвечает другое устройство: чужой сертификат, не сканер, сканер без автоподачи;
+   * `error` — `null`, когда это исправный сканер с другим UUID.
+   */
+  | {
+      readonly kind: 'otherDevice';
+      readonly scanner: ScannerInfo;
+      readonly error: DomainError | null;
+    };
+
+/** Идущий проход — то, что показывает экран `scan`. */
+export interface PassProgress {
+  readonly phase:
+    /** Задание ещё не создано: закрываются незакрытые задания, читается лоток. */
+    | 'starting'
+    /** Устройство занято: ждём, пока примет задание (R7). */
+    | 'busy'
+    /** Задание принято, идут страницы. */
+    | 'scanning'
+    /** «Остановить» нажато: ждём, пока устройство закроет задание. */
+    | 'stopping';
+  /** Досканирование прерванного прохода, а не новый проход. */
+  readonly resumed: boolean;
+  /** Страниц, принятых этим запуском. */
+  readonly pages: number;
+}
+
+export interface Snapshot {
+  /** Номер снимка: событие несёт его, интерфейс берёт позднейший. */
+  readonly seq: number;
+  readonly scanner: ScannerState;
+  readonly session: SessionSnapshot | null;
+  /** `null` — проход не идёт. */
+  readonly pass: PassProgress | null;
+  /** Последний проход прерван, и его можно досканировать: параметры известны, сканер тот же. */
+  readonly canResume: boolean;
+  /** Последний проход прерван, и его можно оставить как есть. */
+  readonly canAccept: boolean;
+  readonly storage: {
+    /** Данные более новой версии: ни прохода, ни «Новой пачки» (KTD-35). */
+    readonly incompatible: boolean;
+    /** Журнал в памяти новее записанного: последняя запись на диск не удалась. */
+    readonly unsaved: boolean;
+  };
+  /** Уведомления запуска; читаются без сброса, интерфейс показывает их один раз сам. */
+  readonly notices: readonly StartupNotice[];
+}

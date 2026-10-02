@@ -19,6 +19,8 @@
     "scanParamsUnsupported": "сканер не поддерживает выбранные параметры сканирования",
     "scannerUnreachable": "сканер не отвечает",
     "scannerCertificateChanged": "по этому адресу отвечает другое устройство",
+    "scannerNotConnected": "сканер не подключён",
+    "scanNoPaper": "в лотке нет бумаги",
     "scannerBusy": "сканер занят",
     "scanParamsRejected": "сканер отклонил параметры сканирования",
     "scanFeedFailed": "сканер прервал подачу бумаги",

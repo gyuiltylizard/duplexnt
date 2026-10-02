@@ -1,7 +1,14 @@
 import { z } from 'zod';
-import { fail, ok, type DomainError, type Result, type StartupNotice } from '@shared';
+import {
+  fail,
+  ok,
+  type DomainError,
+  type Result,
+  type ScanParams,
+  type StartupNotice,
+} from '@shared';
 import { probeScanner, type ConnectedScanner, type ConnectorOptions } from '../escl/connect';
-import { resolveScanParams, type ScanParams } from '../escl/scan-settings';
+import { resolveScanParams } from '../escl/scan-settings';
 import { scanParamsSchema } from './journal';
 import { layoutOf } from './layout';
 import { ioOf, serialQueue, storageFailure, type StorageOptions } from './storage-fs';

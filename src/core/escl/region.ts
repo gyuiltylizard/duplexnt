@@ -1,4 +1,4 @@
-import { fail, ok, type Result } from '@shared';
+import { fail, ok, PAPER_SIZES, type PaperSize, type Result } from '@shared';
 import type { InputCaps } from './capabilities';
 
 // Регион сканирования — ВСЕГДА в 1/300 дюйма, независимо от выбранного разрешения
@@ -7,9 +7,6 @@ import type { InputCaps } from './capabilities';
 
 export const REGION_UNITS_PER_INCH = 300;
 const MM_PER_INCH = 25.4;
-
-export const PAPER_SIZES = ['A4', 'Letter'] as const;
-export type PaperSize = (typeof PAPER_SIZES)[number];
 
 export interface ScanRegion {
   readonly xOffset: number;

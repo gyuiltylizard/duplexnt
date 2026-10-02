@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { ScanParams } from '@shared';
 import { ET_3850, readFixture, readFixtureText } from '../../../test/support/fixtures';
 import { parseCapabilities, type ScannerCapabilities } from './capabilities';
 import {
@@ -6,7 +7,6 @@ import {
   DEFAULT_SCAN_PARAMS,
   resolveScanParams,
   scanOptionsOf,
-  type ScanParams,
 } from './scan-settings';
 import { descendantOf, NS_PWG, NS_SCAN, parseXml, textOf, uintOf, type XmlElement } from './xml';
 

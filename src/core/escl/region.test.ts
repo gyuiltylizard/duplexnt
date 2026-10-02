@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { PAPER_SIZES } from '@shared';
 import { ET_3850, readFixture } from '../../../test/support/fixtures';
 import { parseCapabilities, type InputCaps } from './capabilities';
-import { PAPER_SIZES, regionFor, type ScanRegion } from './region';
+import { regionFor, type ScanRegion } from './region';
 
 function et3850Adf(): InputCaps {
   const result = parseCapabilities(readFixture(...ET_3850, 'ScannerCapabilities.xml'));

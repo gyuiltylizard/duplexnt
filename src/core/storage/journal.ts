@@ -1,8 +1,5 @@
 import { z } from 'zod';
-import type { PassState } from '@shared';
-import { COLOR_MODES } from '../escl/capabilities';
-import { PAPER_SIZES } from '../escl/region';
-import type { ScanParams } from '../escl/scan-settings';
+import { COLOR_MODES, PAPER_SIZES, type PassState, type ScanParams } from '@shared';
 import {
   MAX_PAGE_INDEX,
   MAX_PASS_NUMBER,

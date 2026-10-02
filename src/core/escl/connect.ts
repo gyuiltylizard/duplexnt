@@ -1,7 +1,7 @@
-import { fail, ok, type Result } from '@shared';
+import { fail, ok, type Result, type ScanOptions } from '@shared';
 import { parseCapabilities, type ScannerCapabilities } from './capabilities';
 import { DEFAULT_BASE_PATH, normalizeBasePath } from './device-path';
-import { scanOptionsOf, type ScanOptions } from './scan-settings';
+import { scanOptionsOf } from './scan-settings';
 import {
   createTransport,
   type ScannerProfile,

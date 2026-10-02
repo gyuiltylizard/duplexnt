@@ -1,23 +1,20 @@
-import { fail, ok, type Result } from '@shared';
-import type { ColorMode, ScannerCapabilities } from './capabilities';
-import { PAPER_SIZES, regionFor, type PaperSize } from './region';
+import {
+  fail,
+  ok,
+  PAPER_SIZES,
+  type ColorMode,
+  type Result,
+  type ScanOptions,
+  type ScanParams,
+} from '@shared';
+import type { ScannerCapabilities } from './capabilities';
+import { regionFor } from './region';
 import { NS_PWG, NS_SCAN } from './xml';
 
 // Параметры сканирования: что предложить пользователю и как собрать запрос задания (ADR 0006).
 // Запрос собирается шаблоном; каждое значение перед подстановкой сверяется с вариантами,
 // выведенными из capabilities, — одним и тем же списком пользуются интерфейс и проверка.
-
-export interface ScanParams {
-  readonly colorMode: ColorMode;
-  readonly resolution: number;
-  readonly paperSize: PaperSize;
-}
-
-export interface ScanOptions {
-  readonly colorModes: readonly ColorMode[];
-  readonly resolutions: readonly number[];
-  readonly paperSizes: readonly PaperSize[];
-}
+// Типы параметров и вариантов — в `@shared`: они идут в снимок интерфейса.
 
 // Capabilities — необходимый вход, но не истина: ET-3850 перечисляет `BlackAndWhite1` и отвечает
 // `409` на задание с ним и JPEG (журнал M1, U1). Страницы приложение берёт только в JPEG,
