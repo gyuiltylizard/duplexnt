@@ -14,6 +14,12 @@ export const ERROR_CODES = [
   'scannerNoJpeg',
   // Параметр сканирования, которого нет у устройства; какой именно — в деталях (`field`).
   'scanParamsUnsupported',
+  // Соединение со сканером не состоялось или оборвалось; причина — в деталях (`reason`).
+  'scannerUnreachable',
+  // По адресу сканера отвечает устройство с другим сертификатом (план M1, KTD-40).
+  'scannerCertificateChanged',
+  // Операция отменена самим приложением: «Остановить», закрытие окна, новое подключение.
+  'canceled',
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

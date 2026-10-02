@@ -173,6 +173,55 @@ describe('глобальное ослабление TLS', () => {
   });
 });
 
+describe('исключение TLS для транспорта сканера', () => {
+  const TRANSPORT = 'src/core/escl/transport.ts';
+  const AGENT =
+    "import { Agent } from 'node:https';\nexport const agent = new Agent({ rejectUnauthorized: false });\n";
+
+  it('агент с ослабленной проверкой разрешён ровно в файле транспорта', async () => {
+    expect(await lint(TRANSPORT, AGENT)).toEqual([]);
+  });
+
+  it('тот же код в любом другом файле src/ — ошибка', async () => {
+    for (const file of [
+      'src/core/escl/scan-job.ts',
+      'src/core/escl/transport.test.ts',
+      'src/core/escl/transport/index.ts',
+      'src/core/discovery/transport.ts',
+      'src/main/transport.ts',
+      'src/main/index.ts',
+      'src/preload/index.ts',
+      'src/renderer/src/transport.ts',
+    ]) {
+      const messages = await lint(file, AGENT.replace("import { Agent } from 'node:https';\n", ''));
+      expect(messages, file).toHaveLength(1);
+      expect(messages[0], file).toContain('no-restricted-syntax');
+    }
+  });
+
+  it('остальные способы ослабить TLS запрещены и в файле транспорта', async () => {
+    const samples = [
+      "process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';\n",
+      'export const options = { checkServerIdentity: () => undefined };\n',
+      'declare const s: { setCertificateVerifyProc(f: unknown): void };\ns.setCertificateVerifyProc(null);\n',
+      "declare const app: { on(n: string, f: unknown): void };\napp.on('certificate-error', null);\n",
+      "export const flag = '--ignore-certificate-errors';\n",
+    ];
+    for (const code of samples) {
+      const messages = await lint(TRANSPORT, code);
+      expect(messages.length, code).toBeGreaterThan(0);
+      expect(messages[0], code).toContain('no-restricted-syntax');
+    }
+  });
+
+  it('исключение не открывает границы слоя: Electron и вышележащие слои — ошибка', async () => {
+    expect(await lint(TRANSPORT, "import 'electron';\n")).toHaveLength(1);
+    expect(await lint(TRANSPORT, "import '../../main/index';\n")).toHaveLength(1);
+    expect(await lint(TRANSPORT, "export const e = import('electron');\n")).toHaveLength(1);
+    expect(await lint(TRANSPORT, "import '../../../test/support/fixtures';\n")).toHaveLength(1);
+  });
+});
+
 describe('обходы статического импорта', () => {
   it('динамический import() через границу слоя — ошибка', async () => {
     expect(

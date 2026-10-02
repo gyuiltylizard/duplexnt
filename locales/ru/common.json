@@ -16,7 +16,10 @@
     "notEsclScanner": "по этому адресу отвечает не сканер с поддержкой eSCL",
     "scannerNoAdf": "у этого сканера нет автоподатчика",
     "scannerNoJpeg": "этот сканер не отдаёт страницы в формате JPEG",
-    "scanParamsUnsupported": "сканер не поддерживает выбранные параметры сканирования"
+    "scanParamsUnsupported": "сканер не поддерживает выбранные параметры сканирования",
+    "scannerUnreachable": "сканер не отвечает",
+    "scannerCertificateChanged": "по этому адресу отвечает другое устройство",
+    "canceled": "операция отменена"
   },
   "versions": {
     "electron": "Electron",
