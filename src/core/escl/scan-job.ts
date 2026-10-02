@@ -111,6 +111,14 @@ export interface ScanJobRequest {
   readonly sink: PageSink;
   /** «Остановить». Уже ушедший `POST` отмена не обрывает (KTD-10). */
   readonly signal?: AbortSignal;
+  /**
+   * Обработчики вызывающего. Исключение любого из них после создания задания обрывает задание
+   * так же, как исключение приёмника: исход `interrupted` с причиной `sink`, `DELETE` уходит.
+   * Исключение `onPhase('busy')` пробрасывается: задания ещё нет, закрывать нечего.
+   *
+   * При негодном `Location` обработчики ниже не вызываются: страниц не будет, задание
+   * закрывается по адресу из статуса, а исход и адрес несёт только отчёт.
+   */
   readonly onPhase?: (phase: ScanJobPhase) => void;
   /** Адрес задания — сразу после ответа `201`, до первой страницы (KTD-11). */
   readonly onJobCreated?: (jobPath: string) => Promise<void> | void;
@@ -126,7 +134,9 @@ const realClock: ScanJobClock = {
     delay(ms, undefined, signal === undefined ? {} : { signal }).catch(() => undefined),
 };
 
-const badResponse = (reason: BadResponseReason, status?: number): DomainError => ({
+// Не путать с `badResponse` из ./xml.ts: тот возвращает конверт, этот — саму ошибку, из которой
+// здесь собираются и исход задания, и исключение потока страницы.
+const protocolError = (reason: BadResponseReason, status?: number): DomainError => ({
   code: 'scannerBadResponse',
   details: status === undefined ? { reason } : { reason, status },
 });
@@ -158,7 +168,7 @@ async function* jpegOnly(
   for await (const chunk of body) {
     for (let index = 0; index < chunk.byteLength && total + index < SOI.length; index += 1) {
       if (chunk[index] !== SOI[total + index]) {
-        throw new TransportError(badResponse('notJpeg'));
+        throw new TransportError(protocolError('notJpeg'));
       }
     }
     if (chunk.byteLength > 0) {
@@ -168,10 +178,10 @@ async function* jpegOnly(
     yield chunk;
   }
   if (total === 0) {
-    throw new TransportError(badResponse('emptyPage'));
+    throw new TransportError(protocolError('emptyPage'));
   }
   if (total < SOI.length + EOI.length || tail[0] !== EOI[0] || tail[1] !== EOI[1]) {
-    throw new TransportError(badResponse('notJpeg'));
+    throw new TransportError(protocolError('notJpeg'));
   }
   verified();
 }
@@ -245,7 +255,7 @@ export async function runScanJob(request: ScanJobRequest): Promise<Result<ScanJo
       return fail('scanParamsRejected');
     }
     if (status !== 503) {
-      return { ok: false, error: badResponse('status', status) };
+      return { ok: false, error: protocolError('status', status) };
     }
     if (busySince === null) {
       busySince = clock.now();
@@ -256,7 +266,6 @@ export async function runScanJob(request: ScanJobRequest): Promise<Result<ScanJo
     }
     await clock.sleep(limits.retryDelayMs, signal);
   }
-  request.onPhase?.('scanning');
 
   const jobPath = jobPathFromLocation(location, basePath);
   if (jobPath === null) {
@@ -264,7 +273,7 @@ export async function runScanJob(request: ScanJobRequest): Promise<Result<ScanJo
     const closed =
       found !== null && (await closeScanJob(transport, found, limits.deleteDeadlineMs));
     return ok({
-      end: interrupted(badResponse('location')),
+      end: interrupted(protocolError('location')),
       pages: 0,
       job: { path: found, closed },
     });
@@ -280,7 +289,7 @@ export async function runScanJob(request: ScanJobRequest): Promise<Result<ScanJo
         return { kind: 'canceled' };
       }
       if (pages >= limits.maxPages) {
-        return interrupted(badResponse('tooManyPages'));
+        return interrupted(protocolError('tooManyPages'));
       }
       const index = pages + 1;
       const fetched = await transport.stream(
@@ -330,7 +339,7 @@ export async function runScanJob(request: ScanJobRequest): Promise<Result<ScanJo
         return interrupted({ code: 'scanFeedFailed', details: { reason: 'gone' } });
       }
       if (status !== 503) {
-        return interrupted(badResponse('status', status));
+        return interrupted(protocolError('status', status));
       }
       // `503` между страницами — штатное «лист ещё едет»; обрыв — только затянувшаяся серия.
       notReadySince ??= clock.now();
@@ -344,6 +353,7 @@ export async function runScanJob(request: ScanJobRequest): Promise<Result<ScanJo
   let end: ScanJobEnd;
   try {
     await request.onJobCreated?.(jobPath);
+    request.onPhase?.('scanning');
     end = await receivePages();
   } catch (error) {
     end = sinkFailed(error);

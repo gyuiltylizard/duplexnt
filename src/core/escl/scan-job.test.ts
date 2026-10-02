@@ -508,6 +508,55 @@ describe('задание автоподачи: приёмник и обрабо�
     expect(calls).toEqual([POST, DELETE]);
   });
 
+  it('исключение onPhase после создания задания: страницы не запрашиваются, задание закрыто', async () => {
+    const { report, calls } = await run([created, deleted], {
+      onPhase: () => {
+        throw diskFull;
+      },
+    });
+
+    expect(report?.end).toEqual({
+      kind: 'interrupted',
+      reason: { source: 'sink', error: diskFull },
+    });
+    expect(report?.job).toEqual({ path: JOB, closed: true });
+    expect(calls).toEqual([POST, DELETE]);
+  });
+
+  it('исключение onPhase при занятости пробрасывается: задания ещё нет', async () => {
+    const fake = fakeTransport([{ status: 503 }]);
+
+    await expect(
+      runScanJob({
+        transport: fake.transport,
+        basePath: '/eSCL',
+        settings: '<settings/>',
+        sink: collector().sink,
+        clock: fakeClock().clock,
+        onPhase: () => {
+          throw diskFull;
+        },
+      }),
+    ).rejects.toBe(diskFull);
+    expect(fake.calls).toEqual([POST]);
+  });
+
+  it('при негодном Location обработчики не вызываются: исход несёт только отчёт', async () => {
+    const called: string[] = [];
+    const { report } = await run([{ status: 201 }, { status: 500 }], {
+      onPhase: (phase) => called.push(phase),
+      onJobCreated: () => {
+        called.push('создано');
+      },
+      onEnd: () => {
+        called.push('исход');
+      },
+    });
+
+    expect(called).toEqual([]);
+    expect(report?.job).toEqual({ path: null, closed: false });
+  });
+
   it('отказ записать исход: задание всё равно закрыто, отчёт несёт ошибку', async () => {
     const { report, calls } = await run([created, page, end, deleted], {
       onEnd: () => {

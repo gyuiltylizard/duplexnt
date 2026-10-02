@@ -50,6 +50,19 @@ describe('buildApi', () => {
     expect(listener).toHaveBeenCalledExactlyOnceWith({ seq: 3 });
   });
 
+  it('у каждого события свой канал: событие поиска не приходит подписчику снимка', () => {
+    const { api, emit } = setup();
+    const snapshot = vi.fn();
+    const discovery = vi.fn();
+    api.onSnapshotChanged(snapshot);
+    api.onDiscoveryChanged(discovery);
+
+    emit(BRIDGE_EVENT_CHANNELS.discoveryChanged, { seq: 5 });
+
+    expect(discovery).toHaveBeenCalledExactlyOnceWith({ seq: 5 });
+    expect(snapshot).not.toHaveBeenCalled();
+  });
+
   it('после отписки обработчик не вызывается; второй подписчик продолжает получать', () => {
     const { api, emit, listeners } = setup();
     const first = vi.fn();

@@ -214,14 +214,20 @@ describe('эмулятор сканера: задание', () => {
   });
 
   it('после DELETE идущего задания устройство ещё занято: оно гонит остаток пачки', async () => {
-    const emulator = await startTestEmulator({ scenario: { busyAfterCancelMs: 60 } });
+    // Окно с запасом: первый POST обязан попасть в него и на медленной машине.
+    const emulator = await startTestEmulator({ scenario: { busyAfterCancelMs: 400 } });
     await send(emulator, 'DELETE', await createJob(emulator));
 
     expect((await send(emulator, 'POST', JOBS, SETTINGS)).status).toBe(503);
     // Статус при этом уже показывает покой — как на устройстве (журнал M1, U1).
     expect((await send(emulator, 'GET', STATUS)).body.toString('utf8')).toContain('>Idle<');
-    await delay(80);
-    expect((await send(emulator, 'POST', JOBS, SETTINGS)).status).toBe(201);
+    // Конца окна тест ждёт повторами, как клиент, а не фиксированной паузой.
+    let status: number | null = 503;
+    for (let attempt = 0; attempt < 200 && status === 503; attempt += 1) {
+      await delay(20);
+      status = (await send(emulator, 'POST', JOBS, SETTINGS)).status;
+    }
+    expect(status).toBe(201);
   });
 
   it('после DELETE идущего задания лоток пуст: остаток пачки ушёл через тракт', async () => {
