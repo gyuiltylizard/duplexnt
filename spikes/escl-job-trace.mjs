@@ -32,6 +32,7 @@ const { values: options, positionals } = parseArgs({
     'escl-version': { type: 'string', default: '2.9' }, // версия из capabilities ET-3850
     // Ход задания.
     'wait-loaded': { type: 'boolean', default: false },
+    'wait-limit': { type: 'string', default: '300' },
     pause: { type: 'string', default: '0' },
     'max-pages': { type: 'string' },
     'delete-after': { type: 'string' },
@@ -149,7 +150,9 @@ function printExchange(record) {
   const timing = [
     record.reusedSocket ? 'соединение прежнее' : null,
     record.connectAtMs === undefined ? null : `TCP ${record.connectAtMs} мс`,
-    record.tlsAtMs === undefined ? null : `TLS ${record.tlsAtMs} мс`,
+    record.tlsAtMs === undefined
+      ? null
+      : `TLS ${record.tlsAtMs} мс${record.tls?.sessionReused ? ' (сессия возобновлена)' : ''}`,
     record.headersAtMs === undefined ? null : `заголовки ${record.headersAtMs} мс`,
     record.firstByteAtMs === undefined ? null : `первый байт ${record.firstByteAtMs} мс`,
     `всё ${record.totalMs} мс`,
@@ -245,6 +248,8 @@ function exchange(exchangeLabel, method, path, settings = {}) {
         record.tls = {
           protocol: socket.getProtocol(),
           cipher: socket.getCipher().name,
+          // Возобновлённая сессия TLS — короткое рукопожатие: объясняет разницу времён.
+          sessionReused: socket.isSessionReused(),
           fingerprint256: socket.getPeerCertificate().fingerprint256 ?? null,
         };
       });
@@ -578,7 +583,7 @@ async function closeJob(tag, jobPath) {
 
 /** Полное задание: статус → POST → страницы → статус → DELETE (или без него). */
 async function runJob(tag, { finish = 'delete' } = {}) {
-  if (options['wait-loaded']) await waitLoaded(tag);
+  if (options['wait-loaded']) await waitLoaded(tag, number('wait-limit'));
   await status(`${tag}status-before`);
   const { jobPath } = await createJob(tag);
   if (jobPath === null) {

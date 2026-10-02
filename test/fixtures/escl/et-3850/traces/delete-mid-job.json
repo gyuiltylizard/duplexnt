@@ -1,0 +1,720 @@
+{
+  "device": "et-3850",
+  "description": "DELETE после первой страницы из трёх.",
+  "scenario": "job",
+  "settings": {
+    "colorMode": "Grayscale8",
+    "resolution": 300,
+    "region": {
+      "xOffset": 35,
+      "yOffset": 0,
+      "width": 2480,
+      "height": 3507
+    }
+  },
+  "exchanges": [
+    {
+      "label": "status-before",
+      "atMs": 0,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "861",
+        "Connection": "close"
+      },
+      "bodyBytes": 861,
+      "chunks": 1,
+      "headersAtMs": 16,
+      "totalMs": 18,
+      "error": null,
+      "scannerStatus": {
+        "state": "Idle",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 5
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 195
+          }
+        ]
+      }
+    },
+    {
+      "label": "post-1",
+      "atMs": 21,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 201,
+      "statusMessage": "Created",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "Location": "https://192.0.2.10:443/eSCL/ScanJobs/00000000-0000-4000-8000-000000000000",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 20,
+      "totalMs": 20,
+      "error": null
+    },
+    {
+      "label": "status-after-post",
+      "atMs": 43,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "866",
+        "Connection": "close"
+      },
+      "bodyBytes": 866,
+      "chunks": 1,
+      "headersAtMs": 17,
+      "totalMs": 19,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 0,
+            "age": 0
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 5
+          }
+        ]
+      }
+    },
+    {
+      "label": "page-1",
+      "atMs": 66,
+      "method": "GET",
+      "path": "/eSCL/ScanJobs/00000000-0000-4000-8000-000000000000/NextDocument",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "Content-Location": "/eSCL/ScanJobs/00000000-0000-4000-8000-000000000000/file-1",
+        "CONTENT-TYPE": "image/jpeg",
+        "TRANSFER-ENCODING": "CHUNKED",
+        "Connection": "close"
+      },
+      "bodyBytes": 875660,
+      "chunks": 1120,
+      "headersAtMs": 6409,
+      "totalMs": 16709,
+      "error": null,
+      "page": {
+        "head": "ffd8ffe000104a46494600010201012c",
+        "startsWithSoi": true,
+        "endsWithEoi": true,
+        "bytesAfterLastEoi": 0,
+        "markers": [
+          "ffe0",
+          "ffdb",
+          "ffc4",
+          "ffc0",
+          "ffda"
+        ],
+        "jfif": {
+          "version": "1.2",
+          "units": 1,
+          "xDensity": 300,
+          "yDensity": 300
+        },
+        "sof": {
+          "precision": 8,
+          "height": 3507,
+          "width": 2480,
+          "components": 1
+        },
+        "expected": {
+          "width": 2480,
+          "height": 3507
+        },
+        "restartMarkers": 0,
+        "chromaSubsampling": "4:4:4"
+      }
+    },
+    {
+      "label": "status-after-page-1",
+      "atMs": 16848,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "871",
+        "Connection": "close"
+      },
+      "bodyBytes": 871,
+      "chunks": 1,
+      "headersAtMs": 22,
+      "totalMs": 23,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfProcessing",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 0
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 22
+          }
+        ]
+      }
+    },
+    {
+      "label": "status-after-terminal",
+      "atMs": 16874,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "871",
+        "Connection": "close"
+      },
+      "bodyBytes": 871,
+      "chunks": 1,
+      "headersAtMs": 16,
+      "totalMs": 16,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfProcessing",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 0
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 22
+          }
+        ]
+      }
+    },
+    {
+      "label": "delete",
+      "atMs": 16892,
+      "method": "DELETE",
+      "path": "/eSCL/ScanJobs/00000000-0000-4000-8000-000000000000",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 25,
+      "totalMs": 25,
+      "error": null
+    },
+    {
+      "label": "status-after-delete",
+      "atMs": 16918,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "869",
+        "Connection": "close"
+      },
+      "bodyBytes": 869,
+      "chunks": 1,
+      "headersAtMs": 17,
+      "totalMs": 18,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfProcessing",
+        "jobs": [
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 0
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 22
+          }
+        ]
+      }
+    },
+    {
+      "label": "status-after-mid-delete-1",
+      "atMs": 18950,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "859",
+        "Connection": "close"
+      },
+      "bodyBytes": 859,
+      "chunks": 1,
+      "headersAtMs": 28,
+      "totalMs": 29,
+      "error": null,
+      "scannerStatus": {
+        "state": "Idle",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 2
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 24
+          }
+        ]
+      }
+    },
+    {
+      "label": "status-after-mid-delete-2",
+      "atMs": 21002,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "859",
+        "Connection": "close"
+      },
+      "bodyBytes": 859,
+      "chunks": 1,
+      "headersAtMs": 21,
+      "totalMs": 22,
+      "error": null,
+      "scannerStatus": {
+        "state": "Idle",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 4
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 26
+          }
+        ]
+      }
+    },
+    {
+      "label": "status-after-mid-delete-3",
+      "atMs": 23047,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "859",
+        "Connection": "close"
+      },
+      "bodyBytes": 859,
+      "chunks": 1,
+      "headersAtMs": 19,
+      "totalMs": 20,
+      "error": null,
+      "scannerStatus": {
+        "state": "Idle",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 6
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 28
+          }
+        ]
+      }
+    },
+    {
+      "label": "status-after-mid-delete-4",
+      "atMs": 25086,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "859",
+        "Connection": "close"
+      },
+      "bodyBytes": 859,
+      "chunks": 1,
+      "headersAtMs": 23,
+      "totalMs": 24,
+      "error": null,
+      "scannerStatus": {
+        "state": "Idle",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 8
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 30
+          }
+        ]
+      }
+    },
+    {
+      "label": "status-after-mid-delete-5",
+      "atMs": 27123,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "860",
+        "Connection": "close"
+      },
+      "bodyBytes": 860,
+      "chunks": 1,
+      "headersAtMs": 36,
+      "totalMs": 37,
+      "error": null,
+      "scannerStatus": {
+        "state": "Idle",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 10
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 32
+          }
+        ]
+      }
+    },
+    {
+      "label": "status-after-mid-delete-6",
+      "atMs": 29181,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "860",
+        "Connection": "close"
+      },
+      "bodyBytes": 860,
+      "chunks": 1,
+      "headersAtMs": 32,
+      "totalMs": 34,
+      "error": null,
+      "scannerStatus": {
+        "state": "Idle",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 12
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 34
+          }
+        ]
+      }
+    },
+    {
+      "label": "status-after-mid-delete-7",
+      "atMs": 31227,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "860",
+        "Connection": "close"
+      },
+      "bodyBytes": 860,
+      "chunks": 1,
+      "headersAtMs": 25,
+      "totalMs": 27,
+      "error": null,
+      "scannerStatus": {
+        "state": "Idle",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 14
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 36
+          }
+        ]
+      }
+    },
+    {
+      "label": "status-after-mid-delete-8",
+      "atMs": 33274,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "860",
+        "Connection": "close"
+      },
+      "bodyBytes": 860,
+      "chunks": 1,
+      "headersAtMs": 20,
+      "totalMs": 21,
+      "error": null,
+      "scannerStatus": {
+        "state": "Idle",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 16
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 38
+          }
+        ]
+      }
+    },
+    {
+      "label": "status-after-mid-delete-9",
+      "atMs": 35312,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "860",
+        "Connection": "close"
+      },
+      "bodyBytes": 860,
+      "chunks": 1,
+      "headersAtMs": 28,
+      "totalMs": 29,
+      "error": null,
+      "scannerStatus": {
+        "state": "Idle",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 18
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 40
+          }
+        ]
+      }
+    },
+    {
+      "label": "status-after-mid-delete-10",
+      "atMs": 37350,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "860",
+        "Connection": "close"
+      },
+      "bodyBytes": 860,
+      "chunks": 1,
+      "headersAtMs": 16,
+      "totalMs": 20,
+      "error": null,
+      "scannerStatus": {
+        "state": "Idle",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 20
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 42
+          }
+        ]
+      }
+    },
+    {
+      "label": "page-after-delete",
+      "atMs": 37372,
+      "method": "GET",
+      "path": "/eSCL/ScanJobs/00000000-0000-4000-8000-000000000000/NextDocument",
+      "requestBytes": 0,
+      "status": 410,
+      "statusMessage": "Gone",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "",
+        "CONTENT-LENGTH": "0",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 18,
+      "totalMs": 18,
+      "error": null
+    },
+    {
+      "label": "delete-again",
+      "atMs": 37390,
+      "method": "DELETE",
+      "path": "/eSCL/ScanJobs/00000000-0000-4000-8000-000000000000",
+      "requestBytes": 0,
+      "status": 404,
+      "statusMessage": "Not Found",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 14,
+      "totalMs": 14,
+      "error": null
+    },
+    {
+      "label": "status-final",
+      "atMs": 37405,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "860",
+        "Connection": "close"
+      },
+      "bodyBytes": 860,
+      "chunks": 1,
+      "headersAtMs": 18,
+      "totalMs": 19,
+      "error": null,
+      "scannerStatus": {
+        "state": "Idle",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 20
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 42
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,3677 @@
+{
+  "device": "et-3850",
+  "description": "Задание брошено после первой страницы без DELETE: три минуты 503 на новый POST, затем DELETE.",
+  "scenario": "abandon",
+  "settings": {
+    "colorMode": "Grayscale8",
+    "resolution": 300,
+    "region": {
+      "xOffset": 35,
+      "yOffset": 0,
+      "width": 2480,
+      "height": 3507
+    }
+  },
+  "exchanges": [
+    {
+      "label": "first-status-before",
+      "atMs": 0,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "861",
+        "Connection": "close"
+      },
+      "bodyBytes": 861,
+      "chunks": 1,
+      "headersAtMs": 18,
+      "totalMs": 18,
+      "error": null,
+      "scannerStatus": {
+        "state": "Idle",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 16
+          },
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 393
+          }
+        ]
+      }
+    },
+    {
+      "label": "first-post-1",
+      "atMs": 21,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 201,
+      "statusMessage": "Created",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "Location": "https://192.0.2.10:443/eSCL/ScanJobs/00000000-0000-4000-8000-000000000000",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 20,
+      "totalMs": 20,
+      "error": null
+    },
+    {
+      "label": "first-status-after-post",
+      "atMs": 44,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "867",
+        "Connection": "close"
+      },
+      "bodyBytes": 867,
+      "chunks": 1,
+      "headersAtMs": 16,
+      "totalMs": 17,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 0,
+            "age": 1
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 17
+          }
+        ]
+      }
+    },
+    {
+      "label": "first-page-1",
+      "atMs": 63,
+      "method": "GET",
+      "path": "/eSCL/ScanJobs/00000000-0000-4000-8000-000000000000/NextDocument",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "Content-Location": "/eSCL/ScanJobs/00000000-0000-4000-8000-000000000000/file-1",
+        "CONTENT-TYPE": "image/jpeg",
+        "TRANSFER-ENCODING": "CHUNKED",
+        "Connection": "close"
+      },
+      "bodyBytes": 878447,
+      "chunks": 1119,
+      "headersAtMs": 6411,
+      "totalMs": 16701,
+      "error": null,
+      "page": {
+        "head": "ffd8ffe000104a46494600010201012c",
+        "startsWithSoi": true,
+        "endsWithEoi": true,
+        "bytesAfterLastEoi": 0,
+        "markers": [
+          "ffe0",
+          "ffdb",
+          "ffc4",
+          "ffc0",
+          "ffda"
+        ],
+        "jfif": {
+          "version": "1.2",
+          "units": 1,
+          "xDensity": 300,
+          "yDensity": 300
+        },
+        "sof": {
+          "precision": 8,
+          "height": 3507,
+          "width": 2480,
+          "components": 1
+        },
+        "expected": {
+          "width": 2480,
+          "height": 3507
+        },
+        "restartMarkers": 0,
+        "chromaSubsampling": "4:4:4"
+      }
+    },
+    {
+      "label": "first-status-after-page-1",
+      "atMs": 16841,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "871",
+        "Connection": "close"
+      },
+      "bodyBytes": 871,
+      "chunks": 1,
+      "headersAtMs": 24,
+      "totalMs": 25,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfProcessing",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 0
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 33
+          }
+        ]
+      }
+    },
+    {
+      "label": "first-status-after-terminal",
+      "atMs": 16869,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "871",
+        "Connection": "close"
+      },
+      "bodyBytes": 871,
+      "chunks": 1,
+      "headersAtMs": 15,
+      "totalMs": 17,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfProcessing",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 0
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 33
+          }
+        ]
+      }
+    },
+    {
+      "label": "probe-status-1",
+      "atMs": 20945,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "867",
+        "Connection": "close"
+      },
+      "bodyBytes": 867,
+      "chunks": 1,
+      "headersAtMs": 20,
+      "totalMs": 21,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 4
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 37
+          }
+        ]
+      }
+    },
+    {
+      "label": "probe-1-post-1",
+      "atMs": 20971,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 17,
+      "totalMs": 18,
+      "error": null
+    },
+    {
+      "label": "probe-status-2",
+      "atMs": 25990,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "867",
+        "Connection": "close"
+      },
+      "bodyBytes": 867,
+      "chunks": 1,
+      "headersAtMs": 19,
+      "totalMs": 19,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 9
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 42
+          }
+        ]
+      }
+    },
+    {
+      "label": "probe-2-post-1",
+      "atMs": 26012,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 26,
+      "totalMs": 26,
+      "error": null
+    },
+    {
+      "label": "probe-status-3",
+      "atMs": 31054,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "868",
+        "Connection": "close"
+      },
+      "bodyBytes": 868,
+      "chunks": 1,
+      "headersAtMs": 22,
+      "totalMs": 23,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 15
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 48
+          }
+        ]
+      }
+    },
+    {
+      "label": "probe-3-post-1",
+      "atMs": 31081,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 21,
+      "totalMs": 21,
+      "error": null
+    },
+    {
+      "label": "probe-status-4",
+      "atMs": 36107,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "868",
+        "Connection": "close"
+      },
+      "bodyBytes": 868,
+      "chunks": 1,
+      "headersAtMs": 18,
+      "totalMs": 19,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 20
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 53
+          }
+        ]
+      }
+    },
+    {
+      "label": "probe-4-post-1",
+      "atMs": 36129,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 17,
+      "totalMs": 17,
+      "error": null
+    },
+    {
+      "label": "probe-status-5",
+      "atMs": 41156,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "868",
+        "Connection": "close"
+      },
+      "bodyBytes": 868,
+      "chunks": 1,
+      "headersAtMs": 17,
+      "totalMs": 18,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 25
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 58
+          }
+        ]
+      }
+    },
+    {
+      "label": "probe-5-post-1",
+      "atMs": 41179,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 20,
+      "totalMs": 21,
+      "error": null
+    },
+    {
+      "label": "probe-status-6",
+      "atMs": 46209,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "868",
+        "Connection": "close"
+      },
+      "bodyBytes": 868,
+      "chunks": 1,
+      "headersAtMs": 17,
+      "totalMs": 18,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 30
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 63
+          }
+        ]
+      }
+    },
+    {
+      "label": "probe-6-post-1",
+      "atMs": 46232,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 20,
+      "totalMs": 20,
+      "error": null
+    },
+    {
+      "label": "probe-status-7",
+      "atMs": 51261,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "868",
+        "Connection": "close"
+      },
+      "bodyBytes": 868,
+      "chunks": 1,
+      "headersAtMs": 18,
+      "totalMs": 19,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 35
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 68
+          }
+        ]
+      }
+    },
+    {
+      "label": "probe-7-post-1",
+      "atMs": 51284,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 16,
+      "totalMs": 16,
+      "error": null
+    },
+    {
+      "label": "probe-status-8",
+      "atMs": 56306,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "868",
+        "Connection": "close"
+      },
+      "bodyBytes": 868,
+      "chunks": 1,
+      "headersAtMs": 20,
+      "totalMs": 21,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 40
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 73
+          }
+        ]
+      }
+    },
+    {
+      "label": "probe-8-post-1",
+      "atMs": 56331,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 26,
+      "totalMs": 26,
+      "error": null
+    },
+    {
+      "label": "probe-status-9",
+      "atMs": 61370,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "868",
+        "Connection": "close"
+      },
+      "bodyBytes": 868,
+      "chunks": 1,
+      "headersAtMs": 24,
+      "totalMs": 25,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 45
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 78
+          }
+        ]
+      }
+    },
+    {
+      "label": "probe-9-post-1",
+      "atMs": 61402,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 16,
+      "totalMs": 16,
+      "error": null
+    },
+    {
+      "label": "probe-status-10",
+      "atMs": 66421,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "868",
+        "Connection": "close"
+      },
+      "bodyBytes": 868,
+      "chunks": 1,
+      "headersAtMs": 19,
+      "totalMs": 21,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 50
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 83
+          }
+        ]
+      }
+    },
+    {
+      "label": "probe-10-post-1",
+      "atMs": 66449,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 18,
+      "totalMs": 18,
+      "error": null
+    },
+    {
+      "label": "probe-status-11",
+      "atMs": 71476,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "868",
+        "Connection": "close"
+      },
+      "bodyBytes": 868,
+      "chunks": 1,
+      "headersAtMs": 24,
+      "totalMs": 33,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 55
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 88
+          }
+        ]
+      }
+    },
+    {
+      "label": "probe-11-post-1",
+      "atMs": 71512,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 18,
+      "totalMs": 18,
+      "error": null
+    },
+    {
+      "label": "probe-status-12",
+      "atMs": 76536,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "868",
+        "Connection": "close"
+      },
+      "bodyBytes": 868,
+      "chunks": 1,
+      "headersAtMs": 21,
+      "totalMs": 23,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 60
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 93
+          }
+        ]
+      }
+    },
+    {
+      "label": "probe-12-post-1",
+      "atMs": 76563,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 18,
+      "totalMs": 18,
+      "error": null
+    },
+    {
+      "label": "probe-status-13",
+      "atMs": 81592,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "868",
+        "Connection": "close"
+      },
+      "bodyBytes": 868,
+      "chunks": 1,
+      "headersAtMs": 16,
+      "totalMs": 16,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 65
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 98
+          }
+        ]
+      }
+    },
+    {
+      "label": "probe-13-post-1",
+      "atMs": 81611,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 16,
+      "totalMs": 16,
+      "error": null
+    },
+    {
+      "label": "probe-status-14",
+      "atMs": 86634,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "869",
+        "Connection": "close"
+      },
+      "bodyBytes": 869,
+      "chunks": 1,
+      "headersAtMs": 22,
+      "totalMs": 23,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 70
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 103
+          }
+        ]
+      }
+    },
+    {
+      "label": "probe-14-post-1",
+      "atMs": 86660,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 15,
+      "totalMs": 16,
+      "error": null
+    },
+    {
+      "label": "probe-status-15",
+      "atMs": 91678,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "869",
+        "Connection": "close"
+      },
+      "bodyBytes": 869,
+      "chunks": 1,
+      "headersAtMs": 16,
+      "totalMs": 17,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 75
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 108
+          }
+        ]
+      }
+    },
+    {
+      "label": "probe-15-post-1",
+      "atMs": 91699,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 16,
+      "totalMs": 16,
+      "error": null
+    },
+    {
+      "label": "probe-status-16",
+      "atMs": 96727,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "869",
+        "Connection": "close"
+      },
+      "bodyBytes": 869,
+      "chunks": 1,
+      "headersAtMs": 18,
+      "totalMs": 20,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 80
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 113
+          }
+        ]
+      }
+    },
+    {
+      "label": "probe-16-post-1",
+      "atMs": 96748,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 16,
+      "totalMs": 16,
+      "error": null
+    },
+    {
+      "label": "probe-status-17",
+      "atMs": 101778,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "869",
+        "Connection": "close"
+      },
+      "bodyBytes": 869,
+      "chunks": 1,
+      "headersAtMs": 30,
+      "totalMs": 30,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 85
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 118
+          }
+        ]
+      }
+    },
+    {
+      "label": "probe-17-post-1",
+      "atMs": 101813,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 16,
+      "totalMs": 16,
+      "error": null
+    },
+    {
+      "label": "probe-status-18",
+      "atMs": 106843,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "869",
+        "Connection": "close"
+      },
+      "bodyBytes": 869,
+      "chunks": 1,
+      "headersAtMs": 17,
+      "totalMs": 19,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 90
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 123
+          }
+        ]
+      }
+    },
+    {
+      "label": "probe-18-post-1",
+      "atMs": 106866,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 16,
+      "totalMs": 16,
+      "error": null
+    },
+    {
+      "label": "probe-status-19",
+      "atMs": 111901,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "869",
+        "Connection": "close"
+      },
+      "bodyBytes": 869,
+      "chunks": 1,
+      "headersAtMs": 17,
+      "totalMs": 18,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 95
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 128
+          }
+        ]
+      }
+    },
+    {
+      "label": "probe-19-post-1",
+      "atMs": 111922,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 19,
+      "totalMs": 19,
+      "error": null
+    },
+    {
+      "label": "probe-status-20",
+      "atMs": 116950,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "870",
+        "Connection": "close"
+      },
+      "bodyBytes": 870,
+      "chunks": 1,
+      "headersAtMs": 27,
+      "totalMs": 28,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 100
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 133
+          }
+        ]
+      }
+    },
+    {
+      "label": "probe-20-post-1",
+      "atMs": 116985,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 14,
+      "totalMs": 14,
+      "error": null
+    },
+    {
+      "label": "probe-status-21",
+      "atMs": 122012,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "870",
+        "Connection": "close"
+      },
+      "bodyBytes": 870,
+      "chunks": 1,
+      "headersAtMs": 20,
+      "totalMs": 21,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 105
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 138
+          }
+        ]
+      }
+    },
+    {
+      "label": "probe-21-post-1",
+      "atMs": 122035,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 17,
+      "totalMs": 17,
+      "error": null
+    },
+    {
+      "label": "probe-status-22",
+      "atMs": 127055,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "870",
+        "Connection": "close"
+      },
+      "bodyBytes": 870,
+      "chunks": 1,
+      "headersAtMs": 15,
+      "totalMs": 16,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 111
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 144
+          }
+        ]
+      }
+    },
+    {
+      "label": "probe-22-post-1",
+      "atMs": 127075,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 16,
+      "totalMs": 16,
+      "error": null
+    },
+    {
+      "label": "probe-status-23",
+      "atMs": 132096,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "870",
+        "Connection": "close"
+      },
+      "bodyBytes": 870,
+      "chunks": 1,
+      "headersAtMs": 20,
+      "totalMs": 21,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 116
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 149
+          }
+        ]
+      }
+    },
+    {
+      "label": "probe-23-post-1",
+      "atMs": 132120,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 15,
+      "totalMs": 15,
+      "error": null
+    },
+    {
+      "label": "probe-status-24",
+      "atMs": 137141,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "870",
+        "Connection": "close"
+      },
+      "bodyBytes": 870,
+      "chunks": 1,
+      "headersAtMs": 20,
+      "totalMs": 21,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 121
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 154
+          }
+        ]
+      }
+    },
+    {
+      "label": "probe-24-post-1",
+      "atMs": 137167,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 16,
+      "totalMs": 16,
+      "error": null
+    },
+    {
+      "label": "probe-status-25",
+      "atMs": 142192,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "870",
+        "Connection": "close"
+      },
+      "bodyBytes": 870,
+      "chunks": 1,
+      "headersAtMs": 20,
+      "totalMs": 21,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 126
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 159
+          }
+        ]
+      }
+    },
+    {
+      "label": "probe-25-post-1",
+      "atMs": 142217,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 17,
+      "totalMs": 17,
+      "error": null
+    },
+    {
+      "label": "probe-status-26",
+      "atMs": 147240,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "870",
+        "Connection": "close"
+      },
+      "bodyBytes": 870,
+      "chunks": 1,
+      "headersAtMs": 20,
+      "totalMs": 38,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 131
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 164
+          }
+        ]
+      }
+    },
+    {
+      "label": "probe-26-post-1",
+      "atMs": 147281,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 14,
+      "totalMs": 14,
+      "error": null
+    },
+    {
+      "label": "probe-status-27",
+      "atMs": 152311,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "870",
+        "Connection": "close"
+      },
+      "bodyBytes": 870,
+      "chunks": 1,
+      "headersAtMs": 20,
+      "totalMs": 20,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 136
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 169
+          }
+        ]
+      }
+    },
+    {
+      "label": "probe-27-post-1",
+      "atMs": 152337,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 28,
+      "totalMs": 28,
+      "error": null
+    },
+    {
+      "label": "probe-status-28",
+      "atMs": 157375,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "870",
+        "Connection": "close"
+      },
+      "bodyBytes": 870,
+      "chunks": 1,
+      "headersAtMs": 20,
+      "totalMs": 24,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 141
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 174
+          }
+        ]
+      }
+    },
+    {
+      "label": "probe-28-post-1",
+      "atMs": 157405,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 20,
+      "totalMs": 20,
+      "error": null
+    },
+    {
+      "label": "probe-status-29",
+      "atMs": 162441,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "870",
+        "Connection": "close"
+      },
+      "bodyBytes": 870,
+      "chunks": 1,
+      "headersAtMs": 20,
+      "totalMs": 20,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 146
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 179
+          }
+        ]
+      }
+    },
+    {
+      "label": "probe-29-post-1",
+      "atMs": 162464,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 15,
+      "totalMs": 15,
+      "error": null
+    },
+    {
+      "label": "probe-status-30",
+      "atMs": 167487,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "870",
+        "Connection": "close"
+      },
+      "bodyBytes": 870,
+      "chunks": 1,
+      "headersAtMs": 21,
+      "totalMs": 21,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 151
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 184
+          }
+        ]
+      }
+    },
+    {
+      "label": "probe-30-post-1",
+      "atMs": 167512,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 15,
+      "totalMs": 15,
+      "error": null
+    },
+    {
+      "label": "probe-status-31",
+      "atMs": 172541,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "870",
+        "Connection": "close"
+      },
+      "bodyBytes": 870,
+      "chunks": 1,
+      "headersAtMs": 19,
+      "totalMs": 19,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 156
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 189
+          }
+        ]
+      }
+    },
+    {
+      "label": "probe-31-post-1",
+      "atMs": 172562,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 20,
+      "totalMs": 20,
+      "error": null
+    },
+    {
+      "label": "probe-status-32",
+      "atMs": 177589,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "870",
+        "Connection": "close"
+      },
+      "bodyBytes": 870,
+      "chunks": 1,
+      "headersAtMs": 15,
+      "totalMs": 16,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 161
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 194
+          }
+        ]
+      }
+    },
+    {
+      "label": "probe-32-post-1",
+      "atMs": 177609,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 16,
+      "totalMs": 16,
+      "error": null
+    },
+    {
+      "label": "probe-status-33",
+      "atMs": 182637,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "870",
+        "Connection": "close"
+      },
+      "bodyBytes": 870,
+      "chunks": 1,
+      "headersAtMs": 21,
+      "totalMs": 22,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 166
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 199
+          }
+        ]
+      }
+    },
+    {
+      "label": "probe-33-post-1",
+      "atMs": 182663,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 15,
+      "totalMs": 15,
+      "error": null
+    },
+    {
+      "label": "probe-status-34",
+      "atMs": 187685,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "870",
+        "Connection": "close"
+      },
+      "bodyBytes": 870,
+      "chunks": 1,
+      "headersAtMs": 15,
+      "totalMs": 16,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 171
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 204
+          }
+        ]
+      }
+    },
+    {
+      "label": "probe-34-post-1",
+      "atMs": 187704,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 19,
+      "totalMs": 19,
+      "error": null
+    },
+    {
+      "label": "probe-status-35",
+      "atMs": 192731,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "870",
+        "Connection": "close"
+      },
+      "bodyBytes": 870,
+      "chunks": 1,
+      "headersAtMs": 25,
+      "totalMs": 26,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 176
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 209
+          }
+        ]
+      }
+    },
+    {
+      "label": "probe-35-post-1",
+      "atMs": 192764,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 15,
+      "totalMs": 16,
+      "error": null
+    },
+    {
+      "label": "probe-status-36",
+      "atMs": 197793,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "870",
+        "Connection": "close"
+      },
+      "bodyBytes": 870,
+      "chunks": 1,
+      "headersAtMs": 20,
+      "totalMs": 20,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Processing",
+            "imagesCompleted": 1,
+            "age": 181
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 214
+          }
+        ]
+      }
+    },
+    {
+      "label": "probe-36-post-1",
+      "atMs": 197819,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 16,
+      "totalMs": 16,
+      "error": null
+    },
+    {
+      "label": "first-delete",
+      "atMs": 202853,
+      "method": "DELETE",
+      "path": "/eSCL/ScanJobs/00000000-0000-4000-8000-000000000000",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 17,
+      "totalMs": 17,
+      "error": null
+    },
+    {
+      "label": "first-status-after-delete",
+      "atMs": 202872,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "866",
+        "Connection": "close"
+      },
+      "bodyBytes": 866,
+      "chunks": 1,
+      "headersAtMs": 21,
+      "totalMs": 24,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 0
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 219
+          }
+        ]
+      }
+    },
+    {
+      "label": "after-close-post-1",
+      "atMs": 202904,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 17,
+      "totalMs": 17,
+      "error": null
+    },
+    {
+      "label": "after-close-status-while-busy-1",
+      "atMs": 202922,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "860",
+        "Connection": "close"
+      },
+      "bodyBytes": 860,
+      "chunks": 1,
+      "headersAtMs": 17,
+      "totalMs": 19,
+      "error": null,
+      "scannerStatus": {
+        "state": "Idle",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 0
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 219
+          }
+        ]
+      }
+    },
+    {
+      "label": "after-close-post-2",
+      "atMs": 203950,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 18,
+      "totalMs": 19,
+      "error": null
+    },
+    {
+      "label": "after-close-status-while-busy-2",
+      "atMs": 203969,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "860",
+        "Connection": "close"
+      },
+      "bodyBytes": 860,
+      "chunks": 1,
+      "headersAtMs": 18,
+      "totalMs": 19,
+      "error": null,
+      "scannerStatus": {
+        "state": "Idle",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 1
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 220
+          }
+        ]
+      }
+    },
+    {
+      "label": "after-close-post-3",
+      "atMs": 204992,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 18,
+      "totalMs": 18,
+      "error": null
+    },
+    {
+      "label": "after-close-status-while-busy-3",
+      "atMs": 205013,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "860",
+        "Connection": "close"
+      },
+      "bodyBytes": 860,
+      "chunks": 1,
+      "headersAtMs": 26,
+      "totalMs": 31,
+      "error": null,
+      "scannerStatus": {
+        "state": "Idle",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 2
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 221
+          }
+        ]
+      }
+    },
+    {
+      "label": "after-close-post-4",
+      "atMs": 206054,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 22,
+      "totalMs": 22,
+      "error": null
+    },
+    {
+      "label": "after-close-status-while-busy-4",
+      "atMs": 206078,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "860",
+        "Connection": "close"
+      },
+      "bodyBytes": 860,
+      "chunks": 1,
+      "headersAtMs": 18,
+      "totalMs": 19,
+      "error": null,
+      "scannerStatus": {
+        "state": "Idle",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 4
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 223
+          }
+        ]
+      }
+    },
+    {
+      "label": "after-close-post-5",
+      "atMs": 207110,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 17,
+      "totalMs": 17,
+      "error": null
+    },
+    {
+      "label": "after-close-status-while-busy-5",
+      "atMs": 207129,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "860",
+        "Connection": "close"
+      },
+      "bodyBytes": 860,
+      "chunks": 1,
+      "headersAtMs": 16,
+      "totalMs": 16,
+      "error": null,
+      "scannerStatus": {
+        "state": "Idle",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 5
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 224
+          }
+        ]
+      }
+    },
+    {
+      "label": "after-close-post-6",
+      "atMs": 208149,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 19,
+      "totalMs": 19,
+      "error": null
+    },
+    {
+      "label": "after-close-status-while-busy-6",
+      "atMs": 208170,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "860",
+        "Connection": "close"
+      },
+      "bodyBytes": 860,
+      "chunks": 1,
+      "headersAtMs": 16,
+      "totalMs": 17,
+      "error": null,
+      "scannerStatus": {
+        "state": "Idle",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 6
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 225
+          }
+        ]
+      }
+    },
+    {
+      "label": "after-close-post-7",
+      "atMs": 209203,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 40,
+      "totalMs": 40,
+      "error": null
+    },
+    {
+      "label": "after-close-status-while-busy-7",
+      "atMs": 209245,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "860",
+        "Connection": "close"
+      },
+      "bodyBytes": 860,
+      "chunks": 1,
+      "headersAtMs": 16,
+      "totalMs": 16,
+      "error": null,
+      "scannerStatus": {
+        "state": "Idle",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 7
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 226
+          }
+        ]
+      }
+    },
+    {
+      "label": "after-close-post-8",
+      "atMs": 210278,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 28,
+      "totalMs": 28,
+      "error": null
+    },
+    {
+      "label": "after-close-status-while-busy-8",
+      "atMs": 210309,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "860",
+        "Connection": "close"
+      },
+      "bodyBytes": 860,
+      "chunks": 1,
+      "headersAtMs": 17,
+      "totalMs": 17,
+      "error": null,
+      "scannerStatus": {
+        "state": "Idle",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 8
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 227
+          }
+        ]
+      }
+    },
+    {
+      "label": "after-close-post-9",
+      "atMs": 211339,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 22,
+      "totalMs": 22,
+      "error": null
+    },
+    {
+      "label": "after-close-status-while-busy-9",
+      "atMs": 211362,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "860",
+        "Connection": "close"
+      },
+      "bodyBytes": 860,
+      "chunks": 1,
+      "headersAtMs": 27,
+      "totalMs": 28,
+      "error": null,
+      "scannerStatus": {
+        "state": "Idle",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 9
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 228
+          }
+        ]
+      }
+    },
+    {
+      "label": "after-close-post-10",
+      "atMs": 212394,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 42,
+      "totalMs": 42,
+      "error": null
+    },
+    {
+      "label": "after-close-status-while-busy-10",
+      "atMs": 212439,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "861",
+        "Connection": "close"
+      },
+      "bodyBytes": 861,
+      "chunks": 1,
+      "headersAtMs": 17,
+      "totalMs": 18,
+      "error": null,
+      "scannerStatus": {
+        "state": "Idle",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 10
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 229
+          }
+        ]
+      }
+    },
+    {
+      "label": "after-close-post-11",
+      "atMs": 213469,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 17,
+      "totalMs": 17,
+      "error": null
+    },
+    {
+      "label": "after-close-status-while-busy-11",
+      "atMs": 213488,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "861",
+        "Connection": "close"
+      },
+      "bodyBytes": 861,
+      "chunks": 1,
+      "headersAtMs": 17,
+      "totalMs": 18,
+      "error": null,
+      "scannerStatus": {
+        "state": "Idle",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 11
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 230
+          }
+        ]
+      }
+    },
+    {
+      "label": "after-close-post-12",
+      "atMs": 214511,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 47,
+      "totalMs": 47,
+      "error": null
+    },
+    {
+      "label": "after-close-status-while-busy-12",
+      "atMs": 214561,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "861",
+        "Connection": "close"
+      },
+      "bodyBytes": 861,
+      "chunks": 1,
+      "headersAtMs": 17,
+      "totalMs": 18,
+      "error": null,
+      "scannerStatus": {
+        "state": "Idle",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 12
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 231
+          }
+        ]
+      }
+    },
+    {
+      "label": "after-close-post-13",
+      "atMs": 215584,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 19,
+      "totalMs": 19,
+      "error": null
+    },
+    {
+      "label": "after-close-status-while-busy-13",
+      "atMs": 215605,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "861",
+        "Connection": "close"
+      },
+      "bodyBytes": 861,
+      "chunks": 1,
+      "headersAtMs": 18,
+      "totalMs": 18,
+      "error": null,
+      "scannerStatus": {
+        "state": "Idle",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 13
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 232
+          }
+        ]
+      }
+    },
+    {
+      "label": "after-close-post-14",
+      "atMs": 216640,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 27,
+      "totalMs": 27,
+      "error": null
+    },
+    {
+      "label": "after-close-status-while-busy-14",
+      "atMs": 216669,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "861",
+        "Connection": "close"
+      },
+      "bodyBytes": 861,
+      "chunks": 1,
+      "headersAtMs": 22,
+      "totalMs": 22,
+      "error": null,
+      "scannerStatus": {
+        "state": "Idle",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 14
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 233
+          }
+        ]
+      }
+    },
+    {
+      "label": "after-close-post-15",
+      "atMs": 217695,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 19,
+      "totalMs": 19,
+      "error": null
+    },
+    {
+      "label": "after-close-status-while-busy-15",
+      "atMs": 217717,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "861",
+        "Connection": "close"
+      },
+      "bodyBytes": 861,
+      "chunks": 1,
+      "headersAtMs": 22,
+      "totalMs": 22,
+      "error": null,
+      "scannerStatus": {
+        "state": "Idle",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 15
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 234
+          }
+        ]
+      }
+    },
+    {
+      "label": "after-close-post-16",
+      "atMs": 218751,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 37,
+      "totalMs": 37,
+      "error": null
+    },
+    {
+      "label": "after-close-status-while-busy-16",
+      "atMs": 218789,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "861",
+        "Connection": "close"
+      },
+      "bodyBytes": 861,
+      "chunks": 1,
+      "headersAtMs": 16,
+      "totalMs": 17,
+      "error": null,
+      "scannerStatus": {
+        "state": "Idle",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 16
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 235
+          }
+        ]
+      }
+    },
+    {
+      "label": "after-close-post-17",
+      "atMs": 219813,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 19,
+      "totalMs": 19,
+      "error": null
+    },
+    {
+      "label": "after-close-status-while-busy-17",
+      "atMs": 219833,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "861",
+        "Connection": "close"
+      },
+      "bodyBytes": 861,
+      "chunks": 1,
+      "headersAtMs": 15,
+      "totalMs": 16,
+      "error": null,
+      "scannerStatus": {
+        "state": "Idle",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 17
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 236
+          }
+        ]
+      }
+    },
+    {
+      "label": "after-close-post-18",
+      "atMs": 220855,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 18,
+      "totalMs": 18,
+      "error": null
+    },
+    {
+      "label": "after-close-status-while-busy-18",
+      "atMs": 220875,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "861",
+        "Connection": "close"
+      },
+      "bodyBytes": 861,
+      "chunks": 1,
+      "headersAtMs": 18,
+      "totalMs": 18,
+      "error": null,
+      "scannerStatus": {
+        "state": "Idle",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 18
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 237
+          }
+        ]
+      }
+    },
+    {
+      "label": "after-close-post-19",
+      "atMs": 221905,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 36,
+      "totalMs": 36,
+      "error": null
+    },
+    {
+      "label": "after-close-status-while-busy-19",
+      "atMs": 221942,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "861",
+        "Connection": "close"
+      },
+      "bodyBytes": 861,
+      "chunks": 1,
+      "headersAtMs": 18,
+      "totalMs": 19,
+      "error": null,
+      "scannerStatus": {
+        "state": "Idle",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 19
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 238
+          }
+        ]
+      }
+    },
+    {
+      "label": "after-close-post-20",
+      "atMs": 222981,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 25,
+      "totalMs": 26,
+      "error": null
+    },
+    {
+      "label": "after-close-status-while-busy-20",
+      "atMs": 223009,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "861",
+        "Connection": "close"
+      },
+      "bodyBytes": 861,
+      "chunks": 1,
+      "headersAtMs": 17,
+      "totalMs": 18,
+      "error": null,
+      "scannerStatus": {
+        "state": "Idle",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 20
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 239
+          }
+        ]
+      }
+    },
+    {
+      "label": "after-close-post-21",
+      "atMs": 224036,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 19,
+      "totalMs": 20,
+      "error": null
+    },
+    {
+      "label": "after-close-status-while-busy-21",
+      "atMs": 224057,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "861",
+        "Connection": "close"
+      },
+      "bodyBytes": 861,
+      "chunks": 1,
+      "headersAtMs": 26,
+      "totalMs": 27,
+      "error": null,
+      "scannerStatus": {
+        "state": "Idle",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 22
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 241
+          }
+        ]
+      }
+    },
+    {
+      "label": "after-close-post-22",
+      "atMs": 225099,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 30,
+      "totalMs": 30,
+      "error": null
+    },
+    {
+      "label": "after-close-status-while-busy-22",
+      "atMs": 225132,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "861",
+        "Connection": "close"
+      },
+      "bodyBytes": 861,
+      "chunks": 1,
+      "headersAtMs": 16,
+      "totalMs": 17,
+      "error": null,
+      "scannerStatus": {
+        "state": "Idle",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 23
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 242
+          }
+        ]
+      }
+    },
+    {
+      "label": "after-close-post-23",
+      "atMs": 226167,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 29,
+      "totalMs": 29,
+      "error": null
+    },
+    {
+      "label": "after-close-status-while-busy-23",
+      "atMs": 226198,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "861",
+        "Connection": "close"
+      },
+      "bodyBytes": 861,
+      "chunks": 1,
+      "headersAtMs": 25,
+      "totalMs": 25,
+      "error": null,
+      "scannerStatus": {
+        "state": "Idle",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 24
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 243
+          }
+        ]
+      }
+    },
+    {
+      "label": "after-close-post-24",
+      "atMs": 227228,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 503,
+      "statusMessage": "Service Unavailable",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "RETRY-AFTER": "20",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 22,
+      "totalMs": 22,
+      "error": null
+    },
+    {
+      "label": "after-close-status-while-busy-24",
+      "atMs": 227253,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "861",
+        "Connection": "close"
+      },
+      "bodyBytes": 861,
+      "chunks": 1,
+      "headersAtMs": 19,
+      "totalMs": 19,
+      "error": null,
+      "scannerStatus": {
+        "state": "Idle",
+        "adfState": "ScannerAdfLoaded",
+        "jobs": [
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 25
+          },
+          {
+            "jobState": "Completed",
+            "imagesCompleted": 3,
+            "age": 244
+          }
+        ]
+      }
+    },
+    {
+      "label": "after-close-post-25",
+      "atMs": 228282,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 748,
+      "status": 201,
+      "statusMessage": "Created",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "Location": "https://192.0.2.10:443/eSCL/ScanJobs/00000000-0000-4000-8000-000000000000",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 36,
+      "totalMs": 36,
+      "error": null
+    },
+    {
+      "label": "third-page-1",
+      "atMs": 228320,
+      "method": "GET",
+      "path": "/eSCL/ScanJobs/00000000-0000-4000-8000-000000000000/NextDocument",
+      "requestBytes": 0,
+      "status": 404,
+      "statusMessage": "Not Found",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 16,
+      "totalMs": 16,
+      "error": null
+    },
+    {
+      "label": "third-delete",
+      "atMs": 228340,
+      "method": "DELETE",
+      "path": "/eSCL/ScanJobs/00000000-0000-4000-8000-000000000000",
+      "requestBytes": 0,
+      "status": 404,
+      "statusMessage": "Not Found",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 18,
+      "totalMs": 18,
+      "error": null
+    },
+    {
+      "label": "third-status-after-delete",
+      "atMs": 228359,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "862",
+        "Connection": "close"
+      },
+      "bodyBytes": 862,
+      "chunks": 1,
+      "headersAtMs": 30,
+      "totalMs": 32,
+      "error": null,
+      "scannerStatus": {
+        "state": "Processing",
+        "adfState": "ScannerAdfEmpty",
+        "jobs": [
+          {
+            "jobState": "Aborted",
+            "imagesCompleted": 0,
+            "age": 0
+          },
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 26
+          }
+        ]
+      }
+    }
+  ]
+}
