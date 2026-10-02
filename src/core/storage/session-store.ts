@@ -1,8 +1,9 @@
-import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
 import { fail, ok, type DomainError, type Result, type SessionSnapshot } from '@shared';
 import { isTempName, removeByPrefix, renameWithRetry, writeStreamAtomic } from './atomic-file';
 import {
+  JOURNAL_VERSION,
+  journalSchema,
   newJournal,
   pageCountOf,
   pagesOf,
@@ -23,6 +24,7 @@ import {
   MAX_PAGE_INDEX,
   MAX_PASS_NUMBER,
   MAX_SEGMENT_NUMBER,
+  newSessionId as randomSessionId,
   PAGE_FILE,
   pageFileName,
   pageKey,
@@ -42,7 +44,7 @@ import {
   type StorageFs,
   type StorageOptions,
 } from './storage-fs';
-import { isSetAsideName, writeVersioned } from './versioned-file';
+import { isSetAsideName, setAside, writeVersioned } from './versioned-file';
 
 // Хранилище сессии: журнал, страницы, проходы и сегменты (ADR 0004 с амендментом; план M1, U13).
 //
@@ -78,6 +80,11 @@ export interface SessionState {
   readonly lost: ReadonlySet<string>;
   /** Журнал в памяти новее записанного: сверке не удалось его записать. */
   readonly unsaved: boolean;
+  /**
+   * На месте журнала лежит нечитаемый файл, который сверке не удалось сохранить в стороне
+   * (KTD-34): первая запись журнала сначала отодвигает его, а не выйдет — не делается.
+   */
+  readonly unpreserved: boolean;
 }
 
 export const NO_SESSION: SessionState = {
@@ -85,6 +92,7 @@ export const NO_SESSION: SessionState = {
   journal: null,
   lost: new Set(),
   unsaved: false,
+  unpreserved: false,
 };
 
 export interface SegmentStart {
@@ -166,6 +174,14 @@ const runningSegment = (number: number): JournalSegment => ({
   pageCount: 0,
 });
 
+/**
+ * Пустая сессия равна отсутствию сессии (ADR 0004, амендмент): журнал без единой записи о
+ * странице и без идущего сегмента. На диске он может остаться ради пометки об удалении или до
+ * следующего запуска — для вызывающего сессии нет.
+ */
+const isVacant = (journal: Journal): boolean =>
+  pageCountOf(journal) === 0 && runningSegmentOf(journal) === null;
+
 const isJournalFile = (name: string): boolean =>
   name === JOURNAL_FILE_NAME ||
   (name.startsWith(`${JOURNAL_FILE_NAME}.`) &&
@@ -202,15 +218,22 @@ export function createSessionStore(
   const layout = layoutOf(dataRoot);
   const io = ioOf(options);
   const { fs } = io;
-  const newSessionId = options.newSessionId ?? (() => randomBytes(8).toString('hex'));
+  const newSessionId = options.newSessionId ?? randomSessionId;
   const minFreeBytes = options.minFreeBytes ?? MIN_FREE_BYTES;
   const { incompatible } = initial;
 
   let journal = initial.journal;
   let unsaved = initial.unsaved;
+  let unpreserved = initial.unpreserved;
   const lost = new Set(initial.lost);
 
   const enqueue = serialQueue();
+  // Изменяющая операция: в режиме отказа отклоняется, не начавшись (KTD-35). Проверка стоит в
+  // одном месте — новая операция не может её забыть.
+  const mutating = <T>(operation: () => Promise<Result<T>>): Promise<Result<T>> =>
+    enqueue(() =>
+      incompatible ? Promise.resolve<Result<T>>({ ok: false, error: REFUSAL }) : operation(),
+    );
 
   // Идущие чтения страниц: закрытие сессии и удаление сегмента их дожидаются.
   const reads = new Set<Promise<unknown>>();
@@ -219,7 +242,11 @@ export function createSessionStore(
 
   async function commit(next: Journal, mode: 'must' | 'soft'): Promise<Result<void>> {
     try {
-      await writeVersioned(layout.journalFile, next, io);
+      if (unpreserved) {
+        await setAside(layout.journalFile, io);
+        unpreserved = false;
+      }
+      await writeVersioned(layout.journalFile, journalSchema, JOURNAL_VERSION, next, io);
     } catch (error) {
       if (mode === 'soft') {
         journal = next;
@@ -271,7 +298,7 @@ export function createSessionStore(
       return { ok: false, error: REFUSAL };
     }
     const pass = journal?.passes.at(-1);
-    if (pass === undefined) {
+    if (journal === null || pass === undefined || isVacant(journal)) {
       return conflict('noSession');
     }
     const state = passStateOf(pass);
@@ -344,9 +371,7 @@ export function createSessionStore(
     incompatible,
 
     snapshot() {
-      // Пустая сессия равна отсутствию сессии: журнал без единой страницы может остаться на
-      // диске только ради пометки об удалении.
-      if (journal === null || (pageCountOf(journal) === 0 && runningSegmentOf(journal) === null)) {
+      if (journal === null || isVacant(journal)) {
         return null;
       }
       return {
@@ -363,10 +388,7 @@ export function createSessionStore(
     unsaved: () => unsaved,
 
     beginPass: (origin) =>
-      enqueue(async () => {
-        if (incompatible) {
-          return { ok: false, error: REFUSAL };
-        }
+      mutating(async () => {
         if (runningSegmentOf(journal) !== null) {
           return conflict('passRunning');
         }
@@ -374,7 +396,15 @@ export function createSessionStore(
         if (!space.ok) {
           return space;
         }
-        const base = journal ?? newJournal(newSessionId());
+        // Пустой журнал — не сессия: проход начинается заново, пустые проходы в новую не идут.
+        // Пометки об удалении и счётчики при этом остаются: без них неудалённые файлы
+        // отброшенного сегмента вернулись бы страницами.
+        const base =
+          journal === null || (isVacant(journal) && journal.deletions.length === 0)
+            ? newJournal(newSessionId())
+            : isVacant(journal)
+              ? { ...journal, passes: [] }
+              : journal;
         const number = base.nextPass;
         if (number > MAX_PASS_NUMBER) {
           return fail('storageFailed', { reason: 'passLimit' });
@@ -410,7 +440,7 @@ export function createSessionStore(
     },
 
     resumePass: () =>
-      enqueue(async () => {
+      mutating(async () => {
         const target = resumable();
         if (!target.ok || journal === null) {
           return target.ok ? conflict('noSession') : target;
@@ -419,6 +449,12 @@ export function createSessionStore(
         const space = await checkFreeSpace();
         if (!space.ok) {
           return space;
+        }
+        // Каталога страниц может не быть: все страницы потеряны вместе с ним, а записи остались.
+        try {
+          await fs.mkdir(layout.pagesDir);
+        } catch (error) {
+          return { ok: false, error: storageFailure(error) };
         }
         const segment = await freeSegmentNumber(journal, pass.number, pass.nextSegment);
         if (!segment.ok) {
@@ -497,10 +533,7 @@ export function createSessionStore(
       }),
 
     endSegment: (outcome) =>
-      enqueue(async () => {
-        if (incompatible) {
-          return { ok: false, error: REFUSAL };
-        }
+      mutating(async () => {
         const running = runningSegmentOf(journal);
         if (running === null || journal === null) {
           return conflict('noRunningPass');
@@ -514,10 +547,7 @@ export function createSessionStore(
       }),
 
     discardSegment: () =>
-      enqueue(async () => {
-        if (incompatible) {
-          return { ok: false, error: REFUSAL };
-        }
+      mutating<{ readonly sessionClosed: boolean }>(async () => {
         const running = runningSegmentOf(journal);
         if (running === null || journal === null) {
           return conflict('noRunningPass');
@@ -539,7 +569,9 @@ export function createSessionStore(
           const closed = await closeDirectory(sessionId);
           if (!closed.ok) {
             await commit(interrupted, 'soft');
-            return closed;
+            // Страниц не было вовсе — защищать нечего: журнал пуст, и для вызывающего сессии нет.
+            // Каталог дочистит сверка при запуске.
+            return pageCountOf(interrupted) === 0 ? ok({ sessionClosed: true }) : closed;
           }
           return ok({ sessionClosed: true });
         }
@@ -560,12 +592,9 @@ export function createSessionStore(
       }),
 
     acceptPass: () =>
-      enqueue(async () => {
-        if (incompatible) {
-          return { ok: false, error: REFUSAL };
-        }
+      mutating(async () => {
         const pass = journal?.passes.at(-1);
-        if (pass === undefined || journal === null) {
+        if (pass === undefined || journal === null || isVacant(journal)) {
           return conflict('noSession');
         }
         const state = passStateOf(pass);
@@ -576,10 +605,7 @@ export function createSessionStore(
       }),
 
     closeSession: () =>
-      enqueue(async () => {
-        if (incompatible) {
-          return { ok: false, error: REFUSAL };
-        }
+      mutating(async () => {
         if (journal === null) {
           return ok(undefined);
         }
@@ -590,10 +616,7 @@ export function createSessionStore(
       }),
 
     flush: () =>
-      enqueue(async () => {
-        if (incompatible) {
-          return { ok: false, error: REFUSAL };
-        }
+      mutating(async () => {
         return journal === null || !unsaved ? ok(undefined) : commit(journal, 'must');
       }),
 

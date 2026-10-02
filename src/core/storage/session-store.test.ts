@@ -5,7 +5,7 @@ import { fsError, interceptFs, type FsCall } from '../../../test/support/interce
 import { makeTempDataRoot } from '../../../test/support/temp-data-root';
 import { parseJournal, type Journal, type PassOrigin } from './journal';
 import { layoutOf } from './layout';
-import { createSessionStore, type SessionStoreOptions } from './session-store';
+import { createSessionStore, NO_SESSION, type SessionStoreOptions } from './session-store';
 import { realStorageFs, StorageError } from './storage-fs';
 
 const SESSION = 'a1b2c3d4e5f60718';
@@ -398,11 +398,7 @@ describe('хранилище сессии: недопустимое в теку�
   it('хранилище в режиме отказа отклоняет каждую изменяющую операцию', async () => {
     const root = await makeTempDataRoot();
     const { fs, calls } = interceptFs(realStorageFs);
-    const store = createSessionStore(
-      root,
-      { incompatible: true, journal: null, lost: new Set(), unsaved: false },
-      { fs },
-    );
+    const store = createSessionStore(root, { ...NO_SESSION, incompatible: true }, { fs });
 
     const refusal = { code: 'storageIncompatible' };
     for (const result of [
@@ -667,5 +663,273 @@ describe('хранилище сессии: закрытие', () => {
     expect(ok(await reading)).toEqual(page(1));
     ok(await closing);
     expect(order).toEqual(['read', 'rename']);
+  });
+});
+
+describe('хранилище сессии: пустая сессия равна отсутствию сессии', () => {
+  const noSession = {
+    ok: false,
+    error: { code: 'sessionConflict', details: { reason: 'noSession' } },
+  };
+
+  it('«Остановить» без страниц при отказе закрытия каталога не оставляет прохода-призрака', async () => {
+    const { store, journalOnDisk } = await setup((call) => {
+      if (call.op === 'rename' && call.to?.includes('session.closing-') === true) {
+        throw fsError('EPERM');
+      }
+    });
+    ok(await store.beginPass(ORIGIN));
+
+    // Страниц нет — защищать нечего: для вызывающего сессии больше нет.
+    expect(await store.discardSegment()).toEqual({ ok: true, value: { sessionClosed: true } });
+
+    expect(store.snapshot()).toBeNull();
+    expect(store.resumeTarget()).toMatchObject(noSession);
+    expect(await store.resumePass()).toMatchObject(noSession);
+    expect(await store.acceptPass()).toMatchObject(noSession);
+    // Следующий проход — первый, а не второй после пустого.
+    expect(ok(await store.beginPass(ORIGIN))).toMatchObject({ pass: 1, segment: 1 });
+    expect(store.snapshot()?.passes.map((pass) => pass.number)).toEqual([1]);
+    expect((await journalOnDisk()).passes).toHaveLength(1);
+  });
+
+  it('исход сегмента без единой страницы не оставляет прохода-призрака', async () => {
+    const { store, journalOnDisk, accept } = await setup();
+    ok(await store.beginPass(ORIGIN));
+    ok(await store.endSegment('interrupted'));
+
+    expect(store.snapshot()).toBeNull();
+    expect(store.resumeTarget()).toMatchObject(noSession);
+
+    expect(ok(await store.beginPass(ORIGIN))).toMatchObject({ pass: 1, segment: 1 });
+    await accept(1, 1);
+    expect(store.snapshot()?.passes.map((pass) => [pass.number, pass.pages.length])).toEqual([
+      [1, 1],
+    ]);
+    expect((await journalOnDisk()).passes).toHaveLength(1);
+  });
+
+  it('пустой журнал с пометкой об удалении пометку и счётчики сохраняет', async () => {
+    const root = await makeTempDataRoot();
+    const layout = layoutOf(root);
+    await mkdir(layout.pagesDir, { recursive: true });
+    await writeFile(join(layout.pagesDir, 'p01-s02-0001.jpg'), page(9));
+    const journal: Journal = {
+      version: 1,
+      sessionId: SESSION,
+      nextPass: 2,
+      passes: [
+        {
+          number: 1,
+          accepted: false,
+          origin: ORIGIN,
+          nextSegment: 3,
+          segments: [{ number: 1, state: 'interrupted', pageCount: 0 }],
+        },
+      ],
+      deletions: ['p01-s02-'],
+    };
+    const store = createSessionStore(root, { ...NO_SESSION, journal }, { retry: { ceilingMs: 0 } });
+
+    expect(store.snapshot()).toBeNull();
+    expect(ok(await store.beginPass(ORIGIN))).toMatchObject({ pass: 2, segment: 1 });
+
+    const parsed = parseJournal(await readFile(layout.journalFile));
+    if (parsed.kind !== 'ok') {
+      throw new Error('журнал не читается');
+    }
+    expect(parsed.value.sessionId).toBe(SESSION);
+    expect(parsed.value.deletions).toEqual(['p01-s02-']);
+    expect(parsed.value.passes.map((pass) => pass.number)).toEqual([2]);
+  });
+});
+
+describe('хранилище сессии: досканирование без каталога страниц', () => {
+  it('досканирование создаёт каталог страниц, если его нет', async () => {
+    const { store, layout, pageFiles, accept } = await setup();
+    ok(await store.beginPass(ORIGIN));
+    await accept(1, 2);
+    ok(await store.endSegment('interrupted'));
+    await realStorageFs.removeTree(layout.pagesDir);
+
+    ok(await store.resumePass());
+    const accepted = await store.acceptPage(body(page(3)));
+
+    expect(accepted).toMatchObject({ key: 'p01-s02-0001', number: 3 });
+    expect(await pageFiles()).toEqual(['p01-s02-0001.jpg']);
+  });
+});
+
+describe('хранилище сессии: запись проверяется схемой журнала', () => {
+  it('данные, которые не прошли бы чтение, не записываются: старт отклонён', async () => {
+    const { store, root } = await setup();
+    const withExtra = {
+      ...ORIGIN,
+      params: { ...ORIGIN.params, duplex: true },
+    } as unknown as PassOrigin;
+
+    expect(await store.beginPass(withExtra)).toMatchObject({
+      ok: false,
+      error: { code: 'storageFailed', details: { reason: 'schema' } },
+    });
+
+    expect(store.snapshot()).toBeNull();
+    expect(await readdir(join(root, 'session'))).toEqual(['pages']);
+  });
+});
+
+describe('хранилище сессии: потолки счётчиков', () => {
+  const journalWith = (overrides: Partial<Journal>, pageCount = 0, nextSegment = 2): Journal => ({
+    version: 1,
+    sessionId: SESSION,
+    nextPass: 2,
+    passes: [
+      {
+        number: 1,
+        accepted: false,
+        origin: ORIGIN,
+        nextSegment,
+        segments: [{ number: nextSegment - 1, state: 'running', pageCount }],
+      },
+    ],
+    deletions: [],
+    ...overrides,
+  });
+
+  async function storeWith(journal: Journal) {
+    const root = await makeTempDataRoot();
+    const layout = layoutOf(root);
+    await mkdir(layout.pagesDir, { recursive: true });
+    const store = createSessionStore(root, { ...NO_SESSION, journal }, { retry: { ceilingMs: 0 } });
+    return { store, layout };
+  }
+
+  it('страница 9999 принимается, 10000-я — отказ без файла', async () => {
+    const { store, layout } = await storeWith(journalWith({}, 9998));
+
+    expect(await store.acceptPage(body(page(1)))).toMatchObject({ key: 'p01-s01-9999' });
+    await expect(store.acceptPage(body(page(2)))).rejects.toMatchObject({
+      failure: { code: 'storageFailed', details: { reason: 'pageLimit' } },
+    });
+
+    expect(await readdir(layout.pagesDir)).toEqual(['p01-s01-9999.jpg']);
+  });
+
+  it('проход 99 начинается, сотый — отказ', async () => {
+    const base = journalWith({ nextPass: 99 });
+    const { store } = await storeWith({
+      ...base,
+      passes: base.passes.map((pass) => ({
+        ...pass,
+        number: 98,
+        segments: [{ number: 1, state: 'completed' as const, pageCount: 1 }],
+      })),
+    });
+
+    expect(ok(await store.beginPass(ORIGIN))).toMatchObject({ pass: 99 });
+    ok(await store.acceptPage(body(page(1))).then((value) => ({ ok: true as const, value })));
+    ok(await store.endSegment('completed'));
+    expect(await store.beginPass(ORIGIN)).toMatchObject({
+      ok: false,
+      error: { code: 'storageFailed', details: { reason: 'passLimit' } },
+    });
+  });
+
+  it('сегмент 99 начинается, сотый — отказ', async () => {
+    const base = journalWith({}, 1, 99);
+    const { store } = await storeWith({
+      ...base,
+      passes: base.passes.map((pass) => ({
+        ...pass,
+        segments: [{ number: 98, state: 'interrupted' as const, pageCount: 1 }],
+      })),
+    });
+
+    expect(ok(await store.resumePass())).toMatchObject({ segment: 99 });
+    ok(await store.endSegment('interrupted'));
+    expect(await store.resumePass()).toMatchObject({
+      ok: false,
+      error: { code: 'storageFailed', details: { reason: 'segmentLimit' } },
+    });
+  });
+});
+
+describe('хранилище сессии: миниатюры отброшенного сегмента', () => {
+  it('удаление сегмента чистит его миниатюры и не трогает остальные', async () => {
+    const { store, layout, accept } = await setup();
+    ok(await store.beginPass(ORIGIN));
+    await accept(1, 1);
+    ok(await store.endSegment('interrupted'));
+    ok(await store.resumePass());
+    await accept(2, 3);
+    const thumbs = join(layout.derivedDir, SESSION, 'thumbs');
+    await mkdir(thumbs, { recursive: true });
+    for (const name of ['p01-s01-0001.jpg', 'p01-s02-0001.jpg', 'p01-s02-0002.jpg']) {
+      await writeFile(join(thumbs, name), page(7));
+    }
+
+    ok(await store.discardSegment());
+
+    expect(await readdir(thumbs)).toEqual(['p01-s01-0001.jpg']);
+  });
+});
+
+describe('хранилище сессии: нечитаемый журнал, который сверка не сохранила в стороне', () => {
+  const JOURNAL: Journal = {
+    version: 1,
+    sessionId: SESSION,
+    nextPass: 2,
+    passes: [
+      {
+        number: 1,
+        accepted: false,
+        origin: null,
+        nextSegment: 2,
+        segments: [{ number: 1, state: 'interrupted', pageCount: 1 }],
+      },
+    ],
+    deletions: [],
+  };
+
+  async function seeded(before?: (call: FsCall) => void) {
+    const root = await makeTempDataRoot();
+    const layout = layoutOf(root);
+    await mkdir(layout.pagesDir, { recursive: true });
+    await writeFile(layout.journalFile, 'не журнал');
+    await writeFile(join(layout.pagesDir, 'p01-s01-0001.jpg'), page(1));
+    const { fs } = interceptFs(realStorageFs, before);
+    const store = createSessionStore(
+      root,
+      { ...NO_SESSION, journal: JOURNAL, unsaved: true, unpreserved: true },
+      { fs, retry: { ceilingMs: 0 } },
+    );
+    return { store, layout };
+  }
+
+  it('первая запись сначала отодвигает прежний файл', async () => {
+    const { store, layout } = await seeded();
+
+    ok(await store.flush());
+
+    const names = await readdir(layout.sessionDir);
+    const aside = names.find((name) => name.includes('.unreadable-')) ?? '';
+    expect(await readFile(join(layout.sessionDir, aside), 'utf8')).toBe('не журнал');
+    expect(parseJournal(await readFile(layout.journalFile))).toMatchObject({ kind: 'ok' });
+    expect(store.unsaved()).toBe(false);
+  });
+
+  it('не отодвинулся — запись не делается, прежний файл цел', async () => {
+    const { store, layout } = await seeded((call) => {
+      if (call.op === 'rename' && call.to?.includes('.unreadable-') === true) {
+        throw fsError('EBUSY');
+      }
+    });
+
+    expect(await store.flush()).toMatchObject({ ok: false, error: { code: 'storageFailed' } });
+    expect(await store.acceptPass()).toMatchObject({ ok: false });
+
+    expect(await readFile(layout.journalFile, 'utf8')).toBe('не журнал');
+    expect(store.unsaved()).toBe(true);
+    expect(store.snapshot()?.passes[0]?.state).toBe('interrupted');
   });
 });

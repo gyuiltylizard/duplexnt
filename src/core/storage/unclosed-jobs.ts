@@ -1,10 +1,10 @@
 import { z } from 'zod';
-import { ok, type Result } from '@shared';
+import { fail, ok, type Result } from '@shared';
 import { DEVICE_PATH_MAX_LENGTH } from '../escl/device-path';
 import { layoutOf } from './layout';
 import { ioOf, serialQueue, storageFailure, type StorageOptions } from './storage-fs';
 import { sameScanner, storedScannerSchema, type StoredScanner } from './stored-scanner';
-import { readVersioned, setAside, writeVersioned } from './versioned-file';
+import { fitsSchema, readVersioned, setAside, writeVersioned } from './versioned-file';
 
 // Незакрытые задания сканера (план M1, KTD-11; ADR 0004, амендмент). Адрес задания записывается
 // сразу после ответа `201` и убирается, когда задание закрыто. Файл лежит в корне данных, а не
@@ -50,7 +50,8 @@ export async function openUnclosedJobs(
   const { fs } = io;
 
   let jobs: readonly UnclosedJob[] = [];
-  // Файл более новой версии не переписывается: список живёт только в памяти.
+  // Файл, который не переписывается до конца работы: более новой версии или не прочитанный
+  // вовсе. Список тогда живёт только в памяти.
   let frozen = false;
   try {
     const read = await readVersioned(
@@ -67,19 +68,32 @@ export async function openUnclosedJobs(
       await setAside(unclosedJobsFile, io);
     }
   } catch {
-    // Список — подсказка, а не данные пользователя: без него задание снимет само устройство.
+    // Список — подсказка, а не данные пользователя: без него задание снимет само устройство. Но
+    // файл не прочитался или не отодвинулся — что в нём, неизвестно, в том числе его версия:
+    // запись его затёрла бы.
+    frozen = true;
   }
 
   const enqueue = serialQueue();
   const update = (change: (current: readonly UnclosedJob[]) => readonly UnclosedJob[]) =>
     enqueue(async (): Promise<Result<void>> => {
-      jobs = change(jobs);
+      const document = { version: UNCLOSED_JOBS_VERSION, jobs: [...change(jobs)] };
+      if (!fitsSchema(unclosedJobsSchema, document)) {
+        return fail('storageFailed', { reason: 'schema' });
+      }
+      ({ jobs } = document);
       if (frozen) {
         return ok(undefined);
       }
       try {
         await fs.mkdir(root);
-        await writeVersioned(unclosedJobsFile, { version: UNCLOSED_JOBS_VERSION, jobs }, io);
+        await writeVersioned(
+          unclosedJobsFile,
+          unclosedJobsSchema,
+          UNCLOSED_JOBS_VERSION,
+          document,
+          io,
+        );
         return ok(undefined);
       } catch (error) {
         return { ok: false, error: storageFailure(error) };

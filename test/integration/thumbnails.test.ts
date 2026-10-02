@@ -1,4 +1,4 @@
-import { readdir, readFile, rm, stat, unlink, writeFile, mkdir } from 'node:fs/promises';
+import { mkdir, readdir, rm, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
@@ -10,11 +10,14 @@ import type { SessionStore } from '../../src/core/storage/session-store';
 import { realStorageFs } from '../../src/core/storage/storage-fs';
 import {
   createThumbnails,
+  decodePixelLimit,
   FALLBACK_PIXEL_LIMIT,
+  MAX_PAGE_PIXELS,
   pagePixelLimit,
   THUMBNAIL_BOX,
   type ThumbnailSource,
 } from '../../src/core/storage/thumbnails';
+import { dirSnapshot } from '../support/dir-snapshot';
 import { ET_3850, readFixture } from '../support/fixtures';
 import { makeTempDataRoot } from '../support/temp-data-root';
 
@@ -73,17 +76,6 @@ function counting(store: SessionStore) {
     },
   };
   return { source, reads };
-}
-
-async function dirSnapshot(directory: string): Promise<Record<string, string>> {
-  const snapshot: Record<string, string> = {};
-  for (const name of (await readdir(directory, { recursive: true })).sort()) {
-    const path = join(directory, name);
-    snapshot[name] = (await stat(path)).isDirectory()
-      ? '<каталог>'
-      : (await readFile(path)).toString('hex');
-  }
-  return snapshot;
 }
 
 const KEY = 'p01-s01-0001';
@@ -334,6 +326,38 @@ describe('миниатюры', () => {
   });
 });
 
+describe('миниатюры: кэш — по возможности', () => {
+  it('кэш не записался — миниатюра всё равно отдаётся', async () => {
+    const { store, layout } = await sessionWith([pageFixture(1)]);
+    const thumbnails = createThumbnails(layout.derivedDir, store, {
+      retry: { ceilingMs: 0 },
+      fs: {
+        ...realStorageFs,
+        rename: () => Promise.reject(Object.assign(new Error('ENOSPC'), { code: 'ENOSPC' })),
+      },
+    });
+
+    const thumbnail = valueOf(await thumbnails.get(KEY));
+
+    expect((await sharp(thumbnail).metadata()).format).toBe('jpeg');
+    const sessionId = store.snapshot()?.id ?? '';
+    expect(await readdir(join(layout.derivedDir, sessionId, 'thumbs'))).toEqual([]);
+  });
+
+  it('файл кэша нулевой длины не отдаётся: миниатюра строится заново', async () => {
+    const { store, layout, thumbnails } = await sessionWith([pageFixture(1)]);
+    const sessionId = store.snapshot()?.id ?? '';
+    const thumbs = join(layout.derivedDir, sessionId, 'thumbs');
+    await mkdir(thumbs, { recursive: true });
+    await writeFile(join(thumbs, `${KEY}.jpg`), new Uint8Array(0));
+
+    const thumbnail = valueOf(await thumbnails.get(KEY));
+
+    expect(thumbnail.byteLength).toBeGreaterThan(0);
+    expect((await sharp(thumbnail).metadata()).format).toBe('jpeg');
+  });
+});
+
 describe('предел пикселей страницы', () => {
   it('ET-3850: наибольший регион автоподачи при наибольшем разрешении — 5100 × 8400', () => {
     const capabilities = parseCapabilities(readFixture(...ET_3850, 'ScannerCapabilities.xml'));
@@ -356,5 +380,26 @@ describe('предел пикселей страницы', () => {
     };
 
     expect(pagePixelLimit(adf)).toBe(1701 * 2801);
+  });
+  it('предел не выше потолка в коде, что бы ни заявило устройство', () => {
+    const adf = {
+      minWidth: 1,
+      minHeight: 1,
+      maxWidth: 30_000,
+      maxHeight: 30_000,
+      colorModes: ['RGB24' as const],
+      documentFormats: ['image/jpeg' as const],
+      resolutions: [9600],
+    };
+
+    expect(pagePixelLimit(adf)).toBe(MAX_PAGE_PIXELS);
+    // Потолок — встроенный предел sharp: предел из capabilities его только понижает.
+    expect(MAX_PAGE_PIXELS).toBe(0x3fff * 0x3fff);
+  });
+
+  it('предел из журнала выше потолка не действует; неизвестный — фиксированный', () => {
+    expect(decodePixelLimit(9e11)).toBe(MAX_PAGE_PIXELS);
+    expect(decodePixelLimit(5100 * 8400)).toBe(5100 * 8400);
+    expect(decodePixelLimit(null)).toBe(FALLBACK_PIXEL_LIMIT);
   });
 });

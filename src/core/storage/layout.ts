@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
 
 // Раскладка каталога данных и устойчивый ключ страницы (ADR 0004 с амендментом; план M1, KTD-15).
@@ -28,6 +29,9 @@ export const PAGE_FILE = /^p(\d{2})-s(\d{2})-(\d{4})\.jpg$/;
 const PAGE_KEY = /^p(\d{2})-s(\d{2})-(\d{4})$/;
 
 export const SESSION_ID = /^[0-9a-f]{16}$/;
+
+/** Новый идентификатор сессии — подходит под `SESSION_ID`. */
+export const newSessionId = (): string => randomBytes(8).toString('hex');
 const CLOSING_DIR = /^session\.closing-[0-9a-f]{16}$/;
 
 export interface DataLayout {

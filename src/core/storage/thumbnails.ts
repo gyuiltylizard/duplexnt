@@ -29,14 +29,28 @@ const DEFAULT_CONCURRENCY = 2;
 export const FALLBACK_PIXEL_LIMIT = 10_200 * 16_800;
 
 /**
- * Предел пикселей страницы (KTD-37): наибольший регион автоподачи при наибольшем разрешении.
+ * Потолок в коде — встроенный предел `sharp`. Предел страницы приходит из capabilities, то есть
+ * от самого устройства, и из журнала, то есть с диска: оба могут предел только понизить. Без
+ * потолка враждебное устройство заявило бы поле и разрешение, при которых декодер не ограничен
+ * ничем, и страница в несколько мегабайт заняла бы гигабайты памяти в main.
+ */
+export const MAX_PAGE_PIXELS = 0x3fff * 0x3fff;
+
+/** Предел, с которым страница декодируется: из журнала, но не выше потолка. */
+export function decodePixelLimit(pixelLimit: number | null): number {
+  return Math.min(pixelLimit ?? FALLBACK_PIXEL_LIMIT, MAX_PAGE_PIXELS);
+}
+
+/**
+ * Предел пикселей страницы (KTD-37): наибольший регион автоподачи при наибольшем разрешении,
+ * но не выше потолка в коде.
  * Считается при начале прохода и записывается в журнал — миниатюры строятся и при выключенном
  * сканере.
  */
 export function pagePixelLimit(adf: InputCaps): number {
   const resolution = Math.max(...adf.resolutions);
   const side = (units: number): number => Math.ceil((units * resolution) / REGION_UNITS_PER_INCH);
-  return side(adf.maxWidth) * side(adf.maxHeight);
+  return Math.min(side(adf.maxWidth) * side(adf.maxHeight), MAX_PAGE_PIXELS);
 }
 
 /** Откуда миниатюры берут страницы; хранилище сессии этому интерфейсу подходит. */
@@ -133,7 +147,7 @@ export function createThumbnails(
     if (!page.ok) {
       return page;
     }
-    const rendered = await render(page.value, info.pixelLimit ?? FALLBACK_PIXEL_LIMIT);
+    const rendered = await render(page.value, decodePixelLimit(info.pixelLimit));
     if (!rendered.ok) {
       return rendered;
     }

@@ -28,7 +28,17 @@ export const storedScannerSchema = z.strictObject({
 export type StoredScanner = z.infer<typeof storedScannerSchema>;
 
 export function storedScannerOf({ profile, capabilities }: ConnectedScanner): StoredScanner {
-  return { ...profile, uuid: capabilities.uuid, name: capabilities.makeAndModel };
+  // Поля перечислены явно: схема строгая, и лишнее поле профиля сделало бы файл несовместимым.
+  const { scheme, host, port, basePath, fingerprint } = profile;
+  return {
+    scheme,
+    host,
+    port,
+    basePath,
+    fingerprint,
+    uuid: capabilities.uuid,
+    name: capabilities.makeAndModel,
+  };
 }
 
 export function profileOf(scanner: StoredScanner): ScannerProfile {

@@ -1,11 +1,13 @@
-import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { dirSnapshot } from '../../../test/support/dir-snapshot';
 import { fsError, interceptFs } from '../../../test/support/intercept-fs';
 import { makeTempDataRoot } from '../../../test/support/temp-data-root';
 import type { PassOrigin } from './journal';
 import { layoutOf, type DataLayout } from './layout';
 import { openSessionStore, reconcileSession } from './reconcile';
+import { createSessionStore } from './session-store';
 import { realStorageFs } from './storage-fs';
 
 // Сверка при запуске — по таблице плана M1 («Сверка при запуске»). Каждая строка таблицы —
@@ -77,18 +79,6 @@ async function seed(journal: unknown, pages: readonly string[] = []) {
 /** Проход 1, сегмент 1: файлы страниц с 1 по `count`. */
 const pagesOfFirstSegment = (count: number): string[] =>
   Array.from({ length: count }, (_value, index) => pageName(1, 1, index + 1));
-
-/** Каталог побайтово: путь → содержимое в hex; каталоги — отдельной отметкой. */
-async function dirSnapshot(root: string): Promise<Record<string, string>> {
-  const snapshot: Record<string, string> = {};
-  for (const name of (await readdir(root, { recursive: true })).sort()) {
-    const path = join(root, name);
-    snapshot[name.replaceAll('\\', '/')] = (await stat(path)).isDirectory()
-      ? '<каталог>'
-      : (await readFile(path)).toString('hex');
-  }
-  return snapshot;
-}
 
 async function journalOnDisk(layout: DataLayout): Promise<ReturnType<typeof journalOf>> {
   return JSON.parse(await readFile(layout.journalFile, 'utf8')) as ReturnType<typeof journalOf>;
@@ -532,6 +522,94 @@ describe('сверка при запуске: таблица плана', () => 
   });
 });
 
+describe('сверка при запуске: нечитаемый журнал не теряется', () => {
+  const asides = async (layout: DataLayout): Promise<string[]> =>
+    (await readdir(layout.sessionDir)).filter((name) => name.includes('.unreadable-'));
+
+  it('журнал не отодвинулся переименованием — копируется, новый журнал записан', async () => {
+    const { root, layout } = await seed('не журнал', pagesOfFirstSegment(3));
+    const { fs } = interceptFs(realStorageFs, (call) => {
+      // Отказывает именно переименование самого журнала; запись копии рядом проходит.
+      if (call.op === 'rename' && call.path.endsWith('session.json')) {
+        throw fsError('EPERM');
+      }
+    });
+
+    const { state } = await reconcileSession(root, { fs, retry: { ceilingMs: 0 } });
+
+    expect(state.unsaved).toBe(false);
+    expect(state.unpreserved).toBe(false);
+    const [copy = ''] = await asides(layout);
+    expect(await readFile(join(layout.sessionDir, copy), 'utf8')).toBe('не журнал');
+    expect((await journalOnDisk(layout)).passes[0]?.segments[0]?.pageCount).toBe(3);
+  });
+
+  it('журнал не удалось ни отодвинуть, ни скопировать — он цел, а хранилище отодвигает его перед первой записью', async () => {
+    const { root, layout } = await seed('не журнал', pagesOfFirstSegment(3));
+    const { fs } = interceptFs(realStorageFs, (call) => {
+      if (`${call.path}|${call.to ?? ''}`.includes('.unreadable-') && call.op !== 'readdir') {
+        throw fsError('EPERM');
+      }
+    });
+
+    const { state, notices } = await reconcileSession(root, { fs, retry: { ceilingMs: 0 } });
+
+    expect(state.unsaved).toBe(true);
+    expect(state.unpreserved).toBe(true);
+    expect(notices).toContain('journalRebuilt');
+    expect(state.journal?.passes[0]?.segments[0]?.pageCount).toBe(3);
+    expect(await readFile(layout.journalFile, 'utf8')).toBe('не журнал');
+    expect(await asides(layout)).toEqual([]);
+
+    // Помеха ушла: первая же запись хранилища сначала сохраняет прежний файл в стороне.
+    const store = createSessionStore(root, state);
+    expect(await store.flush()).toEqual({ ok: true, value: undefined });
+    const [copy = ''] = await asides(layout);
+    expect(await readFile(join(layout.sessionDir, copy), 'utf8')).toBe('не журнал');
+    expect((await journalOnDisk(layout)).passes[0]?.segments[0]?.pageCount).toBe(3);
+  });
+
+  it('нечитаемый журнал без страниц, который не удалось сохранить в стороне, новая сессия не затирает', async () => {
+    const { root, layout } = await seed('не журнал');
+    const { fs } = interceptFs(realStorageFs, (call) => {
+      if (`${call.path}|${call.to ?? ''}`.includes('.unreadable-') && call.op !== 'readdir') {
+        throw fsError('EPERM');
+      }
+    });
+
+    const { state } = await reconcileSession(root, { fs, retry: { ceilingMs: 0 } });
+
+    expect(state.journal).toBeNull();
+    expect(state.unpreserved).toBe(true);
+    expect(await readFile(layout.journalFile, 'utf8')).toBe('не журнал');
+
+    const store = createSessionStore(root, state);
+    expect(await store.beginPass(ORIGIN)).toMatchObject({ ok: true });
+    const [copy = ''] = await asides(layout);
+    expect(await readFile(join(layout.sessionDir, copy), 'utf8')).toBe('не журнал');
+  });
+});
+
+describe('сверка при запуске: миниатюры отброшенного сегмента', () => {
+  it('доведённое удаление сегмента чистит и его миниатюры', async () => {
+    const { root, layout } = await seed(
+      journalOf([pass(1, [segment(1, 'interrupted', 1)], { nextSegment: 3 })], {
+        deletions: ['p01-s02-'],
+      }),
+      [pageName(1, 1, 1), pageName(1, 2, 1)],
+    );
+    const thumbs = join(layout.derivedDir, SESSION, 'thumbs');
+    await mkdir(thumbs, { recursive: true });
+    for (const name of [pageName(1, 1, 1), pageName(1, 2, 1), pageName(1, 2, 2)]) {
+      await writeFile(join(thumbs, name), page(7));
+    }
+
+    await reconciled(root);
+
+    expect(await readdir(thumbs)).toEqual([pageName(1, 1, 1)]);
+  });
+});
+
 describe('сверка при запуске: сбой на каждом шаге записи хранилища', () => {
   const READS = new Set(['readdir', 'readFile', 'size', 'freeBytes']);
 
@@ -560,8 +638,8 @@ describe('сверка при запуске: сбой на каждом шаг�
   }
 
   interface Outcome {
-    /** Страницы, приём которых подтверждён и которые никто не удалял. */
-    readonly kept: Set<string>;
+    /** Страницы, приём которых подтверждён и которые никто не удалял: ключ → принятые байты. */
+    readonly kept: Map<string, Uint8Array>;
     /** Страницы сегмента, удаление которого подтверждено. */
     readonly discarded: Set<string>;
     /** Страницы сегмента, удаление которого началось, но не подтверждено: все или ни одной. */
@@ -569,10 +647,11 @@ describe('сверка при запуске: сбой на каждом шаг�
     closing: boolean;
   }
 
-  // Сценарий: проход, обрыв, досканирование, «Остановить», новое досканирование, «Новая пачка».
+  // Сценарий: проход, обрыв, досканирование, «Остановить», новое досканирование, второй проход,
+  // «оставить как есть», «Новая пачка».
   async function scenario(root: string, fs: typeof realStorageFs): Promise<Outcome> {
     const outcome: Outcome = {
-      kept: new Set(),
+      kept: new Map(),
       discarded: new Set(),
       limbo: new Set(),
       closing: false,
@@ -585,10 +664,15 @@ describe('сверка при запуске: сбой на каждом шаг�
       return result.value;
     };
     let content = 0;
-    const accept = async (count: number, into: Set<string> = outcome.kept): Promise<void> => {
+    const accept = async (count: number, into?: Set<string>): Promise<void> => {
       for (let index = 0; index < count; index += 1) {
         content += 1;
-        into.add((await store.acceptPage(body(content))).key);
+        const { key } = await store.acceptPage(body(content));
+        if (into === undefined) {
+          outcome.kept.set(key, page(content));
+        } else {
+          into.add(key);
+        }
       }
     };
 
@@ -608,6 +692,11 @@ describe('сверка при запуске: сбой на каждом шаг�
       must(await store.resumePass());
       await accept(2);
       must(await store.endSegment('completed'));
+
+      must(await store.beginPass(ORIGIN));
+      await accept(1);
+      must(await store.endSegment('interrupted'));
+      must(await store.acceptPass());
 
       outcome.closing = true;
       must(await store.closeSession());
@@ -639,17 +728,15 @@ describe('сверка при запуске: сбой на каждом шаг�
       expect(second.lost, `шаг ${dieAt}`).toEqual([]);
 
       const present = new Set(first.keys);
-      if (outcome.closing) {
-        // «Новая пачка» оборвана: сессия либо цела, либо её нет — половины не бывает.
-        if (present.size > 0) {
-          expect(
-            [...outcome.kept].every((key) => present.has(key)),
-            `шаг ${dieAt}`,
-          ).toBe(true);
-        }
-      } else {
-        for (const key of outcome.kept) {
+      // «Новая пачка» оборвана: сессия либо цела, либо её нет — половины не бывает.
+      if (!outcome.closing || present.size > 0) {
+        for (const [key, bytes] of outcome.kept) {
           expect(present.has(key), `шаг ${dieAt}: страница ${key} потеряна`).toBe(true);
+          // Не только имя: байты на диске — те, что были приняты.
+          expect(await second.store.readPage(key), `шаг ${dieAt}: страница ${key}`).toEqual({
+            ok: true,
+            value: bytes,
+          });
         }
       }
       for (const key of outcome.discarded) {
@@ -659,4 +746,70 @@ describe('сверка при запуске: сбой на каждом шаг�
       expect([0, outcome.limbo.size], `шаг ${dieAt}: удаление наполовину`).toContain(limbo.length);
     }
   }, 120_000);
+  // Сама сверка тоже может быть убита посередине: следующий запуск обязан довести её до того же.
+  it.each([
+    [
+      'журнал с идущим сегментом, пометкой об удалении, временными файлами и закрываемым каталогом',
+      journalOf([pass(1, [segment(1, 'running', 2)], { nextSegment: 3 })], {
+        deletions: ['p01-s02-'],
+      }),
+    ],
+    ['нечитаемый журнал', 'не журнал'],
+  ])(
+    'сверка, убитая на каждом своём шаге, доводится следующими запусками: %s',
+    async (_title, journal) => {
+      const prepare = async () => {
+        const seeded = await seed(journal, [
+          ...pagesOfFirstSegment(3),
+          ...(typeof journal === 'string' ? [] : [pageName(1, 2, 1), pageName(1, 2, 2)]),
+        ]);
+        const { root, layout } = seeded;
+        await writeFile(join(layout.pagesDir, 'p01-s01-0004.jpg.0123456789ab.tmp'), page(4));
+        await writeFile(join(layout.sessionDir, 'session.json.ba9876543210.tmp'), '{');
+        await mkdir(join(root, `session.closing-${OTHER_SESSION}`, 'pages'), { recursive: true });
+        await writeFile(
+          join(root, `session.closing-${OTHER_SESSION}`, 'pages', pageName(1, 1, 1)),
+          page(1),
+        );
+        await mkdir(join(layout.derivedDir, OTHER_SESSION, 'thumbs'), { recursive: true });
+        return seeded;
+      };
+      const expectedKeys = ['p01-s01-0001', 'p01-s01-0002', 'p01-s01-0003'];
+
+      const dry = dyingFs(Number.POSITIVE_INFINITY);
+      await reconcileSession((await prepare()).root, { fs: dry.fs, retry: { ceilingMs: 0 } });
+      const total = dry.steps();
+      expect(total).toBeGreaterThan(5);
+
+      for (let dieAt = 1; dieAt <= total; dieAt += 1) {
+        const { root, layout } = await prepare();
+        const dying = dyingFs(dieAt);
+        await reconcileSession(root, { fs: dying.fs, retry: { ceilingMs: 0 } }).catch(
+          () => undefined,
+        );
+        expect(dying.dead(), `шаг ${dieAt}`).toBe(true);
+
+        const first = await reconciled(root);
+        const afterFirst = await dirSnapshot(root);
+        const second = await reconciled(root);
+
+        expect(first.keys, `шаг ${dieAt}`).toEqual(expectedKeys);
+        expect(first.lost, `шаг ${dieAt}`).toEqual([]);
+        expect(first.passes[0]?.state, `шаг ${dieAt}`).toBe('interrupted');
+        expect(second.keys, `шаг ${dieAt}: второй прогон`).toEqual(expectedKeys);
+        expect(await dirSnapshot(root), `шаг ${dieAt}: второй прогон`).toEqual(afterFirst);
+        // Страницы отброшенного сегмента не вернулись, временные файлы не стали страницами.
+        expect(await readdir(layout.pagesDir), `шаг ${dieAt}`).toEqual(pagesOfFirstSegment(3));
+        if (typeof journal === 'string') {
+          // Нечитаемый журнал не потерян, сколько бы раз сверка ни начиналась заново.
+          const copies = (await readdir(layout.sessionDir)).filter((name) =>
+            name.includes('.unreadable-'),
+          );
+          expect(copies, `шаг ${dieAt}`).toHaveLength(1);
+          expect(await readFile(join(layout.sessionDir, copies[0] ?? ''), 'utf8')).toBe(journal);
+        }
+      }
+    },
+    120_000,
+  );
 });

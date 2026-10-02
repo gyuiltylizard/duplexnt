@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import type { z } from 'zod';
 import { renameWithRetry, writeFileAtomic } from './atomic-file';
-import { isMissing, type StorageFs, type StorageIo, type StorageOptions } from './storage-fs';
+import { isMissing, StorageError, type StorageFs, type StorageIo } from './storage-fs';
 
 // Файл с маркером версии: журнал сессии, настройки, незакрытые задания (ADR 0004; план M1,
 // KTD-34, KTD-35). Правила одни на все три:
@@ -78,12 +78,41 @@ export function serializeVersioned(value: unknown): Uint8Array {
   return new TextEncoder().encode(`${JSON.stringify(value, null, 2)}\n`);
 }
 
-export function writeVersioned(
+const rejected = (reason: 'schema' | 'verify'): StorageError =>
+  new StorageError({ code: 'storageFailed', details: { reason } });
+
+/** Значение, которое схема не прочитала бы обратно, не записывается. */
+export function fitsSchema<T>(schema: z.ZodType<T>, value: unknown): boolean {
+  return schema.safeParse(value).success;
+}
+
+/**
+ * Атомарная запись с проверкой структуры до и после. До: значение обязано пройти ту же строгую
+ * схему, которой файл читается, — иначе следующий запуск счёл бы собственные данные
+ * несовместимыми или нечитаемыми. После: записанное читается обратно и разбирается. Не удалось
+ * перечитать (файл занят) — не отказ: атомарная запись уже прошла.
+ */
+export async function writeVersioned<T>(
   path: string,
-  value: unknown,
-  options: StorageOptions,
+  schema: z.ZodType<T>,
+  version: number,
+  value: T,
+  options: StorageIo,
 ): Promise<void> {
-  return writeFileAtomic(path, serializeVersioned(value), options);
+  if (!fitsSchema(schema, value)) {
+    throw rejected('schema');
+  }
+  await writeFileAtomic(path, serializeVersioned(value), options);
+
+  let written: Uint8Array;
+  try {
+    written = await options.fs.readFile(path);
+  } catch {
+    return;
+  }
+  if (parseVersioned(written, schema, version).kind !== 'ok') {
+    throw rejected('verify');
+  }
 }
 
 const SET_ASIDE_SUFFIX = /\.unreadable-[0-9a-f]{12}$/;
@@ -93,13 +122,17 @@ export function isSetAsideName(name: string, baseName: string): boolean {
   return name.startsWith(`${baseName}.`) && SET_ASIDE_SUFFIX.test(name.slice(baseName.length));
 }
 
+/** Уникальное имя для отодвинутой копии файла — подходит под `isSetAsideName`. */
+export const setAsidePathOf = (path: string): string =>
+  `${path}.unreadable-${randomBytes(6).toString('hex')}`;
+
 /**
  * Отодвигает нечитаемый файл под уникальным именем рядом с прежним. Файла уже нет — не ошибка:
  * повторная сверка после сбоя приходит сюда второй раз.
  */
 export async function setAside(path: string, options: StorageIo): Promise<void> {
   try {
-    await renameWithRetry(path, `${path}.unreadable-${randomBytes(6).toString('hex')}`, options);
+    await renameWithRetry(path, setAsidePathOf(path), options);
   } catch (error) {
     if (!isMissing(error)) {
       throw error;

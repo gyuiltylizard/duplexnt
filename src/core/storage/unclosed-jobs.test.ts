@@ -6,7 +6,8 @@ import type { PassOrigin } from './journal';
 import { layoutOf } from './layout';
 import { createSessionStore } from './session-store';
 import { realStorageFs } from './storage-fs';
-import { sameScanner, type StoredScanner } from './stored-scanner';
+import type { ConnectedScanner } from '../escl/connect';
+import { sameScanner, storedScannerOf, type StoredScanner } from './stored-scanner';
 import { openUnclosedJobs } from './unclosed-jobs';
 
 const SCANNER_A: StoredScanner = {
@@ -129,6 +130,37 @@ describe('незакрытые задания', () => {
     expect(names[0]).toMatch(/^unclosed-jobs\.json\.unreadable-[0-9a-f]{12}$/);
   });
 
+  it('файл не прочитался — он не переписывается: что в нём, неизвестно', async () => {
+    const root = await makeTempDataRoot();
+    const file = layoutOf(root).unclosedJobsFile;
+    const newer = JSON.stringify({ version: 2, jobs: 'что-то новое' });
+    await writeFile(file, newer);
+    const { fs } = interceptFs(realStorageFs, (call) => {
+      if (call.op === 'readFile') {
+        throw fsError('EBUSY');
+      }
+    });
+
+    const jobs = await openUnclosedJobs(root, { fs, retry: { ceilingMs: 0 } });
+    expect(await jobs.add(SCANNER_A, JOB)).toMatchObject({ ok: true });
+
+    expect(jobs.jobsOf(SCANNER_A)).toEqual([JOB]);
+    expect(await readFile(file, 'utf8')).toBe(newer);
+  });
+
+  it('запись проверяется схемой: негодный адрес задания не записывается', async () => {
+    const root = await makeTempDataRoot();
+    const jobs = await openUnclosedJobs(root);
+
+    expect(await jobs.add(SCANNER_A, '')).toMatchObject({
+      ok: false,
+      error: { code: 'storageFailed', details: { reason: 'schema' } },
+    });
+
+    expect(jobs.jobsOf(SCANNER_A)).toEqual([]);
+    expect(await readdir(root)).toEqual([]);
+  });
+
   it('отказ записи возвращается кодом, адрес остаётся в памяти', async () => {
     const root = await makeTempDataRoot();
     const { fs } = interceptFs(realStorageFs, (call) => {
@@ -143,6 +175,33 @@ describe('незакрытые задания', () => {
       error: { code: 'storageFull' },
     });
     expect(jobs.jobsOf(SCANNER_A)).toEqual([JOB]);
+  });
+});
+
+describe('storedScannerOf', () => {
+  it('берёт из профиля только свои поля: лишнее на диск не попадает', () => {
+    const profile = {
+      scheme: 'https' as const,
+      host: 'scanner-a.test',
+      port: 443,
+      basePath: '/eSCL',
+      fingerprint: 'aa'.repeat(32),
+      token: 'лишнее',
+    };
+    const capabilities = {
+      uuid: 'u',
+      makeAndModel: 'Scanner A',
+    } as ConnectedScanner['capabilities'];
+
+    const stored = storedScannerOf({
+      profile,
+      capabilities,
+      options: { colorModes: [], resolutions: [], paperSizes: [] },
+    });
+
+    expect(Object.keys(stored).sort()).toEqual(
+      ['basePath', 'fingerprint', 'host', 'name', 'port', 'scheme', 'uuid'].sort(),
+    );
   });
 });
 

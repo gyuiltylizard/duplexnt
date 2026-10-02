@@ -1,8 +1,9 @@
-import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
 import type { StartupNotice } from '@shared';
 import { isTempName, removeByPrefix, writeFileAtomic } from './atomic-file';
 import {
+  JOURNAL_VERSION,
+  journalSchema,
   newJournal,
   pageCountOf,
   pagesOf,
@@ -14,6 +15,7 @@ import {
 import {
   isClosingDirName,
   layoutOf,
+  newSessionId as randomSessionId,
   PAGE_FILE,
   parsePageFileName,
   segmentPrefix,
@@ -28,7 +30,7 @@ import {
   type SessionStoreOptions,
 } from './session-store';
 import { ioOf, isMissing, listDir } from './storage-fs';
-import { setAside, writeVersioned } from './versioned-file';
+import { setAside, setAsidePathOf, writeVersioned } from './versioned-file';
 
 // Сверка при запуске (план M1, U14; ADR 0004): журнал сверяется с файлами по таблице плана.
 // Строки применяются сверху вниз; несовместимые данные отменяют все остальные — в каталоге тогда
@@ -140,7 +142,7 @@ export async function reconcileSession(
   const layout = layoutOf(dataRoot);
   const io = ioOf(options);
   const { fs } = io;
-  const newSessionId = options.newSessionId ?? (() => randomBytes(8).toString('hex'));
+  const newSessionId = options.newSessionId ?? randomSessionId;
 
   // Журнал читается первым: данные более новой версии отменяют всё остальное (KTD-35).
   let original: Uint8Array | null = null;
@@ -209,15 +211,17 @@ export async function reconcileSession(
 
   const notices: StartupNotice[] = [];
   let journal = read?.kind === 'ok' ? read.value : null;
-  // Журнал, который нельзя сохранить в стороне, сверка не затирает: новый остаётся в памяти.
+  // Журнал, который нельзя сохранить в стороне, сверка не затирает: новый остаётся в памяти, а
+  // хранилище отодвигает прежний файл перед своей первой записью — или не пишет вовсе.
   let writable = true;
   if (journal === null) {
     if (original !== null) {
       // Нечитаемый журнал не удаляется (KTD-34): отодвигается, а не выйдет — копируется.
-      const aside = `${layout.journalFile}.unreadable-${randomBytes(6).toString('hex')}`;
       writable =
         (await attempt(setAside(layout.journalFile, io).then(() => true))) ??
-        (await attempt(writeFileAtomic(aside, original, io).then(() => true))) ??
+        (await attempt(
+          writeFileAtomic(setAsidePathOf(layout.journalFile), original, io).then(() => true),
+        )) ??
         false;
     }
     if ([...groups.values()].some((group) => group.present.size > 0)) {
@@ -255,7 +259,7 @@ export async function reconcileSession(
     }
     await attempt(fs.rmdir(layout.sessionDir));
     await dropForeignCaches(null);
-    return { state: NO_SESSION, notices: [] };
+    return { state: { ...NO_SESSION, unpreserved: !writable }, notices: [] };
   }
 
   const lost = new Set<string>();
@@ -273,13 +277,17 @@ export async function reconcileSession(
 
   let unsaved = false;
   if (JSON.stringify(journal) !== before) {
-    unsaved =
-      !writable ||
-      (await attempt(writeVersioned(layout.journalFile, journal, io).then(() => false))) !== false;
+    // Запись начинается, только когда прежний файл сохранён в стороне.
+    const write = (): Promise<void> =>
+      writeVersioned(layout.journalFile, journalSchema, JOURNAL_VERSION, journal, io);
+    unsaved = !writable || (await attempt(write().then(() => false))) !== false;
   }
 
   await dropForeignCaches(journal.sessionId);
-  return { state: { incompatible: false, journal, lost, unsaved }, notices };
+  return {
+    state: { incompatible: false, journal, lost, unsaved, unpreserved: !writable },
+    notices,
+  };
 }
 
 /** Сверка и хранилище, открытое на её результате. */

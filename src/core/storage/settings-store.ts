@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ok, type Result, type StartupNotice } from '@shared';
+import { fail, ok, type DomainError, type Result, type StartupNotice } from '@shared';
 import { probeScanner, type ConnectedScanner, type ConnectorOptions } from '../escl/connect';
 import { resolveScanParams, type ScanParams } from '../escl/scan-settings';
 import { scanParamsSchema } from './journal';
@@ -12,7 +12,7 @@ import {
   storedScannerSchema,
   type StoredScanner,
 } from './stored-scanner';
-import { readVersioned, setAside, writeVersioned } from './versioned-file';
+import { fitsSchema, readVersioned, setAside, writeVersioned } from './versioned-file';
 
 // Настройки и запомненный сканер (план M1, U15, R5, R18). Живут отдельным файлом в корне данных:
 // закрытие сессии их не трогает (ADR 0004).
@@ -79,13 +79,18 @@ export async function openSettingsStore(
   const enqueue = serialQueue();
   const update = (change: Partial<Settings>): Promise<Result<void>> =>
     enqueue(async (): Promise<Result<void>> => {
-      settings = { ...settings, ...change };
+      // Негодное значение не попадает ни в файл, ни в память: схема та же, которой файл читается.
+      const document = { version: SETTINGS_VERSION, ...settings, ...change };
+      if (!fitsSchema(settingsSchema, document)) {
+        return fail('storageFailed', { reason: 'schema' });
+      }
+      settings = { scanner: document.scanner, params: document.params };
       if (frozen) {
         return ok(undefined);
       }
       try {
         await fs.mkdir(root);
-        await writeVersioned(settingsFile, { version: SETTINGS_VERSION, ...settings }, io);
+        await writeVersioned(settingsFile, settingsSchema, SETTINGS_VERSION, document, io);
         return ok(undefined);
       } catch (error) {
         return { ok: false, error: storageFailure(error) };
@@ -110,9 +115,27 @@ export type RememberedScanner =
       readonly connected: ConnectedScanner;
       readonly params: ScanParams;
     }
-  | { readonly state: 'unreachable'; readonly scanner: StoredScanner }
-  /** По адресу отвечает другое устройство — по UUID или по отпечатку сертификата. */
-  | { readonly state: 'otherDevice'; readonly scanner: StoredScanner };
+  /** Сканер молчит, занят или отвечает невнятно; причина — кодом. */
+  | { readonly state: 'unreachable'; readonly scanner: StoredScanner; readonly error: DomainError }
+  /**
+   * По адресу отвечает другое устройство. `error` — чем оно себя выдало: чужой сертификат, не
+   * сканер, сканер без автоподачи; `null` — исправный сканер с другим UUID.
+   */
+  | {
+      readonly state: 'otherDevice';
+      readonly scanner: StoredScanner;
+      readonly error: DomainError | null;
+    };
+
+// «Не отвечает», а не «другое устройство»: сбой сети, отмена, ответ `5xx` (сканер занят или
+// просыпается) и ответ, который не дочитался или не разобрался, — так ведёт себя и тот же сканер.
+function isSilence({ code, details }: DomainError): boolean {
+  if (code === 'scannerUnreachable' || code === 'canceled' || code === 'scannerBadResponse') {
+    return true;
+  }
+  const status = details?.status;
+  return code === 'notEsclScanner' && typeof status === 'number' && status >= 500;
+}
 
 /**
  * Проверка запомненного сканера запросом capabilities. Идёт по запомненной схеме: закрытый порт
@@ -131,15 +154,13 @@ export async function checkRememberedScanner(
   }
   const probed = await probeScanner(profileOf(scanner), options, signal);
   if (!probed.ok) {
-    const { code } = probed.error;
+    const { error } = probed;
     // Всё, кроме молчания, — ответ кого-то другого: чужой сертификат, не сканер, сканер без
     // автоподачи.
-    return code === 'scannerUnreachable' || code === 'canceled'
-      ? { state: 'unreachable', scanner }
-      : { state: 'otherDevice', scanner };
+    return { state: isSilence(error) ? 'unreachable' : 'otherDevice', scanner, error };
   }
   if (!sameScanner(scanner, storedScannerOf(probed.value))) {
-    return { state: 'otherDevice', scanner };
+    return { state: 'otherDevice', scanner, error: null };
   }
   return {
     state: 'ready',

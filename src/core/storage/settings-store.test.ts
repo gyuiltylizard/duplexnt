@@ -248,7 +248,7 @@ describe('запомненный сканер при запуске', () => {
 
     const check = await checkRememberedScanner(store.get(), impostor);
 
-    expect(check).toEqual({ state: 'otherDevice', scanner });
+    expect(check).toEqual({ state: 'otherDevice', scanner, error: null });
     expect(store.get().scanner).toEqual(scanner);
     expect((await readFile(file)).equals(bytes)).toBe(true);
   });
@@ -265,6 +265,7 @@ describe('запомненный сканер при запуске', () => {
     ).toEqual({
       state: 'otherDevice',
       scanner,
+      error: { code: 'scannerCertificateChanged' },
     });
     expect((await readFile(file)).equals(bytes)).toBe(true);
 
@@ -291,35 +292,69 @@ describe('запомненный сканер при запуске', () => {
 
     const check = await checkRememberedScanner(store.get(), { createTransport });
 
-    expect(check).toEqual({ state: 'unreachable', scanner });
+    expect(check).toEqual({
+      state: 'unreachable',
+      scanner,
+      error: { code: 'scannerUnreachable', details: { reason: 'refused' } },
+    });
     expect(profiles.map((profile) => profile.scheme)).toEqual(['https']);
   });
 
   it.each([
     ['таймаут', fail('scannerUnreachable', { reason: 'timeout' }), 'unreachable'],
     ['проверка отменена', fail('canceled'), 'unreachable'],
-    ['по адресу не сканер', ok({ status: 404 }), 'otherDevice'],
-    ['ответ не разобран', fail('scannerBadResponse', { reason: 'tooLarge' }), 'otherDevice'],
+    // Тот же сканер, пока занят или просыпается, — не «другое устройство».
+    ['сканер занят: 503', ok({ status: 503 }), 'unreachable'],
+    ['сбой сканера: 500', ok({ status: 500 }), 'unreachable'],
+    ['ответ не разобран', fail('scannerBadResponse', { reason: 'tooLarge' }), 'unreachable'],
+    ['по адресу не сканер: 404', ok({ status: 404 }), 'otherDevice'],
+    ['по адресу не сканер: HTML', ok({ status: 200 }), 'otherDevice'],
+    ['сертификат сменился', fail('scannerCertificateChanged'), 'otherDevice'],
   ] as const)('%s → %s', async (_title, reply, state) => {
-    const { store } = await remembered();
+    const { store, scanner } = await remembered();
     const answer = reply.ok
       ? ok({
           ...reply.value,
           location: null,
           contentType: null,
           fingerprint: FINGERPRINT,
-          body: new Uint8Array(),
+          body: new TextEncoder().encode('<html></html>'),
         })
       : reply;
 
-    expect(
-      await checkRememberedScanner(
-        store.get(),
-        deviceAt(() => answer),
-      ),
-    ).toMatchObject({
-      state,
+    const check = await checkRememberedScanner(
+      store.get(),
+      deviceAt(() => answer),
+    );
+
+    expect(check).toMatchObject({ state, scanner });
+    // Причина — кодом: интерфейс и тесты не гадают по состоянию.
+    expect(check).toHaveProperty('error.code');
+  });
+
+  it('сканер без автоподачи на адресе запомненного — другое устройство', async () => {
+    const { store } = await remembered();
+    const noAdf = readFixtureText('escl', 'no-adf', 'ScannerCapabilities.xml');
+
+    const check = await checkRememberedScanner(
+      store.get(),
+      deviceAt(() => ({ fingerprint: FINGERPRINT, capabilities: noAdf })),
+    );
+
+    expect(check).toMatchObject({ state: 'otherDevice', error: { code: 'scannerNoAdf' } });
+  });
+
+  it('запись проверяется схемой: негодное значение не попадает ни в файл, ни в память', async () => {
+    const { store, scanner, file, bytes } = await remembered();
+    const garbage = { ...scanner, host: '', token: 'лишнее' } as unknown as StoredScanner;
+
+    expect(await store.rememberScanner(garbage)).toMatchObject({
+      ok: false,
+      error: { code: 'storageFailed', details: { reason: 'schema' } },
     });
+
+    expect(store.get().scanner).toEqual(scanner);
+    expect((await readFile(file)).equals(bytes)).toBe(true);
   });
 
   it('сканер на HTTP без отпечатка и UUID узнаётся по адресу', async () => {
