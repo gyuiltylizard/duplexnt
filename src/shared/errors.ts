@@ -5,7 +5,14 @@
 //
 // Каждый новый код — строка здесь и строка в `errors.<код>` локали.
 
-export const ERROR_CODES = ['invalidInput'] as const;
+export const ERROR_CODES = [
+  'invalidInput',
+  // Ответ устройства не разобран: не XML, не UTF-8, с DOCTYPE, больше потолка. Причина — в деталях.
+  'scannerBadResponse',
+  'notEsclScanner',
+  'scannerNoAdf',
+  'scannerNoJpeg',
+] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];
 
