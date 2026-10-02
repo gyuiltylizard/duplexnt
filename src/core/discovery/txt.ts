@@ -1,4 +1,4 @@
-import { normalizeBasePath } from '../escl/device-path';
+import { DEFAULT_BASE_PATH, normalizeBasePath } from '../escl/device-path';
 import { displayText } from '../escl/xml';
 
 // Объявления mDNS — в записи о сканерах (план M1, U12, KTD-12). Чистые функции: сеть и библиотека
@@ -32,8 +32,6 @@ export interface ScannerRecord {
   readonly basePath: string;
   readonly hasAdf: boolean;
 }
-
-const DEFAULT_RESOURCE_PATH = 'eSCL';
 
 const TXT_MAX_ENTRIES = 64;
 const TXT_KEY_MAX_LENGTH = 64;
@@ -87,9 +85,7 @@ export function recordOf(announcement: Announcement): ScannerRecord | null {
   // `rs` с запросом, точечным сегментом или кодированием базовым путём не становится.
   const resourcePath = txt.get('rs') ?? '';
   const basePath =
-    normalizeBasePath(resourcePath === '' ? DEFAULT_RESOURCE_PATH : resourcePath) ??
-    normalizeBasePath(DEFAULT_RESOURCE_PATH) ??
-    '';
+    normalizeBasePath(resourcePath === '' ? DEFAULT_BASE_PATH : resourcePath) ?? DEFAULT_BASE_PATH;
 
   return {
     uuid: UUID.test(uuid) ? uuid : null,

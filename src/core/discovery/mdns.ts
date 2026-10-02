@@ -125,11 +125,15 @@ export function startDiscovery(options: DiscoveryOptions = {}): Discovery {
   const idOf = (index: number): string => `${token}-${index + 1}`;
 
   let records: readonly ScannerRecord[] = [];
+  let started = false;
   let stopped = false;
   const alive = new Set<MdnsInstance>();
 
+  // Пока поиск собирается, вызывающий ещё не получил объект поиска: уведомлять его рано.
   const changed = (): void => {
-    options.onChange?.();
+    if (started && !stopped) {
+      options.onChange?.();
+    }
   };
 
   const onAnnouncement = (announcement: Announcement): void => {
@@ -149,44 +153,53 @@ export function startDiscovery(options: DiscoveryOptions = {}): Discovery {
 
   // По экземпляру на каждый внешний IPv4-интерфейс: без перебора один прогон из нескольких
   // возвращал пустой результат без единой ошибки (амендмент ADR 0003).
-  for (const address of addresses) {
-    const holder: { instance: MdnsInstance | null; failed: boolean } = {
+  const destroyQuietly = (instance: MdnsInstance): void => {
+    try {
+      instance.destroy();
+    } catch {
+      // Сокет, который не открылся, может не дать себя закрыть; остальные закрываются всё равно.
+    }
+  };
+
+  function openInstance(address: string): void {
+    // Поля объекта, а не переменные: ошибка сокета может прийти раньше, чем `open` вернёт
+    // экземпляр, а сужение типа по потоку управления присваиваний из обработчика не видит.
+    const slot: { instance: MdnsInstance | null; failed: boolean } = {
       instance: null,
       failed: false,
     };
     const fail = (): void => {
-      if (holder.failed) {
+      if (slot.failed) {
         return;
       }
-      holder.failed = true;
-      if (holder.instance !== null && alive.delete(holder.instance)) {
-        try {
-          holder.instance.destroy();
-        } catch {
-          // Сокет, который не открылся, может не дать себя закрыть.
-        }
-        if (!stopped) {
-          changed();
-        }
+      slot.failed = true;
+      // После остановки экземпляр уже закрыт и из `alive` убран.
+      if (slot.instance !== null && alive.delete(slot.instance)) {
+        destroyQuietly(slot.instance);
+        changed();
       }
     };
     try {
       const instance = backend.open(address, fail);
-      holder.instance = instance;
-      if (holder.failed) {
-        instance.destroy();
-        continue;
+      slot.instance = instance;
+      if (slot.failed) {
+        destroyQuietly(instance);
+        return;
       }
+      // В `alive` — до начала поиска: если `browse` бросит, сокет закроет `fail`.
+      alive.add(instance);
       for (const type of SERVICE_TYPES) {
         instance.browse(type, onAnnouncement);
       }
-      alive.add(instance);
     } catch {
       fail();
     }
   }
+  for (const address of addresses) {
+    openInstance(address);
+  }
+  started = true;
 
-  // Сбой — когда поиск идти не может; пустой список при живых сокетах сбоем не является.
   let requeries = 0;
   let timer: NodeJS.Timeout | null = null;
   const scheduleRequery = (): void => {
@@ -200,7 +213,10 @@ export function startDiscovery(options: DiscoveryOptions = {}): Discovery {
           // Сбой сокета придёт своим обработчиком ошибки.
         }
       }
-      scheduleRequery();
+      // Все сокеты отказали — повторять запрос некому.
+      if (alive.size > 0) {
+        scheduleRequery();
+      }
     }, pause);
     // Таймер поиска не держит процесс живым.
     timer.unref();
@@ -209,6 +225,7 @@ export function startDiscovery(options: DiscoveryOptions = {}): Discovery {
     scheduleRequery();
   }
 
+  // Сбой — когда поиск идти не может; пустой список при живых сокетах сбоем не является.
   const failure = (): DiscoveryState['failure'] => {
     if (addresses.length === 0) {
       return 'noNetwork';
@@ -229,8 +246,7 @@ export function startDiscovery(options: DiscoveryOptions = {}): Discovery {
       return { scanners, failure: failure() };
     },
     addressOf(id) {
-      const index = records.findIndex((_, position) => idOf(position) === id);
-      const record = records[index];
+      const record = records.find((_, position) => idOf(position) === id);
       if (record?.hasAdf !== true) {
         return null;
       }
@@ -246,11 +262,7 @@ export function startDiscovery(options: DiscoveryOptions = {}): Discovery {
         clearTimeout(timer);
       }
       for (const instance of alive) {
-        try {
-          instance.destroy();
-        } catch {
-          // Остальные сокеты всё равно должны быть закрыты.
-        }
+        destroyQuietly(instance);
       }
       alive.clear();
     },

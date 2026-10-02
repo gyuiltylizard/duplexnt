@@ -5,6 +5,9 @@
 
 export const DEVICE_PATH_MAX_LENGTH = 512;
 
+/** Базовый путь eSCL по умолчанию: его называет спецификация, и так его объявляет ET-3850. */
+export const DEFAULT_BASE_PATH = '/eSCL';
+
 /** Коллекция заданий под базовым путём. */
 export const SCAN_JOBS_SEGMENT = 'ScanJobs';
 

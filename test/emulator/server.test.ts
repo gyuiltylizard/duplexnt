@@ -213,6 +213,17 @@ describe('эмулятор сканера: задание', () => {
     expect(emulator.jobs()[1]).toEqual({ path: job, state: 'Aborted', imagesCompleted: 0 });
   });
 
+  it('после DELETE идущего задания устройство ещё занято: оно гонит остаток пачки', async () => {
+    const emulator = await startTestEmulator({ scenario: { busyAfterCancelMs: 60 } });
+    await send(emulator, 'DELETE', await createJob(emulator));
+
+    expect((await send(emulator, 'POST', JOBS, SETTINGS)).status).toBe(503);
+    // Статус при этом уже показывает покой — как на устройстве (журнал M1, U1).
+    expect((await send(emulator, 'GET', STATUS)).body.toString('utf8')).toContain('>Idle<');
+    await delay(80);
+    expect((await send(emulator, 'POST', JOBS, SETTINGS)).status).toBe(201);
+  });
+
   it('после DELETE идущего задания лоток пуст: остаток пачки ушёл через тракт', async () => {
     const emulator = await startTestEmulator({ scenario: { sheets: 3 } });
     const first = await createJob(emulator);

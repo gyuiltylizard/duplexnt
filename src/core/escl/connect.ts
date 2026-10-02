@@ -1,19 +1,20 @@
 import { fail, ok, type Result } from '@shared';
 import { parseCapabilities, type ScannerCapabilities } from './capabilities';
-import { normalizeBasePath } from './device-path';
+import { DEFAULT_BASE_PATH, normalizeBasePath } from './device-path';
 import { scanOptionsOf, type ScanOptions } from './scan-settings';
 import {
   createTransport,
   type ScannerProfile,
   type ScannerTransport,
   type TransportLimits,
+  type UnreachableReason,
 } from './transport';
+import type { BadResponseReason } from './xml';
 
 // Подключение по адресу (план M1, U11, KTD-8, KTD-39): введённый адрес превращается в проверенный
 // профиль сканера. Профиль создаётся только после того, как устройство отдало capabilities и они
 // годятся: есть автоподача, JPEG и хотя бы один вариант каждого параметра.
 
-export const DEFAULT_BASE_PATH = '/eSCL';
 const DEFAULT_PORT = { https: 443, http: 80 } as const;
 
 const ADDRESS_MAX_LENGTH = 1024;
@@ -115,11 +116,15 @@ export interface Connector {
 
 // Ответ `200`, который не разобрался как XML, — это чужая страница (веб-интерфейс роутера), а не
 // испорченный ответ сканера.
-const NOT_XML_REASONS = new Set(['malformed', 'doctype', 'notUtf8']);
+const NOT_XML_REASONS: ReadonlySet<unknown> = new Set<BadResponseReason>([
+  'malformed',
+  'doctype',
+  'notUtf8',
+]);
 
 // Переход на HTTP — только при отказе соединения и сбое рукопожатия. Таймаут сюда не входит:
 // молчащий адрес по HTTP тоже промолчит, а пользователь прождёт вдвое дольше (KTD-8).
-const FALLBACK_REASONS = new Set(['refused', 'tls']);
+const FALLBACK_REASONS: ReadonlySet<unknown> = new Set<UnreachableReason>(['refused', 'tls']);
 
 export function createConnector(options: ConnectorOptions = {}): Connector {
   const create = options.createTransport ?? createTransport;
@@ -156,7 +161,7 @@ export function createConnector(options: ConnectorOptions = {}): Connector {
       const capabilities = parseCapabilities(response.value.body);
       if (!capabilities.ok) {
         const { code, details } = capabilities.error;
-        return code === 'scannerBadResponse' && NOT_XML_REASONS.has(String(details?.reason))
+        return code === 'scannerBadResponse' && NOT_XML_REASONS.has(details?.reason)
           ? fail('notEsclScanner')
           : capabilities;
       }
@@ -189,7 +194,7 @@ export function createConnector(options: ConnectorOptions = {}): Connector {
       return first;
     }
     const { code, details } = first.error;
-    if (code !== 'scannerUnreachable' || !FALLBACK_REASONS.has(String(details?.reason))) {
+    if (code !== 'scannerUnreachable' || !FALLBACK_REASONS.has(details?.reason)) {
       return first;
     }
     // Порт, названный пользователем, сохраняется; не названный — по умолчанию для HTTP.

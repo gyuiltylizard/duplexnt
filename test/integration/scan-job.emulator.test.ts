@@ -53,17 +53,26 @@ async function setup(scenario: Partial<Scenario>, overrides: Partial<ScanJobRequ
     await writeStreamAtomic(join(directory, `page-${index}.jpg`), body);
   };
 
-  const run = () =>
+  const run = (extra: Partial<ScanJobRequest> = {}) =>
     runScanJob({
       transport,
       basePath: emulator.basePath,
       settings: SETTINGS,
       sink,
       ...overrides,
-      limits: { ...FAST, ...overrides.limits },
+      ...extra,
+      limits: { ...FAST, ...overrides.limits, ...extra.limits },
     });
   const files = async (): Promise<string[]> => (await readdir(directory)).sort();
   return { emulator, directory, run, files };
+}
+
+/** Ждёт состояния эмулятора, а не времени: под нагрузкой фиксированная пауза промахивается. */
+async function until(condition: () => boolean): Promise<void> {
+  for (let attempt = 0; attempt < 1000 && !condition(); attempt += 1) {
+    await delay(5);
+  }
+  expect(condition()).toBe(true);
 }
 
 async function reportOf(job: ReturnType<typeof runScanJob>) {
@@ -171,7 +180,8 @@ describe('задание против эмулятора: занятость и 
     const phases: string[] = [];
     const { run } = await setup(
       { sheets: 2, busyPosts: 3 },
-      { onPhase: (phase) => phases.push(phase) },
+      // Потолок здесь не предмет проверки: три повтора обязаны уложиться и на медленной машине.
+      { onPhase: (phase) => phases.push(phase), limits: { busyCeilingMs: 5000 } },
     );
 
     const report = await reportOf(run());
@@ -227,11 +237,14 @@ describe('задание против эмулятора: занятость и 
       { sheets: 5, fault: { sheet: 2, kind: 'stall' } },
       { signal: controller.signal, limits: { pageIdleTimeoutMs: 5000 } },
     );
-    setTimeout(() => {
-      controller.abort();
-    }, 150);
 
-    const report = await reportOf(run());
+    const running = run();
+    // Вторая страница начата и молчит: первая к этому моменту записана целиком.
+    await until(
+      () => emulator.requests().filter((it) => it.endsWith('/NextDocument 200')).length === 2,
+    );
+    controller.abort();
+    const report = await reportOf(running);
 
     expect(report.end).toEqual({ kind: 'canceled' });
     expect(report.pages).toBe(1);
@@ -288,7 +301,7 @@ describe('задание против эмулятора: обрыв', () => {
   it('тишина дольше таймаута', async () => {
     const { report, error } = await interrupted(
       { sheets: 3, fault: { sheet: 2, kind: 'stall' } },
-      { pageIdleTimeoutMs: 100 },
+      { pageIdleTimeoutMs: 200 },
     );
 
     expect(report.pages).toBe(1);
@@ -376,11 +389,7 @@ describe('задание против эмулятора: закрытие', () 
     emulator.clearJam();
 
     const second = await reportOf(
-      runScanJob({
-        transport: createTransportFor(emulator),
-        basePath: emulator.basePath,
-        settings: SETTINGS,
-        limits: FAST,
+      run({
         sink: async ({ index, body }) => {
           await writeStreamAtomic(join(directory, `resumed-${index}.jpg`), body);
         },
@@ -394,17 +403,3 @@ describe('задание против эмулятора: закрытие', () 
     expect(resumed.equals(pageFixture(3))).toBe(true);
   });
 });
-
-function createTransportFor(emulator: Awaited<ReturnType<typeof startTestEmulator>>) {
-  const transport = createTransport({
-    scheme: emulator.scheme,
-    host: emulator.host,
-    port: emulator.port,
-    basePath: emulator.basePath,
-    fingerprint: emulator.fingerprint,
-  });
-  onTestFinished(() => {
-    transport.close();
-  });
-  return transport;
-}

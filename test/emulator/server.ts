@@ -3,8 +3,8 @@ import { readdirSync } from 'node:fs';
 import * as http from 'node:http';
 import * as https from 'node:https';
 import type { AddressInfo } from 'node:net';
-import { fixturePath, readFixture } from '../support/fixtures.ts';
-import { createSelfSignedCert, type SelfSignedCert } from '../support/self-signed-cert.ts';
+import { ET_3850, fixturePath, readFixture } from '../support/fixtures.ts';
+import { createSelfSignedCert } from '../support/self-signed-cert.ts';
 import { scenarioOf, type Scenario } from './scenarios.ts';
 
 // Эмулятор сканера eSCL (план M1, U9): устройство для тестов и ручного смоука без бумаги.
@@ -16,10 +16,10 @@ import { scenarioOf, type Scenario } from './scenarios.ts';
 // файлы напрямую Node, без сборки.
 
 const DEVICE_DIRS = {
-  'et-3850': ['escl', 'et-3850'],
+  'et-3850': ET_3850,
   'no-adf': ['escl', 'no-adf'],
 } as const;
-const PAGES_DIR = ['escl', 'et-3850', 'pages'] as const;
+const PAGES_DIR = [...ET_3850, 'pages'] as const;
 
 const NS_SCAN = 'http://schemas.hp.com/imaging/escl/2011/05/03';
 const NS_PWG = 'http://www.pwg.org/schemas/2010/12/sm';
@@ -62,9 +62,6 @@ export interface EmulatorOptions {
   readonly port?: number;
   /** HTTP вместо HTTPS — для проверки перехода на HTTP (KTD-8). */
   readonly http?: boolean;
-  readonly basePath?: string;
-  /** Готовый сертификат вместо свежего. */
-  readonly cert?: SelfSignedCert;
   /** Вызывается, когда обмен закончен, — для журнала в консоли. */
   readonly onExchange?: (exchange: EmulatorExchange) => void;
 }
@@ -91,20 +88,27 @@ export interface Emulator {
   close(): Promise<void>;
 }
 
+// Страницы читаются с диска один раз на процесс: тесты поднимают эмулятор десятками.
+let cachedPages: Buffer[] | null = null;
+
 function pageFixtures(): Buffer[] {
+  if (cachedPages !== null) {
+    return cachedPages;
+  }
   const names = readdirSync(fixturePath(...PAGES_DIR))
     .filter((name) => /^page-\d+\.jpg$/.test(name))
     .sort();
   if (names.length === 0) {
     throw new Error('страниц-фикстур нет: node scripts/generate-page-fixtures.ts');
   }
-  return names.map((name) => readFixture(...PAGES_DIR, name));
+  cachedPages = names.map((name) => readFixture(...PAGES_DIR, name));
+  return cachedPages;
 }
 
 export async function startEmulator(options: EmulatorOptions = {}): Promise<Emulator> {
-  const basePath = options.basePath ?? '/eSCL';
+  const basePath = '/eSCL';
   const collection = `${basePath}/ScanJobs`;
-  const cert = options.http === true ? null : (options.cert ?? createSelfSignedCert());
+  const cert = options.http === true ? null : createSelfSignedCert();
   const scheme = cert === null ? 'http' : 'https';
   const pages = pageFixtures();
 
@@ -226,9 +230,12 @@ export async function startEmulator(options: EmulatorOptions = {}): Promise<Emul
     const exchange: EmulatorExchange = { method, path, status: null };
     exchanges.push(exchange);
     const { socket } = request;
-    socket.once('close', () => {
-      options.onExchange?.(exchange);
-    });
+    const { onExchange } = options;
+    if (onExchange !== undefined) {
+      socket.once('close', () => {
+        onExchange(exchange);
+      });
+    }
 
     // Заголовки — в том виде, в каком их шлёт ET-3850: часть имён прописными, каждое соединение
     // закрывается после ответа.
@@ -380,6 +387,11 @@ export async function startEmulator(options: EmulatorOptions = {}): Promise<Emul
           socket.off('close', done);
           resolve();
         };
+        // Соединение уже закрыто — ни `drain`, ни `close` больше не придут.
+        if (socket.destroyed) {
+          resolve();
+          return;
+        }
         response.once('drain', done);
         socket.once('close', done);
       });

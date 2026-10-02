@@ -30,7 +30,14 @@ interface FakeInstance {
   fail(): void;
 }
 
-function fakeBackend(options: { failOpen?: readonly string[] } = {}) {
+interface FakeOptions {
+  /** Интерфейсы, на которых сокет не открывается. */
+  readonly failOpen?: readonly string[];
+  /** Интерфейсы, на которых сокет открылся, а поиск начать не удалось. */
+  readonly failBrowse?: readonly string[];
+}
+
+function fakeBackend(options: FakeOptions = {}) {
   const instances: FakeInstance[] = [];
   const backend: MdnsBackend = {
     open(address, onError) {
@@ -51,6 +58,9 @@ function fakeBackend(options: { failOpen?: readonly string[] } = {}) {
       instances.push(fake);
       const instance: MdnsInstance = {
         browse(type, onUp) {
+          if (options.failBrowse?.includes(address) === true) {
+            throw Object.assign(new Error('membership'), { code: 'EADDRNOTAVAIL' });
+          }
           fake.browsed.push(type);
           listeners.set(type, onUp);
         },
@@ -67,7 +77,7 @@ function fakeBackend(options: { failOpen?: readonly string[] } = {}) {
   return { backend, instances };
 }
 
-function start(interfaces: string[], options: { failOpen?: readonly string[] } = {}) {
+function start(interfaces: string[], options: FakeOptions = {}) {
   const fake = fakeBackend(options);
   let changes = 0;
   const discovery = startDiscovery({
@@ -220,6 +230,16 @@ describe('обнаружение: повтор запроса', () => {
     expect(instances.map((it) => it.requeried)).toEqual([0, 1]);
   });
 
+  it('когда отказали все сокеты, повтор прекращается', () => {
+    vi.useFakeTimers();
+    const { instances } = start(['192.0.2.2']);
+
+    instances[0]?.fail();
+    vi.advanceTimersByTime(1000);
+
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it('без единого открытого сокета таймер не заводится', () => {
     vi.useFakeTimers();
     start([]);
@@ -230,6 +250,27 @@ describe('обнаружение: повтор запроса', () => {
 });
 
 describe('обнаружение: сбой и остановка', () => {
+  it('сокет открылся, а поиск начать не удалось — сокет закрыт, а не брошен открытым', () => {
+    const { discovery, instances, changes } = start(['192.0.2.2', '198.51.100.2'], {
+      failBrowse: ['192.0.2.2'],
+    });
+
+    expect(instances.map((it) => it.destroyed)).toEqual([1, 0]);
+    expect(discovery.state().failure).toBeNull();
+    // Пока поиск собирается, вызывающий не уведомляется: объекта поиска у него ещё нет.
+    expect(changes()).toBe(0);
+
+    discovery.stop();
+    expect(instances.map((it) => it.destroyed)).toEqual([1, 1]);
+  });
+
+  it('поиск не начался ни на одном интерфейсе — сбой сокета', () => {
+    const { discovery, instances } = start(['192.0.2.2'], { failBrowse: ['192.0.2.2'] });
+
+    expect(discovery.state().failure).toBe('socket');
+    expect(instances[0]?.destroyed).toBe(1);
+  });
+
   it('ошибка сокета отличается от пустого результата', () => {
     const searching = start(['192.0.2.2']);
     const broken = start(['192.0.2.2'], { failOpen: ['192.0.2.2'] });

@@ -127,7 +127,7 @@ export const SCENARIOS = {
   'location-missing': { location: 'missing' },
 } as const satisfies Record<string, Partial<Scenario>>;
 
-export type ScenarioName = keyof typeof SCENARIOS;
+type ScenarioName = keyof typeof SCENARIOS;
 
 export const isScenarioName = (name: string): name is ScenarioName =>
   Object.hasOwn(SCENARIOS, name);

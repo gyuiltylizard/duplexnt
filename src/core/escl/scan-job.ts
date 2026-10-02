@@ -136,6 +136,11 @@ const interrupted = (error: DomainError): ScanJobEnd => ({
   reason: { source: 'device', error },
 });
 
+const sinkFailed = (error: unknown): ScanJobEnd => ({
+  kind: 'interrupted',
+  reason: { source: 'sink', error },
+});
+
 const SOI = [0xff, 0xd8] as const;
 const EOI = [0xff, 0xd9] as const;
 
@@ -240,7 +245,7 @@ export async function runScanJob(request: ScanJobRequest): Promise<Result<ScanJo
       return fail('scanParamsRejected');
     }
     if (status !== 503) {
-      return fail('scannerBadResponse', { reason: 'status', status });
+      return { ok: false, error: badResponse('status', status) };
     }
     if (busySince === null) {
       busySince = clock.now();
@@ -335,11 +340,6 @@ export async function runScanJob(request: ScanJobRequest): Promise<Result<ScanJo
       await clock.sleep(limits.retryDelayMs, signal);
     }
   }
-
-  const sinkFailed = (error: unknown): ScanJobEnd => ({
-    kind: 'interrupted',
-    reason: { source: 'sink', error },
-  });
 
   let end: ScanJobEnd;
   try {
