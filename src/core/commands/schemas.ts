@@ -1,5 +1,15 @@
 import { z } from 'zod';
-import { fail, ok, PROBE_TOKEN_MAX_LENGTH, type ProbeRequest, type Result } from '@shared';
+import {
+  fail,
+  ok,
+  PROBE_TOKEN_MAX_LENGTH,
+  type ConnectScannerRequest,
+  type ProbeRequest,
+  type Result,
+} from '@shared';
+import { DEVICE_PATH_MAX_LENGTH } from '../escl/device-path';
+import { scanParamsSchema } from '../escl/scan-settings';
+import { SESSION_ID } from '../storage/layout';
 
 // Схемы входа команд моста (ADR 0005; план M1, KTD-39). Строгие и без приведения типов: лишнее
 // поле и «почти подходящий» тип — отказ, а не молчаливая починка. Типы запросов объявлены в
@@ -8,6 +18,35 @@ import { fail, ok, PROBE_TOKEN_MAX_LENGTH, type ProbeRequest, type Result } from
 export const probeRequestSchema = z.strictObject({
   token: z.string().min(1).max(PROBE_TOKEN_MAX_LENGTH),
 }) satisfies z.ZodType<ProbeRequest>;
+
+/** Команда без входа: принимается только `undefined`. */
+export const noRequestSchema = z.undefined();
+
+const ADDRESS_MAX_LENGTH = 1024;
+/** Идентификатор найденного устройства: метка поиска и номер записи (./../discovery/mdns.ts). */
+const DISCOVERED_ID = /^[0-9a-f]{8}-\d{1,4}$/;
+
+// Хост здесь — только строка с потолком; имя, IP-литерал и отсутствие userinfo проверяет разбор
+// адреса (`parseScannerAddress`), путь — проверка KTD-7. Схема не берёт на себя их правила.
+export const connectScannerRequestSchema = z.discriminatedUnion('kind', [
+  z.strictObject({
+    kind: z.literal('address'),
+    host: z.string().min(1).max(ADDRESS_MAX_LENGTH),
+    scheme: z.enum(['https', 'http']).nullable(),
+    port: z.number().int().min(1).max(65535).nullable(),
+    basePath: z.string().max(DEVICE_PATH_MAX_LENGTH).nullable(),
+  }),
+  z.strictObject({
+    kind: z.literal('discovered'),
+    id: z.string().regex(DISCOVERED_ID),
+  }),
+]) satisfies z.ZodType<ConnectScannerRequest>;
+
+export { scanParamsSchema };
+
+/** Ключ страницы — заякоренный шаблон только для строки (план M1, KTD-38). */
+export const pageKeySchema = z.string().regex(/^p\d{2}-s\d{2}-\d{4}$/);
+export const sessionIdSchema = z.string().regex(SESSION_ID);
 
 // Мусор на входе — доменный отказ, а не исключение. В детали идут только путь поля и код
 // нарушения: само значение не возвращается, оно может оказаться большим или чужим.

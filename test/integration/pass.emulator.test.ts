@@ -160,6 +160,17 @@ describe('служба прохода: проход против эмулято�
     expect(seqs).toEqual([...new Set(seqs)].sort((left, right) => left - right));
   });
 
+  it('снимок не несёт абсолютных путей и адресов заданий (KTD-39)', async () => {
+    const { emulator, root, service } = await setup({ sheets: 2 });
+    unwrap(await service.startPass());
+
+    const text = JSON.stringify(service.snapshot());
+
+    expect(text).not.toContain(root.replaceAll('\\', '\\\\'));
+    expect(text).not.toContain('ScanJobs');
+    expect(text).not.toContain(emulator.jobs()[0]?.path ?? '<job>');
+  });
+
   it('AE3: после завершённого прохода перезапуск показывает те же страницы', async () => {
     const { root, service, restart } = await setup({ sheets: 3 });
     unwrap(await service.startPass());

@@ -4,6 +4,7 @@ import {
   ok,
   type DomainError,
   type PassProgress,
+  type PassReport,
   type Result,
   type ScanParams,
   type ScannerInfo,
@@ -61,18 +62,6 @@ export interface PassServiceOptions extends SessionStoreOptions {
   readonly clock?: ScanJobClock;
   /** Снимок изменился; `seq` — его номер. */
   readonly onChange?: (seq: number) => void;
-}
-
-export interface PassReport {
-  readonly end:
-    | 'completed'
-    /** Проход прерван; страницы на месте, причина — в `error`. */
-    | 'interrupted'
-    /** «Остановить»: страницы этого запуска удалены. */
-    | 'stopped';
-  /** Страниц, принятых этим запуском и оставшихся на диске. */
-  readonly pages: number;
-  readonly error: DomainError | null;
 }
 
 export interface PassService {

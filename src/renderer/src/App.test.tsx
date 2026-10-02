@@ -18,12 +18,13 @@ const VALUE: ProbeResult = {
 
 const RESULT = ok(VALUE);
 
+// Технический экран M0 зовёт только пробу; остальные команды моста приходят в интерфейс с U20.
 function stubApi(probe: Api['probe']): void {
-  const api: Api = {
+  const api = {
     probe,
     onSnapshotChanged: () => () => undefined,
     onDiscoveryChanged: () => () => undefined,
-  };
+  } as unknown as Api;
   vi.stubGlobal('api', api);
 }
 

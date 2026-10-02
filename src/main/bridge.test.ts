@@ -22,7 +22,14 @@ function setup() {
     },
   };
 
-  const handlers = { probe: vi.fn(() => Promise.resolve(RESULT)) } satisfies BridgeHandlers;
+  // Проверяется обёртка регистрации, а не команды: всем, кроме пробы, — заглушка.
+  const unused = (): Promise<never> => Promise.reject(new Error('команда не ожидалась'));
+  const handlers = {
+    ...(Object.fromEntries(
+      Object.keys(BRIDGE_CHANNELS).map((command) => [command, unused]),
+    ) as unknown as BridgeHandlers),
+    probe: vi.fn(() => Promise.resolve(RESULT)),
+  } satisfies BridgeHandlers;
   registerBridge(ipcMain, window, handlers);
 
   const probe = listeners.get(BRIDGE_CHANNELS.probe);

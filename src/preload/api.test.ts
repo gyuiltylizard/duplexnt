@@ -29,7 +29,11 @@ describe('buildApi', () => {
   it('наружу — только функции команд и подписок, без ipcRenderer и сквозного канала', () => {
     const { api } = setup();
 
-    expect(Object.keys(api).sort()).toEqual(['onDiscoveryChanged', 'onSnapshotChanged', 'probe']);
+    const commands = Object.keys(BRIDGE_CHANNELS);
+    const events = Object.keys(BRIDGE_EVENT_CHANNELS).map(
+      (name) => `on${name.charAt(0).toUpperCase()}${name.slice(1)}`,
+    );
+    expect(Object.keys(api).sort()).toEqual([...commands, ...events].sort());
     expect(Object.values(api).every((member) => typeof member === 'function')).toBe(true);
   });
 
@@ -38,6 +42,16 @@ describe('buildApi', () => {
 
     await expect(api.probe({ token: 't' })).resolves.toBe('ответ');
     expect(invoke).toHaveBeenCalledExactlyOnceWith(BRIDGE_CHANNELS.probe, { token: 't' });
+  });
+
+  it('команда без входа уходит с `undefined`: мост отклонит любой аргумент', async () => {
+    const { api, invoke } = setup();
+
+    await api.startPass();
+    await api.openDataFolder();
+
+    expect(invoke).toHaveBeenNthCalledWith(1, BRIDGE_CHANNELS.startPass, undefined);
+    expect(invoke).toHaveBeenNthCalledWith(2, BRIDGE_CHANNELS.openDataFolder, undefined);
   });
 
   it('подписчик получает данные события с номером, а не объект события', () => {

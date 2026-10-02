@@ -100,6 +100,19 @@ export interface PassProgress {
   readonly pages: number;
 }
 
+/** Итог запуска прохода — ответ команды `startPass`; состояние после него — в снимке. */
+export interface PassReport {
+  readonly end:
+    | 'completed'
+    /** Проход прерван; страницы на месте, причина — в `error`. */
+    | 'interrupted'
+    /** «Остановить»: страницы этого запуска удалены. */
+    | 'stopped';
+  /** Страниц, принятых этим запуском и оставшихся на диске. */
+  readonly pages: number;
+  readonly error: DomainError | null;
+}
+
 export interface Snapshot {
   /** Номер снимка: событие несёт его, интерфейс берёт позднейший. */
   readonly seq: number;

@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { COLOR_MODES, PAPER_SIZES, type PassState, type ScanParams } from '@shared';
+import type { PassState } from '@shared';
+import { scanParamsSchema } from '../escl/scan-settings';
 import {
   MAX_PAGE_INDEX,
   MAX_PASS_NUMBER,
@@ -20,12 +21,6 @@ import { parseVersioned, type VersionedParse } from './versioned-file';
 // - «страница потеряна» — запись есть, файла нет: это видно по диску, а не по журналу.
 
 export const JOURNAL_VERSION = 1;
-
-export const scanParamsSchema = z.strictObject({
-  colorMode: z.enum(COLOR_MODES),
-  resolution: z.number().int().min(1).max(9600),
-  paperSize: z.enum(PAPER_SIZES),
-}) satisfies z.ZodType<ScanParams>;
 
 const segmentSchema = z.strictObject({
   number: z.number().int().min(1).max(MAX_SEGMENT_NUMBER),

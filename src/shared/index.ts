@@ -6,6 +6,9 @@ export const APP_NAME = "Duplexn't";
 export {
   BRIDGE_CHANNELS,
   BRIDGE_EVENT_CHANNELS,
+  PAGE_IMAGE_SCHEME,
+  PAGE_IMAGE_VIEWS,
+  pageImageUrl,
   PROBE_TOKEN_MAX_LENGTH,
   type Api,
   type BridgeCommand,
@@ -15,7 +18,10 @@ export {
   type BridgeHandlers,
   type CommandResult,
   type CommandsApi,
+  type ConnectScannerRequest,
   type EventsApi,
+  type NoRequest,
+  type PageImageView,
   type ProbeRequest,
   type ProbeResult,
   type Unsubscribe,
@@ -35,6 +41,7 @@ export {
 export type {
   PageSnapshot,
   PassProgress,
+  PassReport,
   PassSnapshot,
   PassState,
   ScannerInfo,

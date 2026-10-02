@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import {
+  COLOR_MODES,
   fail,
   ok,
   PAPER_SIZES,
@@ -15,6 +17,13 @@ import { NS_PWG, NS_SCAN } from './xml';
 // Запрос собирается шаблоном; каждое значение перед подстановкой сверяется с вариантами,
 // выведенными из capabilities, — одним и тем же списком пользуются интерфейс и проверка.
 // Типы параметров и вариантов — в `@shared`: они идут в снимок интерфейса.
+
+/** Одна схема на журнал, настройки и вход команды моста: строгая, без приведения типов. */
+export const scanParamsSchema = z.strictObject({
+  colorMode: z.enum(COLOR_MODES),
+  resolution: z.number().int().min(1).max(9600),
+  paperSize: z.enum(PAPER_SIZES),
+}) satisfies z.ZodType<ScanParams>;
 
 // Capabilities — необходимый вход, но не истина: ET-3850 перечисляет `BlackAndWhite1` и отвечает
 // `409` на задание с ним и JPEG (журнал M1, U1). Страницы приложение берёт только в JPEG,

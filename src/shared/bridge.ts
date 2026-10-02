@@ -12,9 +12,38 @@
 // - в типах контракта — только то, что есть в ES-библиотеке и переживает structured clone:
 //   `Uint8Array` и `ArrayBuffer` можно; `Buffer`, `Blob` и потоки нельзя.
 
+import type { DiscoveryState } from './discovery';
 import type { Result } from './errors';
+import type { ScanParams } from './scan-params';
+import type { PassReport, Snapshot } from './snapshot';
 
 export const PROBE_TOKEN_MAX_LENGTH = 64;
+
+/** Схема изображений страниц (ADR 0005; план M1, KTD-38): `<схема>://<сессия>/<вид>/<ключ>`. */
+export const PAGE_IMAGE_SCHEME = 'duplexnt-page';
+export const PAGE_IMAGE_VIEWS = ['page', 'thumb'] as const;
+export type PageImageView = (typeof PAGE_IMAGE_VIEWS)[number];
+
+/** Адрес изображения страницы текущей сессии — единственный способ его собрать в интерфейсе. */
+export function pageImageUrl(sessionId: string, view: PageImageView, key: string): string {
+  return `${PAGE_IMAGE_SCHEME}://${sessionId}/${view}/${key}`;
+}
+
+/**
+ * Подключение сканера (план M1, R1, KTD-39): адрес, введённый вручную, с полями «Дополнительно»,
+ * либо непрозрачный идентификатор найденного устройства. `null` в поле — «не названо»: схема —
+ * сначала HTTPS, порт — по умолчанию для схемы, путь — `/eSCL`.
+ */
+export type ConnectScannerRequest =
+  | {
+      readonly kind: 'address';
+      /** Хост, хост с портом или полный URL — как ввёл пользователь. */
+      readonly host: string;
+      readonly scheme: 'https' | 'http' | null;
+      readonly port: number | null;
+      readonly basePath: string | null;
+    }
+  | { readonly kind: 'discovered'; readonly id: string };
 
 export interface ProbeRequest {
   readonly token: string;
@@ -44,22 +73,51 @@ export interface ProbeResult {
 // Команды: renderer → main.
 // ---------------------------------------------------------------------------------------------
 
+/** Команда без входа: любое значение, кроме `undefined`, отклоняется (KTD-39). */
+export type NoRequest = undefined;
+
 export interface BridgeCommands {
   readonly probe: { readonly request: ProbeRequest; readonly value: ProbeResult };
+  /** Снимок состояния — единственный источник правды для экрана (KTD-23). */
+  readonly getSnapshot: { readonly request: NoRequest; readonly value: Snapshot };
+  readonly startDiscovery: { readonly request: NoRequest; readonly value: DiscoveryState };
+  readonly getDiscovery: { readonly request: NoRequest; readonly value: DiscoveryState };
+  readonly stopDiscovery: { readonly request: NoRequest; readonly value: undefined };
+  /** Исход — в снимке: сканер подключён, запомнен, параметры сверены. */
+  readonly connectScanner: { readonly request: ConnectScannerRequest; readonly value: undefined };
+  readonly setScanParams: { readonly request: ScanParams; readonly value: undefined };
+  /** Новый проход или досканирование; возвращается, когда задание закрыто. */
+  readonly startPass: { readonly request: NoRequest; readonly value: PassReport };
+  readonly stopPass: { readonly request: NoRequest; readonly value: undefined };
+  readonly acceptPass: { readonly request: NoRequest; readonly value: undefined };
+  readonly closeSession: { readonly request: NoRequest; readonly value: undefined };
+  /** Открывает каталог данных в проводнике — при несовместимых данных. Каталог знает main. */
+  readonly openDataFolder: { readonly request: NoRequest; readonly value: undefined };
 }
 
 export type BridgeCommand = keyof BridgeCommands;
 
 export const BRIDGE_CHANNELS = {
   probe: 'duplexnt:probe',
+  getSnapshot: 'duplexnt:get-snapshot',
+  startDiscovery: 'duplexnt:start-discovery',
+  getDiscovery: 'duplexnt:get-discovery',
+  stopDiscovery: 'duplexnt:stop-discovery',
+  connectScanner: 'duplexnt:connect-scanner',
+  setScanParams: 'duplexnt:set-scan-params',
+  startPass: 'duplexnt:start-pass',
+  stopPass: 'duplexnt:stop-pass',
+  acceptPass: 'duplexnt:accept-pass',
+  closeSession: 'duplexnt:close-session',
+  openDataFolder: 'duplexnt:open-data-folder',
 } as const satisfies Record<BridgeCommand, string>;
 
 export type CommandResult<K extends BridgeCommand> = Result<BridgeCommands[K]['value']>;
 
 export type CommandsApi = {
-  readonly [K in BridgeCommand]: (
-    request: BridgeCommands[K]['request'],
-  ) => Promise<CommandResult<K>>;
+  readonly [K in BridgeCommand]: BridgeCommands[K]['request'] extends NoRequest
+    ? () => Promise<CommandResult<K>>
+    : (request: BridgeCommands[K]['request']) => Promise<CommandResult<K>>;
 };
 
 /** Обработчики на стороне main: вход ещё не проверен, поэтому `unknown`. */

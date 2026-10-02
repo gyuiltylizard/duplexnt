@@ -49,6 +49,17 @@ function subscription<K extends BridgeEvent>(ipcRenderer: PreloadIpcRenderer, na
 export function buildApi(ipcRenderer: PreloadIpcRenderer): Api {
   return {
     probe: command(ipcRenderer, 'probe'),
+    getSnapshot: command(ipcRenderer, 'getSnapshot'),
+    startDiscovery: command(ipcRenderer, 'startDiscovery'),
+    getDiscovery: command(ipcRenderer, 'getDiscovery'),
+    stopDiscovery: command(ipcRenderer, 'stopDiscovery'),
+    connectScanner: command(ipcRenderer, 'connectScanner'),
+    setScanParams: command(ipcRenderer, 'setScanParams'),
+    startPass: command(ipcRenderer, 'startPass'),
+    stopPass: command(ipcRenderer, 'stopPass'),
+    acceptPass: command(ipcRenderer, 'acceptPass'),
+    closeSession: command(ipcRenderer, 'closeSession'),
+    openDataFolder: command(ipcRenderer, 'openDataFolder'),
     onSnapshotChanged: subscription(ipcRenderer, 'snapshotChanged'),
     onDiscoveryChanged: subscription(ipcRenderer, 'discoveryChanged'),
   };

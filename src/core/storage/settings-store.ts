@@ -8,8 +8,7 @@ import {
   type StartupNotice,
 } from '@shared';
 import { probeScanner, type ConnectedScanner, type ConnectorOptions } from '../escl/connect';
-import { resolveScanParams } from '../escl/scan-settings';
-import { scanParamsSchema } from './journal';
+import { resolveScanParams, scanParamsSchema } from '../escl/scan-settings';
 import { layoutOf } from './layout';
 import { ioOf, serialQueue, storageFailure, type StorageOptions } from './storage-fs';
 import {
