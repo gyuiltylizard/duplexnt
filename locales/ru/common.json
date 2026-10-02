@@ -15,7 +15,8 @@
     "scannerBadResponse": "сканер прислал ответ, который не удалось разобрать",
     "notEsclScanner": "по этому адресу отвечает не сканер с поддержкой eSCL",
     "scannerNoAdf": "у этого сканера нет автоподатчика",
-    "scannerNoJpeg": "этот сканер не отдаёт страницы в формате JPEG"
+    "scannerNoJpeg": "этот сканер не отдаёт страницы в формате JPEG",
+    "scanParamsUnsupported": "сканер не поддерживает выбранные параметры сканирования"
   },
   "versions": {
     "electron": "Electron",

@@ -12,6 +12,8 @@ export const ERROR_CODES = [
   'notEsclScanner',
   'scannerNoAdf',
   'scannerNoJpeg',
+  // Параметр сканирования, которого нет у устройства; какой именно — в деталях (`field`).
+  'scanParamsUnsupported',
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];
