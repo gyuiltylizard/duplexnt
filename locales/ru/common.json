@@ -22,7 +22,14 @@
     "scannerBusy": "сканер занят",
     "scanParamsRejected": "сканер отклонил параметры сканирования",
     "scanFeedFailed": "сканер прервал подачу бумаги",
-    "canceled": "операция отменена"
+    "canceled": "операция отменена",
+    "storageFull": "на диске не хватает места",
+    "storageFailed": "не удалось записать данные на диск",
+    "storageIncompatible": "данные сохранены более новой версией приложения",
+    "sessionConflict": "сейчас это действие недоступно",
+    "sessionCloseFailed": "не удалось закрыть пачку: файлы заняты другой программой",
+    "pageUnavailable": "страница недоступна",
+    "thumbnailFailed": "не удалось построить миниатюру страницы"
   },
   "versions": {
     "electron": "Electron",

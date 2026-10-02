@@ -23,6 +23,14 @@ export {
 
 export type { DiscoveredScanner, DiscoveryState } from './discovery';
 
+export type {
+  PageSnapshot,
+  PassSnapshot,
+  PassState,
+  SessionSnapshot,
+  StartupNotice,
+} from './snapshot';
+
 export {
   ERROR_CODES,
   fail,
