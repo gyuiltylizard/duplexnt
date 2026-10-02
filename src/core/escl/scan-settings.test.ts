@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { ET_3850, readFixture, readFixtureText } from '../../../test/support/fixtures';
 import { parseCapabilities, type ScannerCapabilities } from './capabilities';
-import { buildScanSettings, scanOptionsOf, type ScanParams } from './scan-settings';
+import {
+  buildScanSettings,
+  DEFAULT_SCAN_PARAMS,
+  resolveScanParams,
+  scanOptionsOf,
+  type ScanParams,
+} from './scan-settings';
 import { descendantOf, NS_PWG, NS_SCAN, parseXml, textOf, uintOf, type XmlElement } from './xml';
 
 function et3850(): ScannerCapabilities {
@@ -78,6 +84,45 @@ describe('scanOptionsOf: варианты для интерфейса из capab
     const other = withAdf({ colorModes: ['RGB24'], resolutions: [150, 400] });
 
     expect(scanOptionsOf(other)).toMatchObject({ colorModes: ['RGB24'], resolutions: [150, 400] });
+  });
+});
+
+describe('resolveScanParams: запомненные параметры против устройства (KTD-13)', () => {
+  const options = scanOptionsOf(CAPS);
+
+  it('без запомненных — значения по умолчанию: серый, 300 dpi, A4', () => {
+    expect(resolveScanParams(null, options)).toEqual(DEFAULT_SCAN_PARAMS);
+    expect(DEFAULT_SCAN_PARAMS).toEqual(A4_GRAY_300);
+  });
+
+  it('запомненное, которое у устройства есть, остаётся', () => {
+    const remembered: ScanParams = { colorMode: 'RGB24', resolution: 600, paperSize: 'Letter' };
+
+    expect(resolveScanParams(remembered, options)).toEqual(remembered);
+  });
+
+  it('запомненное разрешение, которого нет у устройства, заменяется значением по умолчанию', () => {
+    const remembered: ScanParams = { colorMode: 'RGB24', resolution: 1200, paperSize: 'A4' };
+
+    expect(resolveScanParams(remembered, options)).toEqual({ ...remembered, resolution: 300 });
+  });
+
+  it('нет у устройства и значения по умолчанию — берётся первое доступное', () => {
+    const narrow = scanOptionsOf(
+      withAdf({ colorModes: ['RGB24'], resolutions: [150, 600], maxHeight: 3400 }),
+    );
+
+    expect(resolveScanParams({ ...A4_GRAY_300, resolution: 1200 }, narrow)).toEqual({
+      colorMode: 'RGB24',
+      resolution: 150,
+      paperSize: 'Letter',
+    });
+  });
+
+  it('значение, пришедшее мимо типов, заменяется', () => {
+    const garbage = { colorMode: 'BlackAndWhite1', resolution: '300', paperSize: 'A3' };
+
+    expect(resolveScanParams(garbage as unknown as ScanParams, options)).toEqual(A4_GRAY_300);
   });
 });
 

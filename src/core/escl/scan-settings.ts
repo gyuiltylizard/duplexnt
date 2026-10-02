@@ -34,6 +34,34 @@ export function scanOptionsOf(capabilities: ScannerCapabilities): ScanOptions {
   };
 }
 
+/** Параметры по умолчанию (план M1, KTD-13): оттенки серого, 300 dpi, A4. */
+export const DEFAULT_SCAN_PARAMS: ScanParams = {
+  colorMode: 'Grayscale8',
+  resolution: 300,
+  paperSize: 'A4',
+};
+
+const pick = <T>(remembered: T | undefined, fallback: T, available: readonly T[]): T =>
+  remembered !== undefined && available.includes(remembered)
+    ? remembered
+    : available.includes(fallback)
+      ? fallback
+      : (available[0] ?? fallback);
+
+/**
+ * Параметры для устройства (KTD-13): запомненный параметр, которого у устройства нет, заменяется
+ * значением по умолчанию, а если нет и его — первым доступным. Без запомненных — то же правило
+ * от значений по умолчанию.
+ */
+export function resolveScanParams(remembered: ScanParams | null, options: ScanOptions): ScanParams {
+  const fallback = DEFAULT_SCAN_PARAMS;
+  return {
+    colorMode: pick(remembered?.colorMode, fallback.colorMode, options.colorModes),
+    resolution: pick(remembered?.resolution, fallback.resolution, options.resolutions),
+    paperSize: pick(remembered?.paperSize, fallback.paperSize, options.paperSizes),
+  };
+}
+
 // Версию протокола клиент повторяет за устройством; значение — данные устройства и в запрос идёт
 // только в виде «число.число». Проверено на ET-3850 (2.9); остальное — запасной ход.
 const VERSION = /^\d{1,2}\.\d{1,2}$/;

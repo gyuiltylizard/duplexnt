@@ -126,63 +126,79 @@ const NOT_XML_REASONS: ReadonlySet<unknown> = new Set<BadResponseReason>([
 // молчащий адрес по HTTP тоже промолчит, а пользователь прождёт вдвое дольше (KTD-8).
 const FALLBACK_REASONS: ReadonlySet<unknown> = new Set<UnreachableReason>(['refused', 'tls']);
 
+/**
+ * Проба профиля: capabilities запрашиваются временным транспортом с теми же инвариантами, что у
+ * рабочего, и он уничтожается при любом исходе (KTD-39): рабочий транспорт создаёт под профиль
+ * служба прохода. Схема не меняется: её выбирает подключение, а не проба.
+ *
+ * Профиль без отпечатка — первое подключение: отпечаток берётся из ответа. Профиль с отпечатком —
+ * запомненный сканер: другой сертификат на адресе транспорт отклоняет сам (KTD-40).
+ */
+export async function probeScanner(
+  profile: ScannerProfile,
+  options: ConnectorOptions = {},
+  signal?: AbortSignal,
+): Promise<Result<ConnectedScanner>> {
+  const transport = (options.createTransport ?? createTransport)(profile, options.limits);
+  try {
+    const response = await transport.request({
+      method: 'GET',
+      path: `${profile.basePath}/ScannerCapabilities`,
+      ...(signal === undefined ? {} : { signal }),
+    });
+    if (!response.ok) {
+      return response;
+    }
+    if (response.value.status !== 200) {
+      return fail('notEsclScanner', { status: response.value.status });
+    }
+
+    const capabilities = parseCapabilities(response.value.body);
+    if (!capabilities.ok) {
+      const { code, details } = capabilities.error;
+      return code === 'scannerBadResponse' && NOT_XML_REASONS.has(details?.reason)
+        ? fail('notEsclScanner')
+        : capabilities;
+    }
+    const scanOptions = scanOptionsOf(capabilities.value);
+    // JPEG заявлен, но ни одного цветового режима, который устройство отдаёт в JPEG, нет.
+    if (scanOptions.colorModes.length === 0) {
+      return fail('scannerNoJpeg');
+    }
+    if (scanOptions.paperSizes.length === 0) {
+      return fail('scanParamsUnsupported', { field: 'paperSize' });
+    }
+    return ok({
+      // Отпечаток — из ответа (KTD-40); дальше его сверяет транспорт профиля.
+      profile: { ...profile, fingerprint: response.value.fingerprint },
+      capabilities: capabilities.value,
+      options: scanOptions,
+    });
+  } finally {
+    transport.close();
+  }
+}
+
 export function createConnector(options: ConnectorOptions = {}): Connector {
-  const create = options.createTransport ?? createTransport;
   let current: AbortController | null = null;
 
-  // Проба идёт временным транспортом с теми же инвариантами, что у рабочего, и уничтожается при
-  // любом исходе (KTD-39): рабочий транспорт создаёт под профиль служба прохода.
-  async function probe(
+  // Подключение — явное действие пользователя: проба идёт без запомненного отпечатка.
+  const probe = (
     address: ScannerAddress,
     scheme: Scheme,
     signal: AbortSignal,
-  ): Promise<Result<ConnectedScanner>> {
-    const profile: ScannerProfile = {
-      scheme,
-      host: address.host,
-      port: address.port ?? DEFAULT_PORT[scheme],
-      basePath: address.basePath,
-      fingerprint: null,
-    };
-    const transport = create(profile, options.limits);
-    try {
-      const response = await transport.request({
-        method: 'GET',
-        path: `${address.basePath}/ScannerCapabilities`,
-        signal,
-      });
-      if (!response.ok) {
-        return response;
-      }
-      if (response.value.status !== 200) {
-        return fail('notEsclScanner', { status: response.value.status });
-      }
-
-      const capabilities = parseCapabilities(response.value.body);
-      if (!capabilities.ok) {
-        const { code, details } = capabilities.error;
-        return code === 'scannerBadResponse' && NOT_XML_REASONS.has(details?.reason)
-          ? fail('notEsclScanner')
-          : capabilities;
-      }
-      const scanOptions = scanOptionsOf(capabilities.value);
-      // JPEG заявлен, но ни одного цветового режима, который устройство отдаёт в JPEG, нет.
-      if (scanOptions.colorModes.length === 0) {
-        return fail('scannerNoJpeg');
-      }
-      if (scanOptions.paperSizes.length === 0) {
-        return fail('scanParamsUnsupported', { field: 'paperSize' });
-      }
-      return ok({
-        // Отпечаток — из первого ответа (KTD-40); дальше его сверяет транспорт профиля.
-        profile: { ...profile, fingerprint: response.value.fingerprint },
-        capabilities: capabilities.value,
-        options: scanOptions,
-      });
-    } finally {
-      transport.close();
-    }
-  }
+  ): Promise<Result<ConnectedScanner>> =>
+    probeScanner(
+      {
+        scheme,
+        host: address.host,
+        port: address.port ?? DEFAULT_PORT[scheme],
+        basePath: address.basePath,
+        fingerprint: null,
+      },
+      options,
+      signal,
+    );
 
   async function attempt(
     address: ScannerAddress,
