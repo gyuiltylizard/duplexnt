@@ -19,6 +19,7 @@
     "test:all": "npm run test && npm run test:integration",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "emulator": "node test/emulator/cli.ts",
     "tokens:sync": "node scripts/sync-design-tokens.ts && prettier --write src/renderer/src/styles/tokens.css",
     "prepare": "husky"
   },
