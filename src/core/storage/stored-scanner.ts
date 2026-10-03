@@ -3,6 +3,7 @@ import type { ScannerInfo } from '@shared';
 import type { ConnectedScanner } from '../escl/connect';
 import { normalizeBasePath } from '../escl/device-path';
 import type { ScannerProfile } from '../escl/transport';
+import { displayText } from '../escl/xml';
 
 // Сканер, как он записан на диск: в настройках (запомненный), в журнале (сканер прохода) и в
 // файле незакрытых заданий. Одна форма на все три места — и одно правило «то же ли это устройство».
@@ -42,9 +43,12 @@ export function storedScannerOf({ profile, capabilities }: ConnectedScanner): St
   };
 }
 
-/** Сканер, как его показывает интерфейс: имя и адрес, без отпечатка и UUID. */
+/**
+ * Сканер, как его показывает интерфейс: имя и адрес, без отпечатка и UUID. Имя проходит
+ * чистку показа и здесь: записанное на диск прежней версией могло её не проходить.
+ */
 export function scannerInfoOf({ name, scheme, host, port }: StoredScanner): ScannerInfo {
-  return { name, scheme, host, port };
+  return { name: displayText(name), scheme, host, port };
 }
 
 export function profileOf(scanner: StoredScanner): ScannerProfile {

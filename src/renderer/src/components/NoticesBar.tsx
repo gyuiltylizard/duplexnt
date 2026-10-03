@@ -17,7 +17,7 @@ export function NoticesBar({ notices, onDismiss }: NoticesBarProps): ReactNode {
     return null;
   }
   return (
-    <div className="notices" aria-label={t('notices.label')}>
+    <div className="notices" role="region" aria-label={t('notices.label')}>
       {notices.map((notice) => (
         <div key={notice} className="notice notice--info" role="status">
           <p className="notice__text">{t(`notices.${notice}`)}</p>

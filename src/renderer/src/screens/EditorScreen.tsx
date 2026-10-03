@@ -13,6 +13,7 @@ import {
   type DomainError,
   type PageSnapshot,
   type PassSnapshot,
+  type ScannerInfo,
   type SessionSnapshot,
   type Snapshot,
 } from '@shared';
@@ -20,7 +21,7 @@ import type { TFunction } from 'i18next';
 import { useImageLoad } from '../components/useImageLoad';
 import { NewScanModal } from '../modals/NewScanModal';
 import { errorText, errorTextInline } from '../state/error-text';
-import { hostOf } from '../state/scanner-address';
+import { addressOf } from '../state/scanner-address';
 import './editor-screen.css';
 
 // Экран `editor` (план M1, U24; UI_SPEC раздел 6 в объёме KTD-25; handoff U19, S16–S19, S21):
@@ -36,7 +37,7 @@ export interface EditorScreenProps {
   /** «Досканировать остаток»: тот же `startPass` — сессия есть, ядро продолжит проход. */
   readonly onResume: () => void;
   /** Ссылка «подключите заново» в отказе досканирования (S17). */
-  readonly onOpenDevice: (initialHost?: string) => void;
+  readonly onOpenDevice: (initialAddress?: string) => void;
 }
 
 /** Коды отказа досканирования, которые лечатся повторным подключением (S17). */
@@ -117,7 +118,11 @@ const Thumb = memo(function Thumb({
       role="option"
       aria-selected={selected}
       aria-busy={!page.lost && image.state === 'loading' ? true : undefined}
-      aria-label={page.lost ? t('thumb.lostLabel', { number: page.number }) : undefined}
+      aria-label={
+        page.lost
+          ? t('thumb.lostLabel', { number: page.number })
+          : t('thumb.alt', { number: page.number })
+      }
       title={!page.lost && image.state === 'failed' ? t('thumb.failedTitle') : undefined}
       tabIndex={selected ? 0 : -1}
       data-key={page.key}
@@ -233,10 +238,13 @@ export function EditorScreen({
   const railKeyDown = (event: KeyboardEvent<HTMLElement>): void => {
     let target: number;
     switch (event.key) {
+      // ↑/↓ — синонимы ←/→: скринридеры ждут вертикальных стрелок у listbox.
       case 'ArrowLeft':
+      case 'ArrowUp':
         target = selectedIndex - 1;
         break;
       case 'ArrowRight':
+      case 'ArrowDown':
         target = selectedIndex + 1;
         break;
       case 'Home':
@@ -273,7 +281,13 @@ export function EditorScreen({
 
   const reconnect = (): void => {
     const { scanner } = snapshot;
-    onOpenDevice(scanner.kind === 'none' ? undefined : hostOf(scanner.scanner));
+    onOpenDevice(scanner.kind === 'none' ? undefined : addressOf(scanner.scanner));
+  };
+
+  // «Подключите заново» из текста плашки — с адресом сканера прохода: именно его и надо
+  // вернуть, чтобы досканировать (KTD-27).
+  const reconnectPassScanner = (scanner: ScannerInfo | null): void => {
+    onOpenDevice(scanner === null ? undefined : addressOf(scanner));
   };
 
   // Плашка S17: последний проход прерван. Ноль страниц проход иметь не может — сессии бы не было.
@@ -281,13 +295,29 @@ export function EditorScreen({
   let banner: ReactNode = null;
   if (last?.state === 'interrupted') {
     const lastNumber = last.pages[last.pages.length - 1]?.number ?? 0;
-    const text = snapshot.canResume
-      ? t('editor.interrupted.text', { next: lastNumber + 1 })
-      : last.paramsKnown
-        ? t('editor.interrupted.textOtherScanner', {
-            name: last.scanner?.name ?? last.scanner?.host ?? '',
-          })
-        : t('editor.interrupted.textParamsUnknown');
+    // Текст без кнопки досканирования объясняет почему; при «подключён не тот (или никакой)»
+    // ссылка ведёт в `device` с адресом сканера прохода — иначе из `editor` в модалку не
+    // попасть и проход не досканировать (тупик, ревью сессии 9; текст ссылки — Copy).
+    const text: ReactNode = snapshot.canResume ? (
+      t('editor.interrupted.text', { next: lastNumber + 1 })
+    ) : last.paramsKnown ? (
+      <>
+        {t('editor.interrupted.textOtherScanner', {
+          name: last.scanner?.name ?? last.scanner?.host ?? '',
+        })}{' '}
+        <button
+          type="button"
+          className="btn btn--link"
+          onClick={() => {
+            reconnectPassScanner(last.scanner);
+          }}
+        >
+          {t('editor.interrupted.reconnect')}
+        </button>
+      </>
+    ) : (
+      t('editor.interrupted.textParamsUnknown')
+    );
     // Свежий отказ «Оставить как есть» виден и под висящим отказом досканирования:
     // показывается последнее действие, а не первое.
     let failureLine: ReactNode = null;
@@ -385,6 +415,7 @@ export function EditorScreen({
               <ul
                 className="thumbs"
                 role="listbox"
+                aria-orientation="horizontal"
                 aria-label={t('editor.pass.title', { number: pass.number })}
               >
                 {pass.pages.map((page) => (
@@ -413,7 +444,7 @@ export function EditorScreen({
               type="button"
               className="btn btn--icon"
               aria-label={t('editor.prev')}
-              disabled={selectedIndex === 0}
+              aria-disabled={selectedIndex === 0 ? true : undefined}
               onClick={() => {
                 selectAt(selectedIndex - 1, false);
               }}
@@ -427,7 +458,7 @@ export function EditorScreen({
               type="button"
               className="btn btn--icon"
               aria-label={t('editor.next')}
-              disabled={selectedIndex >= total - 1}
+              aria-disabled={selectedIndex >= total - 1 ? true : undefined}
               onClick={() => {
                 selectAt(selectedIndex + 1, false);
               }}

@@ -267,4 +267,51 @@ describe('DeviceModal', () => {
     fireEvent.keyDown(connect, { key: 'Tab' });
     expect(document.activeElement?.getAttribute('role')).toBe('option');
   });
+
+  it('S4: открытие с адресом — поле заполнено, «Дополнительно» раскрыто, уходит kind address', async () => {
+    const { connectScanner } = stubApi({ scanners: [], failure: null });
+    render(<DeviceModal initialAddress="192.0.2.10:443" onClose={vi.fn()} onConnected={vi.fn()} />);
+    await flush();
+
+    const input = screen.getByPlaceholderText('адрес сканера в сети');
+    expect((input as HTMLInputElement).value).toBe('192.0.2.10:443');
+    expect(
+      screen.getByRole('button', { name: /Дополнительно/ }).getAttribute('aria-expanded'),
+    ).toBe('true');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Подключить' }));
+    expect(connectScanner).toHaveBeenCalledExactlyOnceWith({
+      kind: 'address',
+      host: '192.0.2.10:443',
+      scheme: null,
+      port: null,
+      basePath: null,
+    });
+  });
+
+  it('S11: «canceled» не даёт текста, кнопка снова «Подключить»', async () => {
+    const { resolveConnect } = stubApi();
+    render(<DeviceModal onClose={vi.fn()} onConnected={vi.fn()} />);
+    await flush();
+
+    fireEvent.click(await screen.findByText('ScanPro 200'));
+    fireEvent.click(screen.getByRole('button', { name: 'Подключить' }));
+    resolveConnect(0, fail('canceled'));
+    await flush();
+
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Подключить' })).toBeDefined();
+  });
+
+  it('S9: найденный без имени — «Сканер без имени», адрес и порт видны', async () => {
+    stubApi({
+      scanners: [{ id: 'abcdef01-3', name: null, address: '192.0.2.12', port: 8080, hasAdf: true }],
+      failure: null,
+    });
+    render(<DeviceModal onClose={vi.fn()} onConnected={vi.fn()} />);
+    await flush();
+
+    expect(screen.getByText('Сканер без имени')).toBeDefined();
+    expect(screen.getByText('192.0.2.12:8080')).toBeDefined();
+  });
 });

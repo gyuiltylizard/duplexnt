@@ -85,7 +85,7 @@ export interface BridgeCommands {
   readonly stopDiscovery: { readonly request: NoRequest; readonly value: undefined };
   /** Исход — в снимке: сканер подключён, запомнен, параметры сверены. */
   readonly connectScanner: { readonly request: ConnectScannerRequest; readonly value: undefined };
-  /** Отмена идущего подключения — закрытие модалки `device`; оно вернёт `canceled`. */
+  /** Отмена подключения — закрытие модалки `device`; если оно ещё идёт, вернёт `canceled`. */
   readonly cancelConnect: { readonly request: NoRequest; readonly value: undefined };
   /** Проверка запомненного сканера ещё раз — кнопка «Повторить» (U19, S3); исход — в снимке. */
   readonly recheckScanner: { readonly request: NoRequest; readonly value: undefined };

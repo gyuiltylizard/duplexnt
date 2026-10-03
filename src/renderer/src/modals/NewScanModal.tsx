@@ -71,7 +71,13 @@ export function NewScanModal({ pageCount, onClose }: NewScanModalProps): ReactNo
   }
 
   return (
-    <Modal labelledBy="newscan-title" small className="newscan-modal">
+    <Modal
+      labelledBy="newscan-title"
+      describedBy="newscan-text"
+      small
+      busy={deleting}
+      className="newscan-modal"
+    >
       <header className="modal__header">
         <div className="modal__kicker">
           <span className="dot dot--warning" aria-hidden="true" />
@@ -80,7 +86,9 @@ export function NewScanModal({ pageCount, onClose }: NewScanModalProps): ReactNo
         <h2 id="newscan-title" className="modal__title">
           {t('newScan.title')}
         </h2>
-        <p className="modal__subtitle">{t('newScan.text', { count: pageCount })}</p>
+        <p id="newscan-text" className="modal__subtitle">
+          {t('newScan.text', { count: pageCount })}
+        </p>
       </header>
       <footer className="modal__footer">
         {status}

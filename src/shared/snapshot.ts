@@ -64,8 +64,11 @@ export interface ScannerInfo {
 export type ScannerState =
   /** Сканер ещё не подключали. */
   | { readonly kind: 'none' }
-  /** Запомненный сканер проверяется запросом capabilities. */
-  | { readonly kind: 'checking'; readonly scanner: ScannerInfo }
+  /**
+   * Запомненный сканер проверяется запросом capabilities. `params` — запомненные параметры:
+   * ряды настройки недоступны, но показывают их, а не пустоту и не дефолты (S2–S4).
+   */
+  | { readonly kind: 'checking'; readonly scanner: ScannerInfo; readonly params: ScanParams }
   /** Подключён; варианты параметров — из его capabilities, параметры — выбранные (KTD-13). */
   | {
       readonly kind: 'ready';
@@ -74,7 +77,12 @@ export type ScannerState =
       readonly params: ScanParams;
     }
   /** Запомненный сканер молчит, занят или отвечает невнятно; причина — кодом. */
-  | { readonly kind: 'unreachable'; readonly scanner: ScannerInfo; readonly error: DomainError }
+  | {
+      readonly kind: 'unreachable';
+      readonly scanner: ScannerInfo;
+      readonly error: DomainError;
+      readonly params: ScanParams;
+    }
   /**
    * По адресу отвечает другое устройство: чужой сертификат, не сканер, сканер без автоподачи;
    * `error` — `null`, когда это исправный сканер с другим UUID.
@@ -83,6 +91,7 @@ export type ScannerState =
       readonly kind: 'otherDevice';
       readonly scanner: ScannerInfo;
       readonly error: DomainError | null;
+      readonly params: ScanParams;
     };
 
 /** Идущий проход — то, что показывает экран `scan`. */

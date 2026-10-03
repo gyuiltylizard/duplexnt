@@ -197,4 +197,21 @@ describe('displayText', () => {
     expect(displayText(null)).toBeNull();
     expect(displayText(' \t\n ')).toBeNull();
   });
+
+  it('выбрасывает форматирующие символы: би-ди управление и невидимые', () => {
+    // RLO без закрытия перевернул бы хвост фразы, куда имя подставлено (ревью сессии 9).
+    expect(displayText('EPSON‮ET-3850')).toBe('EPSONET-3850');
+    expect(displayText('⁦скрытое⁩ имя​')).toBe('скрытое имя');
+    // Имя из одних невидимых — null, показ падает на адрес.
+    expect(displayText('​​﻿')).toBeNull();
+  });
+
+  it('потолок длины не режет суррогатную пару пополам', () => {
+    const emoji = '😀'; // два code unit
+    const long = emoji.repeat(130);
+    const clean = displayText(long);
+    expect(clean).not.toBeNull();
+    expect(Array.from(clean ?? '').length).toBe(128);
+    expect(clean?.endsWith(emoji)).toBe(true);
+  });
 });

@@ -6,7 +6,7 @@ import {
   type ScannerState,
   type Snapshot,
 } from '@shared';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { StrictMode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import './i18n';
@@ -180,6 +180,158 @@ describe('каркас приложения', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Сканировать листы' }));
     expect((await screen.findByRole('alert')).textContent).toContain('В лотке нет бумаги');
+  });
+
+  it('после отказа запуск доступен снова, плашка снимается следующим нажатием', async () => {
+    const startPass = vi
+      .fn()
+      .mockImplementationOnce(() => Promise.resolve(fail('scanNoPaper')))
+      .mockImplementation(() => new Promise(() => undefined));
+    stubApi(makeSnapshot({ scanner: READY }), { startPass });
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Сканировать листы' }));
+    expect((await screen.findByRole('alert')).textContent).toContain('В лотке нет бумаги');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Сканировать листы' }));
+    expect(startPass).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('S15: отказ закрытия сегмента после «Остановить» — тостом', async () => {
+    stubApi(
+      makeSnapshot({
+        pass: { phase: 'scanning', resumed: false, params: PARAMS, pages: 2 },
+        session: {
+          id: 'session.x',
+          passes: [
+            { number: 1, state: 'running', paramsKnown: true, scanner: null, pages: pages(2) },
+          ],
+        },
+      }),
+      { stopPass: vi.fn(() => Promise.resolve(fail('sessionCloseFailed'))) },
+    );
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Остановить' }));
+    expect((await screen.findByText(/Не удалось убрать страницы/)).textContent).toContain(
+      'Проход оставлен прерванным',
+    );
+  });
+
+  it('другой отказ «Остановить» тоста не даёт', async () => {
+    stubApi(
+      makeSnapshot({
+        pass: { phase: 'scanning', resumed: false, params: PARAMS, pages: 2 },
+        session: {
+          id: 'session.x',
+          passes: [
+            { number: 1, state: 'running', paramsKnown: true, scanner: null, pages: pages(2) },
+          ],
+        },
+      }),
+      {
+        stopPass: vi.fn(() =>
+          Promise.resolve(fail('sessionConflict', { reason: 'noRunningPass' })),
+        ),
+      },
+    );
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Остановить' }));
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    expect(screen.queryByText(/Не удалось убрать страницы/)).toBeNull();
+  });
+
+  it('pagesLost с потерянной страницей в ленте — плашка видна', async () => {
+    stubApi(
+      makeSnapshot({
+        notices: ['pagesLost'],
+        session: {
+          id: 'session.x',
+          passes: [
+            {
+              number: 1,
+              state: 'completed',
+              paramsKnown: true,
+              scanner: null,
+              pages: [
+                { key: 'p01-s01-0001', number: 1, lost: false },
+                { key: 'p01-s01-0002', number: 2, lost: true },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+    render(<App />);
+
+    expect(await screen.findByText(/не нашлось файлов/)).toBeDefined();
+  });
+
+  it('отказ досканирования не переезжает плашкой на setup после «Нового сканирования»', async () => {
+    const interrupted = makeSnapshot({
+      scanner: READY,
+      canResume: true,
+      canAccept: true,
+      session: {
+        id: 'session.x',
+        passes: [
+          { number: 1, state: 'interrupted', paramsKnown: true, scanner: null, pages: pages(3) },
+        ],
+      },
+    });
+    let current = interrupted;
+    let notify: (payload: { seq: number }) => void = () => undefined;
+    stubApi(interrupted, {
+      getSnapshot: vi.fn(() => Promise.resolve(ok(current))),
+      onSnapshotChanged: vi.fn((listener: (payload: { seq: number }) => void) => {
+        notify = listener;
+        return () => undefined;
+      }),
+      startPass: vi.fn(() => Promise.resolve(fail('scanNoPaper'))),
+      closeSession: vi.fn(() => Promise.resolve(ok(undefined))),
+    });
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Досканировать остаток' }));
+    expect((await screen.findByRole('alert')).textContent).toContain('Досканировать не удалось');
+
+    const banner = screen.getByRole('region', { name: /Проход прервался/ });
+    fireEvent.click(within(banner).getByRole('button', { name: 'Новое сканирование' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Удалить и начать заново' }));
+
+    // Сессия закрыта — приходит снимок без неё, экран уходит на `setup`.
+    current = makeSnapshot({ seq: 2, scanner: READY });
+    act(() => {
+      notify({ seq: 2 });
+    });
+
+    expect((await screen.findByRole('heading', { level: 1 })).textContent).toBe(
+      'Сканируем листы из автоподатчика',
+    );
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByText(/В лотке нет бумаги/)).toBeNull();
+  });
+
+  it('после закрытия device, открытой из плашки отказа, фокус не теряется', async () => {
+    stubApi(makeSnapshot({ scanner: READY }), {
+      startPass: vi.fn(() => Promise.resolve(fail('scannerCertificateChanged'))),
+    });
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Сканировать листы' }));
+    const reopen = await screen.findByRole('button', { name: 'Подключить заново' });
+    reopen.focus();
+    fireEvent.click(reopen);
+    expect(await screen.findByRole('dialog')).toBeDefined();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Отмена' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    // Кнопка-опенер исчезла вместе с плашкой — фокус ушёл на первый элемент экрана, не на body.
+    expect(document.activeElement).not.toBe(document.body);
   });
 
   it('двойной клик по запуску шлёт команду один раз', async () => {

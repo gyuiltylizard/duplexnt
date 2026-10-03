@@ -842,6 +842,23 @@ describe('служба прохода: проверка запомненного
     expect(scanner.kind).toBe('ready');
     expect(scanner.kind === 'ready' ? scanner.scanner.port : null).toBe(other.port);
   });
+
+  it('проверка во время прохода и при рабочем подключении — ничего не делает', async () => {
+    // Ревью сессии 9: проверка не трогает ни идущий проход, ни рабочее подключение —
+    // второе обращение к занятому устройству увело бы слот в «не отвечает» посреди прохода.
+    const { service, snapshots } = await setup({ sheets: 3, pageDelayMs: 150 });
+
+    const pass = service.startPass();
+    await until(() => snapshots.some((it) => it.pass?.phase === 'scanning'));
+    await service.checkRememberedScanner();
+    expect(service.snapshot().scanner.kind).toBe('ready');
+    unwrap(await pass);
+    expect(snapshots.every((it) => it.scanner.kind === 'ready')).toBe(true);
+
+    // Вне прохода при «готов» — тоже no-op: неудачная проверка потеряла бы подключение.
+    await service.checkRememberedScanner();
+    expect(service.snapshot().scanner.kind).toBe('ready');
+  });
 });
 
 describe('служба прохода: незакрытые задания', () => {

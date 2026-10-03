@@ -117,6 +117,7 @@ describe('SetupScreen', () => {
       kind: 'unreachable',
       scanner: INFO,
       error: { code: 'scannerUnreachable', details: { reason: 'timeout' } },
+      params: PARAMS,
     });
 
     expect(screen.getByRole('status').textContent).toBe('не отвечает');
@@ -132,7 +133,7 @@ describe('SetupScreen', () => {
 
   it('проверяется: «Сменить» недоступна, ряды показывают значения, но недоступны', () => {
     stubApi();
-    renderSetup({ kind: 'checking', scanner: INFO });
+    renderSetup({ kind: 'checking', scanner: INFO, params: PARAMS });
 
     expect(screen.getByRole('status').textContent).toBe('проверяем…');
     const change = screen.getByRole('button', { name: 'Сменить' });
@@ -142,7 +143,12 @@ describe('SetupScreen', () => {
 
   it('по адресу другое устройство: «Подключить заново» открывает модалку с адресом', () => {
     stubApi();
-    const { onOpenDevice } = renderSetup({ kind: 'otherDevice', scanner: INFO, error: null });
+    const { onOpenDevice } = renderSetup({
+      kind: 'otherDevice',
+      scanner: INFO,
+      error: null,
+      params: PARAMS,
+    });
 
     const status = screen.getByRole('status');
     expect(status.textContent).toBe('по адресу другое устройство');
@@ -200,5 +206,43 @@ describe('SetupScreen', () => {
     expect(alert.textContent).toContain('Проход не начался: по адресу сканера теперь отвечает');
     fireEvent.click(within(alert).getByRole('button', { name: 'Подключить заново' }));
     expect(onOpenDevice).toHaveBeenCalledExactlyOnceWith('192.0.2.10:443');
+  });
+
+  it('недоступные ряды показывают запомненные параметры из снимка, а не дефолты', () => {
+    stubApi();
+    renderSetup({
+      kind: 'unreachable',
+      scanner: INFO,
+      error: { code: 'scannerUnreachable' },
+      params: { colorMode: 'RGB24', resolution: 600, paperSize: 'Letter' },
+    });
+
+    expect(screen.getByRole('radio', { name: '600 dpi' })).toBeDefined();
+    expect(screen.getByRole('radio', { name: 'Цвет' })).toBeDefined();
+    expect(screen.queryByRole('radio', { name: '300 dpi' })).toBeNull();
+  });
+
+  it('после потери сканера ряды держат варианты последнего подтверждения', () => {
+    stubApi();
+    const { view } = renderSetup(READY);
+
+    view.rerender(
+      <SetupScreen
+        snapshot={makeSnapshot({
+          kind: 'unreachable',
+          scanner: INFO,
+          error: { code: 'scannerUnreachable' },
+          params: PARAMS,
+        })}
+        launchFailure={null}
+        onStart={vi.fn()}
+        onOpenDevice={vi.fn()}
+      />,
+    );
+
+    // Полный набор capabilities прошлого подтверждения, недоступный.
+    const group = screen.getByRole('radiogroup', { name: 'Разрешение' });
+    expect(within(group).getAllByRole('radio').length).toBe(4);
+    expect(group.getAttribute('aria-disabled')).toBe('true');
   });
 });

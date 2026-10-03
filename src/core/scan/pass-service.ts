@@ -23,7 +23,7 @@ import {
   type ScanJobEnd,
   type ScanJobLimits,
 } from '../escl/scan-job';
-import { buildScanSettings, resolveScanParams } from '../escl/scan-settings';
+import { buildScanSettings, DEFAULT_SCAN_PARAMS, resolveScanParams } from '../escl/scan-settings';
 import { parseStatus } from '../escl/status';
 import { createTransport, type ScannerTransport } from '../escl/transport';
 import type { PassOrigin } from '../storage/journal';
@@ -174,12 +174,19 @@ export function createPassService(
     options.onChange?.(seq);
   };
 
+  // Запомненные параметры — для рядов настройки, пока сканер не подтверждён (S2–S4).
+  const rememberedParams = (): ScanParams => settings.get().params ?? DEFAULT_SCAN_PARAMS;
+
   const scannerState = (): ScannerState => {
     switch (scanner.kind) {
       case 'none':
         return { kind: 'none' };
       case 'checking':
-        return { kind: 'checking', scanner: scannerInfoOf(scanner.stored) };
+        return {
+          kind: 'checking',
+          scanner: scannerInfoOf(scanner.stored),
+          params: rememberedParams(),
+        };
       case 'ready':
         return {
           kind: 'ready',
@@ -192,12 +199,14 @@ export function createPassService(
           kind: 'unreachable',
           scanner: scannerInfoOf(scanner.stored),
           error: scanner.error,
+          params: rememberedParams(),
         };
       case 'otherDevice':
         return {
           kind: 'otherDevice',
           scanner: scannerInfoOf(scanner.stored),
           error: scanner.error,
+          params: rememberedParams(),
         };
     }
   };
@@ -457,6 +466,11 @@ export function createPassService(
     snapshot,
 
     async checkRememberedScanner(signal) {
+      // Повторная проверка не трогает ни идущий проход, ни рабочее подключение (ревью
+      // сессии 9): интерфейс зовёт её только из «не отвечает», но ядро проверяет само.
+      if (run !== null || scanner.kind === 'ready') {
+        return;
+      }
       const remembered = settings.get().scanner;
       if (remembered === null) {
         return;

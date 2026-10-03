@@ -27,19 +27,19 @@ const DEFAULT_PORTS: Record<Scheme, string> = { https: '443', http: '80' };
 
 export interface DeviceModalProps {
   /** Адрес запомненного сканера — «Подключить заново» открывает модалку с ним (S4). */
-  readonly initialHost?: string | undefined;
+  readonly initialAddress?: string | undefined;
   readonly onClose: () => void;
   /** Подключение прошло: подпись для тоста «Сканер подключён: …». */
   readonly onConnected: (label: string) => void;
 }
 
-export function DeviceModal({ initialHost, onClose, onConnected }: DeviceModalProps): ReactNode {
+export function DeviceModal({ initialAddress, onClose, onConnected }: DeviceModalProps): ReactNode {
   const { t } = useTranslation();
   const [discovery, setDiscovery] = useState<DiscoveryState | null>(null);
   const [waited, setWaited] = useState(false);
   const [selected, setSelected] = useState<DiscoveredScanner | null>(null);
-  const [host, setHost] = useState(initialHost ?? '');
-  const [advancedOpen, setAdvancedOpen] = useState(initialHost !== undefined);
+  const [host, setHost] = useState(initialAddress ?? '');
+  const [advancedOpen, setAdvancedOpen] = useState(initialAddress !== undefined);
   // `null` — схема не названа: уходит в ядро как есть, то разберёт её из хоста-URL; на
   // сегментах при этом подсвечен HTTPS — дефолт ядра.
   const [scheme, setScheme] = useState<Scheme | null>(null);
@@ -51,6 +51,7 @@ export function DeviceModal({ initialHost, onClose, onConnected }: DeviceModalPr
   const cancelRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
+    // Сброс — для повторного монтирования StrictMode: cleanup первого прогона взвёл флаг.
     closed.current = false;
     // Ответы на запросы списка применяются только от последнего запроса: событие поиска могло
     // обогнать ответ на `startDiscovery`, и старый список не должен затирать новый.
@@ -278,7 +279,7 @@ export function DeviceModal({ initialHost, onClose, onConnected }: DeviceModalPr
                 className={
                   scanner.hasAdf
                     ? 'device-item__status'
-                    : 'device-item__status device-item__status--noAdf'
+                    : 'device-item__status device-item__status--no-adf'
                 }
               >
                 {scanner.hasAdf ? t('device.item.status.ready') : t('device.item.status.noAdf')}

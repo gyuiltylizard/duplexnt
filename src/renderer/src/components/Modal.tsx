@@ -11,14 +11,27 @@ const FOCUSABLE =
 export interface ModalProps {
   /** `id` заголовка — для `aria-labelledby`. */
   readonly labelledBy: string;
+  /** `id` поясняющего текста — для `aria-describedby` (подтверждения вроде S21). */
+  readonly describedBy?: string | undefined;
   readonly small?: boolean;
-  /** Подключение идёт: тело приглушено и не кликается (S10). */
+  /**
+   * Команда в полёте: на диалоге `aria-busy`, CSS приглушает `.modal__body` и снимает с него
+   * события мыши (S10); клавиатуру это не запирает. Когда недоступны обе кнопки футера,
+   * фокус держится на самом окне, чтобы Tab не ушёл под затемнение.
+   */
   readonly busy?: boolean;
   readonly className?: string;
   readonly children: ReactNode;
 }
 
-export function Modal({ labelledBy, small, busy, className, children }: ModalProps): ReactNode {
+export function Modal({
+  labelledBy,
+  describedBy,
+  small,
+  busy,
+  className,
+  children,
+}: ModalProps): ReactNode {
   const dialogRef = useRef<HTMLElement>(null);
 
   // Элемент, открывший модалку, запоминается при первом рендере: `autoFocus` React вызывает
@@ -33,9 +46,27 @@ export function Modal({ labelledBy, small, busy, className, children }: ModalPro
     return () => {
       if (opener instanceof HTMLElement && opener.isConnected) {
         opener.focus();
+        return;
       }
+      // Открывшая кнопка исчезла — например, вместе с плашкой отказа (S6, S17). Фокус не
+      // бросается на body, а идёт на первый фокусируемый элемент экрана под модалкой.
+      const fallback = [...document.querySelectorAll<HTMLElement>(FOCUSABLE)].find(
+        (element) => !dialog?.contains(element),
+      );
+      fallback?.focus();
     };
   }, [opener]);
+
+  // Обе кнопки футера могут стать недоступными разом (S21 «Удаляем…»): браузер сбросил бы
+  // фокус на body, и Tab гулял бы под затемнением.
+  useEffect(() => {
+    if (busy === true) {
+      const dialog = dialogRef.current;
+      if (dialog !== null && !dialog.contains(document.activeElement)) {
+        dialog.focus();
+      }
+    }
+  }, [busy]);
 
   const trapFocus = (event: KeyboardEvent<HTMLElement>): void => {
     if (event.key !== 'Tab') {
@@ -75,7 +106,9 @@ export function Modal({ labelledBy, small, busy, className, children }: ModalPro
         role="dialog"
         aria-modal="true"
         aria-labelledby={labelledBy}
+        aria-describedby={describedBy}
         aria-busy={busy === true ? true : undefined}
+        tabIndex={-1}
         className={classes}
         onKeyDown={trapFocus}
       >

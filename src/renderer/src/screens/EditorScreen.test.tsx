@@ -1,5 +1,5 @@
 import { fail, ok, type Api, type PassSnapshot, type Snapshot } from '@shared';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../i18n';
 import { EditorScreen } from './EditorScreen';
@@ -109,12 +109,15 @@ describe('экран editor', () => {
 
     const prev = screen.getByRole('button', { name: 'Предыдущая страница' });
     const next = screen.getByRole('button', { name: 'Следующая страница' });
-    expect(prev.hasAttribute('disabled')).toBe(true);
+    // На краю кнопка гаснет `aria-disabled`, но остаётся фокусируемой (не выбрасывает фокус).
+    expect(prev.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(prev);
+    expect(screen.getByText('1 из 2')).toBeDefined();
 
     fireEvent.click(next);
     expect(screen.getByText('2 из 2')).toBeDefined();
-    expect(next.hasAttribute('disabled')).toBe(true);
-    expect(prev.hasAttribute('disabled')).toBe(false);
+    expect(next.getAttribute('aria-disabled')).toBe('true');
+    expect(prev.getAttribute('aria-disabled')).toBeNull();
   });
 
   it('прерванный проход показывает плашку: номер последней страницы и три действия', () => {
@@ -217,6 +220,7 @@ describe('экран editor', () => {
           kind: 'unreachable',
           scanner: { name: 'ScanPro 200', scheme: 'https', host: '192.0.2.10', port: 443 },
           error: { code: 'scannerUnreachable' },
+          params: { colorMode: 'Grayscale8', resolution: 300, paperSize: 'A4' },
         },
       }),
       { resumeFailure: { code: 'scannerUnreachable' }, onOpenDevice },
@@ -270,6 +274,84 @@ describe('экран editor', () => {
     fireEvent.click(screen.getAllByRole('option')[1] as Element);
     expect(screen.getByText('СТРАНИЦА 2')).toBeDefined();
     expect(screen.getByText(/Файл этой страницы потерян/)).toBeDefined();
+  });
+
+  it('стрелки двигают фокус вместе с выбором (роуминг tabindex)', () => {
+    stubApi();
+    renderEditor(makeSnapshot([makePass({ pages: pages(3) })]));
+
+    const rail = screen.getByLabelText('Отсканированные страницы');
+    const options = screen.getAllByRole('option');
+    expect(options[0]?.getAttribute('tabindex')).toBe('0');
+    expect(options[1]?.getAttribute('tabindex')).toBe('-1');
+
+    fireEvent.keyDown(rail, { key: 'ArrowRight' });
+    expect(document.activeElement).toBe(options[1]);
+    expect(options[1]?.getAttribute('tabindex')).toBe('0');
+    expect(options[0]?.getAttribute('tabindex')).toBe('-1');
+
+    // ↑/↓ — синонимы ←/→.
+    fireEvent.keyDown(rail, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(options[2]);
+    fireEvent.keyDown(rail, { key: 'ArrowUp' });
+    expect(document.activeElement).toBe(options[1]);
+  });
+
+  it('Enter и Пробел на миниатюре выбирают её', () => {
+    stubApi();
+    renderEditor(makeSnapshot([makePass({ pages: pages(3) })]));
+
+    const options = screen.getAllByRole('option');
+    fireEvent.keyDown(options[2] as Element, { key: ' ' });
+    expect(screen.getByText('3 из 3')).toBeDefined();
+    fireEvent.keyDown(options[1] as Element, { key: 'Enter' });
+    expect(screen.getByText('2 из 3')).toBeDefined();
+  });
+
+  it('плашка прерванного прохода несёт все три действия', () => {
+    stubApi();
+    renderEditor(
+      makeSnapshot([makePass({ state: 'interrupted', pages: pages(3) })], {
+        canResume: true,
+        canAccept: true,
+      }),
+    );
+
+    const banner = screen.getByRole('region', { name: /Проход прервался/ });
+    const labels = within(banner)
+      .getAllByRole('button')
+      .map((button) => button.textContent);
+    expect(labels).toEqual(['Досканировать остаток', 'Оставить как есть', 'Новое сканирование']);
+  });
+
+  it('«подключён не тот сканер»: ссылка ведёт в device с адресом сканера прохода', () => {
+    stubApi();
+    const onOpenDevice = vi.fn();
+    renderEditor(
+      makeSnapshot(
+        [
+          makePass({
+            state: 'interrupted',
+            scanner: { name: 'ScanPro 200', scheme: 'https', host: '192.0.2.77', port: 8443 },
+            pages: pages(5),
+          }),
+        ],
+        { canAccept: true },
+      ),
+      { onOpenDevice },
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'подключите заново' }));
+    expect(onOpenDevice).toHaveBeenCalledExactlyOnceWith('192.0.2.77:8443');
+  });
+
+  it('страница, которая не открылась в превью, — текст вместо листа', () => {
+    stubApi();
+    renderEditor(makeSnapshot([makePass({ pages: pages(2) })]));
+
+    fireEvent.error(screen.getByAltText('Страница 1'));
+    expect(screen.getByText(/Страницу не удалось показать/)).toBeDefined();
+    expect(screen.getByText('СТРАНИЦА 1')).toBeDefined();
   });
 
   it('«Новое сканирование» открывает модалку; отмена ничего не шлёт', () => {

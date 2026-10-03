@@ -26,6 +26,7 @@ export interface ScanScreenProps {
   readonly onStop: () => void;
 }
 
+/** Номер идущего прохода; до `resumePass` он ещё прерванный — берётся последний; без сессии — 1. */
 function passNumber(snapshot: Snapshot): number {
   const passes = snapshot.session?.passes ?? [];
   const running = passes.find((pass) => pass.state === 'running') ?? passes[passes.length - 1];
@@ -109,13 +110,17 @@ export function ScanScreen({ snapshot, pass, onStop }: ScanScreenProps): ReactNo
   }, [stopping]);
 
   const pages = passPages(snapshot, pass);
+  // `pass.pages` — число страниц этого запуска; прежние страницы досканируемого прохода — разница.
   const prior = pages.length - pass.pages;
   const busy = pass.phase === 'busy';
 
-  // До первой страницы — «Начинаем проход…» и в фазе `scanning` тоже: задание уже принято, но
-  // «Отсканировано 0» на экране не появляется (S12 — счёт начинается с первой страницы).
+  // «Начинаем проход…» — всю фазу `starting` (и при досканировании: подача ещё не идёт, S12)
+  // и пока счёт нулевой в `scanning`: «Отсканировано 0» на экран не выходит.
   const counted = pages.length > 0 ? pages.length : pass.pages;
-  const counter = counted === 0 ? t('scan.starting') : t('scan.counter', { count: counted });
+  const counter =
+    pass.phase === 'starting' || counted === 0
+      ? t('scan.starting')
+      : t('scan.counter', { count: counted });
 
   const meta = busy
     ? t('scan.busy.meta')

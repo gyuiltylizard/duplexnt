@@ -183,18 +183,24 @@ export function uintOf(element: XmlElement, ns: string, name: string): number | 
   return text !== null && UINT.test(text) ? Number(text) : null;
 }
 
-// Строка устройства для показа: без управляющих символов (C0, DEL, C1) и не длиннее потолка.
+// Строка устройства для показа: без управляющих (C0, DEL, C1) и форматирующих символов
+// (категория Cf: би-ди управление, невидимые) и не длиннее потолка. Неуравновешенный RLO в
+// имени переворачивал бы хвост фразы, куда имя подставлено (ревью сессии 9).
 export const DISPLAY_TEXT_MAX_LENGTH = 128;
 
 const isControl = (code: number): boolean => code < 0x20 || (code >= 0x7f && code <= 0x9f);
+const FORMAT_CHAR = /\p{Cf}/u;
 
 export function displayText(value: string | null): string | null {
   if (value === null) {
     return null;
   }
-  const clean = Array.from(value, (char) => (isControl(char.charCodeAt(0)) ? ' ' : char))
+  // По кодовым точкам: обрезка потолком не режет суррогатную пару пополам.
+  const clean = Array.from(value)
+    .filter((char) => !FORMAT_CHAR.test(char))
+    .map((char) => (isControl(char.charCodeAt(0)) ? ' ' : char))
+    .slice(0, DISPLAY_TEXT_MAX_LENGTH)
     .join('')
-    .trim()
-    .slice(0, DISPLAY_TEXT_MAX_LENGTH);
+    .trim();
   return clean === '' ? null : clean;
 }

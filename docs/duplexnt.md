@@ -335,7 +335,7 @@ MVP.
 - в контракте только типы из ES-библиотеки, переживающие structured clone: `Uint8Array` и
   `ArrayBuffer` можно, `Buffer`, `Blob` и потоки нельзя. События main → renderer, транспорт
   доменных ошибок, библиотека валидации входа и отдача изображений страниц решены
-  [ADR 0005](decisions/0005-bridge-validation-errors-events-images.md); реализуются в M1.
+  [ADR 0005](decisions/0005-bridge-validation-errors-events-images.md); реализованы в M1.
 
 **Подводные камни стека** (подробности и репро —
 [журнал M0](solutions/0001-m0-scaffold.md)):

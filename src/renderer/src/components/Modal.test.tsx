@@ -116,4 +116,67 @@ describe('Modal', () => {
     fireEvent.click(screen.getByRole('button', { name: 'отмена' }));
     expect(document.activeElement).toBe(opener);
   });
+
+  it('опенер исчез — фокус уходит на первый элемент экрана, а не на body', () => {
+    // Кнопка плашки отказа исчезает в момент открытия модалки (S6, S17).
+    function Host(): React.JSX.Element {
+      const [open, setOpen] = useState(false);
+      return (
+        <div>
+          <button type="button">первая на экране</button>
+          {!open && (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(true);
+              }}
+            >
+              исчезающий опенер
+            </button>
+          )}
+          {open && (
+            <Modal labelledBy="m-title">
+              <h2 id="m-title">Заголовок</h2>
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                }}
+              >
+                закрыть
+              </button>
+            </Modal>
+          )}
+        </div>
+      );
+    }
+
+    render(<Host />);
+    const opener = screen.getByRole('button', { name: 'исчезающий опенер' });
+    opener.focus();
+    fireEvent.click(opener);
+
+    fireEvent.click(screen.getByRole('button', { name: 'закрыть' }));
+    expect(document.activeElement?.textContent).toBe('первая на экране');
+  });
+
+  it('пока модалка занята, фокус держится на самом окне', () => {
+    function Host({ busy }: { readonly busy: boolean }): React.JSX.Element {
+      return (
+        <Modal labelledBy="m-title" busy={busy}>
+          <h2 id="m-title">Заголовок</h2>
+          <button type="button" disabled={busy}>
+            действие
+          </button>
+        </Modal>
+      );
+    }
+
+    const view = render(<Host busy={false} />);
+    // Браузер сбросил бы фокус с недоступной кнопки; в тесте он снимается явно.
+    (document.activeElement as HTMLElement | null)?.blur();
+    view.rerender(<Host busy />);
+
+    expect(document.activeElement?.getAttribute('role')).toBe('dialog');
+  });
 });

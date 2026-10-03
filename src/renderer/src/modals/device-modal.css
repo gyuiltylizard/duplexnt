@@ -62,7 +62,7 @@
   white-space: nowrap;
 }
 
-.device-item__status--noAdf {
+.device-item__status--no-adf {
   color: var(--color-status-unavailable);
 }
 

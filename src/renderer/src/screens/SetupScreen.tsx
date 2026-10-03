@@ -11,7 +11,7 @@ import {
 } from '@shared';
 import { Segments } from '../components/Segments';
 import { errorText, errorTextInline } from '../state/error-text';
-import { hostOf } from '../state/scanner-address';
+import { addressOf } from '../state/scanner-address';
 import './setup-screen.css';
 
 // Экран `setup` (план M1, U22; UI_SPEC раздел 2; handoff U19, S1–S6): одна колонка, строка
@@ -24,7 +24,7 @@ export interface SetupScreenProps {
   readonly launchFailure: DomainError | null;
   readonly onStart: () => void;
   /** Открыть модалку `device`; адрес — для «Подключить заново» (S4, S6). */
-  readonly onOpenDevice: (initialHost?: string) => void;
+  readonly onOpenDevice: (initialAddress?: string) => void;
 }
 
 interface KnownParams {
@@ -33,14 +33,16 @@ interface KnownParams {
 }
 
 /** Ряды недоступного состояния показывают значения, а не пустоту (S2): по одному сегменту. */
-const FALLBACK: KnownParams = {
+const singleChoice = (params: ScanParams): KnownParams => ({
   options: {
-    colorModes: [DEFAULT_SCAN_PARAMS.colorMode],
-    resolutions: [DEFAULT_SCAN_PARAMS.resolution],
-    paperSizes: [DEFAULT_SCAN_PARAMS.paperSize],
+    colorModes: [params.colorMode],
+    resolutions: [params.resolution],
+    paperSizes: [params.paperSize],
   },
-  params: DEFAULT_SCAN_PARAMS,
-};
+  params,
+});
+
+const FALLBACK = singleChoice(DEFAULT_SCAN_PARAMS);
 
 export function SetupScreen({
   snapshot,
@@ -61,7 +63,10 @@ export function SetupScreen({
     setKnown(ready);
   }
 
-  const shown = ready ?? known ?? FALLBACK;
+  // Недоступные ряды S2–S4 показывают запомненные параметры из снимка; варианты прошлого
+  // подтверждения (`known`) богаче — у них полные наборы capabilities.
+  const remembered = scanner.kind === 'none' ? null : singleChoice(scanner.params);
+  const shown = ready ?? known ?? remembered ?? FALLBACK;
   const enabled = ready !== null;
 
   const sendParams = (params: ScanParams): void => {
@@ -223,7 +228,7 @@ export function SetupScreen({
             type="button"
             className="btn btn--ghost"
             onClick={() => {
-              onOpenDevice(hostOf(scanner.scanner));
+              onOpenDevice(addressOf(scanner.scanner));
             }}
           >
             {t('setup.device.reconnect')}
@@ -327,7 +332,7 @@ export function SetupScreen({
                 type="button"
                 className="btn btn--tinted"
                 onClick={() => {
-                  onOpenDevice(hostOf(scanner.scanner));
+                  onOpenDevice(addressOf(scanner.scanner));
                 }}
               >
                 {t('setup.device.reconnect')}

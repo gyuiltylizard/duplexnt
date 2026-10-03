@@ -224,6 +224,7 @@
 
 .pass-banner__text {
   margin: 0;
+  overflow-wrap: anywhere;
   font-weight: var(--font-weight-regular);
   font-size: var(--font-size-m);
   line-height: var(--leading-relaxed);

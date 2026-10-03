@@ -22,6 +22,16 @@ interface ToastState {
   readonly text: string;
 }
 
+/**
+ * Отказ последнего запуска прохода — с адресатом: запуск с `setup` показывается плашкой S6,
+ * досканирование — строкой в плашке S17. Отказ не переезжает между экранами: после «Нового
+ * сканирования» плашка `editor` не всплывает на `setup` (ревью сессии 9).
+ */
+interface LaunchFailure {
+  readonly error: DomainError;
+  readonly target: 'setup' | 'editor';
+}
+
 export function App(): ReactNode {
   const { t } = useTranslation();
   // Подписку на мост хранилище включает с первым подписчиком и выключает с последним —
@@ -43,13 +53,13 @@ export function App(): ReactNode {
     setToast((previous) => ({ id: (previous?.id ?? 0) + 1, text }));
   }, []);
 
-  const [deviceModal, setDeviceModal] = useState<{ readonly initialHost?: string } | null>(null);
-  const [launchFailure, setLaunchFailure] = useState<DomainError | null>(null);
+  const [deviceModal, setDeviceModal] = useState<{ readonly initialAddress?: string } | null>(null);
+  const [launchFailure, setLaunchFailure] = useState<LaunchFailure | null>(null);
 
-  const openDevice = useCallback((initialHost?: string) => {
+  const openDevice = useCallback((initialAddress?: string) => {
     // Открытие модалки снимает плашку отказа запуска (S6).
     setLaunchFailure(null);
-    setDeviceModal(initialHost === undefined ? {} : { initialHost });
+    setDeviceModal(initialAddress === undefined ? {} : { initialAddress });
   }, []);
   const closeDevice = useCallback(() => {
     setDeviceModal(null);
@@ -71,12 +81,15 @@ export function App(): ReactNode {
     startInFlight.current = true;
     setLaunchFailure(null);
     // Ответ придёт, когда задание закрыто; экран тем временем сменится по снимку. Отказ до
-    // первой страницы возвращает на `setup` — плашка ждёт его здесь.
+    // первой страницы возвращает на экран-источник — плашка ждёт его здесь, с адресатом.
     window.api.startPass().then(
       (result) => {
         startInFlight.current = false;
         if (!result.ok) {
-          setLaunchFailure(result.error);
+          // Адресат отказа — экран, с которого запускали: сессия есть — досканирование из
+          // `editor`, нет — запуск с `setup`.
+          const target = store.get()?.session == null ? 'setup' : 'editor';
+          setLaunchFailure({ error: result.error, target });
         }
       },
       (error: unknown) => {
@@ -84,7 +97,7 @@ export function App(): ReactNode {
         console.error('[renderer] запуск прохода не ответил', error);
       },
     );
-  }, []);
+  }, [store]);
 
   const stopPass = useCallback(() => {
     // Исход остановки виден по снимку; отдельного текста заслуживает только несмытый сегмент:
@@ -129,7 +142,7 @@ export function App(): ReactNode {
       {screen === 'setup' && (
         <SetupScreen
           snapshot={snapshot}
-          launchFailure={launchFailure}
+          launchFailure={launchFailure?.target === 'setup' ? launchFailure.error : null}
           onStart={startPass}
           onOpenDevice={openDevice}
         />
@@ -141,7 +154,7 @@ export function App(): ReactNode {
         <EditorScreen
           snapshot={snapshot}
           session={snapshot.session}
-          resumeFailure={launchFailure}
+          resumeFailure={launchFailure?.target === 'editor' ? launchFailure.error : null}
           onResume={startPass}
           onOpenDevice={openDevice}
         />
@@ -149,7 +162,7 @@ export function App(): ReactNode {
       {/* `device` открывается и из `editor` — ссылка «подключите заново» в плашке S17. */}
       {deviceModal !== null && (screen === 'setup' || screen === 'editor') && (
         <DeviceModal
-          initialHost={deviceModal.initialHost}
+          initialAddress={deviceModal.initialAddress}
           onClose={closeDevice}
           onConnected={deviceConnected}
         />
