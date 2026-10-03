@@ -20,3 +20,32 @@ export interface ScanOptions {
   readonly resolutions: readonly number[];
   readonly paperSizes: readonly PaperSize[];
 }
+
+/** Параметры по умолчанию (план M1, KTD-13): оттенки серого, 300 dpi, A4. */
+export const DEFAULT_SCAN_PARAMS: ScanParams = {
+  colorMode: 'Grayscale8',
+  resolution: 300,
+  paperSize: 'A4',
+};
+
+const pick = <T>(remembered: T | undefined, fallback: T, available: readonly T[]): T =>
+  remembered !== undefined && available.includes(remembered)
+    ? remembered
+    : available.includes(fallback)
+      ? fallback
+      : (available[0] ?? fallback);
+
+/**
+ * Параметры для устройства (KTD-13): запомненный параметр, которого у устройства нет, заменяется
+ * значением по умолчанию, а если нет и его — первым доступным. Без запомненных — то же правило
+ * от значений по умолчанию. Правило одно на ядро и интерфейс: им же «Сбросить параметры»
+ * считает дефолты против вариантов устройства.
+ */
+export function resolveScanParams(remembered: ScanParams | null, options: ScanOptions): ScanParams {
+  const fallback = DEFAULT_SCAN_PARAMS;
+  return {
+    colorMode: pick(remembered?.colorMode, fallback.colorMode, options.colorModes),
+    resolution: pick(remembered?.resolution, fallback.resolution, options.resolutions),
+    paperSize: pick(remembered?.paperSize, fallback.paperSize, options.paperSizes),
+  };
+}

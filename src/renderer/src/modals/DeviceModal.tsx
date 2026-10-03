@@ -27,7 +27,7 @@ const DEFAULT_PORTS: Record<Scheme, string> = { https: '443', http: '80' };
 
 export interface DeviceModalProps {
   /** Адрес запомненного сканера — «Подключить заново» открывает модалку с ним (S4). */
-  readonly initialHost?: string;
+  readonly initialHost?: string | undefined;
   readonly onClose: () => void;
   /** Подключение прошло: подпись для тоста «Сканер подключён: …». */
   readonly onConnected: (label: string) => void;

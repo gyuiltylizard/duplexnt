@@ -1,0 +1,116 @@
+/* Экран `setup` (U22): группа параметров со строкой устройства — панели разделены волосяными
+   линиями (`gap: 1px` поверх тонированной подложки, принцип 1 дизайн-системы). Строка
+   устройства — CSS handoff'а U19 (S2–S5). */
+
+.params {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-px);
+  background: var(--color-border-subtle);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-l);
+  overflow: hidden;
+}
+
+.device-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  padding: var(--space-7) var(--space-8);
+  background: var(--color-bg-surface);
+}
+
+.device-row__name {
+  font: var(--font-weight-medium) var(--font-size-base) / var(--leading-snug)
+    var(--font-family-sans);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.device-row__none {
+  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
+  color: var(--color-text-subtle);
+}
+
+.device-row__status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* Базовый цвет — «готов»; остальные состояния переопределяют модификатором строки. */
+.device-row__status-text {
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-snug) var(--font-family-mono);
+  white-space: nowrap;
+  color: var(--color-status-ready);
+}
+
+.device-row--checking .device-row__status-text {
+  color: var(--color-text-subtle);
+}
+
+.device-row--unreachable .device-row__status-text {
+  color: var(--color-danger);
+}
+
+.device-row--changed .device-row__status-text {
+  color: var(--color-warning);
+}
+
+.device-row__spacer {
+  flex: 1;
+}
+
+.device-row__scheme {
+  font: var(--font-weight-medium) var(--font-size-xxs) / var(--leading-none) var(--font-family-mono);
+  letter-spacing: var(--tracking-caps);
+  color: var(--color-text-faint);
+  border: var(--border-width) solid var(--color-border-default);
+  border-radius: var(--radius-s);
+  padding: var(--space-1) var(--space-2);
+}
+
+.param-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  padding: var(--space-5) var(--space-8);
+  background: var(--color-bg-surface);
+}
+
+.param-row__label {
+  flex: none;
+  width: var(--size-label-col);
+  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
+  color: var(--color-text-muted);
+}
+
+.params__footer {
+  display: flex;
+  padding: var(--space-4) var(--space-8);
+  background: var(--color-bg-panel);
+}
+
+.params__footer .btn--ghost {
+  color: var(--color-text-subtle);
+}
+
+.params__footer .btn--ghost:hover:not(:disabled) {
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+
+.setup-screen__launch {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-5);
+}
+
+.setup-screen__hint {
+  margin: 0;
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-relaxed)
+    var(--font-family-sans);
+  color: var(--color-text-subtle);
+}

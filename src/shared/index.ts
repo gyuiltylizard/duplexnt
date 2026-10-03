@@ -31,7 +31,9 @@ export type { DiscoveredScanner, DiscoveryState } from './discovery';
 
 export {
   COLOR_MODES,
+  DEFAULT_SCAN_PARAMS,
   PAPER_SIZES,
+  resolveScanParams,
   type ColorMode,
   type PaperSize,
   type ScanOptions,
