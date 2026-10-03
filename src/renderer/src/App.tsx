@@ -141,9 +141,16 @@ export function App(): ReactNode {
         <ScanScreen snapshot={snapshot} pass={snapshot.pass} onStop={stopPass} />
       )}
       {screen === 'editor' && snapshot.session !== null && (
-        <EditorScreen session={snapshot.session} />
+        <EditorScreen
+          snapshot={snapshot}
+          session={snapshot.session}
+          resumeFailure={launchFailure}
+          onResume={startPass}
+          onOpenDevice={openDevice}
+        />
       )}
-      {deviceModal !== null && screen === 'setup' && (
+      {/* `device` открывается и из `editor` — ссылка «подключите заново» в плашке S17. */}
+      {deviceModal !== null && (screen === 'setup' || screen === 'editor') && (
         <DeviceModal
           initialHost={deviceModal.initialHost}
           onClose={closeDevice}

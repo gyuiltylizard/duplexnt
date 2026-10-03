@@ -168,6 +168,32 @@ describe('каркас приложения', () => {
     expect((await screen.findByRole('alert')).textContent).toContain('В лотке нет бумаги');
   });
 
+  it('отказ досканирования возвращается строкой в плашку S17; ссылка открывает device', async () => {
+    stubApi(
+      makeSnapshot({
+        scanner: READY,
+        canResume: true,
+        canAccept: true,
+        session: {
+          id: 'session.x',
+          passes: [
+            { number: 1, state: 'interrupted', paramsKnown: true, scanner: null, pages: pages(3) },
+          ],
+        },
+      }),
+      { startPass: vi.fn(() => Promise.resolve(fail('scannerUnreachable'))) },
+    );
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Досканировать остаток' }));
+    expect((await screen.findByRole('alert')).textContent).toContain('Досканировать не удалось');
+
+    fireEvent.click(screen.getByRole('button', { name: 'подключите заново' }));
+    expect(await screen.findByRole('dialog')).toBeDefined();
+    // Открытие модалки снимает строку отказа.
+    expect(screen.queryByText(/Досканировать не удалось/)).toBeNull();
+  });
+
   it('запуск без сканера открывает модалку device; подключение закрывает её тостом', async () => {
     stubApi(makeSnapshot({}), {
       startDiscovery: vi.fn(() => Promise.resolve(ok({ scanners: [FOUND], failure: null }))),
