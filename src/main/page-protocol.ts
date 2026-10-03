@@ -1,3 +1,4 @@
+import { isPageKey, isSessionId } from '@core/storage/layout';
 import { PAGE_IMAGE_SCHEME, PAGE_IMAGE_VIEWS, type PageImageView, type Result } from '@shared';
 
 // Схема изображений страниц (ADR 0005; план M1, U18, KTD-38). Адрес:
@@ -46,11 +47,9 @@ export interface PageImageSource {
   readThumbnail(key: string): Promise<Result<Uint8Array>>;
 }
 
-// Ключ и идентификатор сессии — заякоренные шаблоны по сырому пути без раскодирования: `%2e%2e`
-// и прочее кодирование не проходят, точечные сегменты разборщик URL схлопывает до того, как
-// сюда попадает путь, и ключ тогда просто не совпадает.
-const PAGE_KEY = /^p\d{2}-s\d{2}-\d{4}$/;
-const SESSION_ID = /^[0-9a-f]{16}$/;
+// Ключ и идентификатор сессии проверяются грамматикой ядра (`isPageKey`, `isSessionId`) по сырому
+// пути без раскодирования: `%2e%2e` и прочее кодирование не проходят, точечные сегменты разборщик
+// URL схлопывает до того, как сюда попадает путь, и ключ тогда просто не совпадает.
 
 interface PageAddress {
   readonly sessionId: string;
@@ -69,7 +68,13 @@ export function parsePageImageUrl(raw: string): PageAddress | null {
   } catch {
     return null;
   }
-  if (url.protocol !== `${PAGE_IMAGE_SCHEME}:` || url.search !== '' || url.username !== '') {
+  if (
+    url.protocol !== `${PAGE_IMAGE_SCHEME}:` ||
+    url.search !== '' ||
+    url.username !== '' ||
+    url.password !== '' ||
+    url.port !== ''
+  ) {
     return null;
   }
   const segments = url.pathname.split('/');
@@ -77,7 +82,7 @@ export function parsePageImageUrl(raw: string): PageAddress | null {
   if (empty !== '' || view === undefined || key === undefined || rest.length > 0) {
     return null;
   }
-  if (!SESSION_ID.test(url.hostname) || !isView(view) || !PAGE_KEY.test(key)) {
+  if (!isSessionId(url.hostname) || !isView(view) || !isPageKey(key)) {
     return null;
   }
   return { sessionId: url.hostname, view, key };

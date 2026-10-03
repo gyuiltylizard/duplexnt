@@ -1,6 +1,7 @@
 import {
   fail,
   ok,
+  sessionConflict,
   type BridgeHandlers,
   type ConnectScannerRequest,
   type DiscoveryState,
@@ -34,7 +35,7 @@ import {
 export interface CommandContext {
   readonly service: PassService;
   /** Открывает каталог данных в проводнике; какой — знает main (KTD-39). */
-  readonly openDataFolder: () => Promise<void>;
+  readonly openDataFolder: () => Promise<Result<void>>;
   /** Список найденных устройств изменился; `seq` — номер изменения. */
   readonly onDiscoveryChanged: (seq: number) => void;
   /** Подмена для тестов. */
@@ -104,14 +105,15 @@ export function createCommands(context: CommandContext): Commands {
     });
   };
 
+  // Остановленный поиск остаётся: найденное доступно по идентификатору до следующего поиска
+  // (контракт `Discovery.stop`) — модалка может остановить поиск раньше, чем нажато «Подключить».
   const stopDiscovery = (): void => {
     discovery?.stop();
-    discovery = null;
   };
 
   async function connectScanner(request: ConnectScannerRequest): Promise<Result<void>> {
     if (service.snapshot().pass !== null) {
-      return fail('sessionConflict', { reason: 'passRunning' });
+      return { ok: false, error: sessionConflict('passRunning') };
     }
     let address: ScannerAddress;
     if (request.kind === 'discovered') {
@@ -157,6 +159,7 @@ export function createCommands(context: CommandContext): Commands {
 
       startDiscovery: withoutRequest(() => {
         stopDiscovery();
+        discovery = null;
         discovery = newDiscovery({ onChange: discoveryChanged });
         return ok(discovery.state());
       }),
@@ -183,14 +186,12 @@ export function createCommands(context: CommandContext): Commands {
       acceptPass: withoutRequest(() => done(() => service.acceptPass())),
       closeSession: withoutRequest(() => done(() => service.closeSession())),
 
-      openDataFolder: withoutRequest(async () => {
-        await context.openDataFolder();
-        return ok(undefined);
-      }),
+      openDataFolder: withoutRequest(() => done(() => context.openDataFolder())),
     },
 
     dispose() {
       stopDiscovery();
+      discovery = null;
       connector.cancel();
     },
   };

@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, protocol, session, shell } from 'e
 import { join } from 'node:path';
 import { createCommands, createThumbnails, layoutOf, openPassService } from '@core';
 import ru from '@locales/ru/common.json';
-import { APP_NAME, PAGE_IMAGE_SCHEME } from '@shared';
+import { APP_NAME, fail, ok, PAGE_IMAGE_SCHEME } from '@shared';
 import { registerBridge } from './bridge';
 import { resolveDataRoot } from './data-root';
 import { createEventSender } from './events';
@@ -97,8 +97,14 @@ async function start(): Promise<void> {
 
   const commands = createCommands({
     service,
+    // `shell.openPath` не бросает: причину отказа он возвращает строкой.
     openDataFolder: async () => {
-      await shell.openPath(dataRoot);
+      const problem = await shell.openPath(dataRoot);
+      if (problem === '') {
+        return ok(undefined);
+      }
+      console.error('[main] каталог данных не открылся', problem);
+      return fail('storageFailed', { reason: 'openPath' });
     },
     onDiscoveryChanged: (seq) => {
       send('discoveryChanged', { seq });

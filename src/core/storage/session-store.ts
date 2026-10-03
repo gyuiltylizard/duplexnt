@@ -1,5 +1,13 @@
 import { join } from 'node:path';
-import { fail, ok, type DomainError, type Result, type SessionSnapshot } from '@shared';
+import {
+  fail,
+  ok,
+  sessionConflict,
+  type DomainError,
+  type Result,
+  type SessionConflictReason,
+  type SessionSnapshot,
+} from '@shared';
 import { isTempName, removeByPrefix, renameWithRetry, writeStreamAtomic } from './atomic-file';
 import {
   JOURNAL_VERSION,
@@ -118,9 +126,6 @@ export interface PageInfo {
   readonly pixelLimit: number | null;
 }
 
-type ConflictReason =
-  'passRunning' | 'noRunningPass' | 'notInterrupted' | 'paramsUnknown' | 'noSession';
-
 export interface SessionStore {
   readonly incompatible: boolean;
   /** Сессия, как её видит интерфейс; `null` — сессии нет. */
@@ -157,13 +162,9 @@ export interface SessionStore {
   readPage(key: string): Promise<Result<Uint8Array>>;
 }
 
-const conflictError = (reason: ConflictReason): DomainError => ({
-  code: 'sessionConflict',
-  details: { reason },
-});
-const conflict = (reason: ConflictReason): Result<never> => ({
+const conflict = (reason: SessionConflictReason): Result<never> => ({
   ok: false,
-  error: conflictError(reason),
+  error: sessionConflict(reason),
 });
 const REFUSAL: DomainError = { code: 'storageIncompatible' };
 const unavailable = (reason: 'unknown' | 'lost'): Result<never> =>
@@ -487,7 +488,7 @@ export function createSessionStore(
         }
         const running = runningSegmentOf(journal);
         if (running === null || journal === null) {
-          throw new StorageError(conflictError('noRunningPass'));
+          throw new StorageError(sessionConflict('noRunningPass'));
         }
         const { pass, segment } = running;
         const index = segment.pageCount + 1;

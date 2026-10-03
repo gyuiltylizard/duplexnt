@@ -9,7 +9,6 @@ import {
 } from '@shared';
 import { DEVICE_PATH_MAX_LENGTH } from '../escl/device-path';
 import { scanParamsSchema } from '../escl/scan-settings';
-import { SESSION_ID } from '../storage/layout';
 
 // Схемы входа команд моста (ADR 0005; план M1, KTD-39). Строгие и без приведения типов: лишнее
 // поле и «почти подходящий» тип — отказ, а не молчаливая починка. Типы запросов объявлены в
@@ -43,10 +42,6 @@ export const connectScannerRequestSchema = z.discriminatedUnion('kind', [
 ]) satisfies z.ZodType<ConnectScannerRequest>;
 
 export { scanParamsSchema };
-
-/** Ключ страницы — заякоренный шаблон только для строки (план M1, KTD-38). */
-export const pageKeySchema = z.string().regex(/^p\d{2}-s\d{2}-\d{4}$/);
-export const sessionIdSchema = z.string().regex(SESSION_ID);
 
 // Мусор на входе — доменный отказ, а не исключение. В детали идут только путь поля и код
 // нарушения: само значение не возвращается, оно может оказаться большим или чужим.

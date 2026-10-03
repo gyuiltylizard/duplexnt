@@ -50,6 +50,33 @@ export const ERROR_CODES = [
 
 export type ErrorCode = (typeof ERROR_CODES)[number];
 
+/**
+ * Почему действие недоступно (`sessionConflict`, `details.reason`): интерфейс выбирает текст по
+ * причине, поэтому набор — контракт, а не свободная строка.
+ */
+export const SESSION_CONFLICT_REASONS = [
+  /** Идёт проход: второй старт, «Новое сканирование», «оставить как есть» отклоняются. */
+  'passRunning',
+  /** Прохода нет: «Остановить» опоздало. */
+  'noRunningPass',
+  /** «Остановить» уже нажато и ещё не доведено. */
+  'stopping',
+  /** Последний проход не прерван: досканировать и принимать нечего. */
+  'notInterrupted',
+  /** Журнал пересобран по файлам: параметры прохода неизвестны. */
+  'paramsUnknown',
+  /** Досканировать можно только на сканере прохода (KTD-27). */
+  'otherScanner',
+  /** Сессии нет. */
+  'noSession',
+] as const;
+
+export type SessionConflictReason = (typeof SESSION_CONFLICT_REASONS)[number];
+
+export function sessionConflict(reason: SessionConflictReason): DomainError {
+  return { code: 'sessionConflict', details: { reason } };
+}
+
 /** Детали — для диагностики и подстановок в текст; только то, что переживает structured clone. */
 export type ErrorDetails = Readonly<Record<string, string | number | boolean | null>>;
 

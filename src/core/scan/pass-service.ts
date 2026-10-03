@@ -3,10 +3,12 @@ import {
   fail,
   ok,
   type DomainError,
+  sessionConflict,
   type PassProgress,
   type PassReport,
   type Result,
   type ScanParams,
+  type SessionConflictReason,
   type ScannerState,
   type Snapshot,
   type StartupNotice,
@@ -126,7 +128,10 @@ interface Run {
   done: Promise<Result<PassReport>>;
 }
 
-const conflict = (reason: string): Result<never> => fail('sessionConflict', { reason });
+const conflict = (reason: SessionConflictReason): Result<never> => ({
+  ok: false,
+  error: sessionConflict(reason),
+});
 
 /** Причина обрыва задания — кодом: отказ устройства как есть, отказ приёмника — через хранилище. */
 export function interruptionError(end: ScanJobEnd): DomainError | null {
@@ -261,6 +266,10 @@ export function createPassService(
   ): Promise<Result<void>> {
     const { basePath } = stored;
     for (const path of unclosedJobs.jobsOf(stored)) {
+      // Молчащий сканер держал бы «Остановить» и закрытие окна на каждом задании.
+      if (signal.aborted) {
+        return fail('canceled');
+      }
       const jobPath = jobPathFromLocation(path, basePath);
       if (
         jobPath === null ||
@@ -332,6 +341,10 @@ export function createPassService(
           notify();
         },
         onPhase: (phase) => {
+          // «Остановить» уже нажато: фаза остаётся «останавливаем», пока задание не закрыто.
+          if (current.intent !== null) {
+            return;
+          }
           current.phase = phase;
           notify();
         },
@@ -442,9 +455,14 @@ export function createPassService(
       if (remembered === null) {
         return;
       }
-      scanner = { kind: 'checking', stored: remembered };
+      const checking: ScannerSlot = { kind: 'checking', stored: remembered };
+      scanner = checking;
       notify();
       const checked = await checkRememberedScanner(settings.get(), connector, signal);
+      // Пока шла проверка, пользователь подключил сканер сам: его выбор не перезаписывается.
+      if (scanner !== checking) {
+        return;
+      }
       switch (checked.state) {
         case 'none':
           scanner = { kind: 'none' };

@@ -75,6 +75,9 @@ describe('parsePageImageUrl', () => {
     ['закодированный обход', `duplexnt-page://${SESSION}/page/%2e%2e%2fsession.json`],
     ['закодированный слэш в ключе', `duplexnt-page://${SESSION}/page%2fp01-s01-0001`],
     ['userinfo', `duplexnt-page://user@${SESSION}/page/p01-s01-0001`],
+    ['пароль в userinfo', `duplexnt-page://:pw@${SESSION}/page/p01-s01-0001`],
+    ['явный порт', `duplexnt-page://${SESSION}:80/page/p01-s01-0001`],
+    ['нулевой номер страницы', `duplexnt-page://${SESSION}/page/p01-s01-0000`],
     ['не URL', 'не url'],
   ])('отклоняет: %s', (_name, url) => {
     expect(parsePageImageUrl(url)).toBeNull();

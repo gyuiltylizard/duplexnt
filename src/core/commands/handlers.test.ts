@@ -77,7 +77,7 @@ function setup(snapshot: Snapshot = EMPTY_SNAPSHOT) {
   const cancel = vi.fn();
   const connector: Connector = { connect, cancel };
 
-  const openDataFolder = vi.fn(() => Promise.resolve());
+  const openDataFolder = vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined)));
   const discoveryEvents: number[] = [];
   const commands = createCommands({
     service,
@@ -193,6 +193,15 @@ describe('снимок и проход', () => {
     expect(await handlers.openDataFolder(undefined)).toEqual(ok(undefined));
     expect(openDataFolder).toHaveBeenCalledExactlyOnceWith();
   });
+
+  it('openDataFolder: отказ main доходит кодом, а не успехом', async () => {
+    const { handlers, openDataFolder } = setup();
+    openDataFolder.mockResolvedValueOnce(fail('storageFailed', { reason: 'openPath' }));
+
+    expect(await handlers.openDataFolder(undefined)).toEqual(
+      fail('storageFailed', { reason: 'openPath' }),
+    );
+  });
 });
 
 describe('поиск устройств', () => {
@@ -234,7 +243,7 @@ describe('поиск устройств', () => {
     const service = setup().service;
     const commands = createCommands({
       service,
-      openDataFolder: () => Promise.resolve(),
+      openDataFolder: () => Promise.resolve(ok(undefined)),
       onDiscoveryChanged: () => {
         throw new Error('окно закрыто');
       },
@@ -256,16 +265,43 @@ describe('поиск устройств', () => {
     error.mockRestore();
   });
 
-  it('stopDiscovery и dispose останавливают поиск; dispose отменяет подключение', async () => {
-    const commands = setup();
-    const { handlers, stop, cancel } = commands;
+  it('stopDiscovery останавливает поиск', async () => {
+    const { handlers, stop } = setup();
     await handlers.startDiscovery(undefined);
 
     expect(await handlers.stopDiscovery(undefined)).toEqual(ok(undefined));
     expect(stop).toHaveBeenCalledOnce();
+  });
+
+  it('dispose при живом поиске останавливает его и отменяет подключение', async () => {
+    const commands = setup();
+    await commands.handlers.startDiscovery(undefined);
+
     commands.dispose();
-    expect(stop).toHaveBeenCalledOnce();
-    expect(cancel).toHaveBeenCalledOnce();
+
+    expect(commands.stop).toHaveBeenCalledOnce();
+    expect(commands.cancel).toHaveBeenCalledOnce();
+  });
+
+  it('после остановки поиска найденное подключается по идентификатору', async () => {
+    const { handlers, connect } = setup();
+    await handlers.startDiscovery(undefined);
+    await handlers.stopDiscovery(undefined);
+
+    expect(await handlers.connectScanner({ kind: 'discovered', id: 'abcdef01-1' })).toEqual(
+      ok(undefined),
+    );
+    expect(connect).toHaveBeenCalledOnce();
+  });
+
+  it('после dispose идентификатор прошлого поиска не принимается', async () => {
+    const commands = setup();
+    await commands.handlers.startDiscovery(undefined);
+    commands.dispose();
+
+    expect(
+      await commands.handlers.connectScanner({ kind: 'discovered', id: 'abcdef01-1' }),
+    ).toMatchObject({ ok: false, error: { code: 'invalidInput' } });
   });
 });
 

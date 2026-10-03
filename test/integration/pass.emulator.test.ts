@@ -9,6 +9,12 @@ import {
   type PassService,
   type PassServiceOptions,
 } from '../../src/core/scan/pass-service';
+import {
+  createTransport,
+  type ScannerProfile,
+  type ScannerTransport,
+  type TransportLimits,
+} from '../../src/core/escl/transport';
 import { layoutOf } from '../../src/core/storage/layout';
 import { realStorageFs, type StorageFs } from '../../src/core/storage/storage-fs';
 import type { DomainError, Result, Snapshot } from '../../src/shared';
@@ -398,6 +404,41 @@ describe('служба прохода: «Остановить»', () => {
   });
 });
 
+/**
+ * Транспорт, который придерживает запросы с выбранным методом и путём до `release()`: так тест
+ * ставит «Остановить» или подключение ровно туда, где запрос уже ушёл, а ответа ещё нет.
+ */
+function holdingTransport(matches: (method: string, path: string) => boolean) {
+  let release: () => void = () => undefined;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let held = false;
+  const create = (profile: ScannerProfile, limits?: Partial<TransportLimits>): ScannerTransport => {
+    const real = createTransport(profile, limits);
+    return {
+      request: async (options) => {
+        if (matches(options.method, options.path)) {
+          held = true;
+          await gate;
+        }
+        return real.request(options);
+      },
+      stream: (options, consume) => real.stream(options, consume),
+      close: () => {
+        real.close();
+      },
+    };
+  };
+  return {
+    create,
+    release: () => {
+      release();
+    },
+    isHeld: () => held,
+  };
+}
+
 describe('служба прохода: обрыв и досканирование', () => {
   it('AE5: обрыв на 18-м листе, досканирование — тридцать страниц по порядку', async () => {
     const { emulator, root, service } = await setup({
@@ -561,6 +602,37 @@ describe('служба прохода: обрыв и досканировани�
     expect(await journalOnDisk(root)).toEqual(afterFirst);
   });
 
+  it('сбой записи журнала на странице и на исходе: повтор доводит журнал до DELETE (KTD-17)', async () => {
+    const emulator = await startTestEmulator({
+      scenario: { sheets: 30, fault: { sheet: 18, kind: 'gone' } },
+    });
+    const root = await makeTempDataRoot();
+    const { journalFile } = layoutOf(root);
+    let armed = false;
+    let failures = 0;
+    // `EIO` не повторяется помощником записи: один отказ — одна запись журнала. Падают запись
+    // после 17-й страницы и запись исхода сегмента; третья запись — повтор службы — проходит.
+    const { fs } = interceptFs<StorageFs>(realStorageFs, (call) => {
+      if (call.op === 'rename' && (call.to ?? '').endsWith('p01-s01-0017.jpg')) {
+        armed = true;
+      }
+      if (armed && failures < 2 && call.op === 'rename' && call.to === journalFile) {
+        failures += 1;
+        throw fsError('EIO');
+      }
+    });
+    const { service } = await open(root, await connectTo(emulator), { fs });
+
+    const report = unwrap(await service.startPass());
+
+    expect(report).toMatchObject({ end: 'interrupted', pages: 17 });
+    expect(failures).toBe(2);
+    expect(service.snapshot().storage.unsaved).toBe(false);
+    const journal = JSON.stringify(await journalOnDisk(root));
+    expect(journal).toContain('"state":"interrupted"');
+    expect(journal).toContain('"pageCount":17');
+  });
+
   it('сбой между переименованием страницы и журналом, перезапуск, досканирование — 30 по порядку', async () => {
     const emulator = await startTestEmulator({
       scenario: { sheets: 30, fault: { sheet: 18, kind: 'gone' } },
@@ -678,6 +750,97 @@ describe('служба прохода: обрыв и досканировани�
       code: 'sessionConflict',
       details: { reason: 'paramsUnknown' },
     });
+  });
+});
+
+describe('служба прохода: «Остановить» в пограничные моменты', () => {
+  it('«Остановить», пока POST ждёт ответа: фаза не возвращается со «stopping»', async () => {
+    const emulator = await startTestEmulator({ scenario: { sheets: 3 } });
+    const root = await makeTempDataRoot();
+    const hold = holdingTransport(
+      (method, path) => method === 'POST' && path.endsWith('/ScanJobs'),
+    );
+    const { service, snapshots } = await open(root, await connectTo(emulator), {
+      connector: { createTransport: hold.create },
+    });
+
+    const running = service.startPass();
+    await until(hold.isHeld);
+    const stopped = service.stopPass();
+    hold.release();
+    const report = unwrap(await running);
+    unwrap(await stopped);
+
+    expect(report.end).toBe('stopped');
+    const phases = snapshots.map((it) => it.pass?.phase ?? null);
+    const stopAt = phases.indexOf('stopping');
+    expect(stopAt).toBeGreaterThanOrEqual(0);
+    expect(phases.slice(stopAt).filter((it) => it !== null && it !== 'stopping')).toEqual([]);
+    expect(emulator.requests().at(-1)?.startsWith('DELETE /eSCL/ScanJobs/<job>')).toBe(true);
+    expect(service.snapshot().session).toBeNull();
+  });
+
+  it('«Остановить», пока закрываются незакрытые задания молчащего сканера, — без ожидания каждого', async () => {
+    const { emulator, service } = await setup(
+      { sheets: 2, deleteHangs: true },
+      { jobLimits: { ...FAST, deleteDeadlineMs: 1000 } },
+    );
+    const deletes = (): number =>
+      emulator.requests().filter((it) => it.startsWith('DELETE')).length;
+    // Два незакрытых задания: DELETE каждого молчит до срока.
+    unwrap(await service.startPass());
+    unwrap(await service.closeSession());
+    emulator.load({ sheets: 2, deleteHangs: true });
+    unwrap(await service.startPass());
+    unwrap(await service.closeSession());
+    emulator.load({ sheets: 2, deleteHangs: true });
+    const before = deletes();
+    const requestsBefore = emulator.requests().length;
+
+    const running = service.startPass();
+    await until(() => deletes() > before);
+    const started = Date.now();
+    unwrap(await service.stopPass());
+    const report = unwrap(await running);
+
+    expect(report.end).toBe('stopped');
+    // Не больше одного срока DELETE: второе задание уже не закрывается.
+    expect(Date.now() - started).toBeLessThan(1800);
+    expect(deletes()).toBe(before + 1);
+    expect(
+      emulator
+        .requests()
+        .slice(requestsBefore)
+        .some((it) => it.startsWith('POST')),
+    ).toBe(false);
+  });
+});
+
+describe('служба прохода: проверка запомненного сканера', () => {
+  it('сканер, подключённый во время проверки, не перезаписывается её результатом', async () => {
+    const remembered = await startTestEmulator();
+    const other = await startTestEmulator();
+    const root = await makeTempDataRoot();
+    const first = await open(root, await connectTo(remembered));
+    expect(first.service.snapshot().scanner.kind).toBe('ready');
+
+    const hold = holdingTransport(
+      (method, path) => method === 'GET' && path.endsWith('/ScannerCapabilities'),
+    );
+    const service = await openPassService(root, {
+      jobLimits: FAST,
+      connector: { createTransport: hold.create },
+    });
+    const checking = service.checkRememberedScanner();
+    await until(hold.isHeld);
+    expect(service.snapshot().scanner.kind).toBe('checking');
+    unwrap(await service.useScanner(await connectTo(other)));
+    hold.release();
+    await checking;
+
+    const { scanner } = service.snapshot();
+    expect(scanner.kind).toBe('ready');
+    expect(scanner.kind === 'ready' ? scanner.scanner.port : null).toBe(other.port);
   });
 });
 

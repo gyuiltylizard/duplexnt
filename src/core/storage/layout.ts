@@ -111,6 +111,11 @@ function addressOf(match: RegExpExecArray | null): PageAddress | null {
   return pass >= 1 && segment >= 1 && index >= 1 ? { pass, segment, index } : null;
 }
 
+/** Ключ страницы — ровно по шаблону, без нулевых номеров. Одна грамматика на ядро и схему изображений. */
+export const isPageKey = (value: string): boolean => parsePageKey(value) !== null;
+
+export const isSessionId = (value: string): boolean => SESSION_ID.test(value);
+
 /** Ключ страницы по заякоренному шаблону; всё остальное — `null`. */
 export function parsePageKey(key: string): PageAddress | null {
   return addressOf(PAGE_KEY.exec(key));
