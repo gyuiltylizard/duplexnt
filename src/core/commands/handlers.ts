@@ -176,6 +176,19 @@ export function createCommands(context: CommandContext): Commands {
         return request.ok ? done(() => connectScanner(request.value)) : request;
       },
 
+      // Закрытие модалки `device`: идущее подключение возвращает `canceled` и ничего не меняет.
+      cancelConnect: withoutRequest(() => {
+        connector.cancel();
+        return ok(undefined);
+      }),
+
+      // Кнопка «Повторить» (U19, S3): исход — в снимке; гонку с ручным подключением служба
+      // разводит сама — результат проверки не затирает сканер, подключённый за это время.
+      recheckScanner: withoutRequest(async () => {
+        await service.checkRememberedScanner();
+        return ok(undefined);
+      }),
+
       setScanParams: async (rawRequest) => {
         const request = parseInput(scanParamsSchema, rawRequest);
         return request.ok ? done(() => service.setParams(request.value)) : request;

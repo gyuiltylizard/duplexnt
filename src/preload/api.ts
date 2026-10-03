@@ -54,6 +54,8 @@ export function buildApi(ipcRenderer: PreloadIpcRenderer): Api {
     getDiscovery: command(ipcRenderer, 'getDiscovery'),
     stopDiscovery: command(ipcRenderer, 'stopDiscovery'),
     connectScanner: command(ipcRenderer, 'connectScanner'),
+    cancelConnect: command(ipcRenderer, 'cancelConnect'),
+    recheckScanner: command(ipcRenderer, 'recheckScanner'),
     setScanParams: command(ipcRenderer, 'setScanParams'),
     startPass: command(ipcRenderer, 'startPass'),
     stopPass: command(ipcRenderer, 'stopPass'),

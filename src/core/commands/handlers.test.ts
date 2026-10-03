@@ -109,6 +109,8 @@ describe('команды без входа', () => {
     'startDiscovery',
     'getDiscovery',
     'stopDiscovery',
+    'cancelConnect',
+    'recheckScanner',
     'startPass',
     'stopPass',
     'acceptPass',
@@ -186,6 +188,18 @@ describe('снимок и проход', () => {
       expect(invalid(await handlers.setScanParams(garbage)), JSON.stringify(garbage)).toBe(true);
     }
     expect(service.setParams).toHaveBeenCalledOnce();
+  });
+
+  it('recheckScanner зовёт проверку запомненного сканера; исход — в снимке', async () => {
+    const { handlers, service } = setup();
+    expect(await handlers.recheckScanner(undefined)).toEqual(ok(undefined));
+    expect(service.checkRememberedScanner).toHaveBeenCalledOnce();
+  });
+
+  it('cancelConnect отменяет идущее подключение', async () => {
+    const { handlers, cancel } = setup();
+    expect(await handlers.cancelConnect(undefined)).toEqual(ok(undefined));
+    expect(cancel).toHaveBeenCalledOnce();
   });
 
   it('openDataFolder зовёт main без аргументов', async () => {

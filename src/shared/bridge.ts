@@ -85,6 +85,10 @@ export interface BridgeCommands {
   readonly stopDiscovery: { readonly request: NoRequest; readonly value: undefined };
   /** Исход — в снимке: сканер подключён, запомнен, параметры сверены. */
   readonly connectScanner: { readonly request: ConnectScannerRequest; readonly value: undefined };
+  /** Отмена идущего подключения — закрытие модалки `device`; оно вернёт `canceled`. */
+  readonly cancelConnect: { readonly request: NoRequest; readonly value: undefined };
+  /** Проверка запомненного сканера ещё раз — кнопка «Повторить» (U19, S3); исход — в снимке. */
+  readonly recheckScanner: { readonly request: NoRequest; readonly value: undefined };
   readonly setScanParams: { readonly request: ScanParams; readonly value: undefined };
   /** Новый проход или досканирование; возвращается, когда задание закрыто. */
   readonly startPass: { readonly request: NoRequest; readonly value: PassReport };
@@ -104,6 +108,8 @@ export const BRIDGE_CHANNELS = {
   getDiscovery: 'duplexnt:get-discovery',
   stopDiscovery: 'duplexnt:stop-discovery',
   connectScanner: 'duplexnt:connect-scanner',
+  cancelConnect: 'duplexnt:cancel-connect',
+  recheckScanner: 'duplexnt:recheck-scanner',
   setScanParams: 'duplexnt:set-scan-params',
   startPass: 'duplexnt:start-pass',
   stopPass: 'duplexnt:stop-pass',
