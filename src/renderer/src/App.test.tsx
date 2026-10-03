@@ -25,11 +25,13 @@ function makeSnapshot(overrides: Partial<Snapshot>): Snapshot {
   };
 }
 
+const PARAMS = { colorMode: 'Grayscale8', resolution: 300, paperSize: 'A4' } as const;
+
 const READY: ScannerState = {
   kind: 'ready',
   scanner: { name: 'ScanPro 200', scheme: 'https', host: '192.0.2.10', port: 443 },
   options: { colorModes: ['Grayscale8'], resolutions: [300], paperSizes: ['A4'] },
-  params: { colorMode: 'Grayscale8', resolution: 300, paperSize: 'A4' },
+  params: PARAMS,
 };
 
 const FOUND: DiscoveredScanner = {
@@ -62,6 +64,9 @@ function stubApi(snapshot: Snapshot, overrides: Partial<Record<keyof Api, unknow
     setScanParams: vi.fn(() => Promise.resolve(ok(undefined))),
     recheckScanner: vi.fn(() => Promise.resolve(ok(undefined))),
     startPass: vi.fn(() => new Promise(() => undefined)),
+    stopPass: vi.fn(() => Promise.resolve(ok(undefined))),
+    acceptPass: vi.fn(() => Promise.resolve(ok(undefined))),
+    closeSession: vi.fn(() => Promise.resolve(ok(undefined))),
     ...overrides,
   } as unknown as Api;
   vi.stubGlobal('api', api);
@@ -86,7 +91,7 @@ describe('каркас приложения', () => {
   it('идущий проход — экран scan со счётчиком принятых страниц', async () => {
     stubApi(
       makeSnapshot({
-        pass: { phase: 'scanning', resumed: false, pages: 7 },
+        pass: { phase: 'scanning', resumed: false, params: PARAMS, pages: 7 },
         session: {
           id: 'session.x',
           passes: [

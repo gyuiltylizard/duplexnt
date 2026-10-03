@@ -50,6 +50,10 @@ export function App(): ReactNode {
   const expireToast = useCallback(() => {
     setToast(null);
   }, []);
+  const showToast = useCallback((text: string) => {
+    toastId.current += 1;
+    setToast({ id: toastId.current, text });
+  }, []);
 
   const [deviceModal, setDeviceModal] = useState<{ readonly initialHost?: string } | null>(null);
   const [launchFailure, setLaunchFailure] = useState<DomainError | null>(null);
@@ -64,10 +68,9 @@ export function App(): ReactNode {
   }, []);
   const deviceConnected = useCallback(
     (label: string) => {
-      toastId.current += 1;
-      setToast({ id: toastId.current, text: t('toast.connected', { name: label }) });
+      showToast(t('toast.connected', { name: label }));
     },
-    [t],
+    [showToast, t],
   );
 
   const startPass = useCallback(() => {
@@ -85,6 +88,21 @@ export function App(): ReactNode {
       },
     );
   }, []);
+
+  const stopPass = useCallback(() => {
+    // Исход остановки виден по снимку; отдельного текста заслуживает только несмытый сегмент:
+    // страницы остались, проход прерван (S15 → тост).
+    window.api.stopPass().then(
+      (result) => {
+        if (!result.ok && result.error.code === 'sessionCloseFailed') {
+          showToast(t('toast.stopCloseFailed'));
+        }
+      },
+      (error: unknown) => {
+        console.error('[renderer] остановка прохода не ответила', error);
+      },
+    );
+  }, [showToast, t]);
 
   if (snapshot === null) {
     // Первый снимок ещё не пришёл: main отвечает за миллисекунды, рисовать нечего.
@@ -120,7 +138,7 @@ export function App(): ReactNode {
         />
       )}
       {screen === 'scan' && snapshot.pass !== null && (
-        <ScanScreen snapshot={snapshot} pass={snapshot.pass} />
+        <ScanScreen snapshot={snapshot} pass={snapshot.pass} onStop={stopPass} />
       )}
       {screen === 'editor' && snapshot.session !== null && (
         <EditorScreen session={snapshot.session} />

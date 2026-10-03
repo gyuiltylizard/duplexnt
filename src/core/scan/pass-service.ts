@@ -120,6 +120,8 @@ type ScannerSlot =
 interface Run {
   readonly controller: AbortController;
   readonly resumed: boolean;
+  /** Параметры прохода — у досканирования из журнала, не из настройки (KTD-27). */
+  readonly params: ScanParams;
   phase: PassProgress['phase'];
   pages: number;
   /** Чем оборван: «Остановить» удаляет сегмент, закрытие окна оставляет его прерванным. */
@@ -218,7 +220,10 @@ export function createPassService(
       seq,
       scanner: scannerState(),
       session,
-      pass: run === null ? null : { phase: run.phase, resumed: run.resumed, pages: run.pages },
+      pass:
+        run === null
+          ? null
+          : { phase: run.phase, resumed: run.resumed, params: run.params, pages: run.pages },
       canResume: run === null && scanner.kind === 'ready' && resumeTarget().ok,
       canAccept: run === null && last?.state === 'interrupted',
       storage: { incompatible: store.incompatible, unsaved: store.unsaved() },
@@ -427,6 +432,7 @@ export function createPassService(
     const current: Run = {
       controller: new AbortController(),
       resumed,
+      params: origin.params,
       phase: 'starting',
       pages: 0,
       intent: null,

@@ -424,7 +424,12 @@ describe('подключение сканера', () => {
   it('во время прохода подключение отклоняется до обращения к сети', async () => {
     const { handlers, connect } = setup({
       ...EMPTY_SNAPSHOT,
-      pass: { phase: 'scanning', resumed: false, pages: 2 },
+      pass: {
+        phase: 'scanning',
+        resumed: false,
+        params: { colorMode: 'Grayscale8', resolution: 300, paperSize: 'A4' },
+        pages: 2,
+      },
     });
 
     const result = await handlers.connectScanner({

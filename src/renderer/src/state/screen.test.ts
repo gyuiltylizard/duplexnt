@@ -15,7 +15,12 @@ const SESSION: SessionSnapshot = {
   ],
 };
 
-const PASS: PassProgress = { phase: 'scanning', resumed: false, pages: 1 };
+const PASS: PassProgress = {
+  phase: 'scanning',
+  resumed: false,
+  params: { colorMode: 'Grayscale8', resolution: 300, paperSize: 'A4' },
+  pages: 1,
+};
 
 function makeSnapshot(overrides: Partial<Snapshot>): Snapshot {
   return {

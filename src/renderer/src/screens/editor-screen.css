@@ -1,0 +1,15 @@
+/* Экран `editor`: каркас U20; полная раскладка — U24. */
+
+.editor-screen {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.editor-screen__count {
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-m);
+  line-height: var(--leading-snug);
+  white-space: nowrap;
+}

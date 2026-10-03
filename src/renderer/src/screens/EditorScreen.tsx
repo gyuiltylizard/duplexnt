@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import type { SessionSnapshot } from '@shared';
 import type { ReactNode } from 'react';
+import './editor-screen.css';
 
 // Экран `editor`, каркасная версия U20: счётчик страниц. Полный каркас — тулбар, лента по
 // проходам, превью, плашка прерванного прохода — юнит U24 (сессия 8).
