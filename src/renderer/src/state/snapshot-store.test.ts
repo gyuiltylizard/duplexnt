@@ -57,11 +57,17 @@ afterEach(() => {
 });
 
 describe('snapshot-store', () => {
-  it('первый снимок запрашивается сразу и применяется, подписчик уведомлён', async () => {
-    const { api, respond } = makeApi();
+  it('первый подписчик включает подписку на мост; снимок запрашивается и применяется', async () => {
+    const { api, respond, requests } = makeApi();
     const store = createSnapshotStore(api);
+
+    // До подписчиков хранилище к мосту не ходит.
+    expect(requests()).toBe(0);
+    expect(api.onSnapshotChanged).not.toHaveBeenCalled();
+
     const listener = vi.fn();
     store.subscribe(listener);
+    expect(api.onSnapshotChanged).toHaveBeenCalledTimes(1);
 
     expect(store.get()).toBeNull();
     respond(0, ok(makeSnapshot(1)));
@@ -74,6 +80,7 @@ describe('snapshot-store', () => {
   it('событие моста — подсказка перечитать: снимок берётся командой, не из события', async () => {
     const { api, respond, fireEvent, requests } = makeApi();
     const store = createSnapshotStore(api);
+    store.subscribe(vi.fn());
     respond(0, ok(makeSnapshot(1)));
     await flush();
 
@@ -102,22 +109,43 @@ describe('snapshot-store', () => {
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
-  it('dispose отписывается от события, поздний ответ не применяется', async () => {
-    const { api, respond, unsubscribe } = makeApi();
+  it('уход последнего подписчика отписывается от моста', () => {
+    const { api, unsubscribe } = makeApi();
     const store = createSnapshotStore(api);
 
-    store.dispose();
-    expect(unsubscribe).toHaveBeenCalledTimes(1);
+    const unsubscribeFirst = store.subscribe(vi.fn());
+    const unsubscribeSecond = store.subscribe(vi.fn());
+    unsubscribeFirst();
+    expect(unsubscribe).not.toHaveBeenCalled();
 
-    respond(0, ok(makeSnapshot(1)));
+    unsubscribeSecond();
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it('повторная подписка (StrictMode) снова слушает мост и перечитывает снимок', async () => {
+    const { api, respond, requests, unsubscribe } = makeApi();
+    const store = createSnapshotStore(api);
+
+    // Монтирование → размонтирование → монтирование, как делает StrictMode в dev.
+    store.subscribe(vi.fn())();
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+    const listener = vi.fn();
+    store.subscribe(listener);
+
+    expect(api.onSnapshotChanged).toHaveBeenCalledTimes(2);
+    expect(requests()).toBe(2);
+    respond(1, ok(makeSnapshot(1)));
     await flush();
-    expect(store.get()).toBeNull();
+
+    expect(store.get()?.seq).toBe(1);
+    expect(listener).toHaveBeenCalledTimes(1);
   });
 
   it('отказ конверта не меняет состояние и не роняет окно', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { api, respond } = makeApi();
     const store = createSnapshotStore(api);
+    store.subscribe(vi.fn());
 
     respond(0, fail('invalidInput'));
     await flush();

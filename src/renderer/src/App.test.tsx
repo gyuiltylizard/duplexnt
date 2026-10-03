@@ -7,6 +7,7 @@ import {
   type Snapshot,
 } from '@shared';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { StrictMode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import './i18n';
 import { App } from './App';
@@ -130,6 +131,19 @@ describe('каркас приложения', () => {
       'Эти сканы сохранила более новая версия приложения',
     );
     expect(screen.queryByText('Сканируем листы из автоподатчика')).toBeNull();
+  });
+
+  it('StrictMode (двойное монтирование dev) не оставляет окно пустым', async () => {
+    stubApi(makeSnapshot({}));
+    render(
+      <StrictMode>
+        <App />
+      </StrictMode>,
+    );
+
+    expect((await screen.findByRole('heading', { level: 1 })).textContent).toBe(
+      'Сканируем листы из автоподатчика',
+    );
   });
 
   it('размонтирование отписывает от события снимка', async () => {

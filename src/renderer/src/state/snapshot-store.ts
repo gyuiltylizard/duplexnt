@@ -3,26 +3,29 @@ import type { Api, Snapshot } from '@shared';
 // Хранилище снимка (план M1, U20; KTD-23): единственный источник состояния для экрана.
 // Событие моста — подсказка перечитать, не данные: по нему снимок запрашивается командой.
 // Ответы применяются по номеру `seq` — устаревший, пришедший позже, отбрасывается.
+//
+// Подписка на мост живёт от первого подписчика до последнего: React в StrictMode монтирует
+// дважды (подписка → отписка → подписка), и хранилище обязано пережить этот цикл — повторная
+// подписка снова слушает мост и перечитывает снимок.
 
 export type SnapshotApi = Pick<Api, 'getSnapshot' | 'onSnapshotChanged'>;
 
 export interface SnapshotStore {
   /** Последний применённый снимок; `null` — первый запрос ещё не ответил. */
   readonly get: () => Snapshot | null;
+  /** Первый подписчик включает подписку на мост, уход последнего — выключает. */
   readonly subscribe: (listener: () => void) => () => void;
   /** Запросить снимок ещё раз — после команды, меняющей состояние, не дожидаясь события. */
   readonly refresh: () => void;
-  /** Отписка от события моста; поздние ответы после неё не применяются. */
-  readonly dispose: () => void;
 }
 
 export function createSnapshotStore(api: SnapshotApi): SnapshotStore {
   let snapshot: Snapshot | null = null;
-  let disposed = false;
   const listeners = new Set<() => void>();
+  let unsubscribe: (() => void) | null = null;
 
   const apply = (next: Snapshot): void => {
-    if (disposed || (snapshot !== null && next.seq <= snapshot.seq)) {
+    if (snapshot !== null && next.seq <= snapshot.seq) {
       return;
     }
     snapshot = next;
@@ -47,23 +50,25 @@ export function createSnapshotStore(api: SnapshotApi): SnapshotStore {
     );
   };
 
-  const unsubscribe = api.onSnapshotChanged(() => {
-    refresh();
-  });
-  refresh();
-
   return {
     get: () => snapshot,
     subscribe: (listener) => {
+      if (listeners.size === 0 && unsubscribe === null) {
+        unsubscribe = api.onSnapshotChanged(() => {
+          refresh();
+        });
+        // Между отпиской и новой подпиской события могли пропасть — снимок перечитывается.
+        refresh();
+      }
       listeners.add(listener);
       return () => {
         listeners.delete(listener);
+        if (listeners.size === 0 && unsubscribe !== null) {
+          unsubscribe();
+          unsubscribe = null;
+        }
       };
     },
     refresh,
-    dispose: () => {
-      disposed = true;
-      unsubscribe();
-    },
   };
 }

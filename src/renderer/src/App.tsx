@@ -1,11 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-  type ReactNode,
-} from 'react';
+import { useCallback, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { DomainError, StartupNotice } from '@shared';
 import { NoticesBar } from './components/NoticesBar';
@@ -31,13 +24,9 @@ interface ToastState {
 
 export function App(): ReactNode {
   const { t } = useTranslation();
+  // Подписку на мост хранилище включает с первым подписчиком и выключает с последним —
+  // размонтирование и повторное монтирование StrictMode оно переживает само.
   const [store] = useState(() => createSnapshotStore(window.api));
-  useEffect(
-    () => () => {
-      store.dispose();
-    },
-    [store],
-  );
   const snapshot = useSyncExternalStore(store.subscribe, store.get);
 
   const [dismissed, setDismissed] = useState<ReadonlySet<StartupNotice>>(new Set());
