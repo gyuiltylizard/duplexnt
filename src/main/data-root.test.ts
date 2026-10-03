@@ -46,6 +46,22 @@ describe('resolveDataRoot', () => {
     expect(calls).toEqual(['getPath:appData', 'setPath:userData', 'getPath:userData']);
   });
 
+  it('неупакованный запуск: DUPLEXNT_USER_DATA переопределяет каталог целиком', () => {
+    const { app, userData } = fakeApp(false);
+    const override = join('D:', 'tmp', 'smoke-userdata');
+
+    expect(resolveDataRoot(app, { DUPLEXNT_USER_DATA: override })).toBe(join(override, 'data'));
+    expect(userData()).toBe(override);
+  });
+
+  it('упакованный запуск переменную окружения не уважает', () => {
+    const { app } = fakeApp(true);
+
+    expect(resolveDataRoot(app, { DUPLEXNT_USER_DATA: join('D:', 'tmp') })).toBe(
+      join(APP_DATA, 'duplexnt', 'data'),
+    );
+  });
+
   it('каталог dev не совпадает с каталогом установленного приложения и не вложен в него', () => {
     const dev = resolveDataRoot(fakeApp(false).app);
     const installed = resolveDataRoot(fakeApp(true).app);

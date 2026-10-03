@@ -17,9 +17,22 @@ export const DATA_DIR_NAME = 'data';
 // `userData`, и `dev` с установленным приложением должны жить в разных каталогах, а не делить
 // сессию и блокировку. Неупакованный запуск получает соседний каталог; путь по умолчанию до
 // переопределения не запрашивается — каталог `dev` строится от `appData`.
-export function resolveDataRoot(app: DataRootApp): string {
+//
+// `DUPLEXNT_USER_DATA` — изолированный каталог для агентских смоуков: данные dev-каталога
+// пользователя не трогаются. Только для неупакованного запуска: установленное приложение
+// чужая переменная окружения с данных не сдвинет.
+export function resolveDataRoot(
+  app: DataRootApp,
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): string {
   if (!app.isPackaged) {
-    app.setPath('userData', join(app.getPath('appData'), app.getName() + DEV_USER_DATA_SUFFIX));
+    const override = env.DUPLEXNT_USER_DATA?.trim();
+    app.setPath(
+      'userData',
+      override !== undefined && override !== ''
+        ? override
+        : join(app.getPath('appData'), app.getName() + DEV_USER_DATA_SUFFIX),
+    );
   }
   return join(app.getPath('userData'), DATA_DIR_NAME);
 }
