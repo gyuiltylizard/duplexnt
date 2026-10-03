@@ -61,6 +61,18 @@ describe('экран scan', () => {
     expect(screen.getByRole('status').textContent).toBe('Начинаем проход…');
   });
 
+  it('лента занимает место и до первой страницы: пустой контейнер на экране', () => {
+    const pass: PassProgress = { phase: 'starting', resumed: false, params: PARAMS, pages: 0 };
+    const view = render(
+      <ScanScreen snapshot={makeSnapshot({ pass })} pass={pass} onStop={vi.fn()} />,
+    );
+
+    const strip = view.container.querySelector('.strip');
+    expect(strip).not.toBeNull();
+    expect(strip?.children.length).toBe(0);
+    expect(strip?.getAttribute('aria-hidden')).toBe('true');
+  });
+
   it('лента показывает не больше пяти последних страниц', () => {
     const { snapshot, pass } = running(8, 8);
     render(<ScanScreen snapshot={snapshot} pass={pass} onStop={vi.fn()} />);

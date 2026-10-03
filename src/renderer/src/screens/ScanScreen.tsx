@@ -157,13 +157,16 @@ export function ScanScreen({ snapshot, pass, onStop }: ScanScreenProps): ReactNo
         <div className="scan-screen__meta">{meta}</div>
       </div>
 
-      {sessionId !== undefined && strip.length > 0 && (
-        <ul className="strip" aria-label={t('scan.strip.label')}>
-          {strip.map((page) => (
-            <StripCard key={page.key} sessionId={sessionId} page={page} />
-          ))}
-        </ul>
-      )}
+      {/* Лента занимает место с самого начала: первая миниатюра не расталкивает экран
+          (смоук приёмки M1). Пустая — скрыта от скринридера. */}
+      <ul
+        className="strip"
+        aria-label={strip.length > 0 ? t('scan.strip.label') : undefined}
+        aria-hidden={strip.length === 0 ? true : undefined}
+      >
+        {sessionId !== undefined &&
+          strip.map((page) => <StripCard key={page.key} sessionId={sessionId} page={page} />)}
+      </ul>
 
       <button
         type="button"

@@ -160,6 +160,12 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  /* Миниатюра проявляется, а не вспыхивает (смоук приёмки M1). */
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+.strip__card--loading .strip__img {
+  opacity: 0;
 }
 
 .strip__card--loading + .strip__card--loading .skeleton {
