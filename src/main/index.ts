@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, protocol, session, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, protocol, session, shell } from 'electron';
 import { join } from 'node:path';
 import { createCommands, createThumbnails, layoutOf, openPassService } from '@core';
 import ru from '@locales/ru/common.json';
@@ -8,6 +8,7 @@ import { resolveDataRoot } from './data-root';
 import { createEventSender } from './events';
 import { handlePageImageRequest, PAGE_SCHEME_REGISTRATION } from './page-protocol';
 import { denyAllPermissions, installShellGuards } from './shell/guards';
+import { installShortcutGuard } from './shell/shortcuts';
 import { buildWebPreferences } from './shell/web-preferences';
 import { acquireSingleInstance } from './single-instance';
 import { installWindowClose } from './window-close';
@@ -128,6 +129,10 @@ if (acquireSingleInstance(app, () => mainWindow)) {
   // Гварды ставятся до первого окна: событие `web-contents-created` не повторяется. Привилегии
   // схемы регистрируются только до `ready`.
   installShellGuards(app);
+  // В упакованном приложении браузерных клавиш нет: ни перезагрузки, ни DevTools, ни масштаба.
+  if (installShortcutGuard(app)) {
+    Menu.setApplicationMenu(null);
+  }
   protocol.registerSchemesAsPrivileged([PAGE_SCHEME_REGISTRATION]);
 
   app.whenReady().then(start).catch(startupFailed);
