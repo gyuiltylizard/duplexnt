@@ -122,10 +122,10 @@ export function ScanScreen({ snapshot, pass, onStop }: ScanScreenProps): ReactNo
   const prior = pages.length - pass.pages;
   const busy = pass.phase === 'busy';
 
-  const counter =
-    pass.phase === 'starting' && pass.pages === 0
-      ? t('scan.starting')
-      : t('scan.counter', { count: pages.length > 0 ? pages.length : pass.pages });
+  // До первой страницы — «Начинаем проход…» и в фазе `scanning` тоже: задание уже принято, но
+  // «Отсканировано 0» на экране не появляется (S12 — счёт начинается с первой страницы).
+  const counted = pages.length > 0 ? pages.length : pass.pages;
+  const counter = counted === 0 ? t('scan.starting') : t('scan.counter', { count: counted });
 
   const meta = busy
     ? t('scan.busy.meta')
