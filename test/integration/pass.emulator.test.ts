@@ -783,7 +783,7 @@ describe('служба прохода: «Остановить» в погран�
   it('«Остановить», пока закрываются незакрытые задания молчащего сканера, — без ожидания каждого', async () => {
     const { emulator, service } = await setup(
       { sheets: 2, deleteHangs: true },
-      { jobLimits: { ...FAST, deleteDeadlineMs: 1000 } },
+      { jobLimits: { ...FAST, deleteDeadlineMs: 400 } },
     );
     const deletes = (): number =>
       emulator.requests().filter((it) => it.startsWith('DELETE')).length;
@@ -804,8 +804,8 @@ describe('служба прохода: «Остановить» в погран�
     const report = unwrap(await running);
 
     expect(report.end).toBe('stopped');
-    // Не больше одного срока DELETE: второе задание уже не закрывается.
-    expect(Date.now() - started).toBeLessThan(1800);
+    // Второе задание уже не закрывается: ждали не больше одного срока DELETE.
+    expect(Date.now() - started).toBeLessThan(1500);
     expect(deletes()).toBe(before + 1);
     expect(
       emulator
