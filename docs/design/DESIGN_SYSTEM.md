@@ -324,6 +324,13 @@ flip / merge / editor, модалки device / add / save / mismatch / newscan).
 
 Первая строка группы параметров: padding `--space-7 --space-8`, фон `--color-bg-surface`, `gap --space-6`. Подключено: имя `--font-weight-medium --font-size-base/--leading-snug`, точка `--size-dot --radius-round` и подпись `--font-size-s --font-family-mono` цветом `--color-status-ready` («готов») или `--color-status-busy` («занят»); справа ghost «Сменить» `--color-accent`. Не подключено: «Сканер не подключён» `--font-size-m --color-text-subtle` и компактная первичная кнопка «+ Добавить сканер».
 
+Состояния запомненного сканера (M1, handoff U19 S2–S5; код — `setup-screen.css`):
+
+- **Проверяется** (`--checking`): точка `--color-text-faint` с `pulse --duration-loop`, подпись «проверяем…» `--color-text-subtle`; «Сменить» `disabled`.
+- **Не отвечает** (`--unreachable`): точка и подпись «не отвечает» `--color-danger`; справа два ghost — «Повторить» и «Сменить».
+- **По адресу другое устройство** (`--changed`): точка и подпись `--color-warning`; один ghost «Подключить заново»; `title` подписи — текст причины.
+- **Бейдж схемы `HTTP`** (между именем и статусом, только при HTTP): `--font-weight-medium --font-size-xxs/--leading-none --font-family-mono --tracking-caps`, цвет `--color-text-faint`, граница `--border-width solid --color-border-default`, `--radius-s`, padding `--space-1 --space-2`; `title` «Соединение со сканером не шифруется». Не кнопка.
+
 ### Модалка
 
 Оверлей `position:absolute; inset:0`, фон `--color-bg-overlay`, содержимое по центру. Окно: ширина `--size-modal` (newscan — `--size-modal-s`), `max-height: calc(100% − 60px)` для прокручиваемых, фон `--color-bg-elevated`, `--radius-xl`, тень `--shadow-modal`, `overflow:hidden`.
