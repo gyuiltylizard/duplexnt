@@ -8,6 +8,8 @@ import {
   type Snapshot,
 } from '@shared';
 import type { TFunction } from 'i18next';
+import { useImageLoad } from '../components/useImageLoad';
+import { lowerFirst } from '../state/error-text';
 import './scan-screen.css';
 
 // Экран `scan` (план M1, U23; UI_SPEC раздел 3; handoff U19, S12–S15, S19): тег прохода,
@@ -45,10 +47,9 @@ function passPages(snapshot: Snapshot, pass: PassProgress): readonly PageSnapsho
 
 /** Строка параметров прохода: «300 dpi · оттенки серого · A4». */
 function paramsLine(t: TFunction, params: ScanParams): string {
-  const color = t(`setup.params.colorMode.${params.colorMode}`);
   return t('scan.params', {
     resolution: params.resolution,
-    color: color.charAt(0).toLowerCase() + color.slice(1),
+    color: lowerFirst(t(`setup.params.colorMode.${params.colorMode}`)),
     size: params.paperSize,
   });
 }
@@ -62,44 +63,33 @@ function StripCard({
   readonly page: PageSnapshot;
 }): ReactNode {
   const { t } = useTranslation();
-  const [state, setState] = useState<'loading' | 'ok' | 'failed'>('loading');
+  const image = useImageLoad();
 
-  if (page.lost) {
-    // Потерянная страница в ленте `scan`: номер на месте, как у не построившейся миниатюры;
-    // полная форма S18 — в ленте `editor`.
+  // Потерянная страница в ленте `scan` выглядит как не построившаяся миниатюра — номер на
+  // месте; полная форма S18 — в ленте `editor`. Различается только подпись.
+  if (page.lost || image.state === 'failed') {
     return (
       <li
         className="strip__card strip__card--failed"
-        title={t('thumb.lostLabel', { number: page.number })}
+        title={page.lost ? t('thumb.lostLabel', { number: page.number }) : t('thumb.failedTitle')}
       >
-        <span className="strip__num">{page.number}</span>
-      </li>
-    );
-  }
-  if (state === 'failed') {
-    return (
-      <li className="strip__card strip__card--failed" title={t('thumb.failedTitle')}>
         <span className="strip__num">{page.number}</span>
       </li>
     );
   }
   return (
     <li
-      className={state === 'loading' ? 'strip__card strip__card--loading' : 'strip__card'}
-      aria-busy={state === 'loading' ? true : undefined}
+      className={image.state === 'loading' ? 'strip__card strip__card--loading' : 'strip__card'}
+      aria-busy={image.state === 'loading' ? true : undefined}
     >
       <img
         className="strip__img"
         alt={t('thumb.alt', { number: page.number })}
         src={pageImageUrl(sessionId, 'thumb', page.key)}
-        onLoad={() => {
-          setState('ok');
-        }}
-        onError={() => {
-          setState('failed');
-        }}
+        onLoad={image.onLoad}
+        onError={image.onError}
       />
-      {state === 'loading' && <span className="skeleton" />}
+      {image.state === 'loading' && <span className="skeleton skeleton--cover" />}
     </li>
   );
 }

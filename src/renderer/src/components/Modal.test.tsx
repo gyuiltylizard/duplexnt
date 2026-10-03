@@ -73,4 +73,47 @@ describe('Modal', () => {
     fireEvent.click(screen.getByRole('button', { name: 'закрыть' }));
     expect(document.activeElement).toBe(opener);
   });
+
+  it('фокус возвращается и когда React сам сфокусировал кнопку autoFocus', () => {
+    // React вызывает autoFocus на коммите, до эффектов: модалка не должна принять свою же
+    // кнопку за «элемент, открывший модалку».
+    function Host(): React.JSX.Element {
+      const [open, setOpen] = useState(false);
+      return (
+        <div>
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(true);
+            }}
+          >
+            открыть
+          </button>
+          {open && (
+            <Modal labelledBy="m-title">
+              <h2 id="m-title">Заголовок</h2>
+              <button
+                type="button"
+                autoFocus
+                onClick={() => {
+                  setOpen(false);
+                }}
+              >
+                отмена
+              </button>
+            </Modal>
+          )}
+        </div>
+      );
+    }
+
+    render(<Host />);
+    const opener = screen.getByRole('button', { name: 'открыть' });
+    opener.focus();
+    fireEvent.click(opener);
+    expect(document.activeElement?.textContent).toBe('отмена');
+
+    fireEvent.click(screen.getByRole('button', { name: 'отмена' }));
+    expect(document.activeElement).toBe(opener);
+  });
 });

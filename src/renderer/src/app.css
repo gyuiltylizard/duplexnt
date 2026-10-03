@@ -117,17 +117,19 @@
 }
 
 /* Недоступная кнопка и фокус (handoff U19; DESIGN_SYSTEM → «Открытые вопросы» 6) */
-.btn:disabled,
-.btn[aria-disabled='true'] {
+.btn:disabled {
   opacity: var(--opacity-disabled);
   cursor: default;
   filter: none;
   text-decoration: none;
 }
 
+/* Кольцо фокуса — одно на все фокусируемые элементы интерфейса. */
 .btn:focus-visible,
 .segment:focus-visible,
-.thumb:focus-visible {
+.thumb:focus-visible,
+.device-item:focus-visible,
+.device-advanced__toggle:focus-visible {
   outline: var(--space-1) solid var(--color-border-focus);
   outline-offset: var(--space-1);
 }
@@ -219,6 +221,13 @@
   border-radius: var(--radius-xs);
   background: var(--color-bg-surface);
   animation: pulse var(--duration-loop) var(--ease-loop) infinite;
+}
+
+/* Поверх загружающейся картинки — в миниатюрах, превью и ленте `scan` (S19). */
+.skeleton--cover {
+  position: absolute;
+  inset: 0;
+  border-radius: 0;
 }
 
 /* — сегментированный выбор — */
@@ -343,7 +352,9 @@
   gap: var(--space-4);
 }
 
-.modal__kicker {
+/* Ряд «точка + кикер» — общий для шапки модалки и плашки прерванного прохода. */
+.modal__kicker,
+.pass-banner__kicker {
   display: flex;
   align-items: center;
   gap: var(--space-4);

@@ -15,8 +15,6 @@ export interface SnapshotStore {
   readonly get: () => Snapshot | null;
   /** Первый подписчик включает подписку на мост, уход последнего — выключает. */
   readonly subscribe: (listener: () => void) => () => void;
-  /** Запросить снимок ещё раз — после команды, меняющей состояние, не дожидаясь события. */
-  readonly refresh: () => void;
 }
 
 export function createSnapshotStore(api: SnapshotApi): SnapshotStore {
@@ -53,7 +51,8 @@ export function createSnapshotStore(api: SnapshotApi): SnapshotStore {
   return {
     get: () => snapshot,
     subscribe: (listener) => {
-      if (listeners.size === 0 && unsubscribe === null) {
+      // `unsubscribe === null` ⇔ подписчиков нет: подписка на мост живёт с первым из них.
+      if (unsubscribe === null) {
         unsubscribe = api.onSnapshotChanged(() => {
           refresh();
         });
@@ -69,6 +68,5 @@ export function createSnapshotStore(api: SnapshotApi): SnapshotStore {
         }
       };
     },
-    refresh,
   };
 }

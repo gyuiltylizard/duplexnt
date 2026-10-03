@@ -1,4 +1,12 @@
-import { Fragment, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import {
+  Fragment,
+  memo,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   pageImageUrl,
@@ -9,8 +17,10 @@ import {
   type Snapshot,
 } from '@shared';
 import type { TFunction } from 'i18next';
+import { useImageLoad } from '../components/useImageLoad';
 import { NewScanModal } from '../modals/NewScanModal';
 import { errorText, errorTextInline } from '../state/error-text';
+import { hostOf } from '../state/scanner-address';
 import './editor-screen.css';
 
 // Экран `editor` (план M1, U24; UI_SPEC раздел 6 в объёме KTD-25; handoff U19, S16–S19, S21):
@@ -42,8 +52,12 @@ function multiline(text: string): ReactNode {
   ));
 }
 
-/** Миниатюра в ленте: обычная, потерянная (S18), строится или не построилась (S19). */
-function Thumb({
+/**
+ * Миниатюра в ленте: обычная, потерянная (S18), строится или не построилась (S19).
+ * Мемоизирована: смена выбора перерисовывает две карточки, а не всю ленту (`onSelect`
+ * стабилен и принимает ключ).
+ */
+const Thumb = memo(function Thumb({
   sessionId,
   page,
   selected,
@@ -52,15 +66,18 @@ function Thumb({
   readonly sessionId: string;
   readonly page: PageSnapshot;
   readonly selected: boolean;
-  readonly onSelect: () => void;
+  readonly onSelect: (key: string) => void;
 }): ReactNode {
   const { t } = useTranslation();
-  const [state, setState] = useState<'loading' | 'ok' | 'failed'>('loading');
+  const image = useImageLoad();
 
+  const select = (): void => {
+    onSelect(page.key);
+  };
   const keyDown = (event: KeyboardEvent<HTMLElement>): void => {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      onSelect();
+      select();
     }
   };
 
@@ -69,11 +86,11 @@ function Thumb({
   if (page.lost) {
     classes.push('thumb--lost');
     paper = <span className="thumb__label">{t('thumb.lost')}</span>;
-  } else if (state === 'failed') {
+  } else if (image.state === 'failed') {
     classes.push('thumb--failed');
     paper = <span className="thumb__label">{t('thumb.failed')}</span>;
   } else {
-    if (state === 'loading') {
+    if (image.state === 'loading') {
       classes.push('thumb--loading');
     }
     paper = (
@@ -81,15 +98,13 @@ function Thumb({
         <img
           className="thumb__img"
           alt=""
+          loading="lazy"
+          decoding="async"
           src={pageImageUrl(sessionId, 'thumb', page.key)}
-          onLoad={() => {
-            setState('ok');
-          }}
-          onError={() => {
-            setState('failed');
-          }}
+          onLoad={image.onLoad}
+          onError={image.onError}
         />
-        {state === 'loading' && <span className="skeleton" />}
+        {image.state === 'loading' && <span className="skeleton skeleton--cover" />}
       </>
     );
   }
@@ -101,13 +116,13 @@ function Thumb({
     <li
       role="option"
       aria-selected={selected}
-      aria-busy={!page.lost && state === 'loading' ? true : undefined}
+      aria-busy={!page.lost && image.state === 'loading' ? true : undefined}
       aria-label={page.lost ? t('thumb.lostLabel', { number: page.number }) : undefined}
-      title={!page.lost && state === 'failed' ? t('thumb.failedTitle') : undefined}
+      title={!page.lost && image.state === 'failed' ? t('thumb.failedTitle') : undefined}
       tabIndex={selected ? 0 : -1}
       data-key={page.key}
       className={classes.join(' ')}
-      onClick={onSelect}
+      onClick={select}
       onKeyDown={keyDown}
     >
       <div className="thumb__paper">{paper}</div>
@@ -116,7 +131,7 @@ function Thumb({
       </div>
     </li>
   );
-}
+});
 
 /** Превью: сама страница; потерянная — пунктирный лист S18; не открылась — текст S19. */
 function Preview({
@@ -127,41 +142,35 @@ function Preview({
   readonly page: PageSnapshot;
 }): ReactNode {
   const { t } = useTranslation();
-  const [state, setState] = useState<'loading' | 'ok' | 'failed'>('loading');
+  const image = useImageLoad();
 
-  if (page.lost) {
+  // Потерянная страница и не открывшийся файл показываются одинаково устроенным листом:
+  // угловая метка и текст; различаются пунктиром и ключом текста.
+  if (page.lost || image.state === 'failed') {
     return (
-      <div className="preview__paper preview__paper--lost">
+      <div className={page.lost ? 'preview__paper preview__paper--lost' : 'preview__paper'}>
         <div className="preview__corner">{t('preview.corner', { number: page.number })}</div>
-        <p className="preview__empty">{multiline(t('preview.lost'))}</p>
-      </div>
-    );
-  }
-  if (state === 'failed') {
-    return (
-      <div className="preview__paper">
-        <div className="preview__corner">{t('preview.corner', { number: page.number })}</div>
-        <p className="preview__empty">{multiline(t('preview.failed'))}</p>
+        <p className="preview__empty">
+          {multiline(page.lost ? t('preview.lost') : t('preview.failed'))}
+        </p>
       </div>
     );
   }
   return (
     <div
-      className={state === 'loading' ? 'preview__paper preview__paper--loading' : 'preview__paper'}
-      aria-busy={state === 'loading' ? true : undefined}
+      className={
+        image.state === 'loading' ? 'preview__paper preview__paper--loading' : 'preview__paper'
+      }
+      aria-busy={image.state === 'loading' ? true : undefined}
     >
       <img
         className="preview__img"
         alt={t('thumb.alt', { number: page.number })}
         src={pageImageUrl(sessionId, 'page', page.key)}
-        onLoad={() => {
-          setState('ok');
-        }}
-        onError={() => {
-          setState('failed');
-        }}
+        onLoad={image.onLoad}
+        onError={image.onError}
       />
-      {state === 'loading' && <span className="skeleton" />}
+      {image.state === 'loading' && <span className="skeleton skeleton--cover" />}
     </div>
   );
 }
@@ -264,9 +273,7 @@ export function EditorScreen({
 
   const reconnect = (): void => {
     const { scanner } = snapshot;
-    onOpenDevice(
-      scanner.kind === 'none' ? undefined : `${scanner.scanner.host}:${scanner.scanner.port}`,
-    );
+    onOpenDevice(scanner.kind === 'none' ? undefined : hostOf(scanner.scanner));
   };
 
   // Плашка S17: последний проход прерван. Ноль страниц проход иметь не может — сессии бы не было.
@@ -281,7 +288,26 @@ export function EditorScreen({
             name: last.scanner?.name ?? last.scanner?.host ?? '',
           })
         : t('editor.interrupted.textParamsUnknown');
-    const failure = resumeFailure ?? acceptFailure;
+    // Свежий отказ «Оставить как есть» виден и под висящим отказом досканирования:
+    // показывается последнее действие, а не первое.
+    let failureLine: ReactNode = null;
+    if (acceptFailure !== null) {
+      failureLine = errorText(t, acceptFailure);
+    } else if (resumeFailure !== null) {
+      failureLine = (
+        <>
+          {t('editor.interrupted.resumeFailed', { error: errorTextInline(t, resumeFailure) })}
+          {RECONNECT_CODES.includes(resumeFailure.code) && (
+            <>
+              {' '}
+              <button type="button" className="btn btn--link" onClick={reconnect}>
+                {t('editor.interrupted.reconnect')}
+              </button>
+            </>
+          )}
+        </>
+      );
+    }
     banner = (
       <div className="pass-banner" role="region" aria-labelledby="pass-banner-title">
         <div className="pass-banner__kicker">
@@ -313,19 +339,9 @@ export function EditorScreen({
             {t('editor.interrupted.newScan')}
           </button>
         </div>
-        {failure !== null && (
+        {failureLine !== null && (
           <p className="pass-banner__status pass-banner__status--danger" role="alert">
-            {failure === resumeFailure
-              ? t('editor.interrupted.resumeFailed', { error: errorTextInline(t, failure) })
-              : errorText(t, failure)}
-            {failure === resumeFailure && RECONNECT_CODES.includes(failure.code) && (
-              <>
-                {' '}
-                <button type="button" className="btn btn--link" onClick={reconnect}>
-                  {t('editor.interrupted.reconnect')}
-                </button>
-              </>
-            )}
+            {failureLine}
           </p>
         )}
       </div>
@@ -377,9 +393,7 @@ export function EditorScreen({
                     sessionId={session.id}
                     page={page}
                     selected={selected?.key === page.key}
-                    onSelect={() => {
-                      setSelectedKey(page.key);
-                    }}
+                    onSelect={setSelectedKey}
                   />
                 ))}
               </ul>

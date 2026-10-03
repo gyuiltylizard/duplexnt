@@ -48,8 +48,12 @@ export function errorText(t: TFunction, error: DomainError): string {
   return t(`errors.${code}`);
 }
 
+/** Первая буква строчной — для подстановки текста в середину фразы. */
+export function lowerFirst(text: string): string {
+  return text.charAt(0).toLowerCase() + text.slice(1);
+}
+
 /** Тот же текст для подстановки в составное сообщение: первая буква понижена. */
 export function errorTextInline(t: TFunction, error: DomainError): string {
-  const text = errorText(t, error);
-  return text.charAt(0).toLowerCase() + text.slice(1);
+  return lowerFirst(errorText(t, error));
 }

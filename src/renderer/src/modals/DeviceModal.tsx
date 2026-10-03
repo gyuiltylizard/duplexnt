@@ -40,9 +40,9 @@ export function DeviceModal({ initialHost, onClose, onConnected }: DeviceModalPr
   const [selected, setSelected] = useState<DiscoveredScanner | null>(null);
   const [host, setHost] = useState(initialHost ?? '');
   const [advancedOpen, setAdvancedOpen] = useState(initialHost !== undefined);
-  const [scheme, setScheme] = useState<Scheme>('https');
-  // Нетронутая схема уходит как `null` («не названо»): ядро тогда разберёт её из хоста-URL.
-  const [schemeDirty, setSchemeDirty] = useState(false);
+  // `null` — схема не названа: уходит в ядро как есть, то разберёт её из хоста-URL; на
+  // сегментах при этом подсвечен HTTPS — дефолт ядра.
+  const [scheme, setScheme] = useState<Scheme | null>(null);
   const [port, setPort] = useState('');
   const [path, setPath] = useState('');
   const [connecting, setConnecting] = useState<string | null>(null);
@@ -133,7 +133,7 @@ export function DeviceModal({ initialHost, onClose, onConnected }: DeviceModalPr
       request = {
         kind: 'address',
         host: trimmed,
-        scheme: schemeDirty ? scheme : null,
+        scheme,
         port: port.trim() === '' ? null : Number(port),
         basePath: path.trim() === '' ? null : path.trim(),
       };
@@ -336,10 +336,9 @@ export function DeviceModal({ initialHost, onClose, onConnected }: DeviceModalPr
                 <Segments<Scheme>
                   label={t('device.advanced.scheme')}
                   values={SCHEMES}
-                  selected={scheme}
+                  selected={scheme ?? 'https'}
                   format={(value) => value.toUpperCase()}
                   onSelect={(value) => {
-                    setSchemeDirty(true);
                     setScheme(value);
                     setFailure(null);
                   }}
@@ -350,7 +349,7 @@ export function DeviceModal({ initialHost, onClose, onConnected }: DeviceModalPr
                 <input
                   className="input input--small"
                   inputMode="numeric"
-                  placeholder={schemeDirty ? DEFAULT_PORTS[scheme] : DEFAULT_PORTS.https}
+                  placeholder={DEFAULT_PORTS[scheme ?? 'https']}
                   value={port}
                   onChange={(event) => {
                     setPort(event.target.value.replace(/\D/g, '').slice(0, 5));

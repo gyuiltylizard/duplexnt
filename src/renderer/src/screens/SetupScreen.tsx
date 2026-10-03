@@ -11,6 +11,7 @@ import {
 } from '@shared';
 import { Segments } from '../components/Segments';
 import { errorText, errorTextInline } from '../state/error-text';
+import { hostOf } from '../state/scanner-address';
 import './setup-screen.css';
 
 // Экран `setup` (план M1, U22; UI_SPEC раздел 2; handoff U19, S1–S6): одна колонка, строка
@@ -25,9 +26,6 @@ export interface SetupScreenProps {
   /** Открыть модалку `device`; адрес — для «Подключить заново» (S4, S6). */
   readonly onOpenDevice: (initialHost?: string) => void;
 }
-
-/** Адрес для поля модалки: хост с портом — порт различает две записи одного устройства. */
-const hostOf = (scanner: ScannerInfo): string => `${scanner.host}:${scanner.port}`;
 
 interface KnownParams {
   readonly options: ScanOptions;
@@ -56,10 +54,11 @@ export function SetupScreen({
 
   // Последние подтверждённые варианты: недоступные ряды S3–S4 показывают их, а не дефолты.
   // Корректировка состояния при рендере (react.dev «You Might Not Need an Effect»): рендер
-  // перезапустится с новым значением до обращения к DOM.
+  // перезапустится с новым значением до обращения к DOM. Снимок после IPC — всегда новые
+  // объекты, так что сравнение по ссылке переприсваивает на каждый снимок; это дёшево.
   const [known, setKnown] = useState<KnownParams | null>(null);
-  if (ready !== null && (known?.options !== ready.options || known.params !== ready.params)) {
-    setKnown({ options: ready.options, params: ready.params });
+  if (ready !== null && known !== ready) {
+    setKnown(ready);
   }
 
   const shown = ready ?? known ?? FALLBACK;

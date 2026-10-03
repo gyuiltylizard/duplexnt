@@ -182,6 +182,18 @@ describe('каркас приложения', () => {
     expect((await screen.findByRole('alert')).textContent).toContain('В лотке нет бумаги');
   });
 
+  it('двойной клик по запуску шлёт команду один раз', async () => {
+    const startPass = vi.fn(() => new Promise(() => undefined));
+    stubApi(makeSnapshot({ scanner: READY }), { startPass });
+    render(<App />);
+
+    const start = await screen.findByRole('button', { name: 'Сканировать листы' });
+    fireEvent.click(start);
+    fireEvent.click(start);
+
+    expect(startPass).toHaveBeenCalledTimes(1);
+  });
+
   it('отказ досканирования возвращается строкой в плашку S17; ссылка открывает device', async () => {
     stubApi(
       makeSnapshot({

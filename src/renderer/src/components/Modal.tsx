@@ -1,4 +1,4 @@
-import { useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 
 // Модалка по рецепту дизайн-системы и UI_SPEC раздел 7: затемнение, окно по центру, без анимации.
 // Esc и клик вне окна остаются без действия — закрывает только кнопка. Фокус заперт внутри;
@@ -21,21 +21,21 @@ export interface ModalProps {
 export function Modal({ labelledBy, small, busy, className, children }: ModalProps): ReactNode {
   const dialogRef = useRef<HTMLElement>(null);
 
+  // Элемент, открывший модалку, запоминается при первом рендере: `autoFocus` React вызывает
+  // на коммите, до эффектов, и к моменту эффекта фокус уже внутри модалки.
+  const [opener] = useState(() => document.activeElement);
+
   useEffect(() => {
-    const opener = document.activeElement;
     const dialog = dialogRef.current;
     if (dialog !== null && !dialog.contains(document.activeElement)) {
-      const initial =
-        dialog.querySelector<HTMLElement>('[autofocus]') ??
-        dialog.querySelector<HTMLElement>(FOCUSABLE);
-      initial?.focus();
+      dialog.querySelector<HTMLElement>(FOCUSABLE)?.focus();
     }
     return () => {
       if (opener instanceof HTMLElement && opener.isConnected) {
         opener.focus();
       }
     };
-  }, []);
+  }, [opener]);
 
   const trapFocus = (event: KeyboardEvent<HTMLElement>): void => {
     if (event.key !== 'Tab') {

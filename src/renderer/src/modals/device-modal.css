@@ -19,11 +19,6 @@
   outline: none;
 }
 
-.device-item:focus-visible {
-  outline: var(--space-1) solid var(--color-border-focus);
-  outline-offset: var(--space-1);
-}
-
 .device-item--selected {
   background: var(--color-bg-selected);
   border-color: var(--color-border-focus);

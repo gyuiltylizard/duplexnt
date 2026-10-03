@@ -162,11 +162,6 @@
   object-fit: cover;
 }
 
-.strip__card--loading .skeleton {
-  position: absolute;
-  inset: 0;
-}
-
 .strip__card--loading + .strip__card--loading .skeleton {
   animation-delay: var(--delay-stagger);
 }

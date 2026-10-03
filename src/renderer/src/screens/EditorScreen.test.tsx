@@ -190,6 +190,23 @@ describe('экран editor', () => {
     expect((await screen.findByRole('alert')).textContent).toContain('Сейчас идёт проход');
   });
 
+  it('свежий отказ «Оставить как есть» виден и под висящим отказом досканирования', async () => {
+    stubApi({
+      acceptPass: vi.fn(() => Promise.resolve(fail('sessionConflict', { reason: 'passRunning' }))),
+    });
+    renderEditor(
+      makeSnapshot([makePass({ state: 'interrupted', pages: pages(3) })], {
+        canResume: true,
+        canAccept: true,
+      }),
+      { resumeFailure: { code: 'scannerUnreachable' } },
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Оставить как есть' }));
+    await screen.findByText(/Сейчас идёт проход/);
+    expect(screen.queryByText(/Досканировать не удалось/)).toBeNull();
+  });
+
   it('отказ досканирования: текст по коду и ссылка «подключите заново»', () => {
     stubApi();
     const onOpenDevice = vi.fn();

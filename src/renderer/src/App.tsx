@@ -34,14 +34,13 @@ export function App(): ReactNode {
     setDismissed((previous) => new Set(previous).add(notice));
   }, []);
 
-  const toastId = useRef(0);
   const [toast, setToast] = useState<ToastState | null>(null);
   const expireToast = useCallback(() => {
     setToast(null);
   }, []);
+  // Номер растёт от предыдущего: новый тост со сменой `key` перезапускает срок показа.
   const showToast = useCallback((text: string) => {
-    toastId.current += 1;
-    setToast({ id: toastId.current, text });
+    setToast((previous) => ({ id: (previous?.id ?? 0) + 1, text }));
   }, []);
 
   const [deviceModal, setDeviceModal] = useState<{ readonly initialHost?: string } | null>(null);
@@ -62,17 +61,26 @@ export function App(): ReactNode {
     [showToast, t],
   );
 
+  const startInFlight = useRef(false);
   const startPass = useCallback(() => {
+    // Повторный клик до ответа не шлёт второй запуск: тот вернул бы `passRunning`, и плашка
+    // отказа повисла бы над удавшимся проходом (находка simplify-ревью сессии 9).
+    if (startInFlight.current) {
+      return;
+    }
+    startInFlight.current = true;
     setLaunchFailure(null);
     // Ответ придёт, когда задание закрыто; экран тем временем сменится по снимку. Отказ до
     // первой страницы возвращает на `setup` — плашка ждёт его здесь.
     window.api.startPass().then(
       (result) => {
+        startInFlight.current = false;
         if (!result.ok) {
           setLaunchFailure(result.error);
         }
       },
       (error: unknown) => {
+        startInFlight.current = false;
         console.error('[renderer] запуск прохода не ответил', error);
       },
     );

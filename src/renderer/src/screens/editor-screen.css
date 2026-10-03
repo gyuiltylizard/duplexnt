@@ -141,11 +141,6 @@
   object-fit: cover;
 }
 
-.thumb--loading .skeleton {
-  position: absolute;
-  inset: 0;
-}
-
 .thumb__label {
   position: absolute;
   inset: 0;
@@ -217,11 +212,7 @@
   border-radius: var(--radius-l);
 }
 
-.pass-banner__kicker {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-}
+/* `.pass-banner__kicker` — общий ряд «точка + кикер», правило в app.css. */
 
 .pass-banner__title {
   margin: 0;
@@ -286,12 +277,6 @@
   width: 100%;
   height: 100%;
   object-fit: contain;
-}
-
-.preview__paper--loading .skeleton {
-  position: absolute;
-  inset: 0;
-  border-radius: 0;
 }
 
 .preview__corner {
