@@ -3,7 +3,7 @@ title: 'feat: Подключение и один проход (M1)'
 type: feat
 date: 2026-10-02
 deepened: 2026-10-02
-status: заморожен # заморожен — готов, не начат → в работе → done
+status: done # заморожен — готов, не начат → в работе → done
 origin: docs/brainstorms/2026-10-02-data-model-requirements.md
 ---
 
