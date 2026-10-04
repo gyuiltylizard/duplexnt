@@ -96,16 +96,20 @@ describe('хранилище сессии: проход', () => {
         origin: ORIGIN,
         nextSegment: 2,
         segments: [{ number: 1, state: 'completed', pageCount: 3 }],
+        rotate180: false,
       },
     ]);
     expect(store.snapshot()).toEqual({
       id: SESSION,
+      backsDeclined: false,
+      saved: false,
       passes: [
         {
           number: 1,
           state: 'completed',
           paramsKnown: true,
           scanner: { name: 'Test Scanner', scheme: 'https', host: 'scanner.test', port: 443 },
+          rotate180: false,
           pages: [
             { key: 'p01-s01-0001', number: 1, lost: false },
             { key: 'p01-s01-0002', number: 2, lost: false },
@@ -716,7 +720,7 @@ describe('хранилище сессии: пустая сессия равна 
     await mkdir(layout.pagesDir, { recursive: true });
     await writeFile(join(layout.pagesDir, 'p01-s02-0001.jpg'), page(9));
     const journal: Journal = {
-      version: 1,
+      version: 2,
       sessionId: SESSION,
       nextPass: 2,
       passes: [
@@ -726,9 +730,12 @@ describe('хранилище сессии: пустая сессия равна 
           origin: ORIGIN,
           nextSegment: 3,
           segments: [{ number: 1, state: 'interrupted', pageCount: 0 }],
+          rotate180: false,
         },
       ],
       deletions: ['p01-s02-'],
+      backsDeclined: false,
+      saved: false,
     };
     const store = createSessionStore(root, { ...NO_SESSION, journal }, { retry: { ceilingMs: 0 } });
 
@@ -781,7 +788,7 @@ describe('хранилище сессии: запись проверяется �
 
 describe('хранилище сессии: потолки счётчиков', () => {
   const journalWith = (overrides: Partial<Journal>, pageCount = 0, nextSegment = 2): Journal => ({
-    version: 1,
+    version: 2,
     sessionId: SESSION,
     nextPass: 2,
     passes: [
@@ -791,9 +798,12 @@ describe('хранилище сессии: потолки счётчиков', (
         origin: ORIGIN,
         nextSegment,
         segments: [{ number: nextSegment - 1, state: 'running', pageCount }],
+        rotate180: false,
       },
     ],
     deletions: [],
+    backsDeclined: false,
+    saved: false,
     ...overrides,
   });
 
@@ -877,7 +887,7 @@ describe('хранилище сессии: миниатюры отброшенн
 
 describe('хранилище сессии: нечитаемый журнал, который сверка не сохранила в стороне', () => {
   const JOURNAL: Journal = {
-    version: 1,
+    version: 2,
     sessionId: SESSION,
     nextPass: 2,
     passes: [
@@ -887,9 +897,12 @@ describe('хранилище сессии: нечитаемый журнал, к
         origin: null,
         nextSegment: 2,
         segments: [{ number: 1, state: 'interrupted', pageCount: 1 }],
+        rotate180: false,
       },
     ],
     deletions: [],
+    backsDeclined: false,
+    saved: false,
   };
 
   async function seeded(before?: (call: FsCall) => void) {
@@ -932,5 +945,132 @@ describe('хранилище сессии: нечитаемый журнал, к
     expect(await readFile(layout.journalFile, 'utf8')).toBe('не журнал');
     expect(store.unsaved()).toBe(true);
     expect(store.snapshot()?.passes[0]?.state).toBe('interrupted');
+  });
+});
+
+describe('хранилище сессии: флаги журнала v2 (M2, U1)', () => {
+  /** Две полных прохода: лицевые (2 стр.) и обороты (2 стр.). */
+  async function twoPasses() {
+    const context = await setup();
+    const { store, accept } = context;
+    ok(await store.beginPass(ORIGIN));
+    await accept(1, 2);
+    ok(await store.endSegment('completed'));
+    ok(await store.beginPass(ORIGIN));
+    await accept(3, 4);
+    ok(await store.endSegment('completed'));
+    return context;
+  }
+
+  it('setRotateBacks ставит флаг на проход оборотов, идемпотентен, переживает запись', async () => {
+    const { store, journalOnDisk } = await twoPasses();
+
+    ok(await store.setRotateBacks(true));
+    ok(await store.setRotateBacks(true));
+
+    expect(store.snapshot()?.passes.map((pass) => pass.rotate180)).toEqual([false, true]);
+    expect((await journalOnDisk()).passes.map((pass) => pass.rotate180)).toEqual([false, true]);
+
+    ok(await store.setRotateBacks(false));
+    expect(store.snapshot()?.passes.map((pass) => pass.rotate180)).toEqual([false, false]);
+  });
+
+  it('setRotateBacks без прохода оборотов — noBacksPass; без сессии — noSession', async () => {
+    const { store, accept } = await setup();
+
+    expect(await store.setRotateBacks(true)).toMatchObject({
+      ok: false,
+      error: { code: 'sessionConflict', details: { reason: 'noSession' } },
+    });
+
+    ok(await store.beginPass(ORIGIN));
+    await accept(1, 2);
+    ok(await store.endSegment('completed'));
+    expect(await store.setRotateBacks(true)).toMatchObject({
+      ok: false,
+      error: { code: 'sessionConflict', details: { reason: 'noBacksPass' } },
+    });
+  });
+
+  it('роль оборотов — позиция среди уцелевших: после остановки флаг ложится на проход №3', async () => {
+    const { store, accept } = await setup();
+    ok(await store.beginPass(ORIGIN));
+    await accept(1, 2);
+    ok(await store.endSegment('completed'));
+    // Проход оборотов №2 остановлен на первом сегменте: исчезает целиком, номер не переиспользуется.
+    ok(await store.beginPass(ORIGIN));
+    await accept(3, 3);
+    expect(ok(await store.discardSegment())).toEqual({ sessionClosed: false });
+    expect(ok(await store.beginPass(ORIGIN))).toMatchObject({ pass: 3 });
+    await accept(4, 5);
+    ok(await store.endSegment('completed'));
+
+    ok(await store.setRotateBacks(true));
+
+    const passes = store.snapshot()?.passes ?? [];
+    expect(passes.map((pass) => [pass.number, pass.rotate180])).toEqual([
+      [1, false],
+      [3, true],
+    ]);
+  });
+
+  it('declineBacks durable и идемпотентен; с отсканированными оборотами — backsPresent', async () => {
+    const { store, accept, journalOnDisk } = await setup();
+    ok(await store.beginPass(ORIGIN));
+    await accept(1, 2);
+    ok(await store.endSegment('completed'));
+
+    ok(await store.declineBacks());
+    ok(await store.declineBacks());
+
+    expect(store.snapshot()?.backsDeclined).toBe(true);
+    expect((await journalOnDisk()).backsDeclined).toBe(true);
+
+    const second = await twoPasses();
+    expect(await second.store.declineBacks()).toMatchObject({
+      ok: false,
+      error: { code: 'sessionConflict', details: { reason: 'backsPresent' } },
+    });
+  });
+
+  it('markSaved ставит отметку; новая страница и смена поворота её снимают (KTD-7)', async () => {
+    const { store, accept, journalOnDisk } = await twoPasses();
+
+    ok(await store.markSaved());
+    expect(store.snapshot()?.saved).toBe(true);
+    expect((await journalOnDisk()).saved).toBe(true);
+
+    // «Сохранил → включил тумблер» — индикация несохранённого возвращается (AE12).
+    ok(await store.setRotateBacks(true));
+    expect(store.snapshot()?.saved).toBe(false);
+
+    ok(await store.markSaved());
+    ok(await store.beginPass(ORIGIN));
+    await accept(5, 5);
+    expect(store.snapshot()?.saved).toBe(false);
+  });
+
+  it('удаление идущего сегмента со страницами снимает отметку о сохранении', async () => {
+    const { store, accept } = await twoPasses();
+    ok(await store.beginPass(ORIGIN));
+    await accept(5, 5);
+    ok(await store.markSaved());
+
+    ok(await store.discardSegment());
+
+    expect(store.snapshot()?.saved).toBe(false);
+  });
+
+  it('новая сессия не наследует флаги закрытой', async () => {
+    const { store, accept } = await twoPasses();
+    ok(await store.setRotateBacks(true));
+    ok(await store.markSaved());
+    ok(await store.closeSession());
+
+    ok(await store.beginPass(ORIGIN));
+    await accept(1, 1);
+
+    expect(store.snapshot()).toMatchObject({ backsDeclined: false, saved: false });
+    expect(store.snapshot()?.passes.map((pass) => pass.rotate180)).toEqual([false]);
   });
 });

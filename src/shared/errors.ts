@@ -69,6 +69,10 @@ export const SESSION_CONFLICT_REASONS = [
   'otherScanner',
   /** Сессии нет. */
   'noSession',
+  /** В наборе нет прохода оборотов: поворачивать нечего (M2, KTD-2). */
+  'noBacksPass',
+  /** Обороты уже отсканированы: «обороты не нужны» опоздало (M2, KTD-6). */
+  'backsPresent',
 ] as const;
 
 export type SessionConflictReason = (typeof SESSION_CONFLICT_REASONS)[number];

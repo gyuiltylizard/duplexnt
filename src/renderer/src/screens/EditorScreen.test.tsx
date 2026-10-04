@@ -18,6 +18,7 @@ function makePass(overrides: Partial<PassSnapshot>): PassSnapshot {
     state: 'completed',
     paramsKnown: true,
     scanner: null,
+    rotate180: false,
     pages: pages(3),
     ...overrides,
   };
@@ -27,7 +28,7 @@ function makeSnapshot(passes: PassSnapshot[], overrides: Partial<Snapshot> = {})
   return {
     seq: 1,
     scanner: { kind: 'none' },
-    session: { id: 'session.x', passes },
+    session: { id: 'session.x', backsDeclined: false, saved: false, passes },
     pass: null,
     canResume: false,
     canAccept: false,

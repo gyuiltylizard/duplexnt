@@ -34,8 +34,17 @@ function running(pageCount: number, passPages: number, phase: PassProgress['phas
     pass,
     session: {
       id: 'session.x',
+      backsDeclined: false,
+      saved: false,
       passes: [
-        { number: 1, state: 'running', paramsKnown: true, scanner: null, pages: pages(pageCount) },
+        {
+          number: 1,
+          state: 'running',
+          paramsKnown: true,
+          scanner: null,
+          rotate180: false,
+          pages: pages(pageCount),
+        },
       ],
     },
   });
@@ -117,8 +126,17 @@ describe('экран scan', () => {
       pass,
       session: {
         id: 'session.x',
+        backsDeclined: false,
+        saved: false,
         passes: [
-          { number: 1, state: 'running', paramsKnown: true, scanner: null, pages: pages(18) },
+          {
+            number: 1,
+            state: 'running',
+            paramsKnown: true,
+            scanner: null,
+            rotate180: false,
+            pages: pages(18),
+          },
         ],
       },
     });
@@ -136,8 +154,17 @@ describe('экран scan', () => {
       pass,
       session: {
         id: 'session.x',
+        backsDeclined: false,
+        saved: false,
         passes: [
-          { number: 1, state: 'interrupted', paramsKnown: true, scanner: null, pages: pages(17) },
+          {
+            number: 1,
+            state: 'interrupted',
+            paramsKnown: true,
+            scanner: null,
+            rotate180: false,
+            pages: pages(17),
+          },
         ],
       },
     });
@@ -177,12 +204,15 @@ describe('экран scan', () => {
       pass,
       session: {
         id: 'session.x',
+        backsDeclined: false,
+        saved: false,
         passes: [
           {
             number: 1,
             state: 'running',
             paramsKnown: true,
             scanner: null,
+            rotate180: false,
             pages: [{ key: 'p01-s01-0001', number: 1, lost: true }, ...pages(2, 2)],
           },
         ],

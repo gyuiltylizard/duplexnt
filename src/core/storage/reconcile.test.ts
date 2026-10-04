@@ -43,15 +43,31 @@ const pass = (number: number, segments: ReturnType<typeof segment>[], extra: obj
   origin: ORIGIN,
   nextSegment: Math.max(...segments.map((it) => it.number)) + 1,
   segments,
+  rotate180: false,
   ...extra,
 });
 const journalOf = (passes: ReturnType<typeof pass>[], extra: object = {}) => ({
-  version: 1,
+  version: 2,
   sessionId: SESSION,
   nextPass: passes.length + 1,
   passes,
   deletions: [] as string[],
+  backsDeclined: false,
+  saved: false,
   ...extra,
+});
+function omit<T extends object, K extends keyof T>(value: T, ...keys: K[]): Omit<T, K> {
+  const dropped: readonly string[] = keys as readonly string[];
+  return Object.fromEntries(
+    Object.entries(value).filter(([key]) => !dropped.includes(key)),
+  ) as Omit<T, K>;
+}
+
+/** Журнал версии 1 (M1): тот же состав без полей v2. */
+const journalV1Of = (passes: ReturnType<typeof pass>[], extra: object = {}) => ({
+  ...omit(journalOf(passes, extra), 'backsDeclined', 'saved'),
+  version: 1,
+  passes: passes.map((one) => omit(one, 'rotate180')),
 });
 
 const page = (number: number): Uint8Array => Uint8Array.of(0xff, 0xd8, number, 0xff, 0xd9);
@@ -112,7 +128,7 @@ describe('сверка при запуске: таблица плана', () => 
 
   it('маркер версии новее понятного → ничего не трогается; режим отказа (AE9)', async () => {
     const { root } = await seed(
-      { ...journalOf([pass(1, [segment(1, 'running', 2)])]), version: 2 },
+      { ...journalOf([pass(1, [segment(1, 'running', 2)])]), version: 3 },
       [...pagesOfFirstSegment(3)],
     );
     const before = await dirSnapshot(root);
@@ -127,6 +143,49 @@ describe('сверка при запуске: таблица плана', () => 
       error: { code: 'storageIncompatible' },
     });
     expect(await store.closeSession()).toMatchObject({ ok: false });
+    expect(await dirSnapshot(root)).toEqual(before);
+  });
+
+  it('журнал версии 1 читается и переписывается текущей версией; флаги — дефолты (M2, R13)', async () => {
+    const { root, layout } = await seed(
+      journalV1Of([pass(1, [segment(1, 'completed', 2)])]),
+      pagesOfFirstSegment(2),
+    );
+
+    const { session, notices } = await reconciled(root);
+
+    expect(notices).toEqual([]);
+    expect(session).toMatchObject({ backsDeclined: false, saved: false });
+    expect(session?.passes[0]).toMatchObject({ rotate180: false });
+    const journal = await journalOnDisk(layout);
+    expect(journal.version).toBe(2);
+    expect(journal).toMatchObject({ backsDeclined: false, saved: false });
+    expect(journal.passes[0]).toMatchObject({ rotate180: false });
+
+    // Повторный прогон уже ничего не меняет: сверка идемпотентна.
+    const before = await dirSnapshot(root);
+    await reconciled(root);
+    expect(await dirSnapshot(root)).toEqual(before);
+  });
+
+  it('флаги v2 переживают перезапуск-сверку, журнал не переписывается (M2, R13)', async () => {
+    const { root } = await seed(
+      journalOf([pass(1, [segment(1, 'completed', 1)]), pass(2, [segment(1, 'completed', 1)])], {
+        nextPass: 3,
+        saved: true,
+        passes: [
+          pass(1, [segment(1, 'completed', 1)]),
+          pass(2, [segment(1, 'completed', 1)], { rotate180: true }),
+        ],
+      }),
+      [pageName(1, 1, 1), pageName(2, 1, 1)],
+    );
+    const before = await dirSnapshot(root);
+
+    const { session } = await reconciled(root);
+
+    expect(session).toMatchObject({ saved: true, backsDeclined: false });
+    expect(session?.passes.map((it) => it.rotate180)).toEqual([false, true]);
     expect(await dirSnapshot(root)).toEqual(before);
   });
 

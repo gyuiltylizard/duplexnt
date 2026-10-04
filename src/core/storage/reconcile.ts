@@ -110,6 +110,7 @@ function adopt(
         origin: null,
         nextSegment: group.segment + 1,
         segments: [interruptedSegment(group.segment, found)],
+        rotate180: false,
       };
       passes = inserted(passes, created);
       nextPass = Math.max(nextPass, group.pass + 1);
@@ -229,7 +230,14 @@ export async function reconcileSession(
       notices.push('journalRebuilt');
     }
   }
-  const before = read?.kind === 'ok' ? JSON.stringify(read.value) : null;
+  // Журнал прежней версии разбирается в текущую и обязан быть переписан, даже когда сверке
+  // нечего менять (запись — всегда текущей версией): маркер на диске сверяется отдельно.
+  const diskVersion =
+    read?.kind === 'ok' && original !== null
+      ? (JSON.parse(new TextDecoder().decode(original)) as { version: number }).version
+      : null;
+  const before =
+    diskVersion === JOURNAL_VERSION && read?.kind === 'ok' ? JSON.stringify(read.value) : null;
 
   if (journal !== null) {
     // Начатое удаление доводится до конца; файлы под пометкой обратно не принимаются. Пометка

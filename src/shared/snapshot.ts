@@ -32,11 +32,20 @@ export interface PassSnapshot {
   readonly paramsKnown: boolean;
   /** Сканер, на котором шёл проход (KTD-27); `null`, когда параметры неизвестны. */
   readonly scanner: ScannerInfo | null;
+  /**
+   * Повернуть страницы прохода на 180° при показе и в PDF (M2, KTD-2). Осмыслен на проходе
+   * оборотов — втором уцелевшем (роль, не чётность номера — KTD-4); исходники не меняются.
+   */
+  readonly rotate180: boolean;
   readonly pages: readonly PageSnapshot[];
 }
 
 export interface SessionSnapshot {
   readonly id: string;
+  /** «Обороты не нужны»: односторонний набор, `flip` больше не показывается (M2, KTD-6). */
+  readonly backsDeclined: boolean;
+  /** Набор сохранён в PDF и с тех пор не менялся (M2, R12): кормит индикацию несохранённого. */
+  readonly saved: boolean;
   readonly passes: readonly PassSnapshot[];
 }
 

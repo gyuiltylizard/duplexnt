@@ -10,6 +10,7 @@ import {
 } from '@shared';
 import { isTempName, removeByPrefix, renameWithRetry, writeStreamAtomic } from './atomic-file';
 import {
+  backsPassOf,
   JOURNAL_VERSION,
   journalSchema,
   newJournal,
@@ -17,6 +18,7 @@ import {
   pagesOf,
   passStateOf,
   runningSegmentOf,
+  survivingPassesOf,
   withLastPass,
   withLastSegment,
   type Journal,
@@ -152,6 +154,15 @@ export interface SessionStore {
   discardSegment(): Promise<Result<{ readonly sessionClosed: boolean }>>;
   /** «Оставить как есть»: прерванный проход принят. */
   acceptPass(): Promise<Result<void>>;
+  /**
+   * «Повернуть обороты на 180°» (M2, KTD-2): флаг на проходе в роли оборотов — втором уцелевшем
+   * (KTD-4). Смена флага снимает отметку о сохранении: на диске лежит PDF без поворота.
+   */
+  setRotateBacks(rotate: boolean): Promise<Result<void>>;
+  /** «Обороты не нужны» (M2, KTD-6): durable-отметка, `flip` больше не показывается. */
+  declineBacks(): Promise<Result<void>>;
+  /** Набор сохранён в PDF (M2, R12); ставится после успешной записи файла. */
+  markSaved(): Promise<Result<void>>;
   /** «Новая пачка»: единственное, что удаляет сессию со страницами. */
   closeSession(): Promise<Result<void>>;
   /** Повторяет запись журнала, если состояние в памяти не сохранено. */
@@ -378,11 +389,14 @@ export function createSessionStore(
       }
       return {
         id: journal.sessionId,
+        backsDeclined: journal.backsDeclined,
+        saved: journal.saved,
         passes: journal.passes.map((pass) => ({
           number: pass.number,
           state: passStateOf(pass),
           paramsKnown: pass.origin !== null,
           scanner: pass.origin === null ? null : scannerInfoOf(pass.origin.scanner),
+          rotate180: pass.rotate180,
           pages: pagesOf(pass).map(({ key, number }) => ({ key, number, lost: lost.has(key) })),
         })),
       };
@@ -401,12 +415,13 @@ export function createSessionStore(
         }
         // Пустой журнал — не сессия: проход начинается заново, пустые проходы в новую не идут.
         // Пометки об удалении и счётчики при этом остаются: без них неудалённые файлы
-        // отброшенного сегмента вернулись бы страницами.
+        // отброшенного сегмента вернулись бы страницами. Решения прежней сессии (отказ от
+        // оборотов, отметка о сохранении) с ней и уходят.
         const base =
           journal === null || (isVacant(journal) && journal.deletions.length === 0)
             ? newJournal(newSessionId())
             : isVacant(journal)
-              ? { ...journal, passes: [] }
+              ? { ...journal, passes: [], backsDeclined: false, saved: false }
               : journal;
         const number = base.nextPass;
         if (number > MAX_PASS_NUMBER) {
@@ -427,6 +442,7 @@ export function createSessionStore(
           origin,
           nextSegment: segment.value + 1,
           segments: [runningSegment(segment.value)],
+          rotate180: false,
         };
         const saved = await commit(
           { ...base, nextPass: number + 1, passes: [...base.passes, pass] },
@@ -528,8 +544,12 @@ export function createSessionStore(
         }
 
         const number = pagesOf(pass).length + 1;
+        // Новая страница меняет вывод: отметка о сохранении снимается (KTD-7).
         await commit(
-          withLastPass(journal, withLastSegment(pass, { ...segment, pageCount: index })),
+          {
+            ...withLastPass(journal, withLastSegment(pass, { ...segment, pageCount: index })),
+            saved: false,
+          },
           'soft',
         );
         return { key, number, bytes };
@@ -562,10 +582,15 @@ export function createSessionStore(
           journal,
           withLastSegment(pass, { ...segment, state: 'interrupted' }),
         );
-        const remaining = withLastPass(
-          journal,
-          pass.segments.length > 1 ? { ...pass, segments: pass.segments.slice(0, -1) } : null,
-        );
+        // Удаление страниц меняет вывод — отметка о сохранении снимается; пустой сегмент
+        // вывода не менял.
+        const remaining = {
+          ...withLastPass(
+            journal,
+            pass.segments.length > 1 ? { ...pass, segments: pass.segments.slice(0, -1) } : null,
+          ),
+          saved: segment.pageCount === 0 ? journal.saved : false,
+        };
 
         // Остановка, после которой в сессии нет страниц, идёт путём закрытия сессии (KTD-20).
         if (pageCountOf(remaining) === 0) {
@@ -605,6 +630,53 @@ export function createSessionStore(
           return conflict(state === 'running' ? 'passRunning' : 'notInterrupted');
         }
         return commit(withLastPass(journal, { ...pass, accepted: true }), 'must');
+      }),
+
+    setRotateBacks: (rotate) =>
+      mutating(async () => {
+        if (journal === null || isVacant(journal)) {
+          return conflict('noSession');
+        }
+        const backs = backsPassOf(journal);
+        if (backs === null) {
+          return conflict('noBacksPass');
+        }
+        if (backs.rotate180 === rotate) {
+          return ok(undefined);
+        }
+        const passes = journal.passes.map((pass) =>
+          pass === backs ? { ...pass, rotate180: rotate } : pass,
+        );
+        // Смена поворота меняет вывод: сохранённый PDF устарел (KTD-7).
+        return commit({ ...journal, passes, saved: false }, 'must');
+      }),
+
+    declineBacks: () =>
+      mutating(async () => {
+        if (journal === null || isVacant(journal)) {
+          return conflict('noSession');
+        }
+        if (runningSegmentOf(journal) !== null) {
+          return conflict('passRunning');
+        }
+        if (survivingPassesOf(journal).length > 1) {
+          return conflict('backsPresent');
+        }
+        if (journal.backsDeclined) {
+          return ok(undefined);
+        }
+        // Вывод не меняется (оборотов и не было) — отметка о сохранении остаётся.
+        return commit({ ...journal, backsDeclined: true }, 'must');
+      }),
+
+    markSaved: () =>
+      mutating(async () => {
+        if (journal === null || isVacant(journal)) {
+          return conflict('noSession');
+        }
+        // Отметка — следствие уже записанного файла, не решение: при отказе записи журнала
+        // остаётся в памяти и доводится следующей перезаписью.
+        return commit({ ...journal, saved: true }, 'soft').then(() => ok(undefined));
       }),
 
     closeSession: () =>

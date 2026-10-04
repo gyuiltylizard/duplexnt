@@ -4,12 +4,15 @@ import { screenOf } from './screen';
 
 const SESSION: SessionSnapshot = {
   id: 'session.20261003-120000-abcd',
+  backsDeclined: false,
+  saved: false,
   passes: [
     {
       number: 1,
       state: 'completed',
       paramsKnown: true,
       scanner: null,
+      rotate180: false,
       pages: [{ key: 'p01-s01-0001', number: 1, lost: false }],
     },
   ],

@@ -95,8 +95,17 @@ describe('каркас приложения', () => {
         pass: { phase: 'scanning', resumed: false, params: PARAMS, pages: 7 },
         session: {
           id: 'session.x',
+          backsDeclined: false,
+          saved: false,
           passes: [
-            { number: 1, state: 'running', paramsKnown: true, scanner: null, pages: pages(7) },
+            {
+              number: 1,
+              state: 'running',
+              paramsKnown: true,
+              scanner: null,
+              rotate180: false,
+              pages: pages(7),
+            },
           ],
         },
       }),
@@ -112,8 +121,17 @@ describe('каркас приложения', () => {
       makeSnapshot({
         session: {
           id: 'session.x',
+          backsDeclined: false,
+          saved: false,
           passes: [
-            { number: 1, state: 'interrupted', paramsKnown: true, scanner: null, pages: pages(5) },
+            {
+              number: 1,
+              state: 'interrupted',
+              paramsKnown: true,
+              scanner: null,
+              rotate180: false,
+              pages: pages(5),
+            },
           ],
         },
       }),
@@ -204,8 +222,17 @@ describe('каркас приложения', () => {
         pass: { phase: 'scanning', resumed: false, params: PARAMS, pages: 2 },
         session: {
           id: 'session.x',
+          backsDeclined: false,
+          saved: false,
           passes: [
-            { number: 1, state: 'running', paramsKnown: true, scanner: null, pages: pages(2) },
+            {
+              number: 1,
+              state: 'running',
+              paramsKnown: true,
+              scanner: null,
+              rotate180: false,
+              pages: pages(2),
+            },
           ],
         },
       }),
@@ -225,8 +252,17 @@ describe('каркас приложения', () => {
         pass: { phase: 'scanning', resumed: false, params: PARAMS, pages: 2 },
         session: {
           id: 'session.x',
+          backsDeclined: false,
+          saved: false,
           passes: [
-            { number: 1, state: 'running', paramsKnown: true, scanner: null, pages: pages(2) },
+            {
+              number: 1,
+              state: 'running',
+              paramsKnown: true,
+              scanner: null,
+              rotate180: false,
+              pages: pages(2),
+            },
           ],
         },
       }),
@@ -251,12 +287,15 @@ describe('каркас приложения', () => {
         notices: ['pagesLost'],
         session: {
           id: 'session.x',
+          backsDeclined: false,
+          saved: false,
           passes: [
             {
               number: 1,
               state: 'completed',
               paramsKnown: true,
               scanner: null,
+              rotate180: false,
               pages: [
                 { key: 'p01-s01-0001', number: 1, lost: false },
                 { key: 'p01-s01-0002', number: 2, lost: true },
@@ -278,8 +317,17 @@ describe('каркас приложения', () => {
       canAccept: true,
       session: {
         id: 'session.x',
+        backsDeclined: false,
+        saved: false,
         passes: [
-          { number: 1, state: 'interrupted', paramsKnown: true, scanner: null, pages: pages(3) },
+          {
+            number: 1,
+            state: 'interrupted',
+            paramsKnown: true,
+            scanner: null,
+            rotate180: false,
+            pages: pages(3),
+          },
         ],
       },
     });
@@ -354,8 +402,17 @@ describe('каркас приложения', () => {
         canAccept: true,
         session: {
           id: 'session.x',
+          backsDeclined: false,
+          saved: false,
           passes: [
-            { number: 1, state: 'interrupted', paramsKnown: true, scanner: null, pages: pages(3) },
+            {
+              number: 1,
+              state: 'interrupted',
+              paramsKnown: true,
+              scanner: null,
+              rotate180: false,
+              pages: pages(3),
+            },
           ],
         },
       }),
