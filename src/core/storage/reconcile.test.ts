@@ -168,6 +168,26 @@ describe('сверка при запуске: таблица плана', () => 
     expect(await dirSnapshot(root)).toEqual(before);
   });
 
+  it('усыновление страниц снимает отметку о сохранении: PDF больше не соответствует набору', async () => {
+    // Сбой после записи файла страницы, но до записи журнала: на диске saved:true и файл
+    // сверх pageCount.
+    const { root, layout } = await seed(
+      journalOf([pass(1, [segment(1, 'completed', 2)])], { saved: true }),
+      [...pagesOfFirstSegment(2), pageName(1, 1, 3)],
+    );
+
+    const { session } = await reconciled(root);
+
+    expect(session?.saved).toBe(false);
+    expect(session?.passes[0]?.pages).toHaveLength(3);
+    expect((await journalOnDisk(layout)).saved).toBe(false);
+
+    // Повторный прогон ничего не меняет: сверка идемпотентна.
+    const before = await dirSnapshot(root);
+    await reconciled(root);
+    expect(await dirSnapshot(root)).toEqual(before);
+  });
+
   it('флаги v2 переживают перезапуск-сверку, журнал не переписывается (M2, R13)', async () => {
     const { root } = await seed(
       journalOf([pass(1, [segment(1, 'completed', 1)]), pass(2, [segment(1, 'completed', 1)])], {

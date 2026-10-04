@@ -64,6 +64,9 @@ console.log(`сценарий: ${values.scenario}`);
 console.log(
   'в консоли: имя сценария — сменить сценарий и перезарядить лоток; clear — снять замятие;',
 );
+console.log(
+  '           reload 6 5 4 — положить лоток для следующего задания (сценарии с trays, M2);',
+);
 console.log('           list — список сценариев; Ctrl+C — выход');
 
 createInterface({ input: process.stdin }).on('line', (line) => {
@@ -78,6 +81,21 @@ createInterface({ input: process.stdin }).on('line', (line) => {
   if (command === 'clear') {
     emulator.clearJam();
     console.log('замятие снято');
+    return;
+  }
+  // «Стопку развернули и положили обратно»: лоток следующего задания, без сброса сценария.
+  if (command.startsWith('reload')) {
+    const tray = command.slice('reload'.length).trim().split(/\s+/).map(Number);
+    if (tray.length === 0 || tray.some((page) => !Number.isInteger(page) || page < 1)) {
+      console.log('reload ждёт номера фикстурных страниц: например, reload 6 5 4');
+      return;
+    }
+    try {
+      emulator.reloadTray(tray);
+      console.log(`лоток на следующее задание: ${tray.join(', ')}`);
+    } catch (error) {
+      console.log(String(error instanceof Error ? error.message : error));
+    }
     return;
   }
   const next = scenarioFor(command);

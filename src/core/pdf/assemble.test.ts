@@ -153,6 +153,14 @@ describe('сборка PDF: DPI неизвестен (KTD-9, origin = null)', ()
     expect(jfifDpi(Uint8Array.of(1, 2, 3))).toBeNull();
     expect(jfifDpi(fixture(1).subarray(0, 4))).toBeNull();
   });
+
+  it('jfifDpi: заявленная длина APP0 меньше заголовка JFIF — null, а не чтение чужих байтов', async () => {
+    const source = withJfif(await plainJpeg(), 1, 150);
+    // Битый файл: сегмент заявляет 8 байт, плотность лежала бы уже в следующем сегменте.
+    source[4] = 0;
+    source[5] = 8;
+    expect(jfifDpi(source)).toBeNull();
+  });
 });
 
 describe('сборка PDF: отказы кодом, не падением', () => {

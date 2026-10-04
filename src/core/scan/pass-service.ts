@@ -187,6 +187,8 @@ export function createPassService(
 
   let scanner: ScannerSlot = { kind: 'none' };
   let run: Run | null = null;
+  /** Сохранение PDF идёт: второй вызов — конфликт, а не два диалога и две записи в один путь. */
+  let saving = false;
   let seq = 0;
 
   const notify = (): void => {
@@ -634,72 +636,86 @@ export function createPassService(
     },
 
     async savePdf(askPath) {
-      // Проверка вынесена в функцию: `run` мутирует конкурентно, и после `await` её нужно
-      // повторить — прямое сравнение TS сузил бы до «всегда null».
-      const refused = (): Result<never> | null => {
-        if (run !== null) {
-          return conflict('passRunning');
-        }
-        if (store.incompatible) {
-          return fail('storageIncompatible');
-        }
-        return store.snapshot() === null ? conflict('noSession') : null;
-      };
-      const early = refused();
-      if (early !== null) {
-        return early;
+      // Одно сохранение за раз: двойной клик не должен открыть два диалога и две записи в
+      // один путь — защита живёт в ядре, а не только в блокировке кнопки (U9).
+      if (saving) {
+        return conflict('saving');
       }
-
-      // Путь — первым (KTD-3): отказ в диалоге не тратит сборку и ничего не пишет.
-      const path = await askPath();
-      if (path === null) {
-        return ok({ canceled: true } as const);
-      }
-      // Диалог мог висеть сколько угодно: состояние проверяется заново, иначе PDF собрался бы
-      // по устаревшему снимку, а отметка о сохранении пометила бы уже изменившийся набор.
-      const stale = refused();
-      if (stale !== null) {
-        return stale;
-      }
-      const session = store.snapshot();
-      if (session === null) {
-        return conflict('noSession');
-      }
-
-      // Страницы — в собранном порядке; потерянная страница — отказ, а не молча короче (R11).
-      const inputs: PdfPageInput[] = [];
-      for (const page of assembleSession(session).order) {
-        const info = store.pageInfo(page.key);
-        const bytes = await store.readPage(page.key);
-        if (!bytes.ok) {
-          return bytes;
-        }
-        inputs.push({
-          bytes: bytes.value,
-          rotate180: page.rotate180,
-          dpi: info?.dpi ?? null,
-          pixelLimit: info?.pixelLimit ?? null,
-        });
-      }
-      const pdf = await assemblePdf(inputs);
-      if (!pdf.ok) {
-        return pdf;
-      }
-
-      // Атомарно рядом с целью: сбой на любом шаге не трогает прежний файл (R11).
+      saving = true;
       try {
-        await writeFileAtomic(path, pdf.value, ioOf(options));
-      } catch (error) {
-        // Перевод кодов — существующим помощником: он различает и ENOSPC, и EDQUOT.
-        const failure = storageFailure(error);
-        return failure.code === 'storageFull'
-          ? fail('storageFull')
-          : fail('saveWriteFailed', { reason: fsErrorCode(error) });
+        // Проверка вынесена в функцию: `run` мутирует конкурентно, и после `await` её нужно
+        // повторить — прямое сравнение TS сузил бы до «всегда null».
+        const refused = (): Result<never> | null => {
+          if (run !== null) {
+            return conflict('passRunning');
+          }
+          if (store.incompatible) {
+            return fail('storageIncompatible');
+          }
+          return store.snapshot() === null ? conflict('noSession') : null;
+        };
+        const early = refused();
+        if (early !== null) {
+          return early;
+        }
+
+        // Путь — первым (KTD-3): отказ в диалоге не тратит сборку и ничего не пишет.
+        const path = await askPath();
+        if (path === null) {
+          return ok({ canceled: true } as const);
+        }
+        // Диалог мог висеть сколько угодно: состояние проверяется заново, иначе PDF собрался бы
+        // по устаревшему снимку, а отметка о сохранении пометила бы уже изменившийся набор.
+        const stale = refused();
+        if (stale !== null) {
+          return stale;
+        }
+        const session = store.snapshot();
+        if (session === null) {
+          return conflict('noSession');
+        }
+        // Ревизия журнала на момент снимка: правка во время сборки и записи (новая страница,
+        // тумблер поворота) снимает отметку, и ставить поверх неё «сохранено» нельзя.
+        const revision = store.revision();
+
+        // Страницы — в собранном порядке; потерянная страница — отказ, а не молча короче (R11).
+        const inputs: PdfPageInput[] = [];
+        for (const page of assembleSession(session).order) {
+          const info = store.pageInfo(page.key);
+          const bytes = await store.readPage(page.key);
+          if (!bytes.ok) {
+            return bytes;
+          }
+          inputs.push({
+            bytes: bytes.value,
+            rotate180: page.rotate180,
+            dpi: info?.dpi ?? null,
+            pixelLimit: info?.pixelLimit ?? null,
+          });
+        }
+        const pdf = await assemblePdf(inputs);
+        if (!pdf.ok) {
+          return pdf;
+        }
+
+        // Атомарно рядом с целью: сбой на любом шаге не трогает прежний файл (R11).
+        try {
+          await writeFileAtomic(path, pdf.value, ioOf(options));
+        } catch (error) {
+          // Перевод кодов — существующим помощником: он различает и ENOSPC, и EDQUOT.
+          const failure = storageFailure(error);
+          return failure.code === 'storageFull'
+            ? fail('storageFull')
+            : fail('saveWriteFailed', { reason: fsErrorCode(error) });
+        }
+        // Отметка — только после успешного переименования и только на неизменившийся набор;
+        // сессия не удаляется (R12). Файл при пропущенной отметке всё равно записан — успех.
+        await store.markSaved(revision);
+        notify();
+        return ok({ canceled: false, fileName: basename(path), directory: dirname(path) });
+      } finally {
+        saving = false;
       }
-      // Отметка — только после успешного переименования; сессия не удаляется (R12).
-      await store.markSaved();
-      notify();
-      return ok({ canceled: false, fileName: basename(path), directory: dirname(path) });
     },
 
     async closeSession() {

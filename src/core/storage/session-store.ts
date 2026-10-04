@@ -136,6 +136,11 @@ export interface SessionStore {
   snapshot(): SessionSnapshot | null;
   /** Журнал в памяти новее записанного на диск. */
   unsaved(): boolean;
+  /**
+   * Монотонный счётчик изменений журнала в памяти (включая несохранённые на диск). Снятый до
+   * долгой операции, он позволяет проверить «набор не менялся» без сравнения содержимого.
+   */
+  revision(): number;
   /** Новый проход: первый сегмент «идёт» записан в журнал. Вызывается до `POST`. */
   beginPass(origin: PassOrigin): Promise<Result<SegmentStart>>;
   /** С чем можно досканировать последний проход; отказ — досканировать нельзя. */
@@ -163,8 +168,12 @@ export interface SessionStore {
   setRotateBacks(rotate: boolean): Promise<Result<void>>;
   /** «Обороты не нужны» (M2, KTD-6): durable-отметка, `flip` больше не показывается. */
   declineBacks(): Promise<Result<void>>;
-  /** Набор сохранён в PDF (M2, R12); ставится после успешной записи файла. */
-  markSaved(): Promise<Result<void>>;
+  /**
+   * Набор сохранён в PDF (M2, R12); ставится после успешной записи файла. С `expectedRevision`
+   * отметка ставится, только если журнал не менялся с момента снятия ревизии: правка во время
+   * сборки и записи уже сняла отметку, и затирать её устаревшим «сохранено» нельзя.
+   */
+  markSaved(expectedRevision?: number): Promise<Result<void>>;
   /** «Новая пачка»: единственное, что удаляет сессию со страницами. */
   closeSession(): Promise<Result<void>>;
   /** Повторяет запись журнала, если состояние в памяти не сохранено. */
@@ -240,6 +249,7 @@ export function createSessionStore(
   let journal = initial.journal;
   let unsaved = initial.unsaved;
   let unpreserved = initial.unpreserved;
+  let revision = 0;
   const lost = new Set(initial.lost);
 
   const enqueue = serialQueue();
@@ -266,11 +276,13 @@ export function createSessionStore(
       if (mode === 'soft') {
         journal = next;
         unsaved = true;
+        revision += 1;
       }
       return { ok: false, error: storageFailure(error) };
     }
     journal = next;
     unsaved = false;
+    revision += 1;
     return ok(undefined);
   }
 
@@ -355,6 +367,7 @@ export function createSessionStore(
       }
       journal = null;
       unsaved = false;
+      revision += 1;
       lost.clear();
       await sweepClosedSession(fs, target);
       await fs.removeTree(derivedDirOf(layout, sessionId)).catch(() => undefined);
@@ -405,6 +418,8 @@ export function createSessionStore(
     },
 
     unsaved: () => unsaved,
+
+    revision: () => revision,
 
     beginPass: (origin) =>
       mutating(async () => {
@@ -671,10 +686,15 @@ export function createSessionStore(
         return commit({ ...journal, backsDeclined: true }, 'must');
       }),
 
-    markSaved: () =>
+    markSaved: (expectedRevision) =>
       mutating(async () => {
         if (journal === null || isVacant(journal)) {
           return conflict('noSession');
+        }
+        // Журнал менялся, пока PDF собирался и писался: правка уже сняла отметку, и ставить
+        // поверх неё устаревшее «сохранено» нельзя — файл набору больше не соответствует.
+        if (expectedRevision !== undefined && expectedRevision !== revision) {
+          return ok(undefined);
         }
         if (journal.saved) {
           return ok(undefined);

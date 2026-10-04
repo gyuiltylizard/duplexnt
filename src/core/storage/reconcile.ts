@@ -247,7 +247,14 @@ export async function reconcileSession(
         deletions.push(prefix);
       }
     }
-    journal = adopt({ ...journal, deletions }, [...groups.values()], journal.deletions);
+    const cleaned = { ...journal, deletions };
+    const adopted = adopt(cleaned, [...groups.values()], journal.deletions);
+    // Усыновление изменило проходы (файлы сверх записей — после сбоя записи журнала): набор
+    // больше не соответствует сохранённому PDF, отметка о сохранении снимается (R12).
+    journal =
+      adopted.saved && JSON.stringify(adopted.passes) !== JSON.stringify(cleaned.passes)
+        ? { ...adopted, saved: false }
+        : adopted;
   }
 
   // Пустая сессия равна отсутствию сессии (ADR 0004, амендмент). Журнал с пометкой остаётся:

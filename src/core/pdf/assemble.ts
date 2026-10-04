@@ -52,6 +52,12 @@ export function jfifDpi(bytes: Uint8Array): number | null {
   if (!isJfif) {
     return null;
   }
+  // Заявленная длина сегмента меньше полного заголовка JFIF: байты плотности лежали бы уже в
+  // следующем сегменте — на битом файле это дало бы случайный размер страницы вместо дефолта.
+  const declaredLength = ((bytes[4] ?? 0) << 8) | (bytes[5] ?? 0);
+  if (declaredLength < 16) {
+    return null;
+  }
   const units = bytes[13];
   const density = ((bytes[14] ?? 0) << 8) | (bytes[15] ?? 0);
   if (density === 0) {

@@ -1065,6 +1065,34 @@ describe('хранилище сессии: флаги журнала v2 (M2, U1)
     expect(store.snapshot()?.saved).toBe(false);
   });
 
+  it('markSaved с устаревшей ревизией — no-op: правка во время сохранения не затирается', async () => {
+    const { store } = await twoPasses();
+    const revision = store.revision();
+
+    // «Пока PDF собирался и писался» — пользователь щёлкнул тумблер поворота.
+    ok(await store.setRotateBacks(true));
+    ok(await store.markSaved(revision));
+
+    expect(store.snapshot()?.saved).toBe(false);
+
+    // Свежая ревизия — отметка ставится.
+    ok(await store.markSaved(store.revision()));
+    expect(store.snapshot()?.saved).toBe(true);
+  });
+
+  it('ревизия растёт на каждой правке журнала, включая несохранённую на диск', async () => {
+    const { store, accept } = await twoPasses();
+    const before = store.revision();
+
+    ok(await store.setRotateBacks(true));
+    expect(store.revision()).toBeGreaterThan(before);
+
+    const afterToggle = store.revision();
+    ok(await store.beginPass(ORIGIN));
+    await accept(5, 5);
+    expect(store.revision()).toBeGreaterThan(afterToggle);
+  });
+
   it('новая сессия не наследует флаги закрытой', async () => {
     const { store, accept } = await twoPasses();
     ok(await store.setRotateBacks(true));

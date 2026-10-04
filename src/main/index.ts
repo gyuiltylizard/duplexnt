@@ -110,7 +110,8 @@ async function start(): Promise<void> {
     // «Сохранить как» (M2, KTD-3): файловые диалоги — обязанность main (ADR 0003); имя, папку
     // и подтверждение перезаписи даёт диалог ОС.
     askSavePdfPath: async () => {
-      const today = new Date().toISOString().slice(0, 10);
+      // Локальная дата, не UTC: ночью до смещения пояса toISOString() предлагал бы «вчера».
+      const today = new Intl.DateTimeFormat('sv-SE').format(new Date());
       const picked = await dialog.showSaveDialog(window, {
         defaultPath: join(app.getPath('documents'), `Скан ${today}.pdf`),
         filters: [{ name: 'PDF', extensions: ['pdf'] }],

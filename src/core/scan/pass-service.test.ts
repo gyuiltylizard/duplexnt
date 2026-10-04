@@ -512,6 +512,36 @@ describe('служба прохода: сохранение PDF (M2, U6)', () =>
     expect(await service.savePdf(() => Promise.resolve(target))).toEqual(fail('storageFull'));
   });
 
+  it('второе сохранение поверх идущего — конфликт, второй диалог не открывается', async () => {
+    const root = await makeTempDataRoot();
+    await savable(root);
+    const target = await saveTarget(root);
+    const service = await openPassService(root);
+
+    let release: (path: string | null) => void = () => undefined;
+    let dialogs = 0;
+    const hangingDialog = (): Promise<string | null> => {
+      dialogs += 1;
+      return new Promise((resolve) => {
+        release = resolve;
+      });
+    };
+
+    const first = service.savePdf(hangingDialog);
+    const second = await service.savePdf(hangingDialog);
+    expect(second).toEqual(fail('sessionConflict', { reason: 'saving' }));
+    expect(dialogs).toBe(1);
+
+    release(target);
+    expect(await first).toMatchObject({ ok: true, value: { canceled: false } });
+
+    // Сохранение кончилось — следующее снова допускается.
+    expect(await service.savePdf(() => Promise.resolve(null))).toEqual({
+      ok: true,
+      value: { canceled: true },
+    });
+  });
+
   it('состояние перепроверяется после диалога: сессия закрыта, пока он висел, — отказ', async () => {
     const root = await makeTempDataRoot();
     await savable(root);
