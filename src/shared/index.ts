@@ -24,6 +24,7 @@ export {
   type PageImageView,
   type ProbeRequest,
   type ProbeResult,
+  type SetRotateBacksRequest,
   type Unsubscribe,
 } from './bridge';
 

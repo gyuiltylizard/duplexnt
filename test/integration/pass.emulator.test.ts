@@ -564,10 +564,12 @@ describe('служба прохода: обрыв и досканировани�
     const snapshot = service.snapshot();
     expect(snapshot.session?.passes[0]?.state).toBe('accepted');
     expect(snapshot).toMatchObject({ canResume: false, canAccept: false });
-    expect(errorOf(await service.startPass())).toEqual({
-      code: 'sessionConflict',
-      details: { reason: 'notInterrupted' },
-    });
+    // С M2 (U3) поверх принятого прохода начинается НОВЫЙ проход — оборотов, не досканирование.
+    expect(unwrap(await service.startPass())).toMatchObject({ end: 'completed', pages: 3 });
+    expect(service.snapshot().session?.passes.map((pass) => [pass.number, pass.state])).toEqual([
+      [1, 'accepted'],
+      [2, 'completed'],
+    ]);
   });
 
   it('AE2: процесс убит посреди прохода — страницы на месте, проход прерван, повторно — то же', async () => {

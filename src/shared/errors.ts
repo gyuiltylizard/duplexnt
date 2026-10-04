@@ -71,8 +71,10 @@ export const SESSION_CONFLICT_REASONS = [
   'noSession',
   /** В наборе нет прохода оборотов: поворачивать нечего (M2, KTD-2). */
   'noBacksPass',
-  /** Обороты уже отсканированы: «обороты не нужны» опоздало (M2, KTD-6). */
+  /** Обороты уже отсканированы: «обороты не нужны» опоздало, новый проход не нужен (M2). */
   'backsPresent',
+  /** От оборотов отказались: набор закрыт односторонним, новый проход не начинается (M2). */
+  'backsDeclined',
 ] as const;
 
 export type SessionConflictReason = (typeof SESSION_CONFLICT_REASONS)[number];

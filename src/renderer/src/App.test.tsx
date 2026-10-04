@@ -93,7 +93,7 @@ describe('каркас приложения', () => {
   it('идущий проход — экран scan со счётчиком принятых страниц', async () => {
     stubApi(
       makeSnapshot({
-        pass: { phase: 'scanning', resumed: false, params: PARAMS, pages: 7 },
+        pass: { phase: 'scanning', resumed: false, expected: null, params: PARAMS, pages: 7 },
         session: {
           id: 'session.x',
           backsDeclined: false,
@@ -220,7 +220,7 @@ describe('каркас приложения', () => {
   it('S15: отказ закрытия сегмента после «Остановить» — тостом', async () => {
     stubApi(
       makeSnapshot({
-        pass: { phase: 'scanning', resumed: false, params: PARAMS, pages: 2 },
+        pass: { phase: 'scanning', resumed: false, expected: null, params: PARAMS, pages: 2 },
         session: {
           id: 'session.x',
           backsDeclined: false,
@@ -250,7 +250,7 @@ describe('каркас приложения', () => {
   it('другой отказ «Остановить» тоста не даёт', async () => {
     stubApi(
       makeSnapshot({
-        pass: { phase: 'scanning', resumed: false, params: PARAMS, pages: 2 },
+        pass: { phase: 'scanning', resumed: false, expected: null, params: PARAMS, pages: 2 },
         session: {
           id: 'session.x',
           backsDeclined: false,

@@ -22,6 +22,9 @@ const CONFLICT_REASONS = [
   'notInterrupted',
   'paramsUnknown',
   'noSession',
+  'noBacksPass',
+  'backsPresent',
+  'backsDeclined',
 ] as const;
 
 function includes<T extends string>(values: readonly T[], value: unknown): value is T {

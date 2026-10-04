@@ -46,6 +46,8 @@ function setup(snapshot: Snapshot = EMPTY_SNAPSHOT) {
     ),
     stopPass: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
     acceptPass: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
+    declineBacks: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
+    setRotateBacks: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
     closeSession: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
     interrupt: vi.fn(() => Promise.resolve()),
     pageInfo: vi.fn(() => null),
@@ -115,6 +117,7 @@ describe('команды без входа', () => {
     'startPass',
     'stopPass',
     'acceptPass',
+    'declineBacks',
     'closeSession',
     'openDataFolder',
   ];
@@ -171,6 +174,40 @@ describe('снимок и проход', () => {
     expect(await handlers.closeSession(undefined)).toEqual(ok(undefined));
     expect(service.acceptPass).toHaveBeenCalledOnce();
     expect(service.closeSession).toHaveBeenCalledOnce();
+  });
+
+  it('declineBacks зовёт службу; отказ доходит кодом (M2, U3)', async () => {
+    const { handlers, service } = setup();
+
+    expect(await handlers.declineBacks(undefined)).toEqual(ok(undefined));
+    expect(service.declineBacks).toHaveBeenCalledOnce();
+
+    service.declineBacks.mockResolvedValueOnce(fail('sessionConflict', { reason: 'backsPresent' }));
+    expect(await handlers.declineBacks(undefined)).toEqual(
+      fail('sessionConflict', { reason: 'backsPresent' }),
+    );
+  });
+
+  it('setRotateBacks: строгая схема, затем служба (M2, U3)', async () => {
+    const { handlers, service } = setup();
+
+    expect(await handlers.setRotateBacks({ rotate: true })).toEqual(ok(undefined));
+    expect(service.setRotateBacks).toHaveBeenCalledExactlyOnceWith(true);
+    expect(await handlers.setRotateBacks({ rotate: false })).toEqual(ok(undefined));
+    expect(service.setRotateBacks).toHaveBeenLastCalledWith(false);
+
+    for (const garbage of [
+      true,
+      { rotate: 'да' },
+      { rotate: 1 },
+      { rotate: true, extra: 1 },
+      {},
+      null,
+      undefined,
+    ]) {
+      expect(invalid(await handlers.setRotateBacks(garbage)), JSON.stringify(garbage)).toBe(true);
+    }
+    expect(service.setRotateBacks).toHaveBeenCalledTimes(2);
   });
 
   it('setScanParams: строгая схема, затем служба', async () => {
@@ -428,6 +465,7 @@ describe('подключение сканера', () => {
       pass: {
         phase: 'scanning',
         resumed: false,
+        expected: null,
         params: { colorMode: 'Grayscale8', resolution: 300, paperSize: 'A4' },
         pages: 2,
       },

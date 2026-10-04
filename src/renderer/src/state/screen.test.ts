@@ -21,6 +21,7 @@ const SESSION: SessionSnapshot = {
 const PASS: PassProgress = {
   phase: 'scanning',
   resumed: false,
+  expected: null,
   params: { colorMode: 'Grayscale8', resolution: 300, paperSize: 'A4' },
   pages: 1,
 };

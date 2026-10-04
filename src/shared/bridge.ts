@@ -49,6 +49,11 @@ export interface ProbeRequest {
   readonly token: string;
 }
 
+/** Вход тумблера «повернуть обороты на 180°» (M2, KTD-2). */
+export interface SetRotateBacksRequest {
+  readonly rotate: boolean;
+}
+
 export interface ProbeResult {
   /** Эхо входного токена — доказывает, что ответ пришёл на этот вызов. */
   readonly echo: string;
@@ -94,6 +99,10 @@ export interface BridgeCommands {
   readonly startPass: { readonly request: NoRequest; readonly value: PassReport };
   readonly stopPass: { readonly request: NoRequest; readonly value: undefined };
   readonly acceptPass: { readonly request: NoRequest; readonly value: undefined };
+  /** «Обороты не нужны» (M2, KTD-6): durable-отметка, `flip` больше не показывается. */
+  readonly declineBacks: { readonly request: NoRequest; readonly value: undefined };
+  /** Тумблер «повернуть обороты на 180°» (M2, KTD-2); исход — в снимке. */
+  readonly setRotateBacks: { readonly request: SetRotateBacksRequest; readonly value: undefined };
   readonly closeSession: { readonly request: NoRequest; readonly value: undefined };
   /** Открывает каталог данных в проводнике — при несовместимых данных. Каталог знает main. */
   readonly openDataFolder: { readonly request: NoRequest; readonly value: undefined };
@@ -114,6 +123,8 @@ export const BRIDGE_CHANNELS = {
   startPass: 'duplexnt:start-pass',
   stopPass: 'duplexnt:stop-pass',
   acceptPass: 'duplexnt:accept-pass',
+  declineBacks: 'duplexnt:decline-backs',
+  setRotateBacks: 'duplexnt:set-rotate-backs',
   closeSession: 'duplexnt:close-session',
   openDataFolder: 'duplexnt:open-data-folder',
 } as const satisfies Record<BridgeCommand, string>;

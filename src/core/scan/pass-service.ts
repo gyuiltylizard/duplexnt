@@ -60,7 +60,10 @@ import { assembleSession } from './assembly';
 // (R9) → записать сегмент «идёт» в журнал (KTD-17) → `POST`. Исход сегмента пишется до `DELETE`:
 // обработчик `onEnd` задания переводит его в хранилище, и только потом задание закрывается.
 //
-// В M1 проход один: новый проход начинается только без сессии; при прерванном — досканирование.
+// Новый проход (M2, план U3): без сессии — лицевые; поверх завершённого или принятого
+// единственного уцелевшего прохода — обороты (роль — позиция среди уцелевших, не чётность
+// номера: после «Остановить» повторный запуск получает номер 3 — KTD-4). Прерванный проход —
+// только досканирование; при двух уцелевших или отказе от оборотов новый проход не начинается.
 
 export interface PassServiceOptions extends SessionStoreOptions {
   /** Транспорт и его пределы — подмена для тестов, как у подключения. */
@@ -87,6 +90,10 @@ export interface PassService {
   stopPass(): Promise<Result<void>>;
   /** «Оставить как есть». */
   acceptPass(): Promise<Result<void>>;
+  /** «Обороты не нужны» (M2, KTD-6): durable-отметка, идемпотентно. */
+  declineBacks(): Promise<Result<void>>;
+  /** Тумблер «повернуть обороты на 180°» (M2, KTD-2): флаг прохода в роли оборотов. */
+  setRotateBacks(rotate: boolean): Promise<Result<void>>;
   /** «Новая пачка». */
   closeSession(): Promise<Result<void>>;
   /**
@@ -123,6 +130,8 @@ interface Run {
   readonly resumed: boolean;
   /** Параметры прохода — у досканирования из журнала, не из настройки (KTD-27). */
   readonly params: ScanParams;
+  /** Ожидаемое число страниц — у прохода оборотов страницы лицевого (M2, R2). */
+  readonly expected: number | null;
   phase: PassProgress['phase'];
   pages: number;
   /** Чем оборван: «Остановить» удаляет сегмент, закрытие окна оставляет его прерванным. */
@@ -234,7 +243,13 @@ export function createPassService(
       pass:
         run === null
           ? null
-          : { phase: run.phase, resumed: run.resumed, params: run.params, pages: run.pages },
+          : {
+              phase: run.phase,
+              resumed: run.resumed,
+              expected: run.expected,
+              params: run.params,
+              pages: run.pages,
+            },
       canResume: run === null && scanner.kind === 'ready' && resumeTarget().ok,
       canAccept: run === null && last?.state === 'interrupted',
       storage: { incompatible: store.incompatible, unsaved: store.unsaved() },
@@ -426,24 +441,54 @@ export function createPassService(
     const { connected, params } = scanner;
     const stored = storedScannerOf(connected);
 
-    // Сессия есть — только досканирование: новый проход в M1 начинается без сессии.
+    // Поверх сессии: прерванный проход — только досканирование; завершённый или принятый
+    // единственный уцелевший — новый проход оборотов (M2, KTD-4). Роль считается по позиции
+    // среди уцелевших (непустых) проходов, не по чётности номера.
     let origin: PassOrigin;
     let resumed = false;
-    if (store.snapshot() === null) {
+    let expected: number | null = null;
+    const session = store.snapshot();
+    if (session === null) {
       origin = { scanner: stored, params, pixelLimit: pagePixelLimit(connected.capabilities.adf) };
     } else {
+      const surviving = session.passes.filter((pass) => pass.pages.length > 0);
       const target = resumeTarget();
-      if (!target.ok) {
+      if (target.ok) {
+        origin = target.value;
+        resumed = true;
+        // Досканируется последний проход; в роли оборотов его счётчик получает «из M» (R2).
+        const resuming = session.passes.at(-1);
+        expected =
+          surviving.findIndex((pass) => pass.number === resuming?.number) >= 1
+            ? (surviving[0]?.pages.length ?? null)
+            : null;
+      } else if (
+        target.error.code === 'sessionConflict' &&
+        target.error.details?.reason === 'notInterrupted'
+      ) {
+        // Последний проход завершён или принят — очередь оборотов.
+        if (session.backsDeclined) {
+          return conflict('backsDeclined');
+        }
+        if (surviving.length > 1) {
+          return conflict('backsPresent');
+        }
+        origin = {
+          scanner: stored,
+          params,
+          pixelLimit: pagePixelLimit(connected.capabilities.adf),
+        };
+        expected = surviving[0]?.pages.length ?? null;
+      } else {
         return target;
       }
-      origin = target.value;
-      resumed = true;
     }
 
     const current: Run = {
       controller: new AbortController(),
       resumed,
       params: origin.params,
+      expected,
       phase: 'starting',
       pages: 0,
       intent: null,
@@ -560,6 +605,21 @@ export function createPassService(
       const accepted = await store.acceptPass();
       notify();
       return accepted;
+    },
+
+    async declineBacks() {
+      if (run !== null) {
+        return conflict('passRunning');
+      }
+      const declined = await store.declineBacks();
+      notify();
+      return declined;
+    },
+
+    async setRotateBacks(rotate) {
+      const set = await store.setRotateBacks(rotate);
+      notify();
+      return set;
     },
 
     async closeSession() {
