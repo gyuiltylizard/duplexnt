@@ -29,6 +29,7 @@ function makeSnapshot(passes: PassSnapshot[], overrides: Partial<Snapshot> = {})
     seq: 1,
     scanner: { kind: 'none' },
     session: { id: 'session.x', backsDeclined: false, saved: false, passes },
+    assembly: null,
     pass: null,
     canResume: false,
     canAccept: false,

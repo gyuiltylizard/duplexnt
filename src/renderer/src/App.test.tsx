@@ -17,6 +17,7 @@ function makeSnapshot(overrides: Partial<Snapshot>): Snapshot {
     seq: 1,
     scanner: { kind: 'none' },
     session: null,
+    assembly: null,
     pass: null,
     canResume: false,
     canAccept: false,

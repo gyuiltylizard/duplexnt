@@ -26,6 +26,7 @@ function makeSnapshot(scanner: ScannerState): Snapshot {
     seq: 1,
     scanner,
     session: null,
+    assembly: null,
     pass: null,
     canResume: false,
     canAccept: false,

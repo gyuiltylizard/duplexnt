@@ -41,6 +41,8 @@ export {
 } from './scan-params';
 
 export type {
+  AssembledPage,
+  AssemblyReport,
   PageSnapshot,
   PassProgress,
   PassReport,
@@ -48,6 +50,7 @@ export type {
   PassState,
   ScannerInfo,
   ScannerState,
+  SessionAssembly,
   SessionSnapshot,
   Snapshot,
   StartupNotice,

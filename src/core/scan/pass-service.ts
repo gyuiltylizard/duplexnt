@@ -43,6 +43,7 @@ import {
 import { storageFailure } from '../storage/storage-fs';
 import { pagePixelLimit } from '../storage/thumbnails';
 import { openUnclosedJobs, type UnclosedJobs } from '../storage/unclosed-jobs';
+import { assembleSession } from './assembly';
 
 // Служба прохода (план M1, U17): связывает клиент сканера, хранилище сессии, настройки и
 // незакрытые задания в один сценарий и выдаёт снимок, из которого интерфейс выводит экран
@@ -229,6 +230,7 @@ export function createPassService(
       seq,
       scanner: scannerState(),
       session,
+      assembly: session === null ? null : assembleSession(session),
       pass:
         run === null
           ? null

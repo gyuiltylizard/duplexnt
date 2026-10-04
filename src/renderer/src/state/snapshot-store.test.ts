@@ -7,6 +7,7 @@ function makeSnapshot(seq: number): Snapshot {
     seq,
     scanner: { kind: 'none' },
     session: null,
+    assembly: null,
     pass: null,
     canResume: false,
     canAccept: false,

@@ -65,6 +65,7 @@ describe('служба прохода без сканера', () => {
       seq: 0,
       scanner: { kind: 'none' },
       session: null,
+      assembly: null,
       pass: null,
       canResume: false,
       canAccept: false,
