@@ -1,0 +1,213 @@
+/* Экран `scan` (U23): тег, иллюстрация подачи, счётчик, лента, «Остановить» — по рецепту
+   «Индикатор прогресса прохода» дизайн-системы и CSS handoff'а U19 (S12–S15, S19).
+   Геометрия иллюстрации и карточек — литералы макета (осознанное исключение DS). */
+
+.scan-screen {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-14);
+  padding: var(--space-15);
+  outline: none; /* контейнер принимает фокус в S15 — кольцо ему не нужно */
+}
+
+.scan-screen__tag {
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius-m);
+  background: var(--color-accent);
+  font-family: var(--font-family-mono);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-xs);
+  line-height: var(--leading-normal);
+  letter-spacing: var(--tracking-caps);
+  color: var(--color-text-on-accent);
+}
+
+.scan-screen__stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-11);
+}
+
+.scan-screen__counter {
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-xl);
+  line-height: var(--leading-snug);
+  color: var(--color-text-primary);
+  text-align: center;
+  text-wrap: balance;
+}
+
+.scan-screen__meta {
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-m);
+  line-height: var(--leading-relaxed);
+  font-family: var(--font-family-mono);
+  color: var(--color-text-subtle);
+  text-align: center;
+}
+
+/* — иллюстрация подачи: стопка листов над лотком, полоса активности — */
+
+.feed {
+  position: relative;
+  width: 150px;
+  height: 186px;
+  flex: none;
+}
+
+.feed__sheet {
+  position: absolute;
+  width: 118px;
+  height: 150px;
+  border-radius: var(--radius-s);
+  background: var(--color-bg-paper);
+  border: var(--border-width) solid var(--color-border-strong);
+}
+
+.feed__sheet--back {
+  left: 14px;
+  top: 0;
+  box-shadow: var(--shadow-hairline);
+}
+
+.feed__sheet--mid {
+  left: 10px;
+  top: 6px;
+}
+
+.feed__sheet--moving {
+  left: 16px;
+  top: 12px;
+  animation: feed var(--duration-loop) var(--ease-loop) infinite;
+}
+
+.feed__tray {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 150px;
+  height: 30px;
+  border-radius: var(--radius-s);
+  background: var(--color-bg-tray);
+}
+
+.feed__bar {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  width: 126px;
+  height: 4px;
+  border-radius: var(--radius-xs);
+  background: var(--color-accent);
+  animation: pulse var(--duration-loop) var(--ease-loop) infinite;
+}
+
+/* S13: подача и полоса замирают, полоса приглушается */
+.feed--idle .feed__sheet--moving,
+.feed--idle .feed__bar {
+  animation: none;
+}
+
+.feed--idle .feed__bar {
+  opacity: var(--opacity-disabled);
+}
+
+/* — лента последних пяти: затухание к старому краю шагом 0,17 — */
+
+.strip {
+  display: flex;
+  gap: var(--space-4);
+  align-items: flex-end;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  height: 74px;
+}
+
+.strip__card {
+  position: relative;
+  width: 50px;
+  height: 70px;
+  border-radius: var(--radius-xs);
+  background: var(--color-bg-paper);
+  border: var(--border-width) solid var(--color-border-default);
+  overflow: hidden;
+}
+
+.strip__card:nth-last-child(2) {
+  opacity: 0.83;
+}
+
+.strip__card:nth-last-child(3) {
+  opacity: 0.66;
+}
+
+.strip__card:nth-last-child(4) {
+  opacity: 0.49;
+}
+
+.strip__card:nth-last-child(5) {
+  opacity: 0.32;
+}
+
+.strip__img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Миниатюра проявляется, а не вспыхивает (смоук приёмки M1). */
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+.strip__card--loading .strip__img {
+  opacity: 0;
+}
+
+.strip__card--loading + .strip__card--loading .skeleton {
+  animation-delay: var(--delay-stagger);
+}
+
+.strip__card--failed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-surface);
+}
+
+.strip__num {
+  font-family: var(--font-family-mono);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-xxs);
+  line-height: var(--leading-none);
+  color: var(--color-text-faint);
+}
+
+/* — движение — */
+
+@keyframes feed {
+  0% {
+    transform: translateY(-22px) scaleY(0.98);
+    opacity: 0;
+  }
+
+  25% {
+    opacity: 1;
+  }
+
+  100% {
+    transform: translateY(30px);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feed__sheet--moving,
+  .feed__bar {
+    animation: none;
+  }
+}

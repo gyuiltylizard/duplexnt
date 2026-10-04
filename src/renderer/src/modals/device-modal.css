@@ -1,0 +1,143 @@
+/* Модалка `device` (U21): список найденных, адрес вручную, «Дополнительно».
+   Рецепты — DESIGN_SYSTEM «Элемент списка устройств» и CSS handoff'а U19 (S7–S9). */
+
+.device-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.device-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  padding: var(--space-6) var(--space-6);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-l);
+  background: var(--color-bg-surface);
+  cursor: pointer;
+  outline: none;
+}
+
+.device-item--selected {
+  background: var(--color-bg-selected);
+  border-color: var(--color-border-focus);
+}
+
+.device-item--disabled {
+  opacity: var(--opacity-disabled);
+  cursor: not-allowed;
+}
+
+.device-item__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.device-item__name {
+  font: var(--font-weight-medium) var(--font-size-base) / var(--leading-snug)
+    var(--font-family-sans);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.device-item__name--unnamed {
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-regular);
+}
+
+.device-item__address {
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-snug) var(--font-family-mono);
+  color: var(--color-text-faint);
+  white-space: nowrap;
+}
+
+.device-item__status {
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-snug) var(--font-family-mono);
+  color: var(--color-status-ready);
+  white-space: nowrap;
+}
+
+.device-item__status--no-adf {
+  color: var(--color-status-unavailable);
+}
+
+/* Три скелетона с пульсацией и сдвигом фазы — пока идёт поиск. */
+.device-skeleton {
+  height: var(--size-list-row);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-l);
+  background: var(--color-bg-surface);
+  animation: pulse var(--duration-loop) var(--ease-loop) infinite;
+}
+
+.device-skeleton:nth-child(2) {
+  animation-delay: var(--delay-stagger);
+}
+
+.device-skeleton:nth-child(3) {
+  animation-delay: calc(var(--delay-stagger) * 2);
+}
+
+/* Пустое состояние (S7) и сбой поиска (S8) — в области списка. */
+.device-list__empty {
+  margin: 0;
+  padding: var(--space-8) var(--space-6);
+  min-height: 132px; /* высота трёх скелетонов макета — литерал геометрии */
+  display: flex;
+  align-items: center;
+  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-relaxed)
+    var(--font-family-sans);
+  color: var(--color-text-subtle);
+  background: var(--color-bg-surface);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-l);
+  text-wrap: pretty;
+}
+
+.device-list__empty--danger {
+  color: var(--color-danger);
+}
+
+/* «Дополнительно»: схема — сегментированный выбор, порт и путь — мелкие поля. */
+.device-advanced__toggle {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: none;
+  border: 0;
+  padding: var(--space-2) 0;
+  font: var(--font-weight-medium) var(--font-size-m) / var(--leading-none) var(--font-family-sans);
+  color: var(--color-text-subtle);
+  cursor: pointer;
+}
+
+.device-advanced__toggle:hover {
+  color: var(--color-text-primary);
+}
+
+.device-advanced {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-6);
+}
+
+.device-advanced__port {
+  width: 96px; /* под пять цифр порта — литерал геометрии */
+}
+
+.device-advanced__path {
+  flex: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .device-skeleton {
+    animation: none;
+    opacity: var(--opacity-disabled);
+  }
+}

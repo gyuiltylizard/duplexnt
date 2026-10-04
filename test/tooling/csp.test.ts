@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { PAGE_IMAGE_SCHEME } from '../../src/shared/bridge';
 import { buildCsp, parseCsp } from '../../tooling/csp';
 
 const DEV_ORIGIN = 'http://localhost:5173';
@@ -28,6 +29,15 @@ describe('buildCsp — сборочный профиль', () => {
     expect(directives.get('script-src')).not.toContain("'unsafe-inline'");
     for (const forbidden of ['ws:', 'http:', 'https:', 'localhost', '*']) {
       expect(csp).not.toContain(forbidden);
+    }
+  });
+
+  it('схема изображений страниц — только в img-src (KTD-38)', () => {
+    expect(directives.get('img-src')).toEqual(["'self'", `${PAGE_IMAGE_SCHEME}:`]);
+    for (const [name, sources] of directives) {
+      if (name !== 'img-src') {
+        expect(sources, name).not.toContain(`${PAGE_IMAGE_SCHEME}:`);
+      }
     }
   });
 });
@@ -60,6 +70,12 @@ describe('buildCsp — профиль разработки', () => {
 
   it('и в разработке не разрешает unsafe-eval', () => {
     expect(buildCsp({ profile: 'dev', devServerOrigin: DEV_ORIGIN })).not.toContain('unsafe-eval');
+  });
+
+  it('и в разработке схема изображений есть в img-src и нигде больше', () => {
+    expect(dev.get('img-src')).toContain(`${PAGE_IMAGE_SCHEME}:`);
+    expect(dev.get('connect-src')).not.toContain(`${PAGE_IMAGE_SCHEME}:`);
+    expect(dev.get('default-src')).not.toContain(`${PAGE_IMAGE_SCHEME}:`);
   });
 
   it('отклоняет origin dev-сервера не с localhost', () => {

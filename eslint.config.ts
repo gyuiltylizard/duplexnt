@@ -67,8 +67,8 @@ const TEST: Restriction = {
 
 const TEST_FILES = ['**/*.test.ts', '**/*.test.tsx'];
 
-// Глобальные механизмы ослабления TLS запрещены по всему src/ (план M0, KTD-20). M1 откроет
-// исключение ровно для одного файла транспорта сканера.
+// Глобальные механизмы ослабления TLS запрещены по всему src/ (план M0, KTD-20). Исключение —
+// ровно один файл транспорта сканера, см. `TLS_TRANSPORT_FILE` ниже.
 const TLS_MESSAGE =
   'Проверка TLS ослабляется только выделенным агентом профиля сканера, глобально — никогда.';
 const TLS_NAMES =
@@ -81,11 +81,27 @@ interface SyntaxRestriction {
   readonly message: string;
 }
 
-const TLS_SELECTORS: readonly SyntaxRestriction[] = [
-  { selector: `Identifier[name=/^(${TLS_NAMES})$/]`, message: TLS_MESSAGE },
-  { selector: `Literal[value=/${TLS_STRINGS}/]`, message: TLS_MESSAGE },
-  { selector: `TemplateElement[value.cooked=/${TLS_STRINGS}/]`, message: TLS_MESSAGE },
+const tlsSelectors = (names: string, strings: string): readonly SyntaxRestriction[] => [
+  { selector: `Identifier[name=/^(${names})$/]`, message: TLS_MESSAGE },
+  { selector: `Literal[value=/${strings}/]`, message: TLS_MESSAGE },
+  { selector: `TemplateElement[value.cooked=/${strings}/]`, message: TLS_MESSAGE },
 ];
+const TLS_SELECTORS = tlsSelectors(TLS_NAMES, TLS_STRINGS);
+
+// Единственное исключение (план M1, KTD-6): транспорт сканера создаёт агент профиля с
+// ослабленной проверкой. Файлу разрешён ровно один идентификатор — опция агента; переменная
+// окружения, обработчики Electron и ключи Chromium остаются запрещены и в нём.
+const TLS_TRANSPORT_FILE = 'src/core/escl/transport.ts';
+const TLS_AGENT_OPTION = 'rejectUnauthorized';
+const withoutAgentOption = (names: string): string =>
+  names
+    .split('|')
+    .filter((name) => name !== TLS_AGENT_OPTION)
+    .join('|');
+const TLS_TRANSPORT_SELECTORS = tlsSelectors(
+  withoutAgentOption(TLS_NAMES),
+  withoutAgentOption(TLS_STRINGS),
+);
 
 // `no-restricted-imports` видит только статические import и export-from. Динамический
 // `import()` и `require()` закрываются селекторами по тому же регулярному выражению. В грамматике
@@ -119,6 +135,33 @@ function layer(dir: string, forbidden: readonly Restriction[]): Linter.Config[] 
   ];
 }
 
+// Эмулятор сканера не видит код приложения (план M1, KTD-4): клиент проверяется против
+// эмулятора, и эмулятор, собранный из тех же модулей, проверял бы клиент самим клиентом. Общее у
+// них одно — фикстуры. Исключения для тестовых файлов нет: тесты «клиент против эмулятора» живут
+// в test/integration.
+const EMULATOR_MESSAGE =
+  'Эмулятор сканера не импортирует код приложения: общее у него с клиентом — только фикстуры.';
+const APP_ALIASES: Restriction = {
+  regex: '^(@shared|@core|@locales)(/.*)?$',
+  message: EMULATOR_MESSAGE,
+};
+const APP_SOURCES: Restriction = {
+  regex: String.raw`^(\.\./)+(.*/)?src(/.*)?$`,
+  message: EMULATOR_MESSAGE,
+};
+const EMULATOR_FORBIDDEN = [APP_ALIASES, APP_SOURCES, ELECTRON];
+
+const emulatorIsolation: Linter.Config = {
+  name: 'duplexnt/emulator-isolation',
+  files: ['test/emulator/**'],
+  rules: {
+    'no-restricted-imports': ['error', { patterns: [...EMULATOR_FORBIDDEN] }],
+    'no-restricted-syntax': ['error', ...dynamicImportSelectors(EMULATOR_FORBIDDEN)],
+  },
+};
+
+const CORE_FORBIDDEN = [ELECTRON, MAIN, PRELOAD, RENDERER, LOCALES];
+
 export const layerBoundaryConfigs: Linter.Config[] = [
   // Страховка для файла под src/, не попавшего ни в один слой. Стоит ПЕРВОЙ: блоки слоёв ниже
   // переопределяют `no-restricted-syntax` своим, более полным набором.
@@ -128,10 +171,23 @@ export const layerBoundaryConfigs: Linter.Config[] = [
     rules: { 'no-restricted-syntax': ['error', ...TLS_SELECTORS] },
   },
   ...layer('shared', [ELECTRON, NODE, CORE, MAIN, PRELOAD, RENDERER, LOCALES]),
-  ...layer('core', [ELECTRON, MAIN, PRELOAD, RENDERER, LOCALES]),
+  ...layer('core', CORE_FORBIDDEN),
+  // Стоит ПОСЛЕ блока слоя: переопределяет его `no-restricted-syntax`, сохраняя запреты импорта.
+  {
+    name: 'duplexnt/tls-scanner-transport',
+    files: [TLS_TRANSPORT_FILE],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        ...TLS_TRANSPORT_SELECTORS,
+        ...dynamicImportSelectors([...CORE_FORBIDDEN, TEST]),
+      ],
+    },
+  },
   ...layer('main', [PRELOAD, RENDERER]),
   ...layer('preload', [NODE, CORE, MAIN, RENDERER, LOCALES]),
   ...layer('renderer', [ELECTRON, NODE, CORE, MAIN, PRELOAD]),
+  emulatorIsolation,
 ];
 
 // ---------------------------------------------------------------------------------------------

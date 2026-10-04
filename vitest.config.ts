@@ -1,41 +1,24 @@
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
 import { aliases } from './tooling/aliases';
+import { TEST_PROJECTS } from './tooling/test-projects';
 
-// Три проекта. `test` называет `node` и `jsdom` поимённо (см. package.json): прогон по
-// умолчанию затянул бы и интеграционные. Глобалы vitest выключены — describe/it/expect
-// импортируются явно, поэтому продуктовым проектам TypeScript не нужны его ambient-типы.
-// Алиасы — из общей таблицы: electron.vite.config.ts vitest не читает.
+// Три проекта — таблица в tooling/test-projects.ts. `test` называет `node` и `jsdom` поимённо
+// (см. package.json): прогон по умолчанию затянул бы и интеграционные. Глобалы vitest выключены —
+// describe/it/expect импортируются явно, поэтому продуктовым проектам TypeScript не нужны его
+// ambient-типы. Алиасы — из общей таблицы: electron.vite.config.ts vitest не читает.
 export default defineConfig({
   resolve: { alias: aliases },
   test: {
-    projects: [
-      {
-        extends: true,
-        test: {
-          name: 'node',
-          environment: 'node',
-          include: ['src/**/*.test.ts', 'test/**/*.test.ts'],
-          exclude: ['src/renderer/**', 'test/integration/**'],
-        },
+    projects: TEST_PROJECTS.map((project) => ({
+      extends: true as const,
+      plugins: project.environment === 'jsdom' ? [react()] : [],
+      test: {
+        name: project.name,
+        environment: project.environment,
+        include: [...project.include],
+        ...(project.exclude === undefined ? {} : { exclude: [...project.exclude] }),
       },
-      {
-        extends: true,
-        plugins: [react()],
-        test: {
-          name: 'jsdom',
-          environment: 'jsdom',
-          include: ['src/renderer/**/*.test.{ts,tsx}'],
-        },
-      },
-      {
-        extends: true,
-        test: {
-          name: 'integration',
-          environment: 'node',
-          include: ['test/integration/**/*.test.ts'],
-        },
-      },
-    ],
+    })),
   },
 });

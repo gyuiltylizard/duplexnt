@@ -1,119 +1,575 @@
-/* Proof-shell M0. Значения — только переменные из tokens.css, ни одного литерала цвета,
-   размера или отступа. */
+/* Каркас интерфейса M1 (U20): примитивы по рецептам DESIGN_SYSTEM.md и CSS handoff'а U19.
+   Значения — только переменные из tokens.css; литералы геометрии иллюстраций и колонок —
+   осознанное исключение дизайн-системы («Открытые вопросы» 7). */
 
-.shell {
+.app {
   display: flex;
   flex-direction: column;
-  gap: var(--space-8);
-  min-height: 100%;
-  max-width: var(--size-modal);
-  margin: 0 auto;
-  padding: var(--space-13) var(--space-10);
+  height: 100%;
 }
 
-.shell__header {
+/* — кнопки — */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  white-space: nowrap;
+  cursor: pointer;
+  outline: none;
+  font-family: var(--font-family-sans);
+}
+
+.btn--primary {
+  background: var(--color-accent);
+  color: var(--color-text-on-accent);
+  border: 0;
+  border-radius: var(--radius-l);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-base);
+  line-height: var(--leading-none);
+  padding: var(--space-6) var(--space-9);
+}
+
+.btn--primary.btn--large {
+  font-size: var(--font-size-l);
+  padding: var(--space-8) var(--space-12);
+  box-shadow: var(--shadow-button);
+}
+
+.btn--primary.btn--large:hover {
+  filter: brightness(1.08);
+}
+
+/* Компактная первичная «+ Добавить сканер» */
+.btn--primary.btn--small {
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-m);
+  padding: var(--space-4) var(--space-6);
+  border-radius: var(--radius-m);
+}
+
+.btn--secondary {
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-l);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-base);
+  line-height: var(--leading-none);
+  padding: var(--space-6) var(--space-9);
+}
+
+.btn--secondary.btn--large {
+  font-size: var(--font-size-l);
+  padding: var(--space-8) var(--space-12);
+}
+
+.btn--tinted {
+  background: var(--color-bg-toolbar);
+  color: var(--color-text-primary);
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-m);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-m);
+  line-height: var(--leading-none);
+  padding: var(--space-4) var(--space-6);
+}
+
+.btn--ghost {
+  background: none;
+  border: 0;
+  padding: var(--space-2) var(--space-3);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-m);
+  line-height: var(--leading-none);
+  color: var(--color-accent);
+}
+
+.btn--ghost:hover {
+  text-decoration: underline;
+}
+
+.btn--icon {
+  width: var(--size-control-w);
+  height: var(--size-control-h);
+  padding: 0;
+  background: var(--color-bg-surface);
+  border: var(--border-width) solid var(--color-border-default);
+  border-radius: var(--radius-m);
+  font-size: var(--font-size-base);
+  color: var(--color-text-secondary);
+}
+
+.btn--link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--color-link);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.btn--link:hover {
+  color: var(--color-link-hover);
+}
+
+/* Недоступная кнопка и фокус (handoff U19; DESIGN_SYSTEM → «Открытые вопросы» 6).
+   `aria-disabled` — у кнопок, которые гаснут, не выбрасывая фокус (стрелки статус-бара). */
+.btn:disabled,
+.btn[aria-disabled='true'] {
+  opacity: var(--opacity-disabled);
+  cursor: default;
+  filter: none;
+  text-decoration: none;
+}
+
+/* Кольцо фокуса — одно на все фокусируемые элементы интерфейса. */
+.btn:focus-visible,
+.segment:focus-visible,
+.thumb:focus-visible,
+.device-item:focus-visible,
+.device-advanced__toggle:focus-visible {
+  outline: var(--space-1) solid var(--color-border-focus);
+  outline-offset: var(--space-1);
+}
+
+/* — кикер и точка статуса — */
+
+.kicker {
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-xs);
+  line-height: var(--leading-none);
+  font-family: var(--font-family-mono);
+  letter-spacing: var(--tracking-caps);
+  color: var(--color-text-hint);
+}
+
+.kicker--warning {
+  color: var(--color-warning);
+}
+
+.dot {
+  flex: none;
+  width: var(--size-dot);
+  height: var(--size-dot);
+  border-radius: var(--radius-round);
+}
+
+.dot--ready {
+  background: var(--color-status-ready);
+}
+
+.dot--danger {
+  background: var(--color-danger);
+}
+
+.dot--warning {
+  background: var(--color-warning);
+}
+
+.dot--checking {
+  background: var(--color-text-faint);
+  animation: pulse var(--duration-loop) var(--ease-loop) infinite;
+}
+
+/* — плашки уведомлений (S6, S20) — */
+
+.notice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-4) var(--space-4) var(--space-6);
+  background: var(--color-bg-surface);
+  border: var(--border-width) solid var(--color-border-default);
+  border-radius: var(--radius-l);
+}
+
+.notice__text {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-s);
+  line-height: var(--leading-relaxed);
+  color: var(--color-text-secondary);
+  text-wrap: pretty;
+}
+
+.notice--warning .notice__text {
+  color: var(--color-warning);
+}
+
+.notice--danger .notice__text {
+  color: var(--color-danger);
+}
+
+.notices {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-6) var(--space-8) 0;
+}
+
+/* — скелетон — */
+
+.skeleton {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-xs);
+  background: var(--color-bg-surface);
+  animation: pulse var(--duration-loop) var(--ease-loop) infinite;
+}
+
+/* Поверх загружающейся картинки — в миниатюрах, превью и ленте `scan` (S19). */
+.skeleton--cover {
+  position: absolute;
+  inset: 0;
+  border-radius: 0;
+}
+
+/* — сегментированный выбор — */
+
+.segments {
+  display: flex;
+  flex-wrap: wrap; /* наборы приходят из capabilities — длинный ряд переносится */
+  gap: var(--space-2);
+}
+
+.segment {
+  font-family: var(--font-family-sans);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-s);
+  line-height: var(--leading-none);
+  padding: var(--space-4) var(--space-4);
+  border-radius: var(--radius-m);
+  border: var(--border-width) solid var(--color-border-default);
+  background: var(--color-bg-surface);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  outline: none;
+}
+
+.segment:hover {
+  border-color: var(--color-accent);
+}
+
+.segment--selected {
+  background: var(--color-bg-selected);
+  border-color: var(--color-border-focus);
+  color: var(--color-accent);
+}
+
+.segments[aria-disabled='true'] {
+  opacity: var(--opacity-disabled);
+}
+
+.segments[aria-disabled='true'] .segment {
+  cursor: default;
+}
+
+.segments[aria-disabled='true'] .segment:hover {
+  border-color: var(--color-border-default);
+}
+
+.segments[aria-disabled='true'] .segment--selected:hover {
+  border-color: var(--color-border-focus);
+}
+
+/* — поле ввода — */
+
+.input {
+  width: 100%;
+  background: var(--color-bg-surface);
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-l);
+  padding: var(--space-6) var(--space-6);
+  font-family: var(--font-family-mono);
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-base);
+  line-height: var(--leading-snug);
+  color: var(--color-text-primary);
+  outline: none;
+}
+
+.input--small {
+  border-color: var(--color-border-default);
+  border-radius: var(--radius-m);
+  padding: var(--space-4) var(--space-5);
+  font-size: var(--font-size-m);
+}
+
+.input:focus {
+  border-color: var(--color-border-focus);
+  background: var(--color-bg-paper);
+}
+
+.field {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
 }
 
-.shell__title {
-  margin: 0;
-  font-size: var(--font-size-display-s);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--leading-tight);
-  letter-spacing: var(--tracking-tight);
-}
-
-.shell__tagline {
-  margin: 0;
-  color: var(--color-text-muted);
-}
-
-.card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-6);
-  padding: var(--space-8) var(--space-10);
-  background: var(--color-bg-surface);
-  border: var(--border-width) solid var(--color-border-default);
-  border-radius: var(--radius-l);
-  box-shadow: var(--shadow-hairline);
-}
-
-.card__heading {
-  margin: 0;
-  color: var(--color-text-subtle);
+.field__label {
+  font-family: var(--font-family-mono);
   font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-medium);
-  letter-spacing: var(--tracking-caps);
-  text-transform: uppercase;
+  color: var(--color-text-hint);
 }
 
-.card__note {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-s);
+/* — модалка — */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--color-bg-overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.status {
-  margin: 0;
-  font-size: var(--font-size-l);
-  font-weight: var(--font-weight-medium);
-  overflow-wrap: anywhere;
-}
-
-.status--pending {
-  color: var(--color-text-muted);
-}
-
-.status--ok {
-  color: var(--color-status-ready);
-}
-
-.status--failed {
-  color: var(--color-danger);
-}
-
-.versions {
+.modal {
   display: flex;
   flex-direction: column;
-  margin: 0;
+  width: var(--size-modal);
+  max-height: calc(100% - 60px); /* запас макета над и под окном — литерал геометрии */
+  background: var(--color-bg-elevated);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-modal);
+  overflow: hidden;
+  outline: none; /* контейнер принимает фокус, пока обе кнопки футера недоступны */
 }
 
-.versions__row {
+.modal--small {
+  width: var(--size-modal-s);
+}
+
+.modal__header {
+  padding: var(--space-11) var(--space-12) var(--space-8);
+  border-bottom: var(--border-width) solid var(--color-border-subtle);
   display: flex;
-  justify-content: space-between;
-  gap: var(--space-8);
-  padding: var(--space-3) 0;
-  border-top: var(--border-width) solid var(--color-border-subtle);
+  flex-direction: column;
+  gap: var(--space-4);
 }
 
-.versions dt {
+/* Ряд «точка + кикер» — общий для шапки модалки и плашки прерванного прохода. */
+.modal__kicker,
+.pass-banner__kicker {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.modal__title {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-2xl);
+  line-height: var(--leading-snug);
+}
+
+.modal__subtitle {
+  margin: 0;
+  font-size: var(--font-size-m);
+  line-height: var(--leading-relaxed);
+  color: var(--color-text-muted);
+  text-wrap: pretty;
+}
+
+.modal__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-10) var(--space-12);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-9);
+}
+
+.modal__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.modal__footer {
+  background: var(--color-bg-panel);
+  border-top: var(--border-width) solid var(--color-border-subtle);
+  padding: var(--space-8) var(--space-12);
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.modal__footer .btn--ghost {
+  font-size: var(--font-size-base);
   color: var(--color-text-secondary);
 }
 
-.versions dd {
+.modal__footer .btn--ghost:hover {
+  color: var(--color-text-primary);
+}
+
+.modal__status {
+  flex: 1;
   margin: 0;
-  font-family: var(--font-family-mono);
-  font-size: var(--font-size-m);
   overflow-wrap: anywhere;
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-s);
+  line-height: var(--leading-relaxed);
+  color: var(--color-text-subtle);
+  text-wrap: pretty;
 }
 
-.samples {
+.modal__status--danger {
+  color: var(--color-danger);
+}
+
+.modal[aria-busy='true'] .modal__body {
+  opacity: var(--opacity-disabled);
+  pointer-events: none;
+}
+
+/* — тост — */
+
+.toast {
+  max-width: calc(100vw - var(--space-16));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  position: fixed;
+  bottom: var(--space-12);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--color-bg-inverse);
+  border-radius: var(--radius-l);
+  box-shadow: var(--shadow-float);
+  padding: var(--space-6) var(--space-6) var(--space-6) var(--space-9);
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-4);
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  align-items: center;
+  gap: var(--space-7);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-m);
+  color: var(--color-text-on-inverse);
+  white-space: nowrap;
 }
 
-.samples li {
-  padding: var(--space-2) var(--space-5);
-  background: var(--color-bg-elevated);
-  border: var(--border-width) solid var(--color-border-subtle);
-  border-radius: var(--radius-m);
-  font-family: var(--font-family-mono);
-  font-size: var(--font-size-m);
+/* — экран setup: одна колонка (S1) — */
+
+.setup-screen {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.setup-screen__column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-12);
+  width: 100%;
+  max-width: 520px; /* ширина колонки макета — литерал иллюстративной геометрии */
+  padding: 0 var(--space-16);
+  margin: 0 auto;
+  box-sizing: content-box;
+}
+
+.setup-screen__intro {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.setup-screen__title {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-display);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  text-wrap: balance;
+}
+
+.setup-screen__lead {
+  margin: 0;
+  font-size: var(--font-size-l);
+  line-height: var(--leading-loose);
+  color: var(--color-text-muted);
+  text-wrap: pretty;
+}
+
+/* — экран несовместимых данных (S22) — */
+
+.incompatible-screen {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.incompatible-screen__column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  max-width: 520px; /* та же колонка макета, что у setup */
+  padding: 0 var(--space-16);
+}
+
+.incompatible-screen__title {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-display-s);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  text-wrap: pretty;
+}
+
+.incompatible-screen__lead {
+  margin: 0;
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-l);
+  line-height: var(--leading-loose);
+  color: var(--color-text-muted);
+  text-wrap: pretty;
+}
+
+.incompatible-screen__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-10);
+  padding-top: var(--space-6);
+}
+
+.incompatible-screen__status {
+  margin: 0;
+  font-size: var(--font-size-s);
+  line-height: var(--leading-relaxed);
+  color: var(--color-danger);
+}
+
+/* — движение — */
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dot--checking,
+  .skeleton {
+    animation: none;
+  }
+
+  .skeleton {
+    opacity: var(--opacity-disabled);
+  }
 }

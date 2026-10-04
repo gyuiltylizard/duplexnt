@@ -1,7 +1,10 @@
+import { PAGE_IMAGE_SCHEME } from '../src/shared/bridge';
+
 // Билдер Content-Security-Policy — чистый модуль без импорта Electron, закрытый тестом.
 // Политика доставляется мета-тегом: его вставляет плагин Vite в electron.vite.config.ts,
 // профиль выбирается по команде Vite, поэтому профиль разработки не может попасть в сборку.
-// Расширять политику (изображения страниц в M1) — узкой дельтой здесь, под тем же тестом.
+// Единственное расширение — схема изображений страниц (план M1, KTD-38): только в `img-src`,
+// в обоих профилях; `connect-src` и `default-src` её не получают.
 
 export type CspOptions =
   { readonly profile: 'build' } | { readonly profile: 'dev'; readonly devServerOrigin: string };
@@ -14,7 +17,7 @@ const BUILD_DIRECTIVES: Directives = [
   ['script-src', ["'self'"]],
   ['style-src', ["'self'"]],
   ['font-src', ["'self'"]],
-  ['img-src', ["'self'"]],
+  ['img-src', ["'self'", `${PAGE_IMAGE_SCHEME}:`]],
   ['connect-src', ["'none'"]],
   ['base-uri', ["'none'"]],
   ['form-action', ["'none'"]],

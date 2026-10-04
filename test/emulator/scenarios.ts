@@ -1,0 +1,137 @@
+// Сценарии эмулятора сканера (план M1, U9). Сценарий — данные: что лежит в лотке и где устройство
+// ведёт себя не так, как в обычном проходе. Обычное поведение повторяет ET-3850 по журналу M1, U1
+// и следам `test/fixtures/escl/et-3850/traces/`; отклонения от него — намеренные сбои.
+
+/** Какой `Location` отдаёт ответ `201`. Задание при этом существует по настоящему адресу. */
+export type LocationForm =
+  /** Как у ET-3850: полный URL с хостом и портом. */
+  | 'absolute'
+  /** Только путь от корня. */
+  | 'path'
+  /** Относительный — от адреса коллекции заданий. */
+  | 'relative'
+  /** Полный URL с чужим хостом: клиент обязан взять из него только путь. */
+  | 'foreign-host'
+  /** Полный URL со схемой `http` при устройстве на HTTPS. */
+  | 'http-scheme'
+  /** Путь вне коллекции заданий — негодный. */
+  | 'outside'
+  /** Путь с точечным сегментом — негодный. */
+  | 'traversal'
+  /** Заголовка нет. */
+  | 'missing';
+
+/** Сбой при отдаче страницы. */
+export type PageFault =
+  /** Соединение закрыто без единого байта — сбой подачи при висящем запросе (журнал U1). */
+  | 'reset-before-headers'
+  /** `410 Gone` — сбой подачи между страницами (журнал U1). */
+  | 'gone'
+  /** Тело `chunked` обрывается посередине. */
+  | 'reset-mid-body'
+  /** Тело обрамлено закрытием соединения и кончается посреди страницы штатным закрытием. */
+  | 'close-mid-body'
+  /** `Content-Length` больше тела: тело короче заявленного. */
+  | 'length-longer'
+  /** `Content-Length` меньше тела: целой страницы в заявленной длине нет, остаток — мусор. */
+  | 'length-shorter'
+  /** Ответ `200`, тело — не JPEG. */
+  | 'not-jpeg'
+  /** Ответ `200` без тела. */
+  | 'empty'
+  /** Тело размером `oversizeBytes`. */
+  | 'oversize'
+  /** Половина тела, затем тишина. */
+  | 'stall'
+  /** Тело по байту раз в `dripIntervalMs`. */
+  | 'drip';
+
+export interface Scenario {
+  /** Чьи capabilities отдаются: ET-3850 или синтетическое устройство без автоподачи. */
+  readonly device: 'et-3850' | 'no-adf';
+  /** Листов в лотке; `Infinity` — лоток не кончается. Лоток общий для всех заданий сценария. */
+  readonly sheets: number;
+  /** Что статус говорит о лотке в покое; `null` — правду, по числу листов. */
+  readonly trayReportsLoaded: boolean | null;
+  /** Сколько первых `POST` получают `503`; `Infinity` — занятость без конца. */
+  readonly busyPosts: number;
+  /** `POST` получает `409` при любых параметрах. */
+  readonly rejectSettings: boolean;
+  /** Сколько `503` отдаёт `NextDocument` после страницы: перед следующей и перед концом. */
+  readonly notReady: { readonly betweenPages: number; readonly beforeEnd: number };
+  readonly location: LocationForm;
+  /** Сбой на листе с этим номером (счёт листов сквозной, с единицы); срабатывает один раз. */
+  readonly fault: { readonly sheet: number; readonly kind: PageFault } | null;
+  /** `DELETE` не получает ответа. */
+  readonly deleteHangs: boolean;
+  /** Пауза перед заголовками страницы — «лист едет через сканер». */
+  readonly pageDelayMs: number;
+  readonly dripIntervalMs: number;
+  readonly oversizeBytes: number;
+  /** Сколько после `DELETE` идущего задания `POST` получает `503`: устройство гонит остаток пачки. */
+  readonly busyAfterCancelMs: number;
+  /** Через сколько без обращений устройство само снимает брошенное задание. */
+  readonly abandonAfterMs: number;
+}
+
+// Обычный проход ET-3850: `503` после каждой страницы, четыре — перед финальным `404`; брошенное
+// задание устройство снимает через пять минут.
+export const DEFAULT_SCENARIO: Scenario = {
+  device: 'et-3850',
+  sheets: 3,
+  trayReportsLoaded: null,
+  busyPosts: 0,
+  rejectSettings: false,
+  notReady: { betweenPages: 1, beforeEnd: 4 },
+  location: 'absolute',
+  fault: null,
+  deleteHangs: false,
+  pageDelayMs: 0,
+  dripIntervalMs: 60_000,
+  oversizeBytes: 80 * 1024 * 1024,
+  busyAfterCancelMs: 0,
+  abandonAfterMs: 5 * 60_000,
+};
+
+/** Именованные сценарии — для `npm run emulator` и ручного смоука. Тесты задают поля напрямую. */
+export const SCENARIOS = {
+  pass: {},
+  'pass-12': { sheets: 12 },
+  'pass-30': { sheets: 30 },
+  'busy-then-ok': { busyPosts: 5 },
+  'busy-forever': { busyPosts: Infinity },
+  'empty-tray': { sheets: 0 },
+  'no-pages': { sheets: 0, trayReportsLoaded: true },
+  'no-adf': { device: 'no-adf' },
+  'settings-rejected': { rejectSettings: true },
+  // Обрыв между страницами: 17 страниц целы, 18-й лист остаётся в лотке — как в примере AE5.
+  'jam-after-17': {
+    sheets: 30,
+    notReady: { betweenPages: 1, beforeEnd: 4 },
+    fault: { sheet: 18, kind: 'gone' },
+  },
+  'reset-at-first-page': { fault: { sheet: 1, kind: 'reset-before-headers' } },
+  'reset-mid-page': { fault: { sheet: 2, kind: 'reset-mid-body' } },
+  'stalled-page': { fault: { sheet: 2, kind: 'stall' } },
+  'dripping-page': { fault: { sheet: 1, kind: 'drip' } },
+  'oversize-page': { fault: { sheet: 1, kind: 'oversize' } },
+  'not-jpeg': { fault: { sheet: 1, kind: 'not-jpeg' } },
+  'empty-page': { fault: { sheet: 1, kind: 'empty' } },
+  'close-mid-page': { fault: { sheet: 1, kind: 'close-mid-body' } },
+  'length-longer': { fault: { sheet: 1, kind: 'length-longer' } },
+  'length-shorter': { fault: { sheet: 1, kind: 'length-shorter' } },
+  'endless-pages': { sheets: Infinity },
+  'delete-hangs': { deleteHangs: true },
+  'location-path': { location: 'path' },
+  'location-foreign-host': { location: 'foreign-host' },
+  'location-missing': { location: 'missing' },
+} as const satisfies Record<string, Partial<Scenario>>;
+
+type ScenarioName = keyof typeof SCENARIOS;
+
+export const isScenarioName = (name: string): name is ScenarioName =>
+  Object.hasOwn(SCENARIOS, name);
+
+export function scenarioOf(overrides: Partial<Scenario> = {}): Scenario {
+  return { ...DEFAULT_SCENARIO, ...overrides };
+}

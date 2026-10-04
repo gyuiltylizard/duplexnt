@@ -1,0 +1,4 @@
+{
+  "//": "Только тип модуля для каталога test/: `npm run emulator` запускает test/emulator и test/support напрямую Node, как и scripts/. В корневом package.json поля type нет намеренно (см. electron.vite.config.ts).",
+  "type": "module"
+}

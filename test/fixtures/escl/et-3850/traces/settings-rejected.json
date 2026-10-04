@@ -1,0 +1,107 @@
+{
+  "device": "et-3850",
+  "description": "BlackAndWhite1 с image/jpeg: 409 на POST.",
+  "scenario": "job",
+  "settings": {
+    "colorMode": "BlackAndWhite1",
+    "resolution": 300,
+    "region": {
+      "xOffset": 0,
+      "yOffset": 0,
+      "width": 2480,
+      "height": 3507
+    }
+  },
+  "exchanges": [
+    {
+      "label": "status-before",
+      "atMs": 0,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "857",
+        "Connection": "close"
+      },
+      "bodyBytes": 857,
+      "chunks": 1,
+      "headersAtMs": 725,
+      "totalMs": 726,
+      "error": null,
+      "scannerStatus": {
+        "state": "Idle",
+        "adfState": "ScannerAdfEmpty",
+        "jobs": [
+          {
+            "jobState": "Aborted",
+            "imagesCompleted": 0,
+            "age": 42
+          },
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 68
+          }
+        ]
+      }
+    },
+    {
+      "label": "post-1",
+      "atMs": 731,
+      "method": "POST",
+      "path": "/eSCL/ScanJobs",
+      "requestBytes": 751,
+      "status": 409,
+      "statusMessage": "Conflict",
+      "headers": {
+        "CONTENT-LENGTH": "0",
+        "Connection": "close"
+      },
+      "bodyBytes": 0,
+      "chunks": 0,
+      "headersAtMs": 17,
+      "totalMs": 17,
+      "error": null
+    },
+    {
+      "label": "status-after-refused-post",
+      "atMs": 749,
+      "method": "GET",
+      "path": "/eSCL/ScannerStatus",
+      "requestBytes": 0,
+      "status": 200,
+      "statusMessage": "OK",
+      "headers": {
+        "Accept-Range": "none",
+        "CONTENT-TYPE": "text/xml;charset=\"utf-8\"",
+        "CONTENT-LENGTH": "857",
+        "Connection": "close"
+      },
+      "bodyBytes": 857,
+      "chunks": 1,
+      "headersAtMs": 17,
+      "totalMs": 17,
+      "error": null,
+      "scannerStatus": {
+        "state": "Idle",
+        "adfState": "ScannerAdfEmpty",
+        "jobs": [
+          {
+            "jobState": "Aborted",
+            "imagesCompleted": 0,
+            "age": 42
+          },
+          {
+            "jobState": "Canceled",
+            "imagesCompleted": 1,
+            "age": 68
+          }
+        ]
+      }
+    }
+  ]
+}

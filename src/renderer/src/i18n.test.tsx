@@ -1,7 +1,28 @@
+import { ERROR_CODES } from '@shared';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_LOCALE, i18n, resources } from './i18n';
 
 describe('i18n', () => {
+  it('у каждого кода доменной ошибки есть строка в локали, и лишних строк нет', () => {
+    for (const [locale, { common }] of Object.entries(resources)) {
+      expect(Object.keys(common.errors).sort(), locale).toEqual([...ERROR_CODES].sort());
+      for (const text of Object.values(common.errors)) {
+        expect(text.trim(), locale).not.toBe('');
+      }
+    }
+  });
+
+  it('варианты по причине лежат под существующими кодами, строки непустые', () => {
+    for (const [locale, { common }] of Object.entries(resources)) {
+      for (const [code, group] of Object.entries(common.errorReasons)) {
+        expect([...ERROR_CODES], locale).toContain(code);
+        for (const text of Object.values(group)) {
+          expect(text.trim(), `${locale}: ${code}`).not.toBe('');
+        }
+      }
+    }
+  });
+
   it('инициализирован синхронно русской локалью', () => {
     expect(i18n.isInitialized).toBe(true);
     expect(i18n.language).toBe(DEFAULT_LOCALE);
@@ -9,22 +30,22 @@ describe('i18n', () => {
   });
 
   it.each([
-    [1, '1 лист'],
-    [2, '2 листа'],
-    [5, '5 листов'],
-  ])('счётчик листов: %i → %s', (count, expected) => {
-    expect(i18n.t('sheets', { count })).toBe(expected);
+    [1, '1 страница'],
+    [2, '2 страницы'],
+    [5, '5 страниц'],
+  ])('счётчик страниц: %i → %s', (count, expected) => {
+    expect(i18n.t('editor.count', { count })).toBe(expected);
   });
 
   it.each([
-    [0, '0 листов'],
-    [11, '11 листов'],
-    [21, '21 лист'],
-    [101, '101 лист'],
-    [112, '112 листов'],
-    [1.5, '1.5 листа'],
+    [0, '0 страниц'],
+    [11, '11 страниц'],
+    [21, '21 страница'],
+    [101, '101 страница'],
+    [112, '112 страниц'],
+    [1.5, '1.5 страницы'],
   ])('края русской плюрализации: %d → %s', (count, expected) => {
-    expect(i18n.t('sheets', { count })).toBe(expected);
+    expect(i18n.t('editor.count', { count })).toBe(expected);
   });
 
   it('ключи типизированы: несуществующий ключ не проходит typecheck', () => {
