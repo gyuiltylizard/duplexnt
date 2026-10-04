@@ -1,4 +1,4 @@
-import { PDFDocument, PDFName, PDFRawStream } from '@cantoo/pdf-lib';
+import { PDFDict, PDFDocument, PDFName, PDFRawStream } from '@cantoo/pdf-lib';
 import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
 import { ET_3850, readFixture } from '../../../test/support/fixtures';
@@ -26,25 +26,27 @@ const unwrap = <T>(result: { ok: true; value: T } | { ok: false; error: unknown 
   return result.value;
 };
 
-/** Байты потоков изображений документа — в порядке страниц, без декодирования фильтров. */
-async function imageStreams(pdfBytes: Uint8Array): Promise<Uint8Array[]> {
+/** Потоки изображений документа — в порядке страниц, без декодирования фильтров. */
+async function rawImageStreams(pdfBytes: Uint8Array): Promise<PDFRawStream[]> {
   const document = await PDFDocument.load(pdfBytes);
-  const streams: Uint8Array[] = [];
+  const streams: PDFRawStream[] = [];
   for (const page of document.getPages()) {
-    const resources = page.node.Resources();
-    const xobjects = resources?.lookup(PDFName.of('XObject'));
-    if (xobjects === undefined || !('entries' in xobjects)) {
+    const xobjects = page.node.Resources()?.lookup(PDFName.of('XObject'));
+    if (!(xobjects instanceof PDFDict)) {
       continue;
     }
-    for (const [, value] of (xobjects as { entries(): [unknown, unknown][] }).entries()) {
-      const stream = page.node.context.lookup(value as never);
+    for (const [, value] of xobjects.entries()) {
+      const stream = page.node.context.lookup(value);
       if (stream instanceof PDFRawStream) {
-        streams.push(stream.getContents());
+        streams.push(stream);
       }
     }
   }
   return streams;
 }
+
+const imageStreams = async (pdfBytes: Uint8Array): Promise<Uint8Array[]> =>
+  (await rawImageStreams(pdfBytes)).map((stream) => stream.getContents());
 
 describe('сборка PDF: без перекодирования, порядок, поворот', () => {
   it('байты потока каждой страницы равны исходному JPEG; порядок сохранён', async () => {
@@ -63,13 +65,9 @@ describe('сборка PDF: без перекодирования, порядо�
 
   it('фильтр потока — DCTDecode: JPEG вложен, а не перекодирован', async () => {
     const pdf = unwrap(await assemblePdf([pageOf(fixture(1))]));
-    const document = await PDFDocument.load(pdf);
-    const page = document.getPage(0);
-    const xobjects = page.node.Resources()?.lookup(PDFName.of('XObject'));
-    const entries = (xobjects as { entries(): [unknown, unknown][] }).entries();
-    const stream = page.node.context.lookup(entries[0]?.[1] as never) as PDFRawStream;
 
-    expect(String(stream.dict.get(PDFName.of('Filter')))).toBe('/DCTDecode');
+    const [stream] = await rawImageStreams(pdf);
+    expect(String(stream?.dict.get(PDFName.of('Filter')))).toBe('/DCTDecode');
   });
 
   it('/Rotate 180 стоит только на повёрнутых страницах; байты изображения не меняются', async () => {
