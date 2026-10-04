@@ -27,6 +27,7 @@ describe('сборка PDF: худший объём (KTD-12)', () => {
         create: {
           ...A4_600DPI,
           channels: 3,
+          background: { r: 128, g: 128, b: 128 },
           noise: { type: 'gaussian', mean: 128, sigma: 12 },
         },
       })
