@@ -44,6 +44,10 @@ export const ERROR_CODES = [
   'sessionCloseFailed',
   // Страницы с таким ключом нет в текущей сессии или её файл потерян (`reason`).
   'pageUnavailable',
+  // Сборка PDF (M2, U5): страница больше предела пикселей, с которым работает приложение.
+  'pdfPageTooLarge',
+  // Сборка PDF (M2, U5): файл страницы не читается как JPEG-изображение.
+  'pdfPageUnreadable',
   // Миниатюра не построилась: исходник не JPEG, больше предела пикселей, не декодируется.
   'thumbnailFailed',
 ] as const;
