@@ -5,6 +5,7 @@ import {
   type BridgeCommand,
   type DiscoveryState,
   type Result,
+  type SavePdfReport,
   type Snapshot,
 } from '@shared';
 import { describe, expect, it, vi } from 'vitest';
@@ -48,6 +49,9 @@ function setup(snapshot: Snapshot = EMPTY_SNAPSHOT) {
     acceptPass: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
     declineBacks: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
     setRotateBacks: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
+    savePdf: vi.fn((): Promise<Result<SavePdfReport>> =>
+      Promise.resolve(ok({ canceled: false, fileName: 'скан.pdf', directory: 'D:\\Сканы' })),
+    ),
     closeSession: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
     interrupt: vi.fn(() => Promise.resolve()),
     pageInfo: vi.fn(() => null),
@@ -81,10 +85,14 @@ function setup(snapshot: Snapshot = EMPTY_SNAPSHOT) {
   const connector: Connector = { connect, cancel };
 
   const openDataFolder = vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined)));
+  const askSavePdfPath = vi.fn((): Promise<string | null> =>
+    Promise.resolve('D:\\Сканы\\скан.pdf'),
+  );
   const discoveryEvents: number[] = [];
   const commands = createCommands({
     service,
     openDataFolder,
+    askSavePdfPath,
     onDiscoveryChanged: (seq) => discoveryEvents.push(seq),
     startDiscovery,
     connector,
@@ -99,6 +107,7 @@ function setup(snapshot: Snapshot = EMPTY_SNAPSHOT) {
     connector,
     cancel,
     openDataFolder,
+    askSavePdfPath,
     discoveryEvents,
   };
 }
@@ -118,6 +127,7 @@ describe('команды без входа', () => {
     'stopPass',
     'acceptPass',
     'declineBacks',
+    'savePdf',
     'closeSession',
     'openDataFolder',
   ];
@@ -185,6 +195,20 @@ describe('снимок и проход', () => {
     service.declineBacks.mockResolvedValueOnce(fail('sessionConflict', { reason: 'backsPresent' }));
     expect(await handlers.declineBacks(undefined)).toEqual(
       fail('sessionConflict', { reason: 'backsPresent' }),
+    );
+  });
+
+  it('savePdf отдаёт отчёт сохранения; диалог пути — функция из контекста main (M2, U6)', async () => {
+    const { handlers, service, askSavePdfPath } = setup();
+
+    expect(await handlers.savePdf(undefined)).toEqual(
+      ok({ canceled: false, fileName: 'скан.pdf', directory: 'D:\\Сканы' }),
+    );
+    expect(service.savePdf).toHaveBeenCalledExactlyOnceWith(askSavePdfPath);
+
+    service.savePdf.mockResolvedValueOnce(fail('saveWriteFailed', { reason: 'EACCES' }));
+    expect(await handlers.savePdf(undefined)).toEqual(
+      fail('saveWriteFailed', { reason: 'EACCES' }),
     );
   });
 
@@ -296,6 +320,7 @@ describe('поиск устройств', () => {
     const commands = createCommands({
       service,
       openDataFolder: () => Promise.resolve(ok(undefined)),
+      askSavePdfPath: () => Promise.resolve(null),
       onDiscoveryChanged: () => {
         throw new Error('окно закрыто');
       },

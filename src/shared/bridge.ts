@@ -54,6 +54,14 @@ export interface SetRotateBacksRequest {
   readonly rotate: boolean;
 }
 
+/** Итог «Сохранить документ» (M2, KTD-3): отказ в диалоге — не ошибка, ничего не записано. */
+export interface SavePdfReport {
+  readonly canceled: boolean;
+  /** Имя файла и папка — для тоста «Сохранено: …»; `null` при отказе в диалоге. */
+  readonly fileName: string | null;
+  readonly directory: string | null;
+}
+
 export interface ProbeResult {
   /** Эхо входного токена — доказывает, что ответ пришёл на этот вызов. */
   readonly echo: string;
@@ -103,6 +111,11 @@ export interface BridgeCommands {
   readonly declineBacks: { readonly request: NoRequest; readonly value: undefined };
   /** Тумблер «повернуть обороты на 180°» (M2, KTD-2); исход — в снимке. */
   readonly setRotateBacks: { readonly request: SetRotateBacksRequest; readonly value: undefined };
+  /**
+   * «Сохранить документ» (M2, KTD-3): путь спрашивает main системным диалогом, ядро собирает
+   * PDF и пишет атомарно; отметка о сохранении — в журнале.
+   */
+  readonly savePdf: { readonly request: NoRequest; readonly value: SavePdfReport };
   readonly closeSession: { readonly request: NoRequest; readonly value: undefined };
   /** Открывает каталог данных в проводнике — при несовместимых данных. Каталог знает main. */
   readonly openDataFolder: { readonly request: NoRequest; readonly value: undefined };
@@ -125,6 +138,7 @@ export const BRIDGE_CHANNELS = {
   acceptPass: 'duplexnt:accept-pass',
   declineBacks: 'duplexnt:decline-backs',
   setRotateBacks: 'duplexnt:set-rotate-backs',
+  savePdf: 'duplexnt:save-pdf',
   closeSession: 'duplexnt:close-session',
   openDataFolder: 'duplexnt:open-data-folder',
 } as const satisfies Record<BridgeCommand, string>;

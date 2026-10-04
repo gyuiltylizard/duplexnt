@@ -48,6 +48,8 @@ export const ERROR_CODES = [
   'pdfPageTooLarge',
   // Сборка PDF (M2, U5): файл страницы не читается как JPEG-изображение.
   'pdfPageUnreadable',
+  // Запись PDF в выбранный пользователем файл не удалась (M2, U6); код ФС — в деталях.
+  'saveWriteFailed',
   // Миниатюра не построилась: исходник не JPEG, больше предела пикселей, не декодируется.
   'thumbnailFailed',
 ] as const;

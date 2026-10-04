@@ -1,3 +1,4 @@
+import { basename, dirname } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import {
   fail,
@@ -7,6 +8,7 @@ import {
   type PassProgress,
   type PassReport,
   type Result,
+  type SavePdfReport,
   type ScanParams,
   type SessionConflictReason,
   type ScannerState,
@@ -26,6 +28,8 @@ import {
 import { buildScanSettings, DEFAULT_SCAN_PARAMS, resolveScanParams } from '../escl/scan-settings';
 import { parseStatus } from '../escl/status';
 import { createTransport, type ScannerTransport } from '../escl/transport';
+import { assemblePdf, type PdfPageInput } from '../pdf/assemble';
+import { writeFileAtomic } from '../storage/atomic-file';
 import type { PassOrigin } from '../storage/journal';
 import { openSessionStore } from '../storage/reconcile';
 import type { PageInfo, SessionStore, SessionStoreOptions } from '../storage/session-store';
@@ -40,7 +44,7 @@ import {
   storedScannerOf,
   type StoredScanner,
 } from '../storage/stored-scanner';
-import { storageFailure } from '../storage/storage-fs';
+import { fsErrorCode, ioOf, storageFailure } from '../storage/storage-fs';
 import { pagePixelLimit } from '../storage/thumbnails';
 import { openUnclosedJobs, type UnclosedJobs } from '../storage/unclosed-jobs';
 import { assembleSession } from './assembly';
@@ -94,6 +98,12 @@ export interface PassService {
   declineBacks(): Promise<Result<void>>;
   /** Тумблер «повернуть обороты на 180°» (M2, KTD-2): флаг прохода в роли оборотов. */
   setRotateBacks(rotate: boolean): Promise<Result<void>>;
+  /**
+   * «Сохранить документ» (M2, U6): путь спрашивает `askPath` (диалог main, `null` — отказ),
+   * ядро читает страницы в собранном порядке, собирает PDF и пишет атомарно рядом с целью;
+   * после успешного переименования — отметка о сохранении в журнале.
+   */
+  savePdf(askPath: () => Promise<string | null>): Promise<Result<SavePdfReport>>;
   /** «Новая пачка». */
   closeSession(): Promise<Result<void>>;
   /**
@@ -620,6 +630,57 @@ export function createPassService(
       const set = await store.setRotateBacks(rotate);
       notify();
       return set;
+    },
+
+    async savePdf(askPath) {
+      if (run !== null) {
+        return conflict('passRunning');
+      }
+      if (store.incompatible) {
+        return fail('storageIncompatible');
+      }
+      const session = store.snapshot();
+      if (session === null) {
+        return conflict('noSession');
+      }
+
+      // Путь — первым (KTD-3): отказ в диалоге не тратит сборку и ничего не пишет.
+      const path = await askPath();
+      if (path === null) {
+        return ok({ canceled: true, fileName: null, directory: null });
+      }
+
+      // Страницы — в собранном порядке; потерянная страница — отказ, а не молча короче (R11).
+      const inputs: PdfPageInput[] = [];
+      for (const page of assembleSession(session).order) {
+        const info = store.pageInfo(page.key);
+        const bytes = await store.readPage(page.key);
+        if (!bytes.ok) {
+          return bytes;
+        }
+        inputs.push({
+          bytes: bytes.value,
+          rotate180: page.rotate180,
+          dpi: info?.dpi ?? null,
+          pixelLimit: info?.pixelLimit ?? null,
+        });
+      }
+      const pdf = await assemblePdf(inputs);
+      if (!pdf.ok) {
+        return pdf;
+      }
+
+      // Атомарно рядом с целью: сбой на любом шаге не трогает прежний файл (R11).
+      try {
+        await writeFileAtomic(path, pdf.value, ioOf(options));
+      } catch (error) {
+        const reason = fsErrorCode(error);
+        return reason === 'ENOSPC' ? fail('storageFull') : fail('saveWriteFailed', { reason });
+      }
+      // Отметка — только после успешного переименования; сессия не удаляется (R12).
+      await store.markSaved();
+      notify();
+      return ok({ canceled: false, fileName: basename(path), directory: dirname(path) });
     },
 
     async closeSession() {

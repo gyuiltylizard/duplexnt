@@ -1,14 +1,16 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { PDFDocument } from '@cantoo/pdf-lib';
 import { fail } from '@shared';
 import { describe, expect, it } from 'vitest';
 import { ET_3850, readFixture } from '../../../test/support/fixtures';
+import { fsError, interceptFs } from '../../../test/support/intercept-fs';
 import { makeTempDataRoot } from '../../../test/support/temp-data-root';
 import { parseCapabilities } from '../escl/capabilities';
 import type { ConnectedScanner, ConnectorOptions } from '../escl/connect';
 import { scanOptionsOf } from '../escl/scan-settings';
 import { layoutOf } from '../storage/layout';
-import { StorageError } from '../storage/storage-fs';
+import { realStorageFs, StorageError } from '../storage/storage-fs';
 import { interruptionError, openPassService } from './pass-service';
 
 // Чистые части службы прохода (план M1, U17): перевод причины обрыва в код, снимок без сканера,
@@ -197,6 +199,8 @@ interface SeededPass {
   readonly state?: 'completed' | 'interrupted';
   readonly accepted?: boolean;
   readonly rotate180?: boolean;
+  /** Номера фикстур-страниц устройства как содержимое; нет — байты-заглушки. */
+  readonly fixtures?: readonly number[];
 }
 
 /** Сессия на диске: журнал v2 + файлы страниц; `origin: null` — политика сканер не сверяет. */
@@ -228,7 +232,12 @@ async function seedSession(
   for (const pass of passes) {
     for (let index = 1; index <= pass.pages; index += 1) {
       const name = `p${String(pass.number).padStart(2, '0')}-s01-${String(index).padStart(4, '0')}.jpg`;
-      await writeFile(join(layout.pagesDir, name), pageBytes);
+      const fixture = pass.fixtures?.[index - 1];
+      const content =
+        fixture === undefined
+          ? pageBytes
+          : readFixture(...ET_3850, 'pages', `page-${String(fixture).padStart(2, '0')}.jpg`);
+      await writeFile(join(layout.pagesDir, name), content);
     }
   }
 }
@@ -387,5 +396,132 @@ describe('служба прохода: команды оборотов (M2, U3)'
       unpairedSheets: [1],
       mismatch: true,
     });
+  });
+});
+
+describe('служба прохода: сохранение PDF (M2, U6)', () => {
+  /** Двусторонняя сессия 2+2 с настоящими JPEG устройства; обороты с флагом поворота. */
+  async function savable(root: string) {
+    await seedSession(root, [
+      { number: 1, pages: 2, fixtures: [1, 2] },
+      { number: 2, pages: 2, rotate180: true, fixtures: [6, 5] },
+    ]);
+  }
+
+  async function saveTarget(root: string): Promise<string> {
+    const out = join(root, 'выход');
+    await mkdir(out, { recursive: true });
+    return join(out, 'скан.pdf');
+  }
+
+  it('сохранение: PDF в собранном порядке, /Rotate на оборотах, отметка в журнале', async () => {
+    const root = await makeTempDataRoot();
+    await savable(root);
+    const target = await saveTarget(root);
+    const service = await openPassService(root);
+
+    const report = await service.savePdf(() => Promise.resolve(target));
+
+    expect(report).toEqual({
+      ok: true,
+      value: { canceled: false, fileName: 'скан.pdf', directory: join(root, 'выход') },
+    });
+    const document = await PDFDocument.load(await readFile(target));
+    // Порядок: 1л, 1о, 2л, 2о; обороты повёрнуты.
+    expect(document.getPageCount()).toBe(4);
+    expect(document.getPages().map((page) => page.getRotation().angle)).toEqual([0, 180, 0, 180]);
+
+    // Отметка о сохранении — durable; сессия не удалена (R12).
+    expect(service.snapshot().session?.saved).toBe(true);
+    const again = await openPassService(root);
+    expect(again.snapshot().session?.saved).toBe(true);
+    expect(again.snapshot().session?.passes).toHaveLength(2);
+
+    // Правка после сохранения снимает отметку (KTD-7, AE12).
+    expect(await again.setRotateBacks(false)).toMatchObject({ ok: true });
+    expect(again.snapshot().session?.saved).toBe(false);
+  });
+
+  it('отказ в диалоге: ничего не записано, без ошибки, отметки нет', async () => {
+    const root = await makeTempDataRoot();
+    await savable(root);
+    const target = await saveTarget(root);
+    const service = await openPassService(root);
+
+    expect(await service.savePdf(() => Promise.resolve(null))).toEqual({
+      ok: true,
+      value: { canceled: true, fileName: null, directory: null },
+    });
+    await expect(readFile(target)).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(service.snapshot().session?.saved).toBe(false);
+  });
+
+  it('потерянная страница — отказ кодом, а не PDF без неё', async () => {
+    const root = await makeTempDataRoot();
+    await savable(root);
+    const target = await saveTarget(root);
+    await rm(join(layoutOf(root).pagesDir, 'p01-s01-0002.jpg'));
+    const service = await openPassService(root);
+
+    expect(await service.savePdf(() => Promise.resolve(target))).toMatchObject({
+      ok: false,
+      error: { code: 'pageUnavailable', details: { reason: 'lost' } },
+    });
+    await expect(readFile(target)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('AE10: сбой на переименовании — старый файл цел, сессия цела, повтор проходит', async () => {
+    const root = await makeTempDataRoot();
+    await savable(root);
+    const target = await saveTarget(root);
+    await writeFile(target, 'прежний документ');
+    let failRename = true;
+    const { fs } = interceptFs(realStorageFs, (call) => {
+      if (failRename && call.op === 'rename' && call.to === target) {
+        throw fsError('EACCES');
+      }
+    });
+    const service = await openPassService(root, { fs, retry: { ceilingMs: 0 } });
+
+    expect(await service.savePdf(() => Promise.resolve(target))).toEqual(
+      fail('saveWriteFailed', { reason: 'EACCES' }),
+    );
+    expect(await readFile(target, 'utf8')).toBe('прежний документ');
+    expect(service.snapshot().session?.saved).toBe(false);
+    expect(service.snapshot().session?.passes).toHaveLength(2);
+
+    // Повторное сохранение перезаписывает атомарно.
+    failRename = false;
+    expect(await service.savePdf(() => Promise.resolve(target))).toMatchObject({ ok: true });
+    const document = await PDFDocument.load(await readFile(target));
+    expect(document.getPageCount()).toBe(4);
+    expect(service.snapshot().session?.saved).toBe(true);
+  });
+
+  it('нет места на диске — storageFull', async () => {
+    const root = await makeTempDataRoot();
+    await savable(root);
+    const target = await saveTarget(root);
+    const { fs } = interceptFs(realStorageFs, (call) => {
+      if (call.op === 'open' && call.path.startsWith(target)) {
+        throw fsError('ENOSPC');
+      }
+    });
+    const service = await openPassService(root, { fs, retry: { ceilingMs: 0 } });
+
+    expect(await service.savePdf(() => Promise.resolve(target))).toEqual(fail('storageFull'));
+  });
+
+  it('без сессии — noSession; сохранение не зовёт диалог', async () => {
+    const service = await openPassService(await makeTempDataRoot());
+    let asked = false;
+
+    const result = await service.savePdf(() => {
+      asked = true;
+      return Promise.resolve(null);
+    });
+
+    expect(result).toEqual(fail('sessionConflict', { reason: 'noSession' }));
+    expect(asked).toBe(false);
   });
 });

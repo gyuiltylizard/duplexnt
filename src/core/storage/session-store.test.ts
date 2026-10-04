@@ -174,7 +174,11 @@ describe('хранилище сессии: проход', () => {
     await accept(1, 2);
 
     expect(ok(await store.readPage('p01-s01-0002'))).toEqual(page(2));
-    expect(store.pageInfo('p01-s01-0002')).toEqual({ sessionId: SESSION, pixelLimit: 5100 * 8400 });
+    expect(store.pageInfo('p01-s01-0002')).toEqual({
+      sessionId: SESSION,
+      pixelLimit: 5100 * 8400,
+      dpi: 300,
+    });
     for (const key of ['p01-s01-0003', 'p02-s01-0001', '../session.json', 'p01-s01-0001.jpg', '']) {
       expect(await store.readPage(key)).toMatchObject({
         ok: false,

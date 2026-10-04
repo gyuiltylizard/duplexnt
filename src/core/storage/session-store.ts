@@ -126,6 +126,8 @@ export interface PageInfo {
   readonly sessionId: string;
   /** Предел пикселей страницы из журнала (KTD-37); `null` — параметры прохода неизвестны. */
   readonly pixelLimit: number | null;
+  /** DPI прохода — размер страницы PDF (M2, KTD-9); `null` — параметры прохода неизвестны. */
+  readonly dpi: number | null;
 }
 
 export interface SessionStore {
@@ -700,7 +702,11 @@ export function createSessionStore(
       if (pass === null || journal === null || lost.has(key)) {
         return null;
       }
-      return { sessionId: journal.sessionId, pixelLimit: pass.origin?.pixelLimit ?? null };
+      return {
+        sessionId: journal.sessionId,
+        pixelLimit: pass.origin?.pixelLimit ?? null,
+        dpi: pass.origin?.params.resolution ?? null,
+      };
     },
 
     readPage(key) {
