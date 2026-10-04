@@ -456,13 +456,13 @@
   white-space: nowrap;
 }
 
-/* — экран setup: одна колонка (S1) — */
+/* — экран setup: колонка настройки + «Как это работает» (S1; M2 U8 вернул правую колонку) — */
 
 .setup-screen {
   flex: 1;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr var(--size-aside);
 }
 
 .setup-screen__column {

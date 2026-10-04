@@ -23,6 +23,12 @@ describe('i18n', () => {
     }
   });
 
+  it('рабочих терминов «пачка» и «стопка» в текстах интерфейса нет (решения автора, M1/M2)', () => {
+    for (const [locale, bundle] of Object.entries(resources)) {
+      expect(JSON.stringify(bundle), locale).not.toMatch(/пачк|стопк/iu);
+    }
+  });
+
   it('инициализирован синхронно русской локалью', () => {
     expect(i18n.isInitialized).toBe(true);
     expect(i18n.language).toBe(DEFAULT_LOCALE);

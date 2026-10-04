@@ -14,9 +14,10 @@ import { errorText, errorTextInline } from '../state/error-text';
 import { addressOf } from '../state/scanner-address';
 import './setup-screen.css';
 
-// Экран `setup` (план M1, U22; UI_SPEC раздел 2; handoff U19, S1–S6): одна колонка, строка
-// устройства с состояниями запомненного сканера, параметры из capabilities, запуск прохода.
-// Строки «Пустые обороты» и «Авто» отсутствуют, тексты — про один проход (KTD-25).
+// Экран `setup` (план M1, U22; UI_SPEC раздел 2; handoff U19, S1–S6): строка устройства с
+// состояниями запомненного сканера, параметры из capabilities, запуск прохода. С M2 вернулись
+// полные тексты макета (план M2, U8): сценарий двух проходов и колонка «Как это работает».
+// Строки «Пустые обороты» и «Авто» по-прежнему отсутствуют (R14).
 
 export interface SetupScreenProps {
   readonly snapshot: Snapshot;
@@ -43,6 +44,9 @@ const singleChoice = (params: ScanParams): KnownParams => ({
 });
 
 const FALLBACK = singleChoice(DEFAULT_SCAN_PARAMS);
+
+/** Шаги колонки «Как это работает» — тексты макета, Copy без «пачки» (handoff M2). */
+const HOW_STEPS = ['step1', 'step2', 'step3', 'step4'] as const;
 
 export function SetupScreen({
   snapshot,
@@ -341,6 +345,23 @@ export function SetupScreen({
           </div>
         )}
       </section>
+
+      <aside className="setup-screen__aside" aria-label={t('setup.how.kicker')}>
+        <div className="kicker">{t('setup.how.kicker')}</div>
+        <ol className="howto">
+          {HOW_STEPS.map((step, index) => (
+            <li key={step} className="howto__step">
+              <span className="howto__num" aria-hidden="true">
+                {index + 1}
+              </span>
+              <span className="howto__body">
+                <span className="howto__title">{t(`setup.how.${step}.title`)}</span>
+                <span className="howto__text">{t(`setup.how.${step}.text`)}</span>
+              </span>
+            </li>
+          ))}
+        </ol>
+      </aside>
     </main>
   );
 }

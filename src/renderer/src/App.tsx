@@ -5,6 +5,7 @@ import { NoticesBar } from './components/NoticesBar';
 import { Toast } from './components/Toast';
 import { DeviceModal } from './modals/DeviceModal';
 import { EditorScreen } from './screens/EditorScreen';
+import { FlipScreen } from './screens/FlipScreen';
 import { IncompatibleScreen } from './screens/IncompatibleScreen';
 import { ScanScreen } from './screens/ScanScreen';
 import { SetupScreen } from './screens/SetupScreen';
@@ -24,12 +25,13 @@ interface ToastState {
 
 /**
  * Отказ последнего запуска прохода — с адресатом: запуск с `setup` показывается плашкой S6,
- * досканирование — строкой в плашке S17. Отказ не переезжает между экранами: после «Нового
+ * досканирование — строкой в плашке S17, запуск оборотов — плашкой на `flip` (M2, S2: потолок
+ * ретрая занятости приходит сюда же). Отказ не переезжает между экранами: после «Нового
  * сканирования» плашка `editor` не всплывает на `setup` (ревью сессии 9).
  */
 interface LaunchFailure {
   readonly error: DomainError;
-  readonly target: 'setup' | 'editor';
+  readonly target: 'setup' | 'editor' | 'flip';
 }
 
 export function App(): ReactNode {
@@ -86,9 +88,11 @@ export function App(): ReactNode {
       (result) => {
         startInFlight.current = false;
         if (!result.ok) {
-          // Адресат отказа — экран, с которого запускали: сессия есть — досканирование из
-          // `editor`, нет — запуск с `setup`.
-          const target = store.get()?.session == null ? 'setup' : 'editor';
+          // Адресат отказа — экран, на который снимок вернул после отказа: он и есть
+          // экран-источник запуска (`setup`, `flip` или `editor` при досканировании).
+          const current = store.get();
+          const screen = current === null ? 'setup' : screenOf(current);
+          const target = screen === 'flip' || screen === 'editor' ? screen : 'setup';
           setLaunchFailure({ error: result.error, target });
         }
       },
@@ -149,6 +153,14 @@ export function App(): ReactNode {
       )}
       {screen === 'scan' && snapshot.pass !== null && (
         <ScanScreen snapshot={snapshot} pass={snapshot.pass} onStop={stopPass} />
+      )}
+      {screen === 'flip' && (
+        <FlipScreen
+          snapshot={snapshot}
+          pass={snapshot.pass}
+          launchFailure={launchFailure?.target === 'flip' ? launchFailure.error : null}
+          onStart={startPass}
+        />
       )}
       {screen === 'editor' && snapshot.session !== null && (
         <EditorScreen

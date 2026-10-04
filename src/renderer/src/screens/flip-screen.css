@@ -1,0 +1,287 @@
+/* Экран `flip` (U8): инструкция разворота по макету и UI_SPEC раздел 4; дырки — handoff M2
+   (S1–S3). Геометрия иллюстрации — литералы макета (осознанное исключение DS). */
+
+.flip-screen {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-13);
+  padding: var(--space-14) var(--space-16);
+  outline: none; /* контейнер принимает фокус в S2 — кольцо ему не нужно */
+}
+
+.flip-screen__intro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.flip-screen__title {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-display-s);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  text-align: center;
+}
+
+.flip-screen__lead {
+  margin: 0;
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-l);
+  line-height: var(--leading-relaxed);
+  color: var(--color-text-muted);
+  max-width: 470px;
+  text-align: center;
+  text-wrap: pretty;
+}
+
+/* — карточка: иллюстрация + чеклист — */
+
+.flip-screen__card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-13);
+  padding: var(--space-12) var(--space-14);
+  background: var(--color-bg-surface);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-xl);
+}
+
+.flip-screen__demo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.flip-screen__caption {
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-s);
+  line-height: var(--leading-normal);
+  font-family: var(--font-family-mono);
+  color: var(--color-text-subtle);
+  text-align: center;
+}
+
+.flip-screen__divider {
+  width: var(--border-width);
+  height: 150px;
+  background: var(--color-border-subtle);
+}
+
+.flip-screen__checklist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  width: 250px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.flip-screen__check {
+  display: flex;
+  gap: var(--space-5);
+  align-items: flex-start;
+}
+
+.flip-screen__checkbox {
+  flex: none;
+  width: var(--size-check);
+  height: var(--size-check);
+  border-radius: var(--radius-s);
+  border: var(--border-width) solid var(--color-border-emphasis);
+  background: var(--color-bg-paper);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-xs);
+  line-height: var(--leading-none);
+  color: var(--color-accent);
+  margin-top: var(--space-px);
+}
+
+.flip-screen__check-text {
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-m);
+  line-height: var(--leading-relaxed);
+  color: var(--color-text-secondary);
+  text-wrap: pretty;
+}
+
+/* — иллюстрация turn180: лист с маркером «ВЕРХ» над лотком — */
+
+.turn {
+  position: relative;
+  width: 150px;
+  height: 186px;
+  flex: none;
+  overflow: hidden;
+}
+
+.turn__shadows {
+  position: absolute;
+  left: 18px;
+  top: 14px;
+  width: 114px;
+  height: 146px;
+  animation: turn180 var(--duration-loop-long) var(--ease-loop) infinite;
+}
+
+.turn__sheet {
+  position: absolute;
+  width: 114px;
+  height: 146px;
+  border-radius: var(--radius-s);
+  border: var(--border-width) solid var(--color-border-default);
+}
+
+.turn__sheet--under {
+  left: 4px;
+  top: 5px;
+  background: var(--color-bg-toolbar);
+}
+
+.turn__sheet--mid {
+  left: 2px;
+  top: 2px;
+  background: var(--color-bg-elevated);
+}
+
+.turn__front {
+  position: absolute;
+  left: 18px;
+  top: 14px;
+  width: 114px;
+  height: 146px;
+  border-radius: var(--radius-s);
+  background: var(--color-bg-paper);
+  border: var(--border-width) solid var(--color-border-strong);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-6) var(--space-5);
+  box-sizing: border-box;
+  animation: turn180 var(--duration-loop-long) var(--ease-loop) infinite;
+}
+
+.turn__arrow {
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-xl);
+  line-height: var(--leading-none);
+  color: var(--color-accent);
+}
+
+.turn__top {
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-xxs);
+  line-height: var(--leading-none);
+  font-family: var(--font-family-mono);
+  letter-spacing: var(--tracking-caps);
+  color: var(--color-accent);
+}
+
+.turn__lines {
+  align-self: stretch;
+  margin-top: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.turn__line {
+  height: 2px;
+  border-radius: var(--radius-xs);
+  background: var(--color-glyph-soft);
+}
+
+.turn__tray {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 150px;
+  height: 30px;
+  border-radius: var(--radius-s);
+  background: var(--color-bg-tray);
+  z-index: var(--z-raised);
+}
+
+/* — действия и строка статуса занятости (S2) — */
+
+.flip-screen__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.flip-screen__status {
+  margin: 0;
+  max-width: 470px;
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-m);
+  line-height: var(--leading-relaxed);
+  color: var(--color-text-muted);
+  text-align: center;
+  text-wrap: pretty;
+}
+
+/* — движение — */
+
+@keyframes turn180 {
+  0% {
+    transform: translateY(-10px) rotate(0) scale(0.98);
+    opacity: 0;
+  }
+
+  14% {
+    transform: translateY(0) rotate(0) scale(1);
+    opacity: 1;
+  }
+
+  24% {
+    transform: translateY(-7px) rotate(0) scale(1.03);
+    opacity: 1;
+  }
+
+  54% {
+    transform: translateY(-7px) rotate(180deg) scale(1.03);
+    opacity: 1;
+  }
+
+  64% {
+    transform: translateY(0) rotate(180deg) scale(1);
+    opacity: 1;
+  }
+
+  76% {
+    transform: translateY(0) rotate(180deg) scale(1);
+    opacity: 1;
+  }
+
+  94% {
+    transform: translateY(34px) rotate(180deg) scale(0.96);
+    opacity: 0;
+  }
+
+  100% {
+    transform: translateY(34px) rotate(180deg) scale(0.96);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Статичный кадр: лист уже развёрнут, подпись остаётся (handoff M2, «Движение»). */
+  .turn__shadows,
+  .turn__front {
+    animation: none;
+    transform: rotate(180deg);
+  }
+}

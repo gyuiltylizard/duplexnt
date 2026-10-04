@@ -1,4 +1,4 @@
-import {
+﻿import {
   ok,
   type Api,
   type ScanOptions,
@@ -99,7 +99,7 @@ describe('SetupScreen', () => {
     stubApi();
     const { onStart, onOpenDevice } = renderSetup({ kind: 'none' });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Сканировать листы' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Сканировать лицевые стороны' }));
     expect(onOpenDevice).toHaveBeenCalledTimes(1);
     expect(onStart).not.toHaveBeenCalled();
   });
@@ -108,7 +108,7 @@ describe('SetupScreen', () => {
     stubApi();
     const { onStart } = renderSetup(READY);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Сканировать листы' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Сканировать лицевые стороны' }));
     expect(onStart).toHaveBeenCalledTimes(1);
   });
 

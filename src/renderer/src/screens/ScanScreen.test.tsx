@@ -67,7 +67,78 @@ describe('экран scan', () => {
 
     expect(screen.getByRole('status').textContent).toBe('Отсканировано 7');
     expect(screen.getByText('300 dpi · оттенки серого · A4')).toBeDefined();
-    expect(screen.getByText('ПРОХОД 1')).toBeDefined();
+    expect(screen.getByText('ПРОХОД 1 · ЛИЦЕВЫЕ СТОРОНЫ')).toBeDefined();
+  });
+
+  it('проход оборотов: тег «ОБОРОТЫ» и счётчик «N из M» (роль — по expected, не по номеру)', () => {
+    const pass: PassProgress = {
+      phase: 'scanning',
+      resumed: false,
+      expected: 12,
+      params: PARAMS,
+      pages: 7,
+    };
+    const snapshot = makeSnapshot({
+      pass,
+      session: {
+        id: 'session.x',
+        backsDeclined: false,
+        saved: false,
+        passes: [
+          {
+            number: 1,
+            state: 'completed',
+            paramsKnown: true,
+            scanner: null,
+            rotate180: false,
+            pages: pages(12),
+          },
+          {
+            number: 3,
+            state: 'running',
+            paramsKnown: true,
+            scanner: null,
+            rotate180: false,
+            pages: pages(7),
+          },
+        ],
+      },
+    });
+    render(<ScanScreen snapshot={snapshot} pass={pass} onStop={vi.fn()} />);
+
+    expect(screen.getByText('ПРОХОД 3 · ОБОРОТЫ')).toBeDefined();
+    expect(screen.getByRole('status').textContent).toBe('Отсканировано 7 из 12');
+  });
+
+  it('счётчик оборотов переваливает за ожидаемое и не подрезается (R2)', () => {
+    const pass: PassProgress = {
+      phase: 'scanning',
+      resumed: false,
+      expected: 3,
+      params: PARAMS,
+      pages: 4,
+    };
+    const snapshot = makeSnapshot({
+      pass,
+      session: {
+        id: 'session.x',
+        backsDeclined: false,
+        saved: false,
+        passes: [
+          {
+            number: 2,
+            state: 'running',
+            paramsKnown: true,
+            scanner: null,
+            rotate180: false,
+            pages: pages(4),
+          },
+        ],
+      },
+    });
+    render(<ScanScreen snapshot={snapshot} pass={pass} onStop={vi.fn()} />);
+
+    expect(screen.getByRole('status').textContent).toBe('Отсканировано 4 из 3');
   });
 
   it('фаза starting без страниц — «Начинаем проход…»', () => {

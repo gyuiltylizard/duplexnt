@@ -1,4 +1,4 @@
-import {
+﻿import {
   fail,
   ok,
   type Api,
@@ -86,7 +86,7 @@ describe('каркас приложения', () => {
     render(<App />);
 
     expect((await screen.findByRole('heading', { level: 1 })).textContent).toBe(
-      'Сканируем листы из автоподатчика',
+      'Сканируем обе стороны в два прохода',
     );
   });
 
@@ -114,7 +114,51 @@ describe('каркас приложения', () => {
     render(<App />);
 
     expect((await screen.findByRole('status')).textContent).toBe('Отсканировано 7');
-    expect(screen.getByText('ПРОХОД 1')).toBeDefined();
+    expect(screen.getByText('ПРОХОД 1 · ЛИЦЕВЫЕ СТОРОНЫ')).toBeDefined();
+  });
+
+  it('завершённый лицевой проход без оборотов — flip с запуском второго прохода', async () => {
+    const startPass = vi.fn(() => new Promise(() => undefined));
+    stubApi(
+      makeSnapshot({
+        session: {
+          id: 'session.x',
+          backsDeclined: false,
+          saved: false,
+          passes: [
+            {
+              number: 1,
+              state: 'completed',
+              paramsKnown: true,
+              scanner: null,
+              rotate180: false,
+              pages: pages(12),
+            },
+          ],
+        },
+        assembly: {
+          order: [],
+          report: {
+            fronts: 12,
+            backs: 0,
+            pairs: 0,
+            unpairedSheets: [],
+            extraBacks: 0,
+            backsState: null,
+            backsDeclined: false,
+            mismatch: false,
+          },
+        },
+      }),
+      { startPass },
+    );
+    render(<App />);
+
+    expect((await screen.findByRole('heading', { level: 1 })).textContent).toBe(
+      'Разверните листы на 180° — все разом',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Листы в лотке — сканировать обороты' }));
+    expect(startPass).toHaveBeenCalledTimes(1);
   });
 
   it('сессия со страницами без прохода — editor со счётчиком страниц', async () => {
@@ -149,7 +193,7 @@ describe('каркас приложения', () => {
     expect((await screen.findByRole('heading', { level: 1 })).textContent).toBe(
       'Эти сканы сохранила более новая версия приложения',
     );
-    expect(screen.queryByText('Сканируем листы из автоподатчика')).toBeNull();
+    expect(screen.queryByText('Сканируем обе стороны в два прохода')).toBeNull();
   });
 
   it('StrictMode (двойное монтирование dev) не оставляет окно пустым', async () => {
@@ -161,7 +205,7 @@ describe('каркас приложения', () => {
     );
 
     expect((await screen.findByRole('heading', { level: 1 })).textContent).toBe(
-      'Сканируем листы из автоподатчика',
+      'Сканируем обе стороны в два прохода',
     );
   });
 
@@ -197,7 +241,7 @@ describe('каркас приложения', () => {
     });
     render(<App />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Сканировать листы' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Сканировать лицевые стороны' }));
     expect((await screen.findByRole('alert')).textContent).toContain('В лотке нет бумаги');
   });
 
@@ -209,10 +253,10 @@ describe('каркас приложения', () => {
     stubApi(makeSnapshot({ scanner: READY }), { startPass });
     render(<App />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Сканировать листы' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Сканировать лицевые стороны' }));
     expect((await screen.findByRole('alert')).textContent).toContain('В лотке нет бумаги');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Сканировать листы' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Сканировать лицевые стороны' }));
     expect(startPass).toHaveBeenCalledTimes(2);
     expect(screen.queryByRole('alert')).toBeNull();
   });
@@ -359,7 +403,7 @@ describe('каркас приложения', () => {
     });
 
     expect((await screen.findByRole('heading', { level: 1 })).textContent).toBe(
-      'Сканируем листы из автоподатчика',
+      'Сканируем обе стороны в два прохода',
     );
     expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.queryByText(/В лотке нет бумаги/)).toBeNull();
@@ -371,7 +415,7 @@ describe('каркас приложения', () => {
     });
     render(<App />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Сканировать листы' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Сканировать лицевые стороны' }));
     const reopen = await screen.findByRole('button', { name: 'Подключить заново' });
     reopen.focus();
     fireEvent.click(reopen);
@@ -388,7 +432,7 @@ describe('каркас приложения', () => {
     stubApi(makeSnapshot({ scanner: READY }), { startPass });
     render(<App />);
 
-    const start = await screen.findByRole('button', { name: 'Сканировать листы' });
+    const start = await screen.findByRole('button', { name: 'Сканировать лицевые стороны' });
     fireEvent.click(start);
     fireEvent.click(start);
 
@@ -437,7 +481,7 @@ describe('каркас приложения', () => {
     });
     render(<App />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Сканировать листы' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Сканировать лицевые стороны' }));
     expect(await screen.findByRole('dialog')).toBeDefined();
 
     fireEvent.click(await screen.findByText('ScanPro 200'));
