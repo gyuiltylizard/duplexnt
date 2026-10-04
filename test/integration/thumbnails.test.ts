@@ -18,13 +18,10 @@ import {
   type ThumbnailSource,
 } from '../../src/core/storage/thumbnails';
 import { dirSnapshot } from '../support/dir-snapshot';
-import { ET_3850, readFixture } from '../support/fixtures';
+import { ET_3850, pageFixture, readFixture } from '../support/fixtures';
 import { makeTempDataRoot } from '../support/temp-data-root';
 
 // Миниатюры на настоящем `sharp` и настоящем хранилище сессии во временном корне данных.
-
-const pageFixture = (number: number): Buffer =>
-  readFixture(...ET_3850, 'pages', `page-${String(number).padStart(2, '0')}.jpg`);
 
 const ORIGIN: PassOrigin = {
   scanner: {

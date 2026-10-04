@@ -14,16 +14,15 @@ import { writeStreamAtomic } from '../../src/core/storage/atomic-file';
 import type { DomainError } from '../../src/shared';
 import type { Scenario } from '../emulator/scenarios';
 import { startTestEmulator } from '../support/emulator';
-import { ET_3850, readFixture, readFixtureText } from '../support/fixtures';
+import { ET_3850, pageFixture, readFixtureText } from '../support/fixtures';
 import { makeTempDataRoot } from '../support/temp-data-root';
+import { until } from '../support/until';
 
 // Задание автоподачи на настоящей цепочке: продуктовый транспорт по HTTPS → эмулятор сканера →
 // атомарная запись на диск (план M1, U10). В каждом сценарии эмулятор видел `DELETE`, либо тест
 // знает незакрытый адрес.
 
 const SETTINGS = readFixtureText(...ET_3850, 'ScanSettings.a4-gray-300.xml');
-const pageFixture = (number: number): Buffer =>
-  readFixture(...ET_3850, 'pages', `page-${String(number).padStart(2, '0')}.jpg`);
 
 // Те же правила, что в продукте, но время сжато: тесты не ждут секундами.
 const FAST: Partial<ScanJobLimits> = {
@@ -65,14 +64,6 @@ async function setup(scenario: Partial<Scenario>, overrides: Partial<ScanJobRequ
     });
   const files = async (): Promise<string[]> => (await readdir(directory)).sort();
   return { emulator, directory, run, files };
-}
-
-/** Ждёт состояния эмулятора, а не времени: под нагрузкой фиксированная пауза промахивается. */
-async function until(condition: () => boolean): Promise<void> {
-  for (let attempt = 0; attempt < 1000 && !condition(); attempt += 1) {
-    await delay(5);
-  }
-  expect(condition()).toBe(true);
 }
 
 async function reportOf(job: ReturnType<typeof runScanJob>) {

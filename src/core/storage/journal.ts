@@ -199,7 +199,7 @@ export function pagesOf(pass: JournalPass): JournalPage[] {
  * «Остановить» повторный запуск оборотов получает номер 3.
  */
 export const survivingPassesOf = (journal: Journal): JournalPass[] =>
-  journal.passes.filter((pass) => pagesOf(pass).length > 0);
+  journal.passes.filter((pass) => pass.segments.some((segment) => segment.pageCount > 0));
 
 /** Проход в роли оборотов — второй уцелевший; `null` — его нет. */
 export const backsPassOf = (journal: Journal): JournalPass | null =>

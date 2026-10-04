@@ -1,6 +1,5 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { setTimeout as delay } from 'node:timers/promises';
 import { describe, expect, it } from 'vitest';
 import { probeScanner, type ConnectedScanner } from '../../src/core/escl/connect';
 import type { ScanJobLimits } from '../../src/core/escl/scan-job';
@@ -10,11 +9,13 @@ import {
   type PassServiceOptions,
 } from '../../src/core/scan/pass-service';
 import { layoutOf } from '../../src/core/storage/layout';
-import type { Result, Snapshot } from '../../src/shared';
+import type { Snapshot } from '../../src/shared';
 import type { Scenario } from '../emulator/scenarios';
 import { startTestEmulator } from '../support/emulator';
-import { ET_3850, readFixture } from '../support/fixtures';
+import { pageFixture } from '../support/fixtures';
 import { makeTempDataRoot } from '../support/temp-data-root';
+import { unwrap } from '../support/result';
+import { until } from '../support/until';
 
 // Двухпроходный сценарий на настоящей цепочке (план M2, U3–U4): эмулятор с лотками по заданиям →
 // клиент → хранилище → сборка в снимке. Правило пар проверяется побайтово: какая фикстура легла
@@ -23,9 +24,6 @@ import { makeTempDataRoot } from '../support/temp-data-root';
 
 const FRONTS = [1, 2, 3];
 const BACKS = [6, 5, 4];
-
-const pageFixture = (number: number): Buffer =>
-  readFixture(...ET_3850, 'pages', `page-${String(number).padStart(2, '0')}.jpg`);
 
 const FAST: Partial<ScanJobLimits> = {
   retryDelayMs: 5,
@@ -69,13 +67,6 @@ async function setup(scenario: Partial<Scenario> = {}) {
   return { emulator, ...harness };
 }
 
-const unwrap = <T>(result: Result<T>): T => {
-  if (!result.ok) {
-    throw new Error(`отказ: ${result.error.code} ${JSON.stringify(result.error.details ?? {})}`);
-  }
-  return result.value;
-};
-
 /** Побайтовая сверка собранного порядка с ожидаемыми фикстурами. */
 async function expectAssembledFixtures(
   root: string,
@@ -88,13 +79,6 @@ async function expectAssembledFixtures(
     const written = await readFile(join(layoutOf(root).pagesDir, `${page.key}.jpg`));
     expect(written.equals(pageFixture(fixtures[index] ?? 0)), `позиция ${index + 1}`).toBe(true);
   }
-}
-
-async function until(condition: () => boolean): Promise<void> {
-  for (let attempt = 0; attempt < 2000 && !condition(); attempt += 1) {
-    await delay(5);
-  }
-  expect(condition()).toBe(true);
 }
 
 describe('два прохода через эмулятор (M2)', () => {

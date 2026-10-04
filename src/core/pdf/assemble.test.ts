@@ -1,15 +1,12 @@
 import { PDFDict, PDFDocument, PDFName, PDFRawStream } from '@cantoo/pdf-lib';
 import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
-import { ET_3850, readFixture } from '../../../test/support/fixtures';
+import { pageFixture as fixture } from '../../../test/support/fixtures';
 import { assemblePdf, jfifDpi, type PdfPageInput } from './assemble';
 
 // Сборка PDF (план M2, U5) — обязательная зона тест-политики: против реальных JPEG устройства
 // проверяется, что байты изображения в PDF РАВНЫ исходнику (нет перекодирования), а поворот —
 // только свойством страницы.
-
-const fixture = (number: number): Buffer =>
-  readFixture(...ET_3850, 'pages', `page-${String(number).padStart(2, '0')}.jpg`);
 
 const pageOf = (bytes: Uint8Array, extra: Partial<PdfPageInput> = {}): PdfPageInput => ({
   bytes,

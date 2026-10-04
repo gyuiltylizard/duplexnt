@@ -30,7 +30,7 @@ import {
   type SessionStoreOptions,
 } from './session-store';
 import { ioOf, isMissing, listDir } from './storage-fs';
-import { setAside, setAsidePathOf, writeVersioned } from './versioned-file';
+import { readVersionMarker, setAside, setAsidePathOf, writeVersioned } from './versioned-file';
 
 // Сверка при запуске (план M1, U14; ADR 0004): журнал сверяется с файлами по таблице плана.
 // Строки применяются сверху вниз; несовместимые данные отменяют все остальные — в каталоге тогда
@@ -232,10 +232,7 @@ export async function reconcileSession(
   }
   // Журнал прежней версии разбирается в текущую и обязан быть переписан, даже когда сверке
   // нечего менять (запись — всегда текущей версией): маркер на диске сверяется отдельно.
-  const diskVersion =
-    read?.kind === 'ok' && original !== null
-      ? (JSON.parse(new TextDecoder().decode(original)) as { version: number }).version
-      : null;
+  const diskVersion = original === null ? null : readVersionMarker(original);
   const before =
     diskVersion === JOURNAL_VERSION && read?.kind === 'ok' ? JSON.stringify(read.value) : null;
 

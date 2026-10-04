@@ -23,6 +23,27 @@ export type VersionedRead<T> =
 
 export type VersionedParse<T> = Exclude<VersionedRead<T>, { kind: 'missing' }>;
 
+/**
+ * Терпимое чтение маркера версии — до и без проверки схемы: данные другой версии могут
+ * выглядеть как угодно. `null` — файл не читается как JSON-объект или маркер не число.
+ */
+export function readVersionMarker(bytes: Uint8Array): number | null {
+  if (bytes.byteLength === 0) {
+    return null;
+  }
+  let raw: unknown;
+  try {
+    raw = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+  } catch {
+    return null;
+  }
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    return null;
+  }
+  const marker = (raw as Record<string, unknown>)[VERSION_FIELD];
+  return typeof marker === 'number' ? marker : null;
+}
+
 export function parseVersioned<T>(
   bytes: Uint8Array,
   schema: z.ZodType<T>,

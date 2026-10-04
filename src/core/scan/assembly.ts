@@ -18,7 +18,7 @@ import type {
 // переиспользуются, и после «Остановить» повторный запуск оборотов получает номер 3.
 
 /** Уцелевшие проходы снимка: с хотя бы одной страницей (роль — позиция здесь, KTD-4). */
-const survivingOf = (session: SessionSnapshot): PassSnapshot[] =>
+export const survivingOf = (session: SessionSnapshot): PassSnapshot[] =>
   session.passes.filter((pass) => pass.pages.length > 0);
 
 /** Сборка сессии: порядок по умолчанию и отчёт пар. */

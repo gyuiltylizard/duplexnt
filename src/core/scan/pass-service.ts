@@ -47,7 +47,7 @@ import {
 import { fsErrorCode, ioOf, storageFailure } from '../storage/storage-fs';
 import { pagePixelLimit } from '../storage/thumbnails';
 import { openUnclosedJobs, type UnclosedJobs } from '../storage/unclosed-jobs';
-import { assembleSession } from './assembly';
+import { assembleSession, survivingOf } from './assembly';
 
 // Служба прохода (план M1, U17): связывает клиент сканера, хранилище сессии, настройки и
 // незакрытые задания в один сценарий и выдаёт снимок, из которого интерфейс выводит экран
@@ -454,14 +454,19 @@ export function createPassService(
     // Поверх сессии: прерванный проход — только досканирование; завершённый или принятый
     // единственный уцелевший — новый проход оборотов (M2, KTD-4). Роль считается по позиции
     // среди уцелевших (непустых) проходов, не по чётности номера.
+    const freshOrigin: PassOrigin = {
+      scanner: stored,
+      params,
+      pixelLimit: pagePixelLimit(connected.capabilities.adf),
+    };
     let origin: PassOrigin;
     let resumed = false;
     let expected: number | null = null;
     const session = store.snapshot();
     if (session === null) {
-      origin = { scanner: stored, params, pixelLimit: pagePixelLimit(connected.capabilities.adf) };
+      origin = freshOrigin;
     } else {
-      const surviving = session.passes.filter((pass) => pass.pages.length > 0);
+      const surviving = survivingOf(session);
       const target = resumeTarget();
       if (target.ok) {
         origin = target.value;
@@ -469,7 +474,7 @@ export function createPassService(
         // Досканируется последний проход; в роли оборотов его счётчик получает «из M» (R2).
         const resuming = session.passes.at(-1);
         expected =
-          surviving.findIndex((pass) => pass.number === resuming?.number) >= 1
+          surviving[1] !== undefined && surviving[1].number === resuming?.number
             ? (surviving[0]?.pages.length ?? null)
             : null;
       } else if (
@@ -483,11 +488,7 @@ export function createPassService(
         if (surviving.length > 1) {
           return conflict('backsPresent');
         }
-        origin = {
-          scanner: stored,
-          params,
-          pixelLimit: pagePixelLimit(connected.capabilities.adf),
-        };
+        origin = freshOrigin;
         expected = surviving[0]?.pages.length ?? null;
       } else {
         return target;
@@ -633,21 +634,36 @@ export function createPassService(
     },
 
     async savePdf(askPath) {
-      if (run !== null) {
-        return conflict('passRunning');
-      }
-      if (store.incompatible) {
-        return fail('storageIncompatible');
-      }
-      const session = store.snapshot();
-      if (session === null) {
-        return conflict('noSession');
+      // Проверка вынесена в функцию: `run` мутирует конкурентно, и после `await` её нужно
+      // повторить — прямое сравнение TS сузил бы до «всегда null».
+      const refused = (): Result<never> | null => {
+        if (run !== null) {
+          return conflict('passRunning');
+        }
+        if (store.incompatible) {
+          return fail('storageIncompatible');
+        }
+        return store.snapshot() === null ? conflict('noSession') : null;
+      };
+      const early = refused();
+      if (early !== null) {
+        return early;
       }
 
       // Путь — первым (KTD-3): отказ в диалоге не тратит сборку и ничего не пишет.
       const path = await askPath();
       if (path === null) {
-        return ok({ canceled: true, fileName: null, directory: null });
+        return ok({ canceled: true } as const);
+      }
+      // Диалог мог висеть сколько угодно: состояние проверяется заново, иначе PDF собрался бы
+      // по устаревшему снимку, а отметка о сохранении пометила бы уже изменившийся набор.
+      const stale = refused();
+      if (stale !== null) {
+        return stale;
+      }
+      const session = store.snapshot();
+      if (session === null) {
+        return conflict('noSession');
       }
 
       // Страницы — в собранном порядке; потерянная страница — отказ, а не молча короче (R11).
@@ -674,8 +690,11 @@ export function createPassService(
       try {
         await writeFileAtomic(path, pdf.value, ioOf(options));
       } catch (error) {
-        const reason = fsErrorCode(error);
-        return reason === 'ENOSPC' ? fail('storageFull') : fail('saveWriteFailed', { reason });
+        // Перевод кодов — существующим помощником: он различает и ENOSPC, и EDQUOT.
+        const failure = storageFailure(error);
+        return failure.code === 'storageFull'
+          ? fail('storageFull')
+          : fail('saveWriteFailed', { reason: fsErrorCode(error) });
       }
       // Отметка — только после успешного переименования; сессия не удаляется (R12).
       await store.markSaved();

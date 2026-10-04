@@ -55,12 +55,10 @@ export interface SetRotateBacksRequest {
 }
 
 /** Итог «Сохранить документ» (M2, KTD-3): отказ в диалоге — не ошибка, ничего не записано. */
-export interface SavePdfReport {
-  readonly canceled: boolean;
-  /** Имя файла и папка — для тоста «Сохранено: …»; `null` при отказе в диалоге. */
-  readonly fileName: string | null;
-  readonly directory: string | null;
-}
+export type SavePdfReport =
+  | { readonly canceled: true }
+  /** Имя файла и папка — для тоста «Сохранено: …». */
+  | { readonly canceled: false; readonly fileName: string; readonly directory: string };
 
 export interface ProbeResult {
   /** Эхо входного токена — доказывает, что ответ пришёл на этот вызов. */

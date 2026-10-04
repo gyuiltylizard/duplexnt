@@ -155,6 +155,10 @@ export async function startEmulator(options: EmulatorOptions = {}): Promise<Emul
 
   const runningJob = (): Job | undefined => jobs.find((job) => job.state === 'Processing');
 
+  /** В лотке задания ещё есть листы: общий счётчик — в прежнем режиме, свой остаток — в trays. */
+  const sheetsLeft = (job: Job): boolean =>
+    job.trayLeft === null ? sheetsUsed < scenario.sheets : job.trayLeft.length > 0;
+
   function statusXml(): Buffer {
     expire();
     const running = runningJob();
@@ -368,7 +372,7 @@ export async function startEmulator(options: EmulatorOptions = {}): Promise<Emul
 
     // Счёт листов — сквозной через все задания: сбой сценария привязан к нему и в M2.
     const sheet = sheetsUsed + 1;
-    if (job.trayLeft === null ? sheet > scenario.sheets : job.trayLeft.length === 0) {
+    if (!sheetsLeft(job)) {
       // После `404` задание закрывается само: `Completed`, а без единой страницы — `Aborted`.
       job.state = job.imagesCompleted > 0 ? 'Completed' : 'Aborted';
       empty(404);
@@ -451,9 +455,9 @@ export async function startEmulator(options: EmulatorOptions = {}): Promise<Emul
       };
       const delivered = (): void => {
         job.imagesCompleted += 1;
-        const hasMore =
-          job.trayLeft === null ? sheetsUsed < scenario.sheets : job.trayLeft.length > 0;
-        job.notReadyLeft = hasMore ? scenario.notReady.betweenPages : scenario.notReady.beforeEnd;
+        job.notReadyLeft = sheetsLeft(job)
+          ? scenario.notReady.betweenPages
+          : scenario.notReady.beforeEnd;
       };
 
       switch (fault) {

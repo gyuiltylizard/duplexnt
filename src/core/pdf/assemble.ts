@@ -1,5 +1,5 @@
 import { setImmediate as nextTick } from 'node:timers/promises';
-import { degrees, PDFDocument } from '@cantoo/pdf-lib';
+import { degrees, PDFDocument, type PDFImage } from '@cantoo/pdf-lib';
 import { fail, ok, type Result } from '@shared';
 import { decodePixelLimit } from '../storage/thumbnails';
 
@@ -70,14 +70,15 @@ export async function assemblePdf(pages: readonly PdfPageInput[]): Promise<Resul
   }
   const document = await PDFDocument.create();
   for (const [index, page] of pages.entries()) {
-    let image;
+    const unreadable = (): Result<never> => fail('pdfPageUnreadable', { page: index + 1 });
+    let image: PDFImage;
     try {
       image = await document.embedJpg(page.bytes);
     } catch {
-      return fail('pdfPageUnreadable', { page: index + 1 });
+      return unreadable();
     }
     if (image.width <= 0 || image.height <= 0) {
-      return fail('pdfPageUnreadable', { page: index + 1 });
+      return unreadable();
     }
     // Потолок sharp не ослабляется (KTD-9): что нельзя показать, то не собирается молча.
     if (image.width * image.height > decodePixelLimit(page.pixelLimit)) {

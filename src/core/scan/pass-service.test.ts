@@ -450,7 +450,7 @@ describe('служба прохода: сохранение PDF (M2, U6)', () =>
 
     expect(await service.savePdf(() => Promise.resolve(null))).toEqual({
       ok: true,
-      value: { canceled: true, fileName: null, directory: null },
+      value: { canceled: true },
     });
     await expect(readFile(target)).rejects.toMatchObject({ code: 'ENOENT' });
     expect(service.snapshot().session?.saved).toBe(false);
@@ -510,6 +510,22 @@ describe('служба прохода: сохранение PDF (M2, U6)', () =>
     const service = await openPassService(root, { fs, retry: { ceilingMs: 0 } });
 
     expect(await service.savePdf(() => Promise.resolve(target))).toEqual(fail('storageFull'));
+  });
+
+  it('состояние перепроверяется после диалога: сессия закрыта, пока он висел, — отказ', async () => {
+    const root = await makeTempDataRoot();
+    await savable(root);
+    const target = await saveTarget(root);
+    const service = await openPassService(root);
+
+    const result = await service.savePdf(async () => {
+      // «Пока диалог висел»: пользователь успел закрыть сессию «Новым сканированием».
+      await service.closeSession();
+      return target;
+    });
+
+    expect(result).toEqual(fail('sessionConflict', { reason: 'noSession' }));
+    await expect(readFile(target)).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
   it('без сессии — noSession; сохранение не зовёт диалог', async () => {

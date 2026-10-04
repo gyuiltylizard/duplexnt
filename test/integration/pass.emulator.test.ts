@@ -1,6 +1,5 @@
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { setTimeout as delay } from 'node:timers/promises';
 import { describe, expect, it } from 'vitest';
 import { probeScanner, type ConnectedScanner } from '../../src/core/escl/connect';
 import type { ScanJobLimits } from '../../src/core/escl/scan-job';
@@ -21,16 +20,15 @@ import type { DomainError, Result, Snapshot } from '../../src/shared';
 import type { Scenario } from '../emulator/scenarios';
 import { dirSnapshot } from '../support/dir-snapshot';
 import { startTestEmulator } from '../support/emulator';
-import { ET_3850, readFixture } from '../support/fixtures';
+import { pageFixture } from '../support/fixtures';
+import { unwrap } from '../support/result';
+import { until } from '../support/until';
 import { fsError, interceptFs } from '../support/intercept-fs';
 import { makeTempDataRoot } from '../support/temp-data-root';
 
 // Служба прохода на настоящей цепочке (план M1, U17): эмулятор сканера по HTTPS → клиент →
 // хранилище во временном корне данных. Каждый сценарий плана — своим тестом; «перезапуск» —
 // новая служба над тем же корнем.
-
-const pageFixture = (number: number): Buffer =>
-  readFixture(...ET_3850, 'pages', `page-${String(number).padStart(2, '0')}.jpg`);
 
 // Те же правила, что в продукте, но время сжато.
 const FAST: Partial<ScanJobLimits> = {
@@ -99,13 +97,6 @@ async function setup(scenario: Partial<Scenario> = {}, options: Partial<PassServ
   return { emulator, ...harness };
 }
 
-const unwrap = <T>(result: Result<T>): T => {
-  if (!result.ok) {
-    throw new Error(`отказ: ${result.error.code} ${JSON.stringify(result.error.details ?? {})}`);
-  }
-  return result.value;
-};
-
 const errorOf = (result: Result<unknown>): DomainError | null => (result.ok ? null : result.error);
 
 const pageFiles = async (root: string): Promise<string[]> => {
@@ -129,14 +120,6 @@ async function expectPagesEqualFixtures(root: string, snapshot: Snapshot, count:
     const written = await readFile(join(layoutOf(root).pagesDir, `${page.key}.jpg`));
     expect(written.equals(pageFixture(page.number))).toBe(true);
   }
-}
-
-/** Ждёт условия, а не времени: под нагрузкой фиксированная пауза промахивается. */
-async function until(condition: () => boolean): Promise<void> {
-  for (let attempt = 0; attempt < 2000 && !condition(); attempt += 1) {
-    await delay(5);
-  }
-  expect(condition()).toBe(true);
 }
 
 const journalOnDisk = async (root: string): Promise<unknown> =>

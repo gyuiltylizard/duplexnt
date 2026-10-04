@@ -676,6 +676,9 @@ export function createSessionStore(
         if (journal === null || isVacant(journal)) {
           return conflict('noSession');
         }
+        if (journal.saved) {
+          return ok(undefined);
+        }
         // Отметка — следствие уже записанного файла, не решение: при отказе записи журнала
         // остаётся в памяти и доводится следующей перезаписью.
         return commit({ ...journal, saved: true }, 'soft').then(() => ok(undefined));
