@@ -51,6 +51,13 @@ export interface Scenario {
   readonly device: 'et-3850' | 'no-adf';
   /** Листов в лотке; `Infinity` — лоток не кончается. Лоток общий для всех заданий сценария. */
   readonly sheets: number;
+  /**
+   * Содержимое лотка по заданиям (M2, U4): номера фикстурных страниц на каждое задание по
+   * порядку создания; очередь пополняется `reloadTray` без сброса сценария и заданий.
+   * `null` — прежнее поведение: общий лоток на `sheets` листов, страницы по сквозному номеру.
+   * Двухпроходная пачка: лицевые прямым порядком, обороты — обратным (стопку развернули).
+   */
+  readonly trays: readonly (readonly number[])[] | null;
   /** Что статус говорит о лотке в покое; `null` — правду, по числу листов. */
   readonly trayReportsLoaded: boolean | null;
   /** Сколько первых `POST` получают `503`; `Infinity` — занятость без конца. */
@@ -79,6 +86,7 @@ export interface Scenario {
 export const DEFAULT_SCENARIO: Scenario = {
   device: 'et-3850',
   sheets: 3,
+  trays: null,
   trayReportsLoaded: null,
   busyPosts: 0,
   rejectSettings: false,
@@ -121,6 +129,30 @@ export const SCENARIOS = {
   'length-longer': { fault: { sheet: 1, kind: 'length-longer' } },
   'length-shorter': { fault: { sheet: 1, kind: 'length-shorter' } },
   'endless-pages': { sheets: Infinity },
+  // Двусторонняя пачка из 3 листов (M2): лица 1–3 — фикстуры 1..3, обороты — 4..6; разворот
+  // на 180° подаёт обороты в обратном порядке: первым идёт оборот последнего листа.
+  'two-pass': {
+    trays: [
+      [1, 2, 3],
+      [6, 5, 4],
+    ],
+  },
+  // «Ролик не взял лист» во втором проходе: оборотов на один меньше, без ошибки устройства —
+  // просто меньше страниц; непарным остаётся лист №1.
+  'two-pass-missing-sheet': {
+    trays: [
+      [1, 2, 3],
+      [6, 5],
+    ],
+  },
+  // Обрыв второго прохода посреди задания: сбой подачи на втором обороте (сквозной лист 5).
+  'two-pass-jam': {
+    trays: [
+      [1, 2, 3],
+      [6, 5, 4],
+    ],
+    fault: { sheet: 5, kind: 'gone' },
+  },
   'delete-hangs': { deleteHangs: true },
   'location-path': { location: 'path' },
   'location-foreign-host': { location: 'foreign-host' },
