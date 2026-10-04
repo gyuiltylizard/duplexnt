@@ -57,7 +57,15 @@ export function FlipScreen({ snapshot, pass, launchFailure, onStart }: FlipScree
     onStart();
   };
 
+  // Отказ запуска оборачивается в «Проход не начался: …»; отказ «Обороты не нужны» — не
+  // запуск, его текст идёт как есть.
   const failure = declineFailure ?? launchFailure;
+  const failureText =
+    failure === null
+      ? null
+      : declineFailure !== null || failure.code === 'scanNoPaper' || failure.code === 'scannerBusy'
+        ? errorText(t, failure)
+        : t('flip.launch.failed', { error: errorTextInline(t, failure) });
 
   return (
     <main className="flip-screen" ref={screenRef} tabIndex={-1}>
@@ -139,11 +147,7 @@ export function FlipScreen({ snapshot, pass, launchFailure, onStart }: FlipScree
             }
             role="alert"
           >
-            <p className="notice__text">
-              {failure.code === 'scanNoPaper' || failure.code === 'scannerBusy'
-                ? errorText(t, failure)
-                : t('flip.launch.failed', { error: errorTextInline(t, failure) })}
-            </p>
+            <p className="notice__text">{failureText}</p>
           </div>
         )}
       </div>

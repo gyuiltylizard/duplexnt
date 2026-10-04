@@ -1,12 +1,25 @@
-import { fail, ok, type Api, type PassSnapshot, type Snapshot } from '@shared';
+import {
+  fail,
+  ok,
+  type Api,
+  type AssembledPage,
+  type PassSnapshot,
+  type SessionAssembly,
+  type SessionSnapshot,
+  type Snapshot,
+} from '@shared';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../i18n';
 import { EditorScreen } from './EditorScreen';
 
-function pages(count: number, from = 1): { key: string; number: number; lost: boolean }[] {
+function pages(
+  count: number,
+  from = 1,
+  prefix = 'p01-s01',
+): { key: string; number: number; lost: boolean }[] {
   return Array.from({ length: count }, (_, index) => ({
-    key: `p01-s01-${String(from + index).padStart(4, '0')}`,
+    key: `${prefix}-${String(from + index).padStart(4, '0')}`,
     number: from + index,
     lost: false,
   }));
@@ -24,18 +37,80 @@ function makePass(overrides: Partial<PassSnapshot>): PassSnapshot {
   };
 }
 
-function makeSnapshot(passes: PassSnapshot[], overrides: Partial<Snapshot> = {}): Snapshot {
+/**
+ * Сборка для фикстур — упрощённое зеркало ядра (KTD-4): лицевые по порядку, обороты обратным
+ * порядком от последнего листа; непарными остаются младшие листы, лишние обороты — в конце.
+ */
+function assemblyOf(session: SessionSnapshot): SessionAssembly {
+  const surviving = session.passes.filter((pass) => pass.pages.length > 0);
+  const frontsPass = surviving[0];
+  const backsPass = surviving[1];
+  const fronts = frontsPass?.pages ?? [];
+  const backs = backsPass?.pages ?? [];
+  const n = fronts.length;
+  const order: AssembledPage[] = [];
+  fronts.forEach((page, index) => {
+    const sheet = index + 1;
+    order.push({ key: page.key, side: 'front', sheet, rotate180: false, lost: page.lost });
+    const back = backs[n - sheet];
+    if (back !== undefined) {
+      order.push({
+        key: back.key,
+        side: 'back',
+        sheet,
+        rotate180: backsPass?.rotate180 ?? false,
+        lost: back.lost,
+      });
+    }
+  });
+  for (const back of backs.slice(n)) {
+    order.push({
+      key: back.key,
+      side: 'back',
+      sheet: null,
+      rotate180: backsPass?.rotate180 ?? false,
+      lost: back.lost,
+    });
+  }
+  const unpaired = Array.from({ length: Math.max(0, n - backs.length) }, (_, index) => index + 1);
+  return {
+    order,
+    report: {
+      fronts: n,
+      backs: backs.length,
+      pairs: Math.min(n, backs.length),
+      unpairedSheets: backsPass === undefined ? [] : unpaired,
+      extraBacks: Math.max(0, backs.length - n),
+      backsState: backsPass?.state ?? null,
+      backsDeclined: session.backsDeclined,
+      mismatch: backsPass !== undefined && backs.length !== n,
+    },
+  };
+}
+
+function makeSnapshot(
+  passes: PassSnapshot[],
+  overrides: Partial<Snapshot> = {},
+  sessionOverrides: Partial<SessionSnapshot> = {},
+): Snapshot {
+  const session: SessionSnapshot = {
+    id: 'session.x',
+    backsDeclined: false,
+    saved: false,
+    passes,
+    ...sessionOverrides,
+  };
   return {
     seq: 1,
     scanner: { kind: 'none' },
-    session: { id: 'session.x', backsDeclined: false, saved: false, passes },
-    assembly: null,
     pass: null,
     canResume: false,
     canAccept: false,
     storage: { incompatible: false, unsaved: false },
     notices: [],
     ...overrides,
+    session,
+    assembly: overrides.assembly === undefined ? assemblyOf(session) : overrides.assembly,
   };
 }
 
@@ -43,6 +118,10 @@ function stubApi(overrides: Partial<Record<keyof Api, unknown>> = {}) {
   const api = {
     acceptPass: vi.fn(() => Promise.resolve(ok(undefined))),
     closeSession: vi.fn(() => Promise.resolve(ok(undefined))),
+    setRotateBacks: vi.fn(() => Promise.resolve(ok(undefined))),
+    savePdf: vi.fn(() =>
+      Promise.resolve(ok({ canceled: false, fileName: 'Скан.pdf', directory: 'Документы' })),
+    ),
     ...overrides,
   } as unknown as Api;
   vi.stubGlobal('api', api);
@@ -56,16 +135,27 @@ function renderEditor(
   if (snapshot.session === null) {
     throw new Error('в фикстуре нет сессии');
   }
-  return render(
+  const onToast = vi.fn();
+  const view = render(
     <EditorScreen
       snapshot={snapshot}
       session={snapshot.session}
       resumeFailure={null}
       onResume={vi.fn()}
       onOpenDevice={vi.fn()}
+      onToast={onToast}
       {...overrides}
     />,
   );
+  return { view, onToast };
+}
+
+/** Двусторонняя фикстура: 3 лица + обороты обратным порядком (AE1). */
+function twoPass(backCount = 3, backsState: PassSnapshot['state'] = 'completed') {
+  return makeSnapshot([
+    makePass({ pages: pages(3) }),
+    makePass({ number: 2, state: backsState, pages: pages(backCount, 1, 'p02-s01') }),
+  ]);
 }
 
 afterEach(() => {
@@ -87,17 +177,147 @@ describe('экран editor', () => {
     expect(screen.getByAltText('Страница 3')).toBeDefined();
   });
 
+  it('AE1: лента — порядок сборки 1л, 1о, 2л, 2о, 3л, 3о с тегами «об» на оборотах', () => {
+    stubApi();
+    renderEditor(twoPass());
+
+    const options = screen.getAllByRole('option');
+    expect(options.length).toBe(6);
+    // Лицо листа 1, затем его оборот — последняя страница второго прохода.
+    expect(options[0]?.getAttribute('data-key')).toBe('p01-s01-0001');
+    expect(options[1]?.getAttribute('data-key')).toBe('p02-s01-0003');
+    expect(options[2]?.getAttribute('data-key')).toBe('p01-s01-0002');
+    expect(options[5]?.getAttribute('data-key')).toBe('p02-s01-0001');
+    // Теги «об» — на оборотах (позиции 2, 4, 6), номера — по порядку в наборе.
+    expect((options[1] as Element).textContent).toContain('об');
+    expect((options[0] as Element).textContent).not.toContain('об');
+    expect((options[5] as Element).textContent).toContain('6');
+  });
+
+  it('S6: непарный лист несёт янтарную точку и aria-label «Лист N — без оборота»', () => {
+    stubApi();
+    renderEditor(twoPass(2));
+
+    const options = screen.getAllByRole('option');
+    // Обороты пришли от последнего листа: без оборота остался лист №1 (младший).
+    expect(options[0]?.getAttribute('aria-label')).toBe('Лист 1 — без оборота');
+    expect(
+      (options[0] as Element).querySelector('[title="У этого листа нет оборота"]'),
+    ).not.toBeNull();
+    // Парные листы точки не несут.
+    expect(options[1]?.getAttribute('aria-label')).toBe('Страница 2');
+    expect(screen.getAllByTitle('У этого листа нет оборота').length).toBe(1);
+  });
+
+  it('S7: тумблер поворота виден при проходе оборотов и шлёт setRotateBacks', () => {
+    const api = stubApi();
+    renderEditor(twoPass());
+
+    const toggle = screen.getByRole('checkbox', { name: 'Повернуть обороты на 180°' });
+    fireEvent.click(toggle);
+    expect(api.setRotateBacks).toHaveBeenCalledExactlyOnceWith({ rotate: true });
+  });
+
+  it('S7: включённый поворот разворачивает только обороты; выключение шлёт rotate: false', () => {
+    const api = stubApi();
+    const snapshot = makeSnapshot([
+      makePass({ pages: pages(2) }),
+      makePass({ number: 2, rotate180: true, pages: pages(2, 1, 'p02-s01') }),
+    ]);
+    renderEditor(snapshot);
+
+    const options = screen.getAllByRole('option');
+    expect((options[1] as Element).className).toContain('thumb--rotated');
+    expect((options[0] as Element).className).not.toContain('thumb--rotated');
+
+    const toggle = screen.getByRole('checkbox', { name: 'Повернуть обороты на 180°' });
+    expect((toggle as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(toggle);
+    expect(api.setRotateBacks).toHaveBeenCalledExactlyOnceWith({ rotate: false });
+  });
+
+  it('без прохода оборотов тумблера нет', () => {
+    stubApi();
+    renderEditor(makeSnapshot([makePass({})]));
+
+    expect(screen.queryByRole('checkbox')).toBeNull();
+  });
+
+  it('S8: «Сохранить документ» шлёт savePdf, блокируется на время записи, тост с именем файла', async () => {
+    let resolveSave: (value: unknown) => void = () => undefined;
+    const savePdf = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          resolveSave = resolve;
+        }),
+    );
+    stubApi({ savePdf });
+    const { onToast } = renderEditor(makeSnapshot([makePass({})]));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить документ' }));
+    expect(savePdf).toHaveBeenCalledTimes(1);
+    const saving = screen.getByRole('button', { name: 'Сохраняем…' });
+    expect(saving.hasAttribute('disabled')).toBe(true);
+    // Повторный клик не шлёт вторую команду.
+    fireEvent.click(saving);
+    expect(savePdf).toHaveBeenCalledTimes(1);
+
+    resolveSave(ok({ canceled: false, fileName: 'Скан 2026-10-04.pdf', directory: 'Документы' }));
+    expect(
+      (await screen.findByRole('button', { name: 'Сохранить документ' })).hasAttribute('disabled'),
+    ).toBe(false);
+    expect(onToast).toHaveBeenCalledExactlyOnceWith(
+      'Сохранено: Скан 2026-10-04.pdf → Документы',
+      6000,
+    );
+  });
+
+  it('S8: отказ записи — тост ошибки; отказ в диалоге — тишина', async () => {
+    const api = stubApi({
+      savePdf: vi
+        .fn()
+        .mockImplementationOnce(() => Promise.resolve(fail('saveWriteFailed')))
+        .mockImplementation(() => Promise.resolve(ok({ canceled: true }))),
+    });
+    const { onToast } = renderEditor(makeSnapshot([makePass({})]));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить документ' }));
+    await screen.findByRole('button', { name: 'Сохранить документ' });
+    expect(onToast).toHaveBeenCalledExactlyOnceWith(
+      expect.stringContaining('Не удалось сохранить'),
+      6000,
+    );
+
+    onToast.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить документ' }));
+    await screen.findByRole('button', { name: 'Сохранить документ' });
+    expect(api.savePdf).toHaveBeenCalledTimes(2);
+    expect(onToast).not.toHaveBeenCalled();
+  });
+
+  it('S9: точка несохранённого видна при saved: false и исчезает при saved: true', () => {
+    stubApi();
+    const unsavedView = renderEditor(makeSnapshot([makePass({})]));
+    expect(screen.getByTitle('Есть несохранённые изменения')).toBeDefined();
+    unsavedView.view.unmount();
+
+    renderEditor(makeSnapshot([makePass({})], {}, { saved: true }));
+    expect(screen.queryByTitle('Есть несохранённые изменения')).toBeNull();
+  });
+
   it('стрелки и Home/End двигают выбор по всей ленте', () => {
     stubApi();
     renderEditor(
-      makeSnapshot([makePass({ pages: pages(2) }), makePass({ number: 2, pages: pages(2, 3) })]),
+      makeSnapshot([
+        makePass({ pages: pages(2) }),
+        makePass({ number: 2, pages: pages(2, 1, 'p02-s01') }),
+      ]),
     );
 
     const rail = screen.getByLabelText('Отсканированные страницы');
     fireEvent.keyDown(rail, { key: 'ArrowRight' });
     expect(screen.getByText('2 из 4')).toBeDefined();
     fireEvent.keyDown(rail, { key: 'ArrowRight' });
-    // Переход через границу прохода.
     expect(screen.getByText('3 из 4')).toBeDefined();
     fireEvent.keyDown(rail, { key: 'Home' });
     expect(screen.getByText('1 из 4')).toBeDefined();
@@ -135,7 +355,6 @@ describe('экран editor', () => {
     expect(screen.getByText(/начиная с 18-го/)).toBeDefined();
     expect(screen.getByRole('button', { name: 'Досканировать остаток' })).toBeDefined();
     expect(screen.getByRole('button', { name: 'Оставить как есть' })).toBeDefined();
-    expect(screen.getByText('17 стр. · прерван')).toBeDefined();
   });
 
   it('неизвестные параметры: «Досканировать» не рисуется, причина названа текстом', () => {
@@ -176,7 +395,6 @@ describe('экран editor', () => {
     renderEditor(makeSnapshot([makePass({ state: 'accepted', pages: pages(5) })]));
 
     expect(screen.queryByText('ПРОХОД ПРЕРВАН')).toBeNull();
-    expect(screen.getByText('5 стр. · принят как есть')).toBeDefined();
   });
 
   it('«Оставить как есть» шлёт acceptPass; отказ показан строкой в плашке', async () => {
@@ -369,14 +587,12 @@ describe('экран editor', () => {
     expect(api.closeSession).not.toHaveBeenCalled();
   });
 
-  it('скрытых элементов макета нет в разметке', () => {
+  it('скрытых элементов макета M3+ нет в разметке', () => {
     stubApi();
     renderEditor(makeSnapshot([makePass({})]));
 
-    expect(screen.queryByText(/Сохранить/)).toBeNull();
     expect(screen.queryByText(/Добавить/)).toBeNull();
     expect(screen.queryByText('↻')).toBeNull();
-    expect(screen.queryByTitle(/Повернуть/)).toBeNull();
     expect(screen.queryByText(/Удалить страницу/)).toBeNull();
     expect(screen.queryByText(/Пересканировать/)).toBeNull();
     expect(screen.queryByText(/пустые/)).toBeNull();

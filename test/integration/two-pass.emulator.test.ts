@@ -1,5 +1,6 @@
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { PDFDocument } from '@cantoo/pdf-lib';
 import { describe, expect, it } from 'vitest';
 import { probeScanner, type ConnectedScanner } from '../../src/core/escl/connect';
 import type { ScanJobLimits } from '../../src/core/escl/scan-job';
@@ -106,6 +107,35 @@ describe('два прохода через эмулятор (M2)', () => {
       '3back',
     ]);
     // Лист 1 получает оборот-фикстуру 4: обороты пришли обратным порядком (KTD-4, техбаза §5).
+    await expectAssembledFixtures(root, snapshot, [1, 4, 2, 5, 3, 6]);
+  });
+
+  it('AE1/AE8: сценарий целиком — два прохода, тумблер 180°, сохранение в PDF', async () => {
+    const { service, root } = await setup();
+
+    expect(unwrap(await service.startPass())).toMatchObject({ end: 'completed', pages: 3 });
+    expect(unwrap(await service.startPass())).toMatchObject({ end: 'completed', pages: 3 });
+    unwrap(await service.setRotateBacks(true));
+
+    const outDir = join(root, 'выход');
+    await mkdir(outDir, { recursive: true });
+    const target = join(outDir, 'скан.pdf');
+    expect(unwrap(await service.savePdf(() => Promise.resolve(target)))).toEqual({
+      canceled: false,
+      fileName: 'скан.pdf',
+      directory: outDir,
+    });
+
+    // PDF несёт собранный порядок; /Rotate 180 — только на оборотах (AE8).
+    const document = await PDFDocument.load(await readFile(target));
+    expect(document.getPageCount()).toBe(6);
+    expect(document.getPages().map((page) => page.getRotation().angle)).toEqual([
+      0, 180, 0, 180, 0, 180,
+    ]);
+    expect(service.snapshot().session?.saved).toBe(true);
+
+    // Исходники страниц не изменились: фикстура листа 1 лежит байт в байт (AE8).
+    const snapshot = service.snapshot();
     await expectAssembledFixtures(root, snapshot, [1, 4, 2, 5, 3, 6]);
   });
 

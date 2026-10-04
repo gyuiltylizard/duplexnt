@@ -1,26 +1,37 @@
-import { useCallback, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
 import { useTranslation } from 'react-i18next';
-import type { DomainError, StartupNotice } from '@shared';
+import type { DomainError, Snapshot, StartupNotice } from '@shared';
 import { NoticesBar } from './components/NoticesBar';
 import { Toast } from './components/Toast';
 import { DeviceModal } from './modals/DeviceModal';
+import { MismatchModal } from './modals/MismatchModal';
 import { EditorScreen } from './screens/EditorScreen';
 import { FlipScreen } from './screens/FlipScreen';
 import { IncompatibleScreen } from './screens/IncompatibleScreen';
+import { MergeScreen, MERGE_PAUSE_DECLINED_MS, MERGE_PAUSE_MS } from './screens/MergeScreen';
 import { ScanScreen } from './screens/ScanScreen';
 import { SetupScreen } from './screens/SetupScreen';
 import { createSnapshotStore } from './state/snapshot-store';
-import { screenOf } from './state/screen';
+import { screenOf, type Screen } from './state/screen';
 import './app.css';
 
 // Каркас интерфейса M1 (U20): экран выводится из снимка, своего состояния сессии у renderer
 // нет (KTD-23). Здесь живёт то, что переживает смену экрана: закрытые уведомления запуска,
-// единственный тост (новый гасит предыдущий сменой `key`), модалка `device` и отказ последнего
-// запуска прохода — экран на время запуска уходит на `scan` и возвращается (S6).
+// единственный тост (новый гасит предыдущий сменой `key`), модалка `device`, отказ последнего
+// запуска прохода (экран на время запуска уходит и возвращается, S6), пауза `merge` поверх
+// `screenOf` (M2, KTD-5) и подтверждение модалки `mismatch` (M2, KTD-8).
 
 interface ToastState {
   readonly id: number;
   readonly text: string;
+  readonly durationMs: number | undefined;
 }
 
 /**
@@ -51,9 +62,57 @@ export function App(): ReactNode {
     setToast(null);
   }, []);
   // Номер растёт от предыдущего: новый тост со сменой `key` перезапускает срок показа.
-  const showToast = useCallback((text: string) => {
-    setToast((previous) => ({ id: (previous?.id ?? 0) + 1, text }));
+  const showToast = useCallback((text: string, durationMs?: number) => {
+    setToast((previous) => ({ id: (previous?.id ?? 0) + 1, text, durationMs }));
   }, []);
+
+  // Пауза `merge` (KTD-5): эфемерное состояние поверх `screenOf`, живёт только в renderer и
+  // после перезапуска не повторяется — сборка уже видна в редакторе. Переход ловится по смене
+  // выведенного экрана: «scan (проход оборотов завершён) → editor» и «flip → editor после
+  // „Обороты не нужны"». Таймер — эффектом: StrictMode перезапускает его, но не теряет.
+  const [mergeHoldMs, setMergeHoldMs] = useState<number | null>(null);
+  const previousScreen = useRef<Screen | null>(null);
+  const backsPassSeen = useRef(false);
+  const watchMerge = useCallback((snapshot: Snapshot | null) => {
+    if (snapshot === null) {
+      return;
+    }
+    const screen = screenOf(snapshot);
+    const previous = previousScreen.current;
+    previousScreen.current = screen;
+    if (snapshot.pass !== null && snapshot.pass.expected !== null) {
+      backsPassSeen.current = true;
+    }
+    if (screen === 'editor' && previous !== null && previous !== 'editor') {
+      const report = snapshot.assembly?.report;
+      // Пауза — только после завершённого прохода оборотов: обрыв и «Остановить» ведут в
+      // editor без неё (сборка не «состоялась», плашка прерванного прохода говорит сама).
+      if (previous === 'scan' && backsPassSeen.current && report?.backsState === 'completed') {
+        setMergeHoldMs(MERGE_PAUSE_MS);
+      } else if (previous === 'flip' && report?.backsDeclined === true) {
+        setMergeHoldMs(MERGE_PAUSE_DECLINED_MS);
+      }
+    }
+    if (snapshot.pass === null) {
+      backsPassSeen.current = false;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (mergeHoldMs === null) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      setMergeHoldMs(null);
+    }, mergeHoldMs);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [mergeHoldMs]);
+
+  // Подтверждение `mismatch` — на время жизни процесса и на конкретную сессию (KTD-8):
+  // после перезапуска модалка показывается снова, новая сессия начинает с чистого листа.
+  const [mismatchConfirmedFor, setMismatchConfirmedFor] = useState<string | null>(null);
 
   const [deviceModal, setDeviceModal] = useState<{ readonly initialAddress?: string } | null>(null);
   const [launchFailure, setLaunchFailure] = useState<LaunchFailure | null>(null);
@@ -118,6 +177,12 @@ export function App(): ReactNode {
     );
   }, [showToast, t]);
 
+  // Переходы для паузы `merge` отслеживаются эффектом: ref-ы меняются вне рендера, и
+  // StrictMode double-render их не задваивает.
+  useEffect(() => {
+    watchMerge(snapshot);
+  }, [snapshot, watchMerge]);
+
   if (snapshot === null) {
     // Первый снимок ещё не пришёл: main отвечает за миллисекунды, рисовать нечего.
     return null;
@@ -140,9 +205,24 @@ export function App(): ReactNode {
     (notice) => !dismissed.has(notice) && (notice !== 'pagesLost' || anyLost),
   );
 
+  const report = snapshot.assembly?.report;
+  // Пауза `merge` — поверх выведенного экрана `editor` (KTD-5).
+  const merging = screen === 'editor' && mergeHoldMs !== null && report !== undefined;
+  // `mismatch` (KTD-8): первый вход в editor за процесс при неподтверждённом несовпадении —
+  // включая вход через «Оставить как есть» и после перезапуска. Прерванный, но не принятый
+  // проход оборотов модалку не зовёт: решение ещё за человеком, его ведёт плашка S17.
+  const showMismatch =
+    screen === 'editor' &&
+    !merging &&
+    report !== undefined &&
+    report.mismatch &&
+    (report.backsState === 'completed' || report.backsState === 'accepted') &&
+    snapshot.session !== null &&
+    mismatchConfirmedFor !== snapshot.session.id;
+
   return (
     <div className="app">
-      {screen !== 'scan' && <NoticesBar notices={notices} onDismiss={dismissNotice} />}
+      {screen !== 'scan' && !merging && <NoticesBar notices={notices} onDismiss={dismissNotice} />}
       {screen === 'setup' && (
         <SetupScreen
           snapshot={snapshot}
@@ -162,13 +242,23 @@ export function App(): ReactNode {
           onStart={startPass}
         />
       )}
-      {screen === 'editor' && snapshot.session !== null && (
+      {merging && <MergeScreen report={report} />}
+      {screen === 'editor' && !merging && snapshot.session !== null && (
         <EditorScreen
           snapshot={snapshot}
           session={snapshot.session}
           resumeFailure={launchFailure?.target === 'editor' ? launchFailure.error : null}
           onResume={startPass}
           onOpenDevice={openDevice}
+          onToast={showToast}
+        />
+      )}
+      {showMismatch && (
+        <MismatchModal
+          report={report}
+          onClose={() => {
+            setMismatchConfirmedFor(snapshot.session?.id ?? null);
+          }}
         />
       )}
       {/* `device` открывается и из `editor` — ссылка «подключите заново» в плашке S17. */}
@@ -179,7 +269,14 @@ export function App(): ReactNode {
           onConnected={deviceConnected}
         />
       )}
-      {toast !== null && <Toast key={toast.id} text={toast.text} onExpire={expireToast} />}
+      {toast !== null && (
+        <Toast
+          key={toast.id}
+          text={toast.text}
+          durationMs={toast.durationMs}
+          onExpire={expireToast}
+        />
+      )}
     </div>
   );
 }

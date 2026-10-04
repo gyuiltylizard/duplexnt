@@ -122,14 +122,16 @@ describe('FlipScreen', () => {
     expect(declineBacks).toHaveBeenCalledTimes(1);
   });
 
-  it('отказ declineBacks показывается плашкой', async () => {
+  it('отказ declineBacks показывается плашкой — своим текстом, без «Проход не начался»', async () => {
     stubApi({
       declineBacks: vi.fn(() => Promise.resolve(fail('storageFailed'))),
     });
     renderFlip();
 
     fireEvent.click(screen.getByRole('button', { name: 'Обороты не нужны' }));
-    expect((await screen.findByRole('alert')).textContent).toContain('Проход не начался');
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('Не удалось записать данные на диск');
+    expect(alert.textContent).not.toContain('Проход не начался');
   });
 
   it('S2: идущий проход оборотов меняет кнопки на ожидание и уводит фокус на экран', () => {
