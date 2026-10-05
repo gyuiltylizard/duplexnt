@@ -19,6 +19,13 @@ import { unwrap } from '../support/result';
 // ждёт: разверни пачку на 180° в плоскости (не переворачивая листы) и положи обратно — второй
 // проход стартует сам, как только лоток перестанет быть пустым. Итоговый PDF кладётся в
 // temp/duplexnt-live-two-pass.pdf — порядок страниц сверяется глазами по номерам (AE2).
+//
+// Поворота оборотов в штатном потоке НЕТ: после разворота пачки они приходят в правильной
+// ориентации (техбаза, «Физическое действие пользователя»; подтверждено живым прогоном
+// 2026-10-05 — принудительный поворот в первой версии теста перевернул их вверх ногами).
+// Тумблер 180° — аварийный; его механика (/Rotate в PDF) проверяется отдельным сохранением
+// без пересканирования (AE8).
+//
 // Адрес сканера в вывод не попадает: он идентифицирует сеть автора.
 
 const BASE_PATH = '/eSCL';
@@ -79,9 +86,8 @@ describeLive('два прохода на живом сканере (AE2)', (host
         mismatch: false,
       });
 
-      // Пачка сканировалась с разворотом — обороты пришли вверх ногами (AE8).
-      unwrap(await service.setRotateBacks(true));
-
+      // Штатный поток: пачка развёрнута правильно, обороты пришли в правильной ориентации —
+      // тумблер НЕ включается, поворота в PDF нет.
       await mkdir(resolve('temp'), { recursive: true });
       const target = resolve('temp', 'duplexnt-live-two-pass.pdf');
       const saved = unwrap(await service.savePdf(() => Promise.resolve(target)));
@@ -89,20 +95,32 @@ describeLive('два прохода на живом сканере (AE2)', (host
 
       const document = await PDFDocument.load(await readFile(target));
       expect(document.getPageCount()).toBe(fronts.pages * 2);
-      // /Rotate 180 — только на оборотах (каждая вторая страница собранного порядка).
-      document.getPages().forEach((page, index) => {
-        expect(page.getRotation().angle, `страница ${index + 1}`).toBe(index % 2 === 1 ? 180 : 0);
-      });
+      for (const [index, page] of document.getPages().entries()) {
+        expect(page.getRotation().angle, `страница ${index + 1}`).toBe(0);
+      }
       expect(service.snapshot().session?.saved).toBe(true);
 
-      // Исходники целы: каждый ключ порядка лежит JPEG'ом на диске.
+      // Исходники целы: порядок несёт обе стороны каждого листа.
       const order = service.snapshot().assembly?.order ?? [];
       expect(order).toHaveLength(fronts.pages * 2);
+
+      // AE8/AE12 без пересканирования: аварийный тумблер снимает отметку сохранения и кладёт
+      // /Rotate 180 только на обороты; выключение возвращает.
+      unwrap(await service.setRotateBacks(true));
+      expect(service.snapshot().session?.saved).toBe(false);
+      const rotatedTarget = resolve('temp', 'duplexnt-live-two-pass-rotated.pdf');
+      unwrap(await service.savePdf(() => Promise.resolve(rotatedTarget)));
+      const rotated = await PDFDocument.load(await readFile(rotatedTarget));
+      for (const [index, page] of rotated.getPages().entries()) {
+        expect(page.getRotation().angle, `страница ${index + 1}`).toBe(index % 2 === 1 ? 180 : 0);
+      }
+      unwrap(await service.setRotateBacks(false));
 
       console.info(
         `[live] PDF сохранён: ${target} (${fronts.pages * 2} страниц). ` +
           'Открой его и сверь порядок по номерам: 1 FRONT, 1 BACK, 2 FRONT, 2 BACK, … — ' +
-          'и что обороты не вверх ногами (тумблер 180° применён).',
+          'все страницы должны быть прямыми, без поворота. Файл *-rotated.pdf — проверка ' +
+          'аварийного тумблера, там обороты нарочно вверх ногами.',
       );
     },
     TIMEOUT_MS,
