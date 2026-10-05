@@ -1,0 +1,128 @@
+/* Экран `merge` (U9): процессная пауза по макету и UI_SPEC раздел 5; статусная строка — S4
+   handoff M2. Ширина диаграммы — литерал макета (осознанное исключение DS). */
+
+.merge-screen {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-12);
+  outline: none; /* контейнер принимает фокус — органов управления на экране нет */
+}
+
+.merge-screen__title {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-4xl);
+  line-height: var(--leading-snug);
+  letter-spacing: var(--tracking-snug);
+}
+
+.merge-screen__diagram {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  width: 560px;
+}
+
+.merge-screen__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.merge-screen__row--document {
+  padding-top: var(--space-3);
+}
+
+.merge-screen__row-label {
+  width: 96px;
+  flex: none;
+  font-family: var(--font-family-mono);
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-s);
+  line-height: var(--leading-none);
+  color: var(--color-text-subtle);
+}
+
+.merge-screen__row-label--strong {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+}
+
+.merge-screen__cells {
+  flex: 1;
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* Обороты пришли в обратном порядке — ряд заполняется с другого края. */
+.merge-screen__cells--reversed {
+  flex-direction: row-reverse;
+}
+
+.merge-screen__cells--document {
+  gap: var(--space-1);
+}
+
+.merge-screen__cell {
+  flex: 1;
+  height: 22px;
+  border-radius: var(--radius-s);
+}
+
+.merge-screen__cell--front {
+  background: var(--color-accent);
+  opacity: var(--opacity-soft);
+}
+
+.merge-screen__cell--back {
+  background: var(--color-warning);
+  opacity: var(--opacity-soft);
+  animation: pulse var(--duration-loop) var(--ease-loop) infinite;
+}
+
+.merge-screen__doc-cell {
+  flex: 1;
+  height: 22px;
+  border-radius: var(--radius-xs);
+  background: var(--color-pass-1);
+}
+
+.merge-screen__doc-cell--back {
+  background: var(--color-pass-2);
+}
+
+.merge-screen__footer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  align-items: center;
+}
+
+.merge-screen__formula {
+  margin: 0;
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-m);
+  line-height: var(--leading-relaxed);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.merge-screen__status {
+  margin: 0;
+  font-family: var(--font-family-mono);
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-s);
+  line-height: var(--leading-none);
+  color: var(--color-text-hint);
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .merge-screen__cell--back {
+    animation: none;
+  }
+}

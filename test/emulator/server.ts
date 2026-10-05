@@ -41,6 +41,8 @@ interface Job {
   lastAccessAt: number;
   notReadyLeft: number;
   transferring: boolean;
+  /** Остаток лотка этого задания — номера фикстур (M2, U4); `null` — общий лоток `sheets`. */
+  trayLeft: number[] | null;
 }
 
 export interface EmulatorExchange {
@@ -83,6 +85,11 @@ export interface Emulator {
   readonly receivedSettings: readonly string[];
   /** Новый сценарий на том же адресе и с тем же сертификатом: лоток, счётчики и задания — заново. */
   load(scenario?: Partial<Scenario>): void;
+  /**
+   * Перезарядка лотка (M2, U4): кладёт содержимое для следующего задания, НЕ сбрасывая ни
+   * сценарий, ни список заданий — брошенные задания остаются видны. Только при `trays`.
+   */
+  reloadTray(tray: readonly number[]): void;
   /** «Бумагу вынули»: состояние замятия снято. */
   clearJam(): void;
   close(): Promise<void>;
@@ -113,6 +120,7 @@ export async function startEmulator(options: EmulatorOptions = {}): Promise<Emul
   const pages = pageFixtures();
 
   let scenario = scenarioOf(options.scenario);
+  let trayQueue = (scenario.trays ?? []).map((tray) => [...tray]);
   let sheetsUsed = 0;
   let faultFired = false;
   let busyPostsLeft = scenario.busyPosts;
@@ -147,10 +155,18 @@ export async function startEmulator(options: EmulatorOptions = {}): Promise<Emul
 
   const runningJob = (): Job | undefined => jobs.find((job) => job.state === 'Processing');
 
+  /** В лотке задания ещё есть листы: общий счётчик — в прежнем режиме, свой остаток — в trays. */
+  const sheetsLeft = (job: Job): boolean =>
+    job.trayLeft === null ? sheetsUsed < scenario.sheets : job.trayLeft.length > 0;
+
   function statusXml(): Buffer {
     expire();
     const running = runningJob();
-    const loaded = scenario.trayReportsLoaded ?? sheetsUsed < scenario.sheets;
+    const loaded =
+      scenario.trayReportsLoaded ??
+      (scenario.trays === null
+        ? sheetsUsed < scenario.sheets
+        : (running?.trayLeft?.length ?? 0) > 0 || trayQueue.length > 0);
     let adfState = loaded ? 'ScannerAdfLoaded' : 'ScannerAdfEmpty';
     if (jam) {
       adfState = 'ScannerAdfJam';
@@ -294,6 +310,8 @@ export async function startEmulator(options: EmulatorOptions = {}): Promise<Emul
         lastAccessAt: Date.now(),
         notReadyLeft: 0,
         transferring: false,
+        // Задание забирает следующий лоток очереди; пустая очередь — пустой лоток.
+        trayLeft: scenario.trays === null ? null : (trayQueue.shift() ?? []),
       };
       jobs.unshift(job);
       jam = false;
@@ -320,7 +338,9 @@ export async function startEmulator(options: EmulatorOptions = {}): Promise<Emul
       job.state = 'Canceled';
       busyUntil = Date.now() + scenario.busyAfterCancelMs;
       // Остаток пачки устройство прогоняет через тракт несканированным: лоток пустеет.
-      if (Number.isFinite(scenario.sheets)) {
+      if (job.trayLeft !== null) {
+        job.trayLeft = [];
+      } else if (Number.isFinite(scenario.sheets)) {
         sheetsUsed = scenario.sheets;
       }
       empty(200);
@@ -350,8 +370,9 @@ export async function startEmulator(options: EmulatorOptions = {}): Promise<Emul
       return;
     }
 
+    // Счёт листов — сквозной через все задания: сбой сценария привязан к нему и в M2.
     const sheet = sheetsUsed + 1;
-    if (sheet > scenario.sheets) {
+    if (!sheetsLeft(job)) {
       // После `404` задание закрывается само: `Completed`, а без единой страницы — `Aborted`.
       job.state = job.imagesCompleted > 0 ? 'Completed' : 'Aborted';
       empty(404);
@@ -396,6 +417,8 @@ export async function startEmulator(options: EmulatorOptions = {}): Promise<Emul
         socket.once('close', done);
       });
 
+    // Лист считается поданным; из лотка задания уходит очередная фикстура (M2, U4).
+    const fixtureNumber = job.trayLeft === null ? sheet : (job.trayLeft.shift() ?? sheet);
     sheetsUsed += 1;
     job.transferring = true;
     try {
@@ -407,7 +430,7 @@ export async function startEmulator(options: EmulatorOptions = {}): Promise<Emul
         }
       }
 
-      const body = pages[(sheet - 1) % pages.length] ?? Buffer.alloc(0);
+      const body = pages[(fixtureNumber - 1) % pages.length] ?? Buffer.alloc(0);
       const half = body.subarray(0, Math.floor(body.byteLength / 2));
       const chunkedHead = (): void => {
         exchange.status = 200;
@@ -432,10 +455,9 @@ export async function startEmulator(options: EmulatorOptions = {}): Promise<Emul
       };
       const delivered = (): void => {
         job.imagesCompleted += 1;
-        job.notReadyLeft =
-          sheetsUsed < scenario.sheets
-            ? scenario.notReady.betweenPages
-            : scenario.notReady.beforeEnd;
+        job.notReadyLeft = sheetsLeft(job)
+          ? scenario.notReady.betweenPages
+          : scenario.notReady.beforeEnd;
       };
 
       switch (fault) {
@@ -548,12 +570,19 @@ export async function startEmulator(options: EmulatorOptions = {}): Promise<Emul
     receivedSettings,
     load(next = {}) {
       scenario = scenarioOf(next);
+      trayQueue = (scenario.trays ?? []).map((tray) => [...tray]);
       sheetsUsed = 0;
       faultFired = false;
       busyPostsLeft = scenario.busyPosts;
       busyUntil = 0;
       jam = false;
       jobs = [];
+    },
+    reloadTray(tray) {
+      if (scenario.trays === null) {
+        throw new Error('reloadTray — только при сценарии с лотками по заданиям (trays)');
+      }
+      trayQueue.push([...tray]);
     },
     clearJam() {
       jam = false;

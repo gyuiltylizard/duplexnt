@@ -1,35 +1,49 @@
-import { useCallback, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import type { DomainError, StartupNotice } from '@shared';
 import { NoticesBar } from './components/NoticesBar';
 import { Toast } from './components/Toast';
 import { DeviceModal } from './modals/DeviceModal';
+import { MismatchModal } from './modals/MismatchModal';
 import { EditorScreen } from './screens/EditorScreen';
+import { FlipScreen } from './screens/FlipScreen';
 import { IncompatibleScreen } from './screens/IncompatibleScreen';
+import { MergeScreen, MERGE_PAUSE_DECLINED_MS, MERGE_PAUSE_MS } from './screens/MergeScreen';
 import { ScanScreen } from './screens/ScanScreen';
 import { SetupScreen } from './screens/SetupScreen';
+import { assemblyLanded, mismatchDue } from './state/assembly-outcome';
 import { createSnapshotStore } from './state/snapshot-store';
-import { screenOf } from './state/screen';
+import { screenOf, type Screen } from './state/screen';
 import './app.css';
 
 // Каркас интерфейса M1 (U20): экран выводится из снимка, своего состояния сессии у renderer
 // нет (KTD-23). Здесь живёт то, что переживает смену экрана: закрытые уведомления запуска,
-// единственный тост (новый гасит предыдущий сменой `key`), модалка `device` и отказ последнего
-// запуска прохода — экран на время запуска уходит на `scan` и возвращается (S6).
+// единственный тост (новый гасит предыдущий сменой `key`), модалка `device`, отказ последнего
+// запуска прохода (экран на время запуска уходит и возвращается, S6), пауза `merge` поверх
+// `screenOf` (M2, KTD-5) и подтверждение модалки `mismatch` (M2, KTD-8).
 
 interface ToastState {
   readonly id: number;
   readonly text: string;
+  readonly durationMs: number | undefined;
 }
 
 /**
  * Отказ последнего запуска прохода — с адресатом: запуск с `setup` показывается плашкой S6,
- * досканирование — строкой в плашке S17. Отказ не переезжает между экранами: после «Нового
+ * досканирование — строкой в плашке S17, запуск оборотов — плашкой на `flip` (M2, S2: потолок
+ * ретрая занятости приходит сюда же). Отказ не переезжает между экранами: после «Нового
  * сканирования» плашка `editor` не всплывает на `setup` (ревью сессии 9).
  */
 interface LaunchFailure {
   readonly error: DomainError;
-  readonly target: 'setup' | 'editor';
+  readonly target: 'setup' | 'editor' | 'flip';
 }
 
 export function App(): ReactNode {
@@ -49,9 +63,47 @@ export function App(): ReactNode {
     setToast(null);
   }, []);
   // Номер растёт от предыдущего: новый тост со сменой `key` перезапускает срок показа.
-  const showToast = useCallback((text: string) => {
-    setToast((previous) => ({ id: (previous?.id ?? 0) + 1, text }));
+  const showToast = useCallback((text: string, durationMs?: number) => {
+    setToast((previous) => ({ id: (previous?.id ?? 0) + 1, text, durationMs }));
   }, []);
+
+  // Пауза `merge` (KTD-5): эфемерное состояние поверх `screenOf`, живёт только в renderer и
+  // после перезапуска не повторяется — на старте процесса предыдущего экрана нет, переход
+  // не срабатывает. Переход ловится корректировкой состояния при рендере (react.dev «You
+  // Might Not Need an Effect», как `known` в SetupScreen) — это идемпотентно и переживает
+  // StrictMode double-render. Условие читает отчёт, а не промежуточные экраны: снимки могут
+  // прийти пачкой, и кадр `scan` между `flip` и `editor` легко пропустить.
+  const [mergeHoldMs, setMergeHoldMs] = useState<number | null>(null);
+  const [previousScreen, setPreviousScreen] = useState<Screen | null>(null);
+  const screen = snapshot === null ? null : screenOf(snapshot);
+  if (screen !== previousScreen) {
+    setPreviousScreen(screen);
+    const transitionReport = snapshot?.assembly?.report;
+    if (
+      screen === 'editor' &&
+      (previousScreen === 'scan' || previousScreen === 'flip') &&
+      transitionReport !== undefined &&
+      assemblyLanded(transitionReport)
+    ) {
+      setMergeHoldMs(transitionReport.backsDeclined ? MERGE_PAUSE_DECLINED_MS : MERGE_PAUSE_MS);
+    }
+  }
+
+  useEffect(() => {
+    if (mergeHoldMs === null) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      setMergeHoldMs(null);
+    }, mergeHoldMs);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [mergeHoldMs]);
+
+  // Подтверждение `mismatch` — на время жизни процесса и на конкретную сессию (KTD-8):
+  // после перезапуска модалка показывается снова, новая сессия начинает с чистого листа.
+  const [mismatchConfirmedFor, setMismatchConfirmedFor] = useState<string | null>(null);
 
   const [deviceModal, setDeviceModal] = useState<{ readonly initialAddress?: string } | null>(null);
   const [launchFailure, setLaunchFailure] = useState<LaunchFailure | null>(null);
@@ -86,9 +138,11 @@ export function App(): ReactNode {
       (result) => {
         startInFlight.current = false;
         if (!result.ok) {
-          // Адресат отказа — экран, с которого запускали: сессия есть — досканирование из
-          // `editor`, нет — запуск с `setup`.
-          const target = store.get()?.session == null ? 'setup' : 'editor';
+          // Адресат отказа — экран, на который снимок вернул после отказа: он и есть
+          // экран-источник запуска (`setup`, `flip` или `editor` при досканировании).
+          const current = store.get();
+          const screen = current === null ? 'setup' : screenOf(current);
+          const target = screen === 'flip' || screen === 'editor' ? screen : 'setup';
           setLaunchFailure({ error: result.error, target });
         }
       },
@@ -114,12 +168,11 @@ export function App(): ReactNode {
     );
   }, [showToast, t]);
 
-  if (snapshot === null) {
+  if (snapshot === null || screen === null) {
     // Первый снимок ещё не пришёл: main отвечает за миллисекунды, рисовать нечего.
     return null;
   }
 
-  const screen = screenOf(snapshot);
   if (screen === 'incompatible') {
     // Единственный экран: ни уведомлений, ни тостов, ни модалок над ним (S22).
     return (
@@ -136,9 +189,25 @@ export function App(): ReactNode {
     (notice) => !dismissed.has(notice) && (notice !== 'pagesLost' || anyLost),
   );
 
+  const assembly = snapshot.assembly;
+  // Пауза `merge` — поверх выведенного экрана `editor` (KTD-5).
+  const merging = screen === 'editor' && mergeHoldMs !== null && assembly !== null;
+  // `mismatch` (KTD-8): первый вход в editor за процесс при неподтверждённом несовпадении —
+  // включая вход через «Оставить как есть» и после перезапуска; условие уместности — общий
+  // предикат `mismatchDue`. Подтверждение — на сессию, id сужается здесь же.
+  const mismatchSessionId =
+    screen === 'editor' &&
+    !merging &&
+    assembly !== null &&
+    mismatchDue(assembly.report) &&
+    snapshot.session !== null
+      ? snapshot.session.id
+      : null;
+  const showMismatch = mismatchSessionId !== null && mismatchConfirmedFor !== mismatchSessionId;
+
   return (
     <div className="app">
-      {screen !== 'scan' && <NoticesBar notices={notices} onDismiss={dismissNotice} />}
+      {screen !== 'scan' && !merging && <NoticesBar notices={notices} onDismiss={dismissNotice} />}
       {screen === 'setup' && (
         <SetupScreen
           snapshot={snapshot}
@@ -150,24 +219,51 @@ export function App(): ReactNode {
       {screen === 'scan' && snapshot.pass !== null && (
         <ScanScreen snapshot={snapshot} pass={snapshot.pass} onStop={stopPass} />
       )}
-      {screen === 'editor' && snapshot.session !== null && (
+      {screen === 'flip' && (
+        <FlipScreen
+          snapshot={snapshot}
+          pass={snapshot.pass}
+          launchFailure={launchFailure?.target === 'flip' ? launchFailure.error : null}
+          onStart={startPass}
+          onOpenDevice={openDevice}
+        />
+      )}
+      {merging && <MergeScreen assembly={assembly} />}
+      {screen === 'editor' && !merging && snapshot.session !== null && (
         <EditorScreen
           snapshot={snapshot}
           session={snapshot.session}
           resumeFailure={launchFailure?.target === 'editor' ? launchFailure.error : null}
           onResume={startPass}
           onOpenDevice={openDevice}
+          onToast={showToast}
         />
       )}
-      {/* `device` открывается и из `editor` — ссылка «подключите заново» в плашке S17. */}
-      {deviceModal !== null && (screen === 'setup' || screen === 'editor') && (
+      {showMismatch && assembly !== null && (
+        <MismatchModal
+          report={assembly.report}
+          onClose={() => {
+            setMismatchConfirmedFor(mismatchSessionId);
+          }}
+        />
+      )}
+      {/* `device` открывается и из `editor` (ссылка в плашке S17), и из `flip` (плашка
+          отказа запуска оборотов — иначе из него не выбраться к подключению). */}
+      {deviceModal !== null && (screen === 'setup' || screen === 'editor' || screen === 'flip') && (
         <DeviceModal
           initialAddress={deviceModal.initialAddress}
           onClose={closeDevice}
           onConnected={deviceConnected}
         />
       )}
-      {toast !== null && <Toast key={toast.id} text={toast.text} onExpire={expireToast} />}
+      {toast !== null && (
+        <Toast
+          key={toast.id}
+          text={toast.text}
+          durationMs={toast.durationMs}
+          onExpire={expireToast}
+        />
+      )}
     </div>
   );
 }

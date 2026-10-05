@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   pageImageUrl,
@@ -8,13 +8,16 @@ import {
   type Snapshot,
 } from '@shared';
 import type { TFunction } from 'i18next';
+import { useFocusWhen } from '../components/useFocusWhen';
 import { useImageLoad } from '../components/useImageLoad';
 import { lowerFirst } from '../state/error-text';
 import './scan-screen.css';
 
 // Экран `scan` (план M1, U23; UI_SPEC раздел 3; handoff U19, S12–S15, S19): тег прохода,
 // иллюстрация подачи, счётчик в живом регионе, строка параметров, лента последних пяти
-// страниц, «Остановить». Тег не упоминает лицевые стороны, счётчик — без «из M» (KTD-25).
+// страниц, «Остановить». С M2 вернулись полные тексты (план M2, U8): тег различает роли
+// «лицевые/обороты» (по `expected`, не по номеру — KTD-4), счётчик оборотов — «N из M» (R2)
+// и может перевалить за M — показывается как есть.
 
 /** Сколько последних страниц показывает лента. */
 export const STRIP_SIZE = 5;
@@ -103,11 +106,7 @@ export function ScanScreen({ snapshot, pass, onStop }: ScanScreenProps): ReactNo
 
   // В S15 «Остановить» выпадает из обхода — фокус уходит на контейнер экрана, чтобы не
   // потеряться (handoff, «Клавиатура»).
-  useEffect(() => {
-    if (stopping) {
-      screenRef.current?.focus();
-    }
-  }, [stopping]);
+  useFocusWhen(screenRef, stopping);
 
   const pages = passPages(snapshot, pass);
   // `pass.pages` — число страниц этого запуска; прежние страницы досканируемого прохода — разница.
@@ -120,7 +119,9 @@ export function ScanScreen({ snapshot, pass, onStop }: ScanScreenProps): ReactNo
   const counter =
     pass.phase === 'starting' || counted === 0
       ? t('scan.starting')
-      : t('scan.counter', { count: counted });
+      : pass.expected !== null
+        ? t('scan.counterOf', { count: counted, expected: pass.expected })
+        : t('scan.counter', { count: counted });
 
   const meta = busy
     ? t('scan.busy.meta')
@@ -141,7 +142,11 @@ export function ScanScreen({ snapshot, pass, onStop }: ScanScreenProps): ReactNo
 
   return (
     <main className="scan-screen" ref={screenRef} tabIndex={-1}>
-      <div className="scan-screen__tag">{t('scan.tag', { number: passNumber(snapshot) })}</div>
+      <div className="scan-screen__tag">
+        {t(pass.expected !== null ? 'scan.tagBacks' : 'scan.tag', {
+          number: passNumber(snapshot),
+        })}
+      </div>
 
       <div className="scan-screen__stage">
         <div className={busy ? 'feed feed--idle' : 'feed'} aria-hidden="true">

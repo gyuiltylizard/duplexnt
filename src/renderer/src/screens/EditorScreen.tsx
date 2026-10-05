@@ -1,33 +1,35 @@
 import {
-  Fragment,
   memo,
   useEffect,
+  useMemo,
   useRef,
   useState,
+  type ChangeEvent,
   type KeyboardEvent,
   type ReactNode,
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   pageImageUrl,
+  type AssembledPage,
   type DomainError,
-  type PageSnapshot,
-  type PassSnapshot,
   type ScannerInfo,
   type SessionSnapshot,
   type Snapshot,
 } from '@shared';
-import type { TFunction } from 'i18next';
+import { multiline } from '../components/multiline';
 import { useImageLoad } from '../components/useImageLoad';
 import { NewScanModal } from '../modals/NewScanModal';
 import { errorText, errorTextInline } from '../state/error-text';
-import { addressOf } from '../state/scanner-address';
+import { addressOf, reconnectAddress } from '../state/scanner-address';
+import { survivingPasses } from '../state/screen';
 import './editor-screen.css';
 
-// Экран `editor` (план M1, U24; UI_SPEC раздел 6 в объёме KTD-25; handoff U19, S16–S19, S21):
-// тулбар с «Новое сканирование», лента группами по проходам, превью со статус-баром, плашка
-// прерванного прохода. Инспектора, «Сохранить», «Добавить», поворота, удаления и
-// пересканирования в разметке нет (KTD-25).
+// Экран `editor` (план M1, U24; M2, U9; UI_SPEC раздел 6; handoff M2, S6–S9): тулбар с «Новое
+// сканирование» и правой зоной сохранения, лента в порядке сборки (AE1: 1л, 1о, 2л, 2о, …)
+// с тегом «об» на оборотах и пометкой непарного листа, превью, тумблер «повернуть обороты
+// на 180°» внизу ленты, плашка прерванного прохода. Инспектора, «Добавить» и правок страниц
+// нет (KTD-25 M1 продолжает действовать).
 
 export interface EditorScreenProps {
   readonly snapshot: Snapshot;
@@ -38,34 +40,50 @@ export interface EditorScreenProps {
   readonly onResume: () => void;
   /** Ссылка «подключите заново» в отказе досканирования (S17). */
   readonly onOpenDevice: (initialAddress?: string) => void;
+  /** Тосты живут в App (новый гасит предыдущий); сохранение показывает их дольше обычного. */
+  readonly onToast: (text: string, durationMs?: number) => void;
 }
 
-/** Коды отказа досканирования, которые лечатся повторным подключением (S17). */
-const RECONNECT_CODES: readonly string[] = ['scannerUnreachable', 'scannerCertificateChanged'];
-
-/** Текст локали с переводом строки — двумя строками (`preview.lost`, `preview.failed`). */
-function multiline(text: string): ReactNode {
-  return text.split('\n').map((line, index) => (
-    <Fragment key={index}>
-      {index > 0 && <br />}
-      {line}
-    </Fragment>
-  ));
-}
+/** Тосты сохранения — 6 с (UI_SPEC раздел 8). */
+const SAVE_TOAST_MS = 6000;
 
 /**
- * Миниатюра в ленте: обычная, потерянная (S18), строится или не построилась (S19).
- * Мемоизирована: смена выбора перерисовывает две карточки, а не всю ленту (`onSelect`
- * стабилен и принимает ключ).
+ * Коды отказа досканирования, которые лечатся повторным подключением (S17). Список шире, чем
+ * у плашки `flip`: досканировать можно только на сканере прохода (KTD-27), поэтому и
+ * «не отвечает» ведёт к переподключению.
+ */
+const RESUME_RECONNECT_CODES: readonly string[] = [
+  'scannerUnreachable',
+  'scannerCertificateChanged',
+];
+
+/**
+ * Миниатюра в ленте: обычная, потерянная (S18), строится или не построилась (S19), оборот с
+ * тегом «об» и поворотом, непарный лист с янтарной точкой (S6). Пропсы — примитивы, чтобы
+ * `memo` переживал новый снимок (объекты порядка пересоздаются десериализацией IPC): тумблер
+ * и отметка сохранения не перерисовывают всю ленту, смена выбора — две карточки.
  */
 const Thumb = memo(function Thumb({
   sessionId,
-  page,
+  pageKey,
+  side,
+  sheet,
+  rotate180,
+  lost,
+  position,
+  unpaired,
   selected,
   onSelect,
 }: {
   readonly sessionId: string;
-  readonly page: PageSnapshot;
+  readonly pageKey: string;
+  readonly side: AssembledPage['side'];
+  readonly sheet: number | null;
+  readonly rotate180: boolean;
+  readonly lost: boolean;
+  /** Номер по порядку в наборе, с единицы. */
+  readonly position: number;
+  readonly unpaired: boolean;
   readonly selected: boolean;
   readonly onSelect: (key: string) => void;
 }): ReactNode {
@@ -73,7 +91,7 @@ const Thumb = memo(function Thumb({
   const image = useImageLoad();
 
   const select = (): void => {
-    onSelect(page.key);
+    onSelect(pageKey);
   };
   const keyDown = (event: KeyboardEvent<HTMLElement>): void => {
     if (event.key === 'Enter' || event.key === ' ') {
@@ -84,7 +102,7 @@ const Thumb = memo(function Thumb({
 
   const classes = ['thumb'];
   let paper: ReactNode;
-  if (page.lost) {
+  if (lost) {
     classes.push('thumb--lost');
     paper = <span className="thumb__label">{t('thumb.lost')}</span>;
   } else if (image.state === 'failed') {
@@ -101,7 +119,7 @@ const Thumb = memo(function Thumb({
           alt=""
           loading="lazy"
           decoding="async"
-          src={pageImageUrl(sessionId, 'thumb', page.key)}
+          src={pageImageUrl(sessionId, 'thumb', pageKey)}
           onLoad={image.onLoad}
           onError={image.onError}
         />
@@ -112,27 +130,41 @@ const Thumb = memo(function Thumb({
   if (selected) {
     classes.push('thumb--selected');
   }
+  // Поворот оборотов — только отображение: файлы не меняются (KTD-2).
+  if (side === 'back' && rotate180) {
+    classes.push('thumb--rotated');
+  }
+
+  const label = lost
+    ? t('thumb.lostLabel', { number: position })
+    : unpaired
+      ? t('thumb.unpairedLabel', { number: sheet ?? position })
+      : t('thumb.alt', { number: position });
 
   return (
     <li
       role="option"
       aria-selected={selected}
-      aria-busy={!page.lost && image.state === 'loading' ? true : undefined}
-      aria-label={
-        page.lost
-          ? t('thumb.lostLabel', { number: page.number })
-          : t('thumb.alt', { number: page.number })
-      }
-      title={!page.lost && image.state === 'failed' ? t('thumb.failedTitle') : undefined}
+      aria-busy={!lost && image.state === 'loading' ? true : undefined}
+      aria-label={label}
+      title={!lost && image.state === 'failed' ? t('thumb.failedTitle') : undefined}
       tabIndex={selected ? 0 : -1}
-      data-key={page.key}
+      data-key={pageKey}
       className={classes.join(' ')}
       onClick={select}
       onKeyDown={keyDown}
     >
       <div className="thumb__paper">{paper}</div>
       <div className="thumb__foot">
-        <span className="thumb__num">{page.number}</span>
+        <span className="thumb__num">{position}</span>
+        {side === 'back' && <span className="thumb__tag">{t('thumb.tagBacks')}</span>}
+        {unpaired && (
+          <span
+            className="dot dot--warning thumb__flag"
+            title={t('thumb.unpairedTitle')}
+            aria-hidden="true"
+          />
+        )}
       </div>
     </li>
   );
@@ -141,37 +173,41 @@ const Thumb = memo(function Thumb({
 /** Превью: сама страница; потерянная — пунктирный лист S18; не открылась — текст S19. */
 function Preview({
   sessionId,
-  page,
+  entry,
+  position,
 }: {
   readonly sessionId: string;
-  readonly page: PageSnapshot;
+  readonly entry: AssembledPage;
+  readonly position: number;
 }): ReactNode {
   const { t } = useTranslation();
   const image = useImageLoad();
 
   // Потерянная страница и не открывшийся файл показываются одинаково устроенным листом:
   // угловая метка и текст; различаются пунктиром и ключом текста.
-  if (page.lost || image.state === 'failed') {
+  if (entry.lost || image.state === 'failed') {
     return (
-      <div className={page.lost ? 'preview__paper preview__paper--lost' : 'preview__paper'}>
-        <div className="preview__corner">{t('preview.corner', { number: page.number })}</div>
+      <div className={entry.lost ? 'preview__paper preview__paper--lost' : 'preview__paper'}>
+        <div className="preview__corner">{t('preview.corner', { number: position })}</div>
         <p className="preview__empty">
-          {multiline(page.lost ? t('preview.lost') : t('preview.failed'))}
+          {multiline(entry.lost ? t('preview.lost') : t('preview.failed'))}
         </p>
       </div>
     );
   }
+  const classes = ['preview__paper'];
+  if (image.state === 'loading') {
+    classes.push('preview__paper--loading');
+  }
+  if (entry.side === 'back' && entry.rotate180) {
+    classes.push('preview__paper--rotated');
+  }
   return (
-    <div
-      className={
-        image.state === 'loading' ? 'preview__paper preview__paper--loading' : 'preview__paper'
-      }
-      aria-busy={image.state === 'loading' ? true : undefined}
-    >
+    <div className={classes.join(' ')} aria-busy={image.state === 'loading' ? true : undefined}>
       <img
         className="preview__img"
-        alt={t('thumb.alt', { number: page.number })}
-        src={pageImageUrl(sessionId, 'page', page.key)}
+        alt={t('thumb.alt', { number: position })}
+        src={pageImageUrl(sessionId, 'page', entry.key)}
         onLoad={image.onLoad}
         onError={image.onError}
       />
@@ -180,38 +216,33 @@ function Preview({
   );
 }
 
-function passMeta(t: TFunction, pass: PassSnapshot): string {
-  const count = pass.pages.length;
-  switch (pass.state) {
-    case 'interrupted':
-      return t('editor.pass.metaInterrupted', { count });
-    case 'accepted':
-      return t('editor.pass.metaAccepted', { count });
-    default:
-      return t('editor.pass.meta', { count });
-  }
-}
-
 export function EditorScreen({
   snapshot,
   session,
   resumeFailure,
   onResume,
   onOpenDevice,
+  onToast,
 }: EditorScreenProps): ReactNode {
   const { t } = useTranslation();
-  const pages = session.passes.flatMap((pass) => pass.pages);
-  const total = pages.length;
+
+  // Лента — порядок сборки (KTD-4, derived); до приёмки прерванных оборотов — фактические пары.
+  const order = snapshot.assembly?.order ?? [];
+  const report = snapshot.assembly?.report;
+  const total = order.length;
+  // Set вместо поиска по массиву на каждой миниатюре; пересобирается только с новым отчётом.
+  const unpairedSheets = useMemo(() => new Set(report?.unpairedSheets ?? []), [report]);
 
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const selectedIndex = Math.max(
     0,
-    pages.findIndex((page) => page.key === selectedKey),
+    order.findIndex((entry) => entry.key === selectedKey),
   );
-  const selected = pages[selectedIndex];
+  const selected = order[selectedIndex];
 
   const [newScanOpen, setNewScanOpen] = useState(false);
   const [acceptFailure, setAcceptFailure] = useState<DomainError | null>(null);
+  const [saving, setSaving] = useState(false);
 
   // Стрелки двигают выбор по всей ленте — фокус должен следовать за ним (роуминг tabindex).
   const railRef = useRef<HTMLElement>(null);
@@ -226,11 +257,11 @@ export function EditorScreen({
   });
 
   const selectAt = (index: number, focus: boolean): void => {
-    const page = pages[Math.min(Math.max(index, 0), total - 1)];
-    if (page !== undefined) {
-      setSelectedKey(page.key);
+    const entry = order[Math.min(Math.max(index, 0), total - 1)];
+    if (entry !== undefined) {
+      setSelectedKey(entry.key);
       if (focus) {
-        focusKey.current = page.key;
+        focusKey.current = entry.key;
       }
     }
   };
@@ -280,14 +311,63 @@ export function EditorScreen({
   };
 
   const reconnect = (): void => {
-    const { scanner } = snapshot;
-    onOpenDevice(scanner.kind === 'none' ? undefined : addressOf(scanner.scanner));
+    onOpenDevice(reconnectAddress(snapshot.scanner));
   };
 
   // «Подключите заново» из текста плашки — с адресом сканера прохода: именно его и надо
   // вернуть, чтобы досканировать (KTD-27).
   const reconnectPassScanner = (scanner: ScannerInfo | null): void => {
     onOpenDevice(scanner === null ? undefined : addressOf(scanner));
+  };
+
+  // Тумблер 180° — у второго уцелевшего прохода (роль, не номер — KTD-4), включая прерванный
+  // и принятый; без прохода оборотов тумблера нет (S7). Правило уцелевшего — одно на renderer.
+  const backsPass = survivingPasses(session)[1];
+  const setRotate = (event: ChangeEvent<HTMLInputElement>): void => {
+    // Снимок — источник правды: при отказе команда не меняет ничего, и чекбокс вернётся сам.
+    window.api.setRotateBacks({ rotate: event.target.checked }).then(
+      (result) => {
+        if (!result.ok) {
+          console.error('[renderer] поворот оборотов не принят', result.error);
+        }
+      },
+      (error: unknown) => {
+        console.error('[renderer] поворот оборотов не отправлен', error);
+      },
+    );
+  };
+
+  // Тосты сохранения живут дольше обычных (UI_SPEC раздел 8).
+  const saveToast = (text: string): void => {
+    onToast(text, SAVE_TOAST_MS);
+  };
+
+  const save = (): void => {
+    if (saving) {
+      return;
+    }
+    setSaving(true);
+    window.api.savePdf().then(
+      (result) => {
+        setSaving(false);
+        if (!result.ok) {
+          saveToast(t('toast.saveFailed', { error: errorTextInline(t, result.error) }));
+          return;
+        }
+        // Отказ в диалоге приходит успехом с `canceled` — не ошибка, тостов нет (KTD-3).
+        if (!result.value.canceled) {
+          saveToast(
+            t('toast.saved', { file: result.value.fileName, folder: result.value.directory }),
+          );
+        }
+      },
+      (error: unknown) => {
+        // Мост не ответил — пользователь не должен гадать, записался ли файл.
+        setSaving(false);
+        console.error('[renderer] сохранение не ответило', error);
+        saveToast(t('toast.saveNoResponse'));
+      },
+    );
   };
 
   // Плашка S17: последний проход прерван. Ноль страниц проход иметь не может — сессии бы не было.
@@ -327,7 +407,7 @@ export function EditorScreen({
       failureLine = (
         <>
           {t('editor.interrupted.resumeFailed', { error: errorTextInline(t, resumeFailure) })}
-          {RECONNECT_CODES.includes(resumeFailure.code) && (
+          {RESUME_RECONNECT_CODES.includes(resumeFailure.code) && (
             <>
               {' '}
               <button type="button" className="btn btn--link" onClick={reconnect}>
@@ -395,48 +475,89 @@ export function EditorScreen({
         <div className="editor-screen__toolbar-center">
           <div className="editor-screen__count">{t('editor.count', { count: total })}</div>
         </div>
+        <div className="editor-screen__toolbar-right">
+          {/* S9: точка несохранённого; скрыта, когда набор пуст или сохранён. */}
+          {!session.saved && total > 0 && (
+            <span
+              className="editor-screen__unsaved dot dot--warning"
+              role="status"
+              title={t('editor.unsaved')}
+            >
+              <span className="visually-hidden">{t('editor.unsaved')}</span>
+            </span>
+          )}
+          {/* S8: блокировка на время сборки и записи — защита от повторного нажатия. */}
+          <button
+            type="button"
+            className="btn btn--primary btn--small"
+            disabled={saving || total === 0}
+            aria-busy={saving ? true : undefined}
+            onClick={save}
+          >
+            {saving ? t('editor.saving') : t('editor.save')}
+          </button>
+        </div>
       </header>
 
       <div className="editor-screen__body">
-        <aside
-          className="rail"
-          aria-label={t('editor.railLabel')}
-          ref={railRef}
-          onKeyDown={railKeyDown}
-        >
-          {session.passes.map((pass) => (
-            <section key={pass.number} className="pass-group">
-              <header className="pass-group__header">
-                <span className="pass-group__title">
-                  {t('editor.pass.title', { number: pass.number })}
-                </span>
-                <span className="pass-group__meta">{passMeta(t, pass)}</span>
-              </header>
-              <ul
-                className="thumbs"
-                role="listbox"
-                aria-orientation="horizontal"
-                aria-label={t('editor.pass.title', { number: pass.number })}
-              >
-                {pass.pages.map((page) => (
-                  <Thumb
-                    key={page.key}
-                    sessionId={session.id}
-                    page={page}
-                    selected={selected?.key === page.key}
-                    onSelect={setSelectedKey}
+        <aside className="rail" ref={railRef} onKeyDown={railKeyDown}>
+          <div className="rail__scroll">
+            {/* Имя — на самом listbox: скринридер объявляет его, а не контейнер (M1). */}
+            <ul
+              className="thumbs"
+              role="listbox"
+              aria-orientation="horizontal"
+              aria-label={t('editor.railLabel')}
+            >
+              {order.map((entry, index) => (
+                <Thumb
+                  key={entry.key}
+                  sessionId={session.id}
+                  pageKey={entry.key}
+                  side={entry.side}
+                  sheet={entry.sheet}
+                  rotate180={entry.rotate180}
+                  lost={entry.lost}
+                  position={index + 1}
+                  unpaired={
+                    entry.side === 'front' &&
+                    entry.sheet !== null &&
+                    unpairedSheets.has(entry.sheet)
+                  }
+                  selected={selected?.key === entry.key}
+                  onSelect={setSelectedKey}
+                />
+              ))}
+            </ul>
+          </div>
+          {backsPass !== undefined && (
+            <footer className="rail__footer">
+              <label className="toggle-row" title={t('editor.rotateBacksTitle')}>
+                <span className="toggle">
+                  <input
+                    className="toggle__input"
+                    type="checkbox"
+                    checked={backsPass.rotate180}
+                    onChange={setRotate}
                   />
-                ))}
-              </ul>
-            </section>
-          ))}
+                  <span className="toggle__track" aria-hidden="true" />
+                </span>
+                <span className="toggle-row__label">{t('editor.rotateBacks')}</span>
+              </label>
+            </footer>
+          )}
         </aside>
 
         <section className="stage">
           {banner}
           <div className="preview">
             {selected !== undefined && (
-              <Preview key={selected.key} sessionId={session.id} page={selected} />
+              <Preview
+                key={selected.key}
+                sessionId={session.id}
+                entry={selected}
+                position={selectedIndex + 1}
+              />
             )}
           </div>
           <footer className="stage__statusbar">

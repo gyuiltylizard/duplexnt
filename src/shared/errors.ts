@@ -44,6 +44,12 @@ export const ERROR_CODES = [
   'sessionCloseFailed',
   // Страницы с таким ключом нет в текущей сессии или её файл потерян (`reason`).
   'pageUnavailable',
+  // Сборка PDF (M2, U5): страница больше предела пикселей, с которым работает приложение.
+  'pdfPageTooLarge',
+  // Сборка PDF (M2, U5): файл страницы не читается как JPEG-изображение.
+  'pdfPageUnreadable',
+  // Запись PDF в выбранный пользователем файл не удалась (M2, U6); код ФС — в деталях.
+  'saveWriteFailed',
   // Миниатюра не построилась: исходник не JPEG, больше предела пикселей, не декодируется.
   'thumbnailFailed',
 ] as const;
@@ -61,6 +67,8 @@ export const SESSION_CONFLICT_REASONS = [
   'noRunningPass',
   /** «Остановить» уже нажато и ещё не доведено. */
   'stopping',
+  /** Сохранение PDF уже идёт: повторное — после конца записи (M2, U6). */
+  'saving',
   /** Последний проход не прерван: досканировать и принимать нечего. */
   'notInterrupted',
   /** Журнал пересобран по файлам: параметры прохода неизвестны. */
@@ -69,6 +77,12 @@ export const SESSION_CONFLICT_REASONS = [
   'otherScanner',
   /** Сессии нет. */
   'noSession',
+  /** В наборе нет прохода оборотов: поворачивать нечего (M2, KTD-2). */
+  'noBacksPass',
+  /** Обороты уже отсканированы: «обороты не нужны» опоздало, новый проход не нужен (M2). */
+  'backsPresent',
+  /** От оборотов отказались: набор закрыт односторонним, новый проход не начинается (M2). */
+  'backsDeclined',
 ] as const;
 
 export type SessionConflictReason = (typeof SESSION_CONFLICT_REASONS)[number];

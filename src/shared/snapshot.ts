@@ -32,12 +32,65 @@ export interface PassSnapshot {
   readonly paramsKnown: boolean;
   /** Сканер, на котором шёл проход (KTD-27); `null`, когда параметры неизвестны. */
   readonly scanner: ScannerInfo | null;
+  /**
+   * Повернуть страницы прохода на 180° при показе и в PDF (M2, KTD-2). Осмыслен на проходе
+   * оборотов — втором уцелевшем (роль, не чётность номера — KTD-4); исходники не меняются.
+   */
+  readonly rotate180: boolean;
   readonly pages: readonly PageSnapshot[];
 }
 
 export interface SessionSnapshot {
   readonly id: string;
+  /** «Обороты не нужны»: односторонний набор, `flip` больше не показывается (M2, KTD-6). */
+  readonly backsDeclined: boolean;
+  /** Набор сохранён в PDF и с тех пор не менялся (M2, R12): кормит индикацию несохранённого. */
+  readonly saved: boolean;
   readonly passes: readonly PassSnapshot[];
+}
+
+/**
+ * Страница в собранном порядке (M2, KTD-4). Роли «лицо/оборот» выводятся из позиции прохода
+ * среди уцелевших, не из чётности номера.
+ */
+export interface AssembledPage {
+  readonly key: string;
+  readonly side: 'front' | 'back';
+  /** Номер листа — позиция в лицевом проходе; у лишнего оборота листа нет (`null`). */
+  readonly sheet: number | null;
+  /** Повернуть на 180° при показе и в PDF — флаг прохода оборотов (KTD-2). */
+  readonly rotate180: boolean;
+  /** Запись есть, файла нет: место в порядке сохраняется. */
+  readonly lost: boolean;
+}
+
+/** Отчёт сборки — кормит статусную строку `merge`, модалку `mismatch` и пометки в ленте. */
+export interface AssemblyReport {
+  /** Страниц лицевого прохода (= листов). */
+  readonly fronts: number;
+  /** Страниц прохода оборотов; 0 — прохода нет. */
+  readonly backs: number;
+  /** Совпавших пар «лицо + оборот». */
+  readonly pairs: number;
+  /** Номера листов без оборота, по возрастанию: при нехватке оборотов — младшие (KTD-4). */
+  readonly unpairedSheets: readonly number[];
+  /** Лишних оборотов сверх числа лиц: лежат в конце набора, не выбрасываются. */
+  readonly extraBacks: number;
+  /** Состояние прохода оборотов; `null` — прохода нет. «Принят» — сборка по фактическим парам. */
+  readonly backsState: PassState | null;
+  /** «Обороты не нужны» (KTD-6). */
+  readonly backsDeclined: boolean;
+  /** Проходы не сошлись: есть листы без оборота или лишние обороты. Показ модалки — KTD-8. */
+  readonly mismatch: boolean;
+}
+
+/**
+ * Сборка сессии: порядок по умолчанию и отчёт. Производное от снимка сессии — в журнал не
+ * пишется (ADR 0004).
+ */
+export interface SessionAssembly {
+  readonly order: readonly AssembledPage[];
+  readonly report: AssemblyReport;
 }
 
 /** Что сверка при запуске нашла и о чём интерфейс сообщает один раз. */
@@ -108,6 +161,11 @@ export interface PassProgress {
   /** Досканирование прерванного прохода, а не новый проход. */
   readonly resumed: boolean;
   /**
+   * Ожидаемое число страниц (M2, R2): у прохода оборотов — страницы лицевого; `null` — лицевой
+   * проход, общее число неизвестно. Счётчик может перевалить за него и не подрезается.
+   */
+  readonly expected: number | null;
+  /**
    * Параметры, с которыми идёт проход. При досканировании — параметры прохода из журнала:
    * после перезапуска они могут отличаться от текущих параметров настройки.
    */
@@ -134,6 +192,8 @@ export interface Snapshot {
   readonly seq: number;
   readonly scanner: ScannerState;
   readonly session: SessionSnapshot | null;
+  /** Сборка текущей сессии (M2); `null` — сессии нет. */
+  readonly assembly: SessionAssembly | null;
   /** `null` — проход не идёт. */
   readonly pass: PassProgress | null;
   /** Последний проход прерван, и его можно досканировать: параметры известны, сканер тот же. */

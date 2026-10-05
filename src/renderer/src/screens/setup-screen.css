@@ -114,3 +114,62 @@
     var(--font-family-sans);
   color: var(--color-text-subtle);
 }
+
+/* — правая колонка «Как это работает» (M2 U8, тексты макета) — */
+
+.setup-screen__aside {
+  background: var(--color-bg-well);
+  border-left: var(--border-width) solid var(--color-border-subtle);
+  padding: 0 var(--space-15);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-11);
+}
+
+.howto {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.howto__step {
+  display: flex;
+  gap: var(--space-8);
+  padding: var(--space-6) 0;
+  border-bottom: var(--border-width) solid var(--color-border-subtle);
+}
+
+.howto__num {
+  flex: none;
+  width: var(--size-step);
+  height: var(--size-step);
+  border-radius: var(--radius-round);
+  border: var(--border-width) solid var(--color-border-emphasis);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: var(--font-weight-medium) var(--font-size-m) / var(--leading-none) var(--font-family-mono);
+  color: var(--color-text-muted);
+}
+
+.howto__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.howto__title {
+  font: var(--font-weight-medium) var(--font-size-base) / var(--leading-normal)
+    var(--font-family-sans);
+}
+
+.howto__text {
+  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-relaxed)
+    var(--font-family-sans);
+  color: var(--color-text-subtle);
+  text-wrap: pretty;
+}

@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  backsPassOf,
   JOURNAL_VERSION,
   pagesOf,
   parseJournal,
   passStateOf,
+  survivingPassesOf,
   type Journal,
   type JournalPass,
 } from './journal';
@@ -31,6 +33,7 @@ const PASS: JournalPass = {
     { number: 1, state: 'interrupted', pageCount: 17 },
     { number: 3, state: 'completed', pageCount: 13 },
   ],
+  rotate180: false,
 };
 
 const JOURNAL: Journal = {
@@ -39,6 +42,22 @@ const JOURNAL: Journal = {
   nextPass: 2,
   passes: [PASS],
   deletions: ['p01-s02-'],
+  backsDeclined: false,
+  saved: false,
+};
+
+function omit<T extends object, K extends keyof T>(value: T, ...keys: K[]): Omit<T, K> {
+  const dropped: readonly string[] = keys as readonly string[];
+  return Object.fromEntries(
+    Object.entries(value).filter(([key]) => !dropped.includes(key)),
+  ) as Omit<T, K>;
+}
+
+// Журнал версии 1 (M1): тот же состав без полей v2.
+const V1_JOURNAL = {
+  ...omit(JOURNAL, 'backsDeclined', 'saved'),
+  version: 1,
+  passes: [omit(PASS, 'rotate180')],
 };
 
 const encode = (value: unknown): Uint8Array => new TextEncoder().encode(JSON.stringify(value));
@@ -56,9 +75,30 @@ describe('журнал: запись и чтение', () => {
   });
 });
 
+describe('журнал: чтение версии 1 (M2, R13)', () => {
+  it('журнал v1 читается: новые поля получают дефолты, версия в памяти — текущая', () => {
+    expect(parse(V1_JOURNAL)).toEqual({ kind: 'ok', value: JOURNAL });
+  });
+
+  it('неизвестное поле в журнале v1 — несовместимость, не откат к v1-чтению', () => {
+    expect(parse({ ...V1_JOURNAL, rotation: {} })).toEqual({
+      kind: 'incompatible',
+      reason: 'unknownField',
+    });
+  });
+
+  it('битый журнал v1 — нечитаемый, а не тихие дефолты', () => {
+    expect(parse({ ...V1_JOURNAL, nextPass: 'два' })).toEqual({
+      kind: 'unreadable',
+      reason: 'schema',
+    });
+    expect(parse({ ...V1_JOURNAL, nextPass: 1 })).toEqual({ kind: 'unreadable', reason: 'schema' });
+  });
+});
+
 describe('журнал: версия (KTD-35)', () => {
   it('маркер версии новее понятного — несовместимость, что бы ни лежало рядом', () => {
-    expect(parse({ ...JOURNAL, version: 2 })).toEqual({
+    expect(parse({ ...JOURNAL, version: 3 })).toEqual({
       kind: 'incompatible',
       reason: 'newerVersion',
     });
@@ -83,6 +123,13 @@ describe('журнал: версия (KTD-35)', () => {
 
   it('неизвестное поле вместе с ошибкой типа в другом поле — всё равно несовместимость', () => {
     expect(parse({ ...JOURNAL, nextPass: 'два', rotation: {} })).toEqual({
+      kind: 'incompatible',
+      reason: 'unknownField',
+    });
+  });
+
+  it('в журнале нет выводимого: порядок сборки схемой не принимается', () => {
+    expect(parse({ ...JOURNAL, assemblyOrder: ['p01-s01-0001'] })).toEqual({
       kind: 'incompatible',
       reason: 'unknownField',
     });
@@ -156,6 +203,40 @@ describe('журнал: выводимое', () => {
     expect(pages[16]).toMatchObject({ key: 'p01-s01-0017', number: 17 });
     expect(pages[17]).toMatchObject({ key: 'p01-s03-0001', number: 18 });
     expect(pages[29]).toMatchObject({ key: 'p01-s03-0013', number: 30 });
+  });
+
+  it('роль прохода — позиция среди уцелевших, не чётность номера (M2, KTD-4)', () => {
+    const passAt = (number: number, pageCount: number): JournalPass => ({
+      ...PASS,
+      number,
+      segments: [{ number: 1, state: 'completed', pageCount }],
+    });
+    // Проход 2 остановлен и исчез; повторный запуск оборотов получил номер 3.
+    const journal: Journal = {
+      ...JOURNAL,
+      nextPass: 4,
+      passes: [passAt(1, 3), passAt(3, 3)],
+    };
+
+    expect(survivingPassesOf(journal).map((pass) => pass.number)).toEqual([1, 3]);
+    expect(backsPassOf(journal)?.number).toBe(3);
+  });
+
+  it('пустой проход не считается уцелевшим и роли не занимает', () => {
+    const empty: JournalPass = {
+      ...PASS,
+      number: 1,
+      segments: [{ number: 1, state: 'interrupted', pageCount: 0 }],
+    };
+    const fronts: JournalPass = {
+      ...PASS,
+      number: 2,
+      segments: [{ number: 1, state: 'completed', pageCount: 2 }],
+    };
+    const journal: Journal = { ...JOURNAL, nextPass: 3, passes: [empty, fronts] };
+
+    expect(survivingPassesOf(journal).map((pass) => pass.number)).toEqual([2]);
+    expect(backsPassOf(journal)).toBeNull();
   });
 });
 

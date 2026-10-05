@@ -24,6 +24,8 @@ export {
   type PageImageView,
   type ProbeRequest,
   type ProbeResult,
+  type SavePdfReport,
+  type SetRotateBacksRequest,
   type Unsubscribe,
 } from './bridge';
 
@@ -41,6 +43,8 @@ export {
 } from './scan-params';
 
 export type {
+  AssembledPage,
+  AssemblyReport,
   PageSnapshot,
   PassProgress,
   PassReport,
@@ -48,6 +52,7 @@ export type {
   PassState,
   ScannerInfo,
   ScannerState,
+  SessionAssembly,
   SessionSnapshot,
   Snapshot,
   StartupNotice,

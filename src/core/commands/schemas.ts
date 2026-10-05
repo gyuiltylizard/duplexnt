@@ -6,6 +6,7 @@ import {
   type ConnectScannerRequest,
   type ProbeRequest,
   type Result,
+  type SetRotateBacksRequest,
 } from '@shared';
 import { DEVICE_PATH_MAX_LENGTH } from '../escl/device-path';
 import { scanParamsSchema } from '../escl/scan-settings';
@@ -40,6 +41,10 @@ export const connectScannerRequestSchema = z.discriminatedUnion('kind', [
     id: z.string().regex(DISCOVERED_ID),
   }),
 ]) satisfies z.ZodType<ConnectScannerRequest>;
+
+export const setRotateBacksRequestSchema = z.strictObject({
+  rotate: z.boolean(),
+}) satisfies z.ZodType<SetRotateBacksRequest>;
 
 export { scanParamsSchema };
 

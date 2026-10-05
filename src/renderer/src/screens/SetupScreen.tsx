@@ -9,14 +9,16 @@ import {
   type ScannerInfo,
   type Snapshot,
 } from '@shared';
+import { LaunchFailureNotice } from '../components/LaunchFailureNotice';
 import { Segments } from '../components/Segments';
-import { errorText, errorTextInline } from '../state/error-text';
+import { errorText } from '../state/error-text';
 import { addressOf } from '../state/scanner-address';
 import './setup-screen.css';
 
-// Экран `setup` (план M1, U22; UI_SPEC раздел 2; handoff U19, S1–S6): одна колонка, строка
-// устройства с состояниями запомненного сканера, параметры из capabilities, запуск прохода.
-// Строки «Пустые обороты» и «Авто» отсутствуют, тексты — про один проход (KTD-25).
+// Экран `setup` (план M1, U22; UI_SPEC раздел 2; handoff U19, S1–S6): строка устройства с
+// состояниями запомненного сканера, параметры из capabilities, запуск прохода. С M2 вернулись
+// полные тексты макета (план M2, U8): сценарий двух проходов и колонка «Как это работает».
+// Строки «Пустые обороты» и «Авто» по-прежнему отсутствуют (R14).
 
 export interface SetupScreenProps {
   readonly snapshot: Snapshot;
@@ -43,6 +45,9 @@ const singleChoice = (params: ScanParams): KnownParams => ({
 });
 
 const FALLBACK = singleChoice(DEFAULT_SCAN_PARAMS);
+
+/** Шаги колонки «Как это работает» — тексты макета, Copy без «пачки» (handoff M2). */
+const HOW_STEPS = ['step1', 'step2', 'step3', 'step4'] as const;
 
 export function SetupScreen({
   snapshot,
@@ -314,33 +319,41 @@ export function SetupScreen({
         </div>
 
         {launchFailure !== null && (
-          <div
-            className={
-              launchFailure.code === 'scanNoPaper'
-                ? 'notice notice--warning'
-                : 'notice notice--danger'
+          <LaunchFailureNotice
+            error={launchFailure}
+            action={
+              launchFailure.code === 'scannerCertificateChanged' && scanner.kind !== 'none' ? (
+                <button
+                  type="button"
+                  className="btn btn--tinted"
+                  onClick={() => {
+                    onOpenDevice(addressOf(scanner.scanner));
+                  }}
+                >
+                  {t('setup.device.reconnect')}
+                </button>
+              ) : undefined
             }
-            role="alert"
-          >
-            <p className="notice__text">
-              {launchFailure.code === 'scanNoPaper'
-                ? errorText(t, launchFailure)
-                : t('setup.launch.failed', { error: errorTextInline(t, launchFailure) })}
-            </p>
-            {launchFailure.code === 'scannerCertificateChanged' && scanner.kind !== 'none' && (
-              <button
-                type="button"
-                className="btn btn--tinted"
-                onClick={() => {
-                  onOpenDevice(addressOf(scanner.scanner));
-                }}
-              >
-                {t('setup.device.reconnect')}
-              </button>
-            )}
-          </div>
+          />
         )}
       </section>
+
+      <aside className="setup-screen__aside" aria-label={t('setup.how.kicker')}>
+        <div className="kicker">{t('setup.how.kicker')}</div>
+        <ol className="howto">
+          {HOW_STEPS.map((step, index) => (
+            <li key={step} className="howto__step">
+              <span className="howto__num" aria-hidden="true">
+                {index + 1}
+              </span>
+              <span className="howto__body">
+                <span className="howto__title">{t(`setup.how.${step}.title`)}</span>
+                <span className="howto__text">{t(`setup.how.${step}.text`)}</span>
+              </span>
+            </li>
+          ))}
+        </ol>
+      </aside>
     </main>
   );
 }

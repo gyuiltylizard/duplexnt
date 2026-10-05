@@ -22,6 +22,7 @@ import {
   noRequestSchema,
   parseInput,
   scanParamsSchema,
+  setRotateBacksRequestSchema,
 } from './schemas';
 
 // Обработчики команд моста (ADR 0005; план M1, U18, KTD-39): вход приходит непроверенным и
@@ -36,6 +37,11 @@ export interface CommandContext {
   readonly service: PassService;
   /** Открывает каталог данных в проводнике; какой — знает main (KTD-39). */
   readonly openDataFolder: () => Promise<Result<void>>;
+  /**
+   * Диалог «Сохранить как» (M2, KTD-3): путь выбранного файла, `null` — пользователь отказался.
+   * Имя по умолчанию и подтверждение перезаписи — обязанность main и диалога ОС.
+   */
+  readonly askSavePdfPath: () => Promise<string | null>;
   /** Список найденных устройств изменился; `seq` — номер изменения. */
   readonly onDiscoveryChanged: (seq: number) => void;
   /** Подмена для тестов. */
@@ -197,6 +203,12 @@ export function createCommands(context: CommandContext): Commands {
       startPass: withoutRequest(() => service.startPass()),
       stopPass: withoutRequest(() => done(() => service.stopPass())),
       acceptPass: withoutRequest(() => done(() => service.acceptPass())),
+      declineBacks: withoutRequest(() => done(() => service.declineBacks())),
+      setRotateBacks: async (rawRequest) => {
+        const request = parseInput(setRotateBacksRequestSchema, rawRequest);
+        return request.ok ? done(() => service.setRotateBacks(request.value.rotate)) : request;
+      },
+      savePdf: withoutRequest(() => service.savePdf(context.askSavePdfPath)),
       closeSession: withoutRequest(() => done(() => service.closeSession())),
 
       openDataFolder: withoutRequest(() => done(() => context.openDataFolder())),

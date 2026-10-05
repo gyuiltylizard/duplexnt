@@ -1,3 +1,4 @@
+import { basename, dirname } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import {
   fail,
@@ -7,6 +8,7 @@ import {
   type PassProgress,
   type PassReport,
   type Result,
+  type SavePdfReport,
   type ScanParams,
   type SessionConflictReason,
   type ScannerState,
@@ -26,6 +28,8 @@ import {
 import { buildScanSettings, DEFAULT_SCAN_PARAMS, resolveScanParams } from '../escl/scan-settings';
 import { parseStatus } from '../escl/status';
 import { createTransport, type ScannerTransport } from '../escl/transport';
+import { assemblePdf, type PdfPageInput } from '../pdf/assemble';
+import { writeFileAtomic } from '../storage/atomic-file';
 import type { PassOrigin } from '../storage/journal';
 import { openSessionStore } from '../storage/reconcile';
 import type { PageInfo, SessionStore, SessionStoreOptions } from '../storage/session-store';
@@ -40,9 +44,10 @@ import {
   storedScannerOf,
   type StoredScanner,
 } from '../storage/stored-scanner';
-import { storageFailure } from '../storage/storage-fs';
+import { fsErrorCode, ioOf, storageFailure } from '../storage/storage-fs';
 import { pagePixelLimit } from '../storage/thumbnails';
 import { openUnclosedJobs, type UnclosedJobs } from '../storage/unclosed-jobs';
+import { assembleSession, survivingOf } from './assembly';
 
 // Служба прохода (план M1, U17): связывает клиент сканера, хранилище сессии, настройки и
 // незакрытые задания в один сценарий и выдаёт снимок, из которого интерфейс выводит экран
@@ -59,7 +64,10 @@ import { openUnclosedJobs, type UnclosedJobs } from '../storage/unclosed-jobs';
 // (R9) → записать сегмент «идёт» в журнал (KTD-17) → `POST`. Исход сегмента пишется до `DELETE`:
 // обработчик `onEnd` задания переводит его в хранилище, и только потом задание закрывается.
 //
-// В M1 проход один: новый проход начинается только без сессии; при прерванном — досканирование.
+// Новый проход (M2, план U3): без сессии — лицевые; поверх завершённого или принятого
+// единственного уцелевшего прохода — обороты (роль — позиция среди уцелевших, не чётность
+// номера: после «Остановить» повторный запуск получает номер 3 — KTD-4). Прерванный проход —
+// только досканирование; при двух уцелевших или отказе от оборотов новый проход не начинается.
 
 export interface PassServiceOptions extends SessionStoreOptions {
   /** Транспорт и его пределы — подмена для тестов, как у подключения. */
@@ -86,6 +94,16 @@ export interface PassService {
   stopPass(): Promise<Result<void>>;
   /** «Оставить как есть». */
   acceptPass(): Promise<Result<void>>;
+  /** «Обороты не нужны» (M2, KTD-6): durable-отметка, идемпотентно. */
+  declineBacks(): Promise<Result<void>>;
+  /** Тумблер «повернуть обороты на 180°» (M2, KTD-2): флаг прохода в роли оборотов. */
+  setRotateBacks(rotate: boolean): Promise<Result<void>>;
+  /**
+   * «Сохранить документ» (M2, U6): путь спрашивает `askPath` (диалог main, `null` — отказ),
+   * ядро читает страницы в собранном порядке, собирает PDF и пишет атомарно рядом с целью;
+   * после успешного переименования — отметка о сохранении в журнале.
+   */
+  savePdf(askPath: () => Promise<string | null>): Promise<Result<SavePdfReport>>;
   /** «Новая пачка». */
   closeSession(): Promise<Result<void>>;
   /**
@@ -122,6 +140,8 @@ interface Run {
   readonly resumed: boolean;
   /** Параметры прохода — у досканирования из журнала, не из настройки (KTD-27). */
   readonly params: ScanParams;
+  /** Ожидаемое число страниц — у прохода оборотов страницы лицевого (M2, R2). */
+  readonly expected: number | null;
   phase: PassProgress['phase'];
   pages: number;
   /** Чем оборван: «Остановить» удаляет сегмент, закрытие окна оставляет его прерванным. */
@@ -167,6 +187,8 @@ export function createPassService(
 
   let scanner: ScannerSlot = { kind: 'none' };
   let run: Run | null = null;
+  /** Сохранение PDF идёт: второй вызов — конфликт, а не два диалога и две записи в один путь. */
+  let saving = false;
   let seq = 0;
 
   const notify = (): void => {
@@ -229,10 +251,17 @@ export function createPassService(
       seq,
       scanner: scannerState(),
       session,
+      assembly: session === null ? null : assembleSession(session),
       pass:
         run === null
           ? null
-          : { phase: run.phase, resumed: run.resumed, params: run.params, pages: run.pages },
+          : {
+              phase: run.phase,
+              resumed: run.resumed,
+              expected: run.expected,
+              params: run.params,
+              pages: run.pages,
+            },
       canResume: run === null && scanner.kind === 'ready' && resumeTarget().ok,
       canAccept: run === null && last?.state === 'interrupted',
       storage: { incompatible: store.incompatible, unsaved: store.unsaved() },
@@ -424,24 +453,55 @@ export function createPassService(
     const { connected, params } = scanner;
     const stored = storedScannerOf(connected);
 
-    // Сессия есть — только досканирование: новый проход в M1 начинается без сессии.
+    // Поверх сессии: прерванный проход — только досканирование; завершённый или принятый
+    // единственный уцелевший — новый проход оборотов (M2, KTD-4). Роль считается по позиции
+    // среди уцелевших (непустых) проходов, не по чётности номера.
+    const freshOrigin: PassOrigin = {
+      scanner: stored,
+      params,
+      pixelLimit: pagePixelLimit(connected.capabilities.adf),
+    };
     let origin: PassOrigin;
     let resumed = false;
-    if (store.snapshot() === null) {
-      origin = { scanner: stored, params, pixelLimit: pagePixelLimit(connected.capabilities.adf) };
+    let expected: number | null = null;
+    const session = store.snapshot();
+    if (session === null) {
+      origin = freshOrigin;
     } else {
+      const surviving = survivingOf(session);
       const target = resumeTarget();
-      if (!target.ok) {
+      if (target.ok) {
+        origin = target.value;
+        resumed = true;
+        // Досканируется последний проход; в роли оборотов его счётчик получает «из M» (R2).
+        const resuming = session.passes.at(-1);
+        expected =
+          surviving[1] !== undefined && surviving[1].number === resuming?.number
+            ? (surviving[0]?.pages.length ?? null)
+            : null;
+      } else if (
+        target.error.code === 'sessionConflict' &&
+        target.error.details?.reason === 'notInterrupted'
+      ) {
+        // Последний проход завершён или принят — очередь оборотов.
+        if (session.backsDeclined) {
+          return conflict('backsDeclined');
+        }
+        if (surviving.length > 1) {
+          return conflict('backsPresent');
+        }
+        origin = freshOrigin;
+        expected = surviving[0]?.pages.length ?? null;
+      } else {
         return target;
       }
-      origin = target.value;
-      resumed = true;
     }
 
     const current: Run = {
       controller: new AbortController(),
       resumed,
       params: origin.params,
+      expected,
       phase: 'starting',
       pages: 0,
       intent: null,
@@ -558,6 +618,104 @@ export function createPassService(
       const accepted = await store.acceptPass();
       notify();
       return accepted;
+    },
+
+    async declineBacks() {
+      if (run !== null) {
+        return conflict('passRunning');
+      }
+      const declined = await store.declineBacks();
+      notify();
+      return declined;
+    },
+
+    async setRotateBacks(rotate) {
+      const set = await store.setRotateBacks(rotate);
+      notify();
+      return set;
+    },
+
+    async savePdf(askPath) {
+      // Одно сохранение за раз: двойной клик не должен открыть два диалога и две записи в
+      // один путь — защита живёт в ядре, а не только в блокировке кнопки (U9).
+      if (saving) {
+        return conflict('saving');
+      }
+      saving = true;
+      try {
+        // Проверка вынесена в функцию: `run` мутирует конкурентно, и после `await` её нужно
+        // повторить — прямое сравнение TS сузил бы до «всегда null».
+        const refused = (): Result<never> | null => {
+          if (run !== null) {
+            return conflict('passRunning');
+          }
+          if (store.incompatible) {
+            return fail('storageIncompatible');
+          }
+          return store.snapshot() === null ? conflict('noSession') : null;
+        };
+        const early = refused();
+        if (early !== null) {
+          return early;
+        }
+
+        // Путь — первым (KTD-3): отказ в диалоге не тратит сборку и ничего не пишет.
+        const path = await askPath();
+        if (path === null) {
+          return ok({ canceled: true } as const);
+        }
+        // Диалог мог висеть сколько угодно: состояние проверяется заново, иначе PDF собрался бы
+        // по устаревшему снимку, а отметка о сохранении пометила бы уже изменившийся набор.
+        const stale = refused();
+        if (stale !== null) {
+          return stale;
+        }
+        const session = store.snapshot();
+        if (session === null) {
+          return conflict('noSession');
+        }
+        // Ревизия журнала на момент снимка: правка во время сборки и записи (новая страница,
+        // тумблер поворота) снимает отметку, и ставить поверх неё «сохранено» нельзя.
+        const revision = store.revision();
+
+        // Страницы — в собранном порядке; потерянная страница — отказ, а не молча короче (R11).
+        const inputs: PdfPageInput[] = [];
+        for (const page of assembleSession(session).order) {
+          const info = store.pageInfo(page.key);
+          const bytes = await store.readPage(page.key);
+          if (!bytes.ok) {
+            return bytes;
+          }
+          inputs.push({
+            bytes: bytes.value,
+            rotate180: page.rotate180,
+            dpi: info?.dpi ?? null,
+            pixelLimit: info?.pixelLimit ?? null,
+          });
+        }
+        const pdf = await assemblePdf(inputs);
+        if (!pdf.ok) {
+          return pdf;
+        }
+
+        // Атомарно рядом с целью: сбой на любом шаге не трогает прежний файл (R11).
+        try {
+          await writeFileAtomic(path, pdf.value, ioOf(options));
+        } catch (error) {
+          // Перевод кодов — существующим помощником: он различает и ENOSPC, и EDQUOT.
+          const failure = storageFailure(error);
+          return failure.code === 'storageFull'
+            ? fail('storageFull')
+            : fail('saveWriteFailed', { reason: fsErrorCode(error) });
+        }
+        // Отметка — только после успешного переименования и только на неизменившийся набор;
+        // сессия не удаляется (R12). Файл при пропущенной отметке всё равно записан — успех.
+        await store.markSaved(revision);
+        notify();
+        return ok({ canceled: false, fileName: basename(path), directory: dirname(path) });
+      } finally {
+        saving = false;
+      }
     },
 
     async closeSession() {

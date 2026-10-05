@@ -1,4 +1,4 @@
-import {
+﻿import {
   fail,
   ok,
   type Api,
@@ -11,12 +11,14 @@ import { StrictMode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import './i18n';
 import { App } from './App';
+import { assemblyOf } from './state/assembly-fixture';
 
 function makeSnapshot(overrides: Partial<Snapshot>): Snapshot {
-  return {
+  const snapshot: Snapshot = {
     seq: 1,
     scanner: { kind: 'none' },
     session: null,
+    assembly: null,
     pass: null,
     canResume: false,
     canAccept: false,
@@ -24,6 +26,10 @@ function makeSnapshot(overrides: Partial<Snapshot>): Snapshot {
     notices: [],
     ...overrides,
   };
+  if (snapshot.session !== null && snapshot.assembly === null) {
+    return { ...snapshot, assembly: assemblyOf(snapshot.session) };
+  }
+  return snapshot;
 }
 
 const PARAMS = { colorMode: 'Grayscale8', resolution: 300, paperSize: 'A4' } as const;
@@ -85,18 +91,27 @@ describe('каркас приложения', () => {
     render(<App />);
 
     expect((await screen.findByRole('heading', { level: 1 })).textContent).toBe(
-      'Сканируем листы из автоподатчика',
+      'Сканируем обе стороны в два прохода',
     );
   });
 
   it('идущий проход — экран scan со счётчиком принятых страниц', async () => {
     stubApi(
       makeSnapshot({
-        pass: { phase: 'scanning', resumed: false, params: PARAMS, pages: 7 },
+        pass: { phase: 'scanning', resumed: false, expected: null, params: PARAMS, pages: 7 },
         session: {
           id: 'session.x',
+          backsDeclined: false,
+          saved: false,
           passes: [
-            { number: 1, state: 'running', paramsKnown: true, scanner: null, pages: pages(7) },
+            {
+              number: 1,
+              state: 'running',
+              paramsKnown: true,
+              scanner: null,
+              rotate180: false,
+              pages: pages(7),
+            },
           ],
         },
       }),
@@ -104,7 +119,51 @@ describe('каркас приложения', () => {
     render(<App />);
 
     expect((await screen.findByRole('status')).textContent).toBe('Отсканировано 7');
-    expect(screen.getByText('ПРОХОД 1')).toBeDefined();
+    expect(screen.getByText('ПРОХОД 1 · ЛИЦЕВЫЕ СТОРОНЫ')).toBeDefined();
+  });
+
+  it('завершённый лицевой проход без оборотов — flip с запуском второго прохода', async () => {
+    const startPass = vi.fn(() => new Promise(() => undefined));
+    stubApi(
+      makeSnapshot({
+        session: {
+          id: 'session.x',
+          backsDeclined: false,
+          saved: false,
+          passes: [
+            {
+              number: 1,
+              state: 'completed',
+              paramsKnown: true,
+              scanner: null,
+              rotate180: false,
+              pages: pages(12),
+            },
+          ],
+        },
+        assembly: {
+          order: [],
+          report: {
+            fronts: 12,
+            backs: 0,
+            pairs: 0,
+            unpairedSheets: [],
+            extraBacks: 0,
+            backsState: null,
+            backsDeclined: false,
+            mismatch: false,
+          },
+        },
+      }),
+      { startPass },
+    );
+    render(<App />);
+
+    expect((await screen.findByRole('heading', { level: 1 })).textContent).toBe(
+      'Разверните листы на 180° — все разом',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Листы в лотке — сканировать обороты' }));
+    expect(startPass).toHaveBeenCalledTimes(1);
   });
 
   it('сессия со страницами без прохода — editor со счётчиком страниц', async () => {
@@ -112,8 +171,17 @@ describe('каркас приложения', () => {
       makeSnapshot({
         session: {
           id: 'session.x',
+          backsDeclined: false,
+          saved: false,
           passes: [
-            { number: 1, state: 'interrupted', paramsKnown: true, scanner: null, pages: pages(5) },
+            {
+              number: 1,
+              state: 'interrupted',
+              paramsKnown: true,
+              scanner: null,
+              rotate180: false,
+              pages: pages(5),
+            },
           ],
         },
       }),
@@ -130,7 +198,7 @@ describe('каркас приложения', () => {
     expect((await screen.findByRole('heading', { level: 1 })).textContent).toBe(
       'Эти сканы сохранила более новая версия приложения',
     );
-    expect(screen.queryByText('Сканируем листы из автоподатчика')).toBeNull();
+    expect(screen.queryByText('Сканируем обе стороны в два прохода')).toBeNull();
   });
 
   it('StrictMode (двойное монтирование dev) не оставляет окно пустым', async () => {
@@ -142,7 +210,7 @@ describe('каркас приложения', () => {
     );
 
     expect((await screen.findByRole('heading', { level: 1 })).textContent).toBe(
-      'Сканируем листы из автоподатчика',
+      'Сканируем обе стороны в два прохода',
     );
   });
 
@@ -178,7 +246,7 @@ describe('каркас приложения', () => {
     });
     render(<App />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Сканировать листы' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Сканировать лицевые стороны' }));
     expect((await screen.findByRole('alert')).textContent).toContain('В лотке нет бумаги');
   });
 
@@ -190,10 +258,10 @@ describe('каркас приложения', () => {
     stubApi(makeSnapshot({ scanner: READY }), { startPass });
     render(<App />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Сканировать листы' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Сканировать лицевые стороны' }));
     expect((await screen.findByRole('alert')).textContent).toContain('В лотке нет бумаги');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Сканировать листы' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Сканировать лицевые стороны' }));
     expect(startPass).toHaveBeenCalledTimes(2);
     expect(screen.queryByRole('alert')).toBeNull();
   });
@@ -201,11 +269,20 @@ describe('каркас приложения', () => {
   it('S15: отказ закрытия сегмента после «Остановить» — тостом', async () => {
     stubApi(
       makeSnapshot({
-        pass: { phase: 'scanning', resumed: false, params: PARAMS, pages: 2 },
+        pass: { phase: 'scanning', resumed: false, expected: null, params: PARAMS, pages: 2 },
         session: {
           id: 'session.x',
+          backsDeclined: false,
+          saved: false,
           passes: [
-            { number: 1, state: 'running', paramsKnown: true, scanner: null, pages: pages(2) },
+            {
+              number: 1,
+              state: 'running',
+              paramsKnown: true,
+              scanner: null,
+              rotate180: false,
+              pages: pages(2),
+            },
           ],
         },
       }),
@@ -222,11 +299,20 @@ describe('каркас приложения', () => {
   it('другой отказ «Остановить» тоста не даёт', async () => {
     stubApi(
       makeSnapshot({
-        pass: { phase: 'scanning', resumed: false, params: PARAMS, pages: 2 },
+        pass: { phase: 'scanning', resumed: false, expected: null, params: PARAMS, pages: 2 },
         session: {
           id: 'session.x',
+          backsDeclined: false,
+          saved: false,
           passes: [
-            { number: 1, state: 'running', paramsKnown: true, scanner: null, pages: pages(2) },
+            {
+              number: 1,
+              state: 'running',
+              paramsKnown: true,
+              scanner: null,
+              rotate180: false,
+              pages: pages(2),
+            },
           ],
         },
       }),
@@ -251,12 +337,15 @@ describe('каркас приложения', () => {
         notices: ['pagesLost'],
         session: {
           id: 'session.x',
+          backsDeclined: false,
+          saved: false,
           passes: [
             {
               number: 1,
               state: 'completed',
               paramsKnown: true,
               scanner: null,
+              rotate180: false,
               pages: [
                 { key: 'p01-s01-0001', number: 1, lost: false },
                 { key: 'p01-s01-0002', number: 2, lost: true },
@@ -278,8 +367,17 @@ describe('каркас приложения', () => {
       canAccept: true,
       session: {
         id: 'session.x',
+        backsDeclined: false,
+        saved: false,
         passes: [
-          { number: 1, state: 'interrupted', paramsKnown: true, scanner: null, pages: pages(3) },
+          {
+            number: 1,
+            state: 'interrupted',
+            paramsKnown: true,
+            scanner: null,
+            rotate180: false,
+            pages: pages(3),
+          },
         ],
       },
     });
@@ -310,7 +408,7 @@ describe('каркас приложения', () => {
     });
 
     expect((await screen.findByRole('heading', { level: 1 })).textContent).toBe(
-      'Сканируем листы из автоподатчика',
+      'Сканируем обе стороны в два прохода',
     );
     expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.queryByText(/В лотке нет бумаги/)).toBeNull();
@@ -322,7 +420,7 @@ describe('каркас приложения', () => {
     });
     render(<App />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Сканировать листы' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Сканировать лицевые стороны' }));
     const reopen = await screen.findByRole('button', { name: 'Подключить заново' });
     reopen.focus();
     fireEvent.click(reopen);
@@ -339,7 +437,7 @@ describe('каркас приложения', () => {
     stubApi(makeSnapshot({ scanner: READY }), { startPass });
     render(<App />);
 
-    const start = await screen.findByRole('button', { name: 'Сканировать листы' });
+    const start = await screen.findByRole('button', { name: 'Сканировать лицевые стороны' });
     fireEvent.click(start);
     fireEvent.click(start);
 
@@ -354,8 +452,17 @@ describe('каркас приложения', () => {
         canAccept: true,
         session: {
           id: 'session.x',
+          backsDeclined: false,
+          saved: false,
           passes: [
-            { number: 1, state: 'interrupted', paramsKnown: true, scanner: null, pages: pages(3) },
+            {
+              number: 1,
+              state: 'interrupted',
+              paramsKnown: true,
+              scanner: null,
+              rotate180: false,
+              pages: pages(3),
+            },
           ],
         },
       }),
@@ -372,6 +479,307 @@ describe('каркас приложения', () => {
     expect(screen.queryByText(/Досканировать не удалось/)).toBeNull();
   });
 
+  it('KTD-5: пауза merge после прохода оборотов переживает StrictMode и уходит сама', async () => {
+    const scanning = makeSnapshot({
+      pass: { phase: 'scanning', resumed: false, expected: 3, params: PARAMS, pages: 3 },
+      session: {
+        id: 'session.x',
+        backsDeclined: false,
+        saved: false,
+        passes: [
+          {
+            number: 1,
+            state: 'completed',
+            paramsKnown: true,
+            scanner: null,
+            rotate180: false,
+            pages: pages(3),
+          },
+          {
+            number: 2,
+            state: 'running',
+            paramsKnown: true,
+            scanner: null,
+            rotate180: false,
+            pages: pages(3, 1).map((page) => ({ ...page, key: `p02-s01-000${page.number}` })),
+          },
+        ],
+      },
+    });
+    const done = makeSnapshot({
+      seq: 2,
+      session: {
+        id: 'session.x',
+        backsDeclined: false,
+        saved: false,
+        passes: [
+          {
+            number: 1,
+            state: 'completed',
+            paramsKnown: true,
+            scanner: null,
+            rotate180: false,
+            pages: pages(3),
+          },
+          {
+            number: 2,
+            state: 'completed',
+            paramsKnown: true,
+            scanner: null,
+            rotate180: false,
+            pages: pages(3, 1).map((page) => ({ ...page, key: `p02-s01-000${page.number}` })),
+          },
+        ],
+      },
+    });
+    let current = scanning;
+    let notify: (payload: { seq: number }) => void = () => undefined;
+    stubApi(scanning, {
+      getSnapshot: vi.fn(() => Promise.resolve(ok(current))),
+      onSnapshotChanged: vi.fn((listener: (payload: { seq: number }) => void) => {
+        notify = listener;
+        return () => undefined;
+      }),
+    });
+    render(
+      <StrictMode>
+        <App />
+      </StrictMode>,
+    );
+    expect((await screen.findByRole('status')).textContent).toBe('Отсканировано 3 из 3');
+
+    vi.useFakeTimers();
+    try {
+      current = done;
+      await act(async () => {
+        notify({ seq: 2 });
+        // Снимок приходит микротаском — дождаться его, не трогая фейковые таймеры.
+        await Promise.resolve();
+      });
+      // Пауза `merge`: без органов управления, статус — фактический результат.
+      expect(screen.getByText('Сопоставляем проходы')).toBeDefined();
+      expect(screen.getByText('совпало пар: 3')).toBeDefined();
+
+      act(() => {
+        vi.advanceTimersByTime(1599);
+      });
+      expect(screen.getByText('Сопоставляем проходы')).toBeDefined();
+      act(() => {
+        vi.advanceTimersByTime(2);
+      });
+      expect(screen.queryByText('Сопоставляем проходы')).toBeNull();
+      expect(screen.getByText('6 страниц')).toBeDefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('KTD-5: «Обороты не нужны» — пауза merge 1,2 с, затем editor только с лицевыми', async () => {
+    const flip = makeSnapshot({
+      session: {
+        id: 'session.x',
+        backsDeclined: false,
+        saved: false,
+        passes: [
+          {
+            number: 1,
+            state: 'completed',
+            paramsKnown: true,
+            scanner: null,
+            rotate180: false,
+            pages: pages(3),
+          },
+        ],
+      },
+    });
+    const declined = makeSnapshot({
+      seq: 2,
+      session: {
+        id: 'session.x',
+        backsDeclined: true,
+        saved: false,
+        passes: flip.session?.passes ?? [],
+      },
+    });
+    let current = flip;
+    let notify: (payload: { seq: number }) => void = () => undefined;
+    stubApi(flip, {
+      getSnapshot: vi.fn(() => Promise.resolve(ok(current))),
+      onSnapshotChanged: vi.fn((listener: (payload: { seq: number }) => void) => {
+        notify = listener;
+        return () => undefined;
+      }),
+      declineBacks: vi.fn(() => Promise.resolve(ok(undefined))),
+    });
+    render(<App />);
+    await screen.findByRole('button', { name: 'Обороты не нужны' });
+
+    vi.useFakeTimers();
+    try {
+      current = declined;
+      await act(async () => {
+        notify({ seq: 2 });
+        // Снимок приходит микротаском — дождаться его, не трогая фейковые таймеры.
+        await Promise.resolve();
+      });
+      expect(screen.getByText('Сопоставляем проходы')).toBeDefined();
+      expect(screen.getByText('обороты не нужны · страниц: 3')).toBeDefined();
+
+      act(() => {
+        vi.advanceTimersByTime(1201);
+      });
+      expect(screen.queryByText('Сопоставляем проходы')).toBeNull();
+      expect(screen.getByText('3 страницы')).toBeDefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('KTD-5: пауза merge не теряется, когда кадр scan пропущен (снимки пришли пачкой)', async () => {
+    const flip = makeSnapshot({
+      session: {
+        id: 'session.x',
+        backsDeclined: false,
+        saved: false,
+        passes: [
+          {
+            number: 1,
+            state: 'completed',
+            paramsKnown: true,
+            scanner: null,
+            rotate180: false,
+            pages: pages(3),
+          },
+        ],
+      },
+    });
+    const done = makeSnapshot({
+      seq: 2,
+      session: {
+        id: 'session.x',
+        backsDeclined: false,
+        saved: false,
+        passes: [
+          ...(flip.session?.passes ?? []),
+          {
+            number: 2,
+            state: 'completed',
+            paramsKnown: true,
+            scanner: null,
+            rotate180: false,
+            pages: pages(3, 1).map((page) => ({ ...page, key: `p02-s01-000${page.number}` })),
+          },
+        ],
+      },
+    });
+    let current = flip;
+    let notify: (payload: { seq: number }) => void = () => undefined;
+    stubApi(flip, {
+      getSnapshot: vi.fn(() => Promise.resolve(ok(current))),
+      onSnapshotChanged: vi.fn((listener: (payload: { seq: number }) => void) => {
+        notify = listener;
+        return () => undefined;
+      }),
+    });
+    render(<App />);
+    await screen.findByRole('button', { name: 'Листы в лотке — сканировать обороты' });
+
+    vi.useFakeTimers();
+    try {
+      // Проход оборотов прошёл так быстро, что интерфейс не увидел ни одного кадра `scan`.
+      current = done;
+      await act(async () => {
+        notify({ seq: 2 });
+        await Promise.resolve();
+      });
+      expect(screen.getByText('Сопоставляем проходы')).toBeDefined();
+
+      act(() => {
+        vi.advanceTimersByTime(1601);
+      });
+      expect(screen.queryByText('Сопоставляем проходы')).toBeNull();
+      expect(screen.getByText('6 страниц')).toBeDefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('KTD-8/AE13: несовпадение показывается при входе в editor после перезапуска; закрытие подтверждает', async () => {
+    // Свежий процесс открывается сразу в editor (паузы merge нет) — модалка не проглочена.
+    stubApi(
+      makeSnapshot({
+        session: {
+          id: 'session.x',
+          backsDeclined: false,
+          saved: false,
+          passes: [
+            {
+              number: 1,
+              state: 'completed',
+              paramsKnown: true,
+              scanner: null,
+              rotate180: false,
+              pages: pages(3),
+            },
+            {
+              number: 2,
+              state: 'completed',
+              paramsKnown: true,
+              scanner: null,
+              rotate180: false,
+              pages: pages(2, 1).map((page) => ({ ...page, key: `p02-s01-000${page.number}` })),
+            },
+          ],
+        },
+      }),
+    );
+    render(<App />);
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('В первом проходе 3 листа, во втором — 2')).toBeDefined();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Понятно' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    // Пометка непарного листа живёт в ленте и после закрытия модалки (S6).
+    expect(screen.getByTitle('У этого листа нет оборота')).toBeDefined();
+  });
+
+  it('KTD-8: прерванный и не принятый проход оборотов модалку не зовёт — решение за плашкой', async () => {
+    stubApi(
+      makeSnapshot({
+        canResume: true,
+        canAccept: true,
+        session: {
+          id: 'session.x',
+          backsDeclined: false,
+          saved: false,
+          passes: [
+            {
+              number: 1,
+              state: 'completed',
+              paramsKnown: true,
+              scanner: null,
+              rotate180: false,
+              pages: pages(3),
+            },
+            {
+              number: 2,
+              state: 'interrupted',
+              paramsKnown: true,
+              scanner: null,
+              rotate180: false,
+              pages: pages(2, 1).map((page) => ({ ...page, key: `p02-s01-000${page.number}` })),
+            },
+          ],
+        },
+      }),
+    );
+    render(<App />);
+
+    expect(await screen.findByText(/Проход прервался/)).toBeDefined();
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
   it('запуск без сканера открывает модалку device; подключение закрывает её тостом', async () => {
     stubApi(makeSnapshot({}), {
       startDiscovery: vi.fn(() => Promise.resolve(ok({ scanners: [FOUND], failure: null }))),
@@ -379,7 +787,7 @@ describe('каркас приложения', () => {
     });
     render(<App />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Сканировать листы' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Сканировать лицевые стороны' }));
     expect(await screen.findByRole('dialog')).toBeDefined();
 
     fireEvent.click(await screen.findByText('ScanPro 200'));

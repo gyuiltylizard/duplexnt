@@ -1,4 +1,4 @@
-import type { DomainError } from '@shared';
+import { SESSION_CONFLICT_REASONS, type DomainError, type SessionConflictReason } from '@shared';
 import type { TFunction } from 'i18next';
 
 // Текст доменной ошибки (план M1, U19 → Copy): вариант по `details.reason` / `details.field`,
@@ -16,13 +16,11 @@ const UNREACHABLE_REASONS = [
   'network',
   'other',
 ] as const;
-const CONFLICT_REASONS = [
-  'passRunning',
-  'noRunningPass',
-  'notInterrupted',
-  'paramsUnknown',
-  'noSession',
-] as const;
+// Производное от контракта: новая причина конфликта без строки в локали роняет typecheck.
+// `stopping` — единственная без текста: окно «останавливаем» мгновенно, базового кода хватает.
+const CONFLICT_REASONS = SESSION_CONFLICT_REASONS.filter(
+  (reason): reason is Exclude<SessionConflictReason, 'stopping'> => reason !== 'stopping',
+);
 
 function includes<T extends string>(values: readonly T[], value: unknown): value is T {
   return typeof value === 'string' && (values as readonly string[]).includes(value);

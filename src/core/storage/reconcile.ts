@@ -30,7 +30,7 @@ import {
   type SessionStoreOptions,
 } from './session-store';
 import { ioOf, isMissing, listDir } from './storage-fs';
-import { setAside, setAsidePathOf, writeVersioned } from './versioned-file';
+import { readVersionMarker, setAside, setAsidePathOf, writeVersioned } from './versioned-file';
 
 // Сверка при запуске (план M1, U14; ADR 0004): журнал сверяется с файлами по таблице плана.
 // Строки применяются сверху вниз; несовместимые данные отменяют все остальные — в каталоге тогда
@@ -110,6 +110,7 @@ function adopt(
         origin: null,
         nextSegment: group.segment + 1,
         segments: [interruptedSegment(group.segment, found)],
+        rotate180: false,
       };
       passes = inserted(passes, created);
       nextPass = Math.max(nextPass, group.pass + 1);
@@ -229,7 +230,11 @@ export async function reconcileSession(
       notices.push('journalRebuilt');
     }
   }
-  const before = read?.kind === 'ok' ? JSON.stringify(read.value) : null;
+  // Журнал прежней версии разбирается в текущую и обязан быть переписан, даже когда сверке
+  // нечего менять (запись — всегда текущей версией): маркер на диске сверяется отдельно.
+  const diskVersion = original === null ? null : readVersionMarker(original);
+  const before =
+    diskVersion === JOURNAL_VERSION && read?.kind === 'ok' ? JSON.stringify(read.value) : null;
 
   if (journal !== null) {
     // Начатое удаление доводится до конца; файлы под пометкой обратно не принимаются. Пометка
@@ -242,7 +247,14 @@ export async function reconcileSession(
         deletions.push(prefix);
       }
     }
-    journal = adopt({ ...journal, deletions }, [...groups.values()], journal.deletions);
+    const cleaned = { ...journal, deletions };
+    const adopted = adopt(cleaned, [...groups.values()], journal.deletions);
+    // Усыновление изменило проходы (файлы сверх записей — после сбоя записи журнала): набор
+    // больше не соответствует сохранённому PDF, отметка о сохранении снимается (R12).
+    journal =
+      adopted.saved && JSON.stringify(adopted.passes) !== JSON.stringify(cleaned.passes)
+        ? { ...adopted, saved: false }
+        : adopted;
   }
 
   // Пустая сессия равна отсутствию сессии (ADR 0004, амендмент). Журнал с пометкой остаётся:

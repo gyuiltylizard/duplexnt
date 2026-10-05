@@ -38,3 +38,8 @@ export function readFixture(...segments: string[]): Buffer {
 export function readFixtureText(...segments: string[]): string {
   return readFixture(...segments).toString('utf8');
 }
+
+/** Страница-фикстура устройства по номеру листа: `pages/page-NN.jpg`. */
+export function pageFixture(number: number): Buffer {
+  return readFixture(...ET_3850, 'pages', `page-${String(number).padStart(2, '0')}.jpg`);
+}
