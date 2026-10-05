@@ -71,6 +71,26 @@ describe('модалка mismatch', () => {
     ).toBeDefined();
   });
 
+  it('принят длинным (лишние обороты, непарных лиц нет): текст без пустого перечня листов', () => {
+    render(
+      <MismatchModal
+        report={report({
+          backs: 5,
+          fronts: 3,
+          pairs: 3,
+          unpairedSheets: [],
+          extraBacks: 2,
+          backsState: 'accepted',
+        })}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Проход оборотов остановлен: 5 из 3')).toBeDefined();
+    expect(screen.getByText(/лишние обороты лежат в конце набора/)).toBeDefined();
+    expect(screen.queryByText(/Без оборота/)).toBeNull();
+  });
+
   it('начальный фокус — на «Понятно»', () => {
     render(<MismatchModal report={report({})} onClose={vi.fn()} />);
 

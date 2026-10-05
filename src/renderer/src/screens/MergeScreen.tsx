@@ -42,6 +42,23 @@ function cells(count: number, max: number): number[] {
   return Array.from({ length: Math.max(1, Math.min(count, max)) }, (_, index) => index);
 }
 
+/**
+ * Ряд «документ» повторяет фактическую сборку, а не идеальное чередование: непарные лица —
+ * в начале (младшие листы без оборота), пары — чередованием, лишние обороты — в конце.
+ */
+function documentSides(report: AssemblyReport): readonly ('front' | 'back')[] {
+  const sides: ('front' | 'back')[] = [
+    ...report.unpairedSheets.map(() => 'front' as const),
+    ...Array.from({ length: report.pairs }).flatMap(() => ['front', 'back'] as const),
+    ...Array.from({ length: report.extraBacks }, () => 'back' as const),
+  ];
+  if (sides.length === 0) {
+    // «Обороты не нужны»: набор — только лицевые.
+    return Array.from({ length: report.fronts }, () => 'front' as const);
+  }
+  return sides.slice(0, DOC_CELLS_MAX);
+}
+
 export function MergeScreen({ report }: MergeScreenProps): ReactNode {
   const { t } = useTranslation();
   const screenRef = useRef<HTMLElement>(null);
@@ -50,8 +67,6 @@ export function MergeScreen({ report }: MergeScreenProps): ReactNode {
   useEffect(() => {
     screenRef.current?.focus();
   }, []);
-
-  const total = report.pairs * 2 + report.unpairedSheets.length + report.extraBacks;
 
   return (
     <main className="merge-screen" ref={screenRef} tabIndex={-1}>
@@ -85,11 +100,11 @@ export function MergeScreen({ report }: MergeScreenProps): ReactNode {
             {t('merge.rowDocument')}
           </div>
           <div className="merge-screen__cells merge-screen__cells--document">
-            {cells(report.backsDeclined ? report.fronts : total, DOC_CELLS_MAX).map((index) => (
+            {documentSides(report).map((side, index) => (
               <span
                 key={index}
                 className={
-                  !report.backsDeclined && index % 2 === 1
+                  side === 'back'
                     ? 'merge-screen__doc-cell merge-screen__doc-cell--back'
                     : 'merge-screen__doc-cell'
                 }

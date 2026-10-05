@@ -64,6 +64,7 @@ function renderFlip(overrides: Partial<Parameters<typeof FlipScreen>[0]> = {}) {
     pass: null,
     launchFailure: null,
     onStart: vi.fn(),
+    onOpenDevice: vi.fn(),
     ...overrides,
   };
   const view = render(<FlipScreen {...props} />);
@@ -164,6 +165,37 @@ describe('FlipScreen', () => {
         .getByRole('button', { name: 'Листы в лотке — сканировать обороты' })
         .hasAttribute('disabled'),
     ).toBe(false);
+  });
+
+  it('смена устройства между проходами — не тупик: «Подключить заново» ведёт в device', () => {
+    stubApi();
+    const onOpenDevice = vi.fn();
+    const snapshot = makeSnapshot(12);
+    renderFlip({
+      snapshot: {
+        ...snapshot,
+        scanner: {
+          kind: 'otherDevice',
+          scanner: { name: 'ScanPro 200', scheme: 'https', host: '192.0.2.10', port: 443 },
+          error: null,
+          params: { colorMode: 'Grayscale8', resolution: 300, paperSize: 'A4' },
+        },
+      },
+      launchFailure: { code: 'scannerCertificateChanged' },
+      onOpenDevice,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Подключить заново' }));
+    expect(onOpenDevice).toHaveBeenCalledExactlyOnceWith('192.0.2.10:443');
+  });
+
+  it('сканер не подключён — кнопка ведёт в device без адреса', () => {
+    stubApi();
+    const onOpenDevice = vi.fn();
+    renderFlip({ launchFailure: { code: 'scannerNotConnected' }, onOpenDevice });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Подключить заново' }));
+    expect(onOpenDevice).toHaveBeenCalledExactlyOnceWith(undefined);
   });
 
   it('нет бумаги — предупреждение, не ошибка', () => {

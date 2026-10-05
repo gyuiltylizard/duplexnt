@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { DomainError, PassProgress, Snapshot } from '@shared';
+import { multiline } from '../components/multiline';
 import { errorText, errorTextInline } from '../state/error-text';
+import { addressOf } from '../state/scanner-address';
 import './flip-screen.css';
 
 // Экран `flip` (план M2, U8; UI_SPEC раздел 4; handoff M2, S1–S3): кикер с числом листов,
@@ -17,12 +19,23 @@ export interface FlipScreenProps {
   readonly launchFailure: DomainError | null;
   /** Запуск прохода оборотов — тот же `startPass`: роль решает политика ядра (KTD-4). */
   readonly onStart: () => void;
+  /** «Подключить заново» из плашки отказа: иначе с `flip` в `device` не попасть (тупик). */
+  readonly onOpenDevice: (initialAddress?: string) => void;
 }
 
 /** Пункты чеклиста в порядке показа; первый — про входной лоток (решение handoff M2). */
 const CHECKS = ['tray', 'noFlip', 'keepOrder', 'stuck'] as const;
 
-export function FlipScreen({ snapshot, pass, launchFailure, onStart }: FlipScreenProps): ReactNode {
+/** Коды отказа, которые лечатся повторным подключением — с `flip` другого пути в `device` нет. */
+const RECONNECT_CODES: readonly string[] = ['scannerCertificateChanged', 'scannerNotConnected'];
+
+export function FlipScreen({
+  snapshot,
+  pass,
+  launchFailure,
+  onStart,
+  onOpenDevice,
+}: FlipScreenProps): ReactNode {
   const { t } = useTranslation();
   const screenRef = useRef<HTMLElement>(null);
   const [declineFailure, setDeclineFailure] = useState<DomainError | null>(null);
@@ -93,16 +106,7 @@ export function FlipScreen({ snapshot, pass, launchFailure, onStart }: FlipScree
             </div>
             <span className="turn__tray" />
           </div>
-          <div className="flip-screen__caption">
-            {t('flip.illustration')
-              .split('\n')
-              .map((line, index) => (
-                <span key={index}>
-                  {index > 0 && <br />}
-                  {line}
-                </span>
-              ))}
-          </div>
+          <div className="flip-screen__caption">{multiline(t('flip.illustration'))}</div>
         </div>
 
         <div className="flip-screen__divider" aria-hidden="true" />
@@ -148,6 +152,18 @@ export function FlipScreen({ snapshot, pass, launchFailure, onStart }: FlipScree
             role="alert"
           >
             <p className="notice__text">{failureText}</p>
+            {RECONNECT_CODES.includes(failure.code) && (
+              <button
+                type="button"
+                className="btn btn--tinted"
+                onClick={() => {
+                  const { scanner } = snapshot;
+                  onOpenDevice(scanner.kind === 'none' ? undefined : addressOf(scanner.scanner));
+                }}
+              >
+                {t('setup.device.reconnect')}
+              </button>
+            )}
           </div>
         )}
       </div>

@@ -29,7 +29,7 @@ describe('экран merge', () => {
   });
 
   it('при несовпадении статус сообщает о нём первым, формула меняется', () => {
-    render(
+    const view = render(
       <MergeScreen
         report={report({ backs: 11, pairs: 11, unpairedSheets: [1], mismatch: true })}
       />,
@@ -37,6 +37,12 @@ describe('экран merge', () => {
 
     expect(screen.getByRole('status').textContent).toBe('не сошлось: лицевых 12, оборотов 11');
     expect(screen.getByText('Пары не сошлись — документ собран по совпавшим')).toBeDefined();
+    // Ряд «документ» повторяет фактическую сборку: непарное лицо в начале, не чередование.
+    const docCells = view.container.querySelectorAll('.merge-screen__cells--document > *');
+    expect(docCells.length).toBe(23);
+    expect(docCells[0]?.className).not.toContain('doc-cell--back');
+    expect(docCells[1]?.className).not.toContain('doc-cell--back');
+    expect(docCells[2]?.className).toContain('doc-cell--back');
   });
 
   it('лишние обороты названы и не потеряны', () => {

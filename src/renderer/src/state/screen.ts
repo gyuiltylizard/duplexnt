@@ -1,4 +1,4 @@
-import type { PassProgress, SessionSnapshot, Snapshot } from '@shared';
+import type { PassProgress, PassSnapshot, SessionSnapshot, Snapshot } from '@shared';
 
 // Экран выводится из снимка чистой функцией (план M1, U20): своего состояния навигации у
 // интерфейса нет. В M2 добавлен `flip` (план M2, KTD-5); `merge` — эфемерная пауза поверх
@@ -9,8 +9,10 @@ export type Screen = 'incompatible' | 'scan' | 'editor' | 'setup' | 'flip';
 /**
  * Уцелевшие проходы — непустые (KTD-4): «Остановить» на первом сегменте убирает опустевший
  * проход целиком, но промежуточный снимок мог бы нести его пустым — фильтр страхует.
+ * Роль прохода — позиция здесь: [0] — лицевые, [1] — обороты. Единственное место правила
+ * в renderer; `EditorScreen` берёт проход оборотов отсюда же.
  */
-function surviving(session: SessionSnapshot) {
+export function survivingPasses(session: SessionSnapshot): readonly PassSnapshot[] {
   return session.passes.filter((pass) => pass.pages.length > 0);
 }
 
@@ -22,7 +24,7 @@ function flipForm(session: SessionSnapshot): boolean {
   if (session.backsDeclined) {
     return false;
   }
-  const passes = surviving(session);
+  const passes = survivingPasses(session);
   const only = passes.length === 1 ? passes[0] : undefined;
   return only !== undefined && (only.state === 'completed' || only.state === 'accepted');
 }

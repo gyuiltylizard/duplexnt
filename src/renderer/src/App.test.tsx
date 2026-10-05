@@ -684,6 +684,75 @@ describe('каркас приложения', () => {
     }
   });
 
+  it('KTD-5: пауза merge не теряется, когда кадр scan пропущен (снимки пришли пачкой)', async () => {
+    const flip = makeSnapshot({
+      session: {
+        id: 'session.x',
+        backsDeclined: false,
+        saved: false,
+        passes: [
+          {
+            number: 1,
+            state: 'completed',
+            paramsKnown: true,
+            scanner: null,
+            rotate180: false,
+            pages: pages(3),
+          },
+        ],
+      },
+    });
+    const done = makeSnapshot({
+      seq: 2,
+      session: {
+        id: 'session.x',
+        backsDeclined: false,
+        saved: false,
+        passes: [
+          ...(flip.session?.passes ?? []),
+          {
+            number: 2,
+            state: 'completed',
+            paramsKnown: true,
+            scanner: null,
+            rotate180: false,
+            pages: pages(3, 1).map((page) => ({ ...page, key: `p02-s01-000${page.number}` })),
+          },
+        ],
+      },
+    });
+    let current = flip;
+    let notify: (payload: { seq: number }) => void = () => undefined;
+    stubApi(flip, {
+      getSnapshot: vi.fn(() => Promise.resolve(ok(current))),
+      onSnapshotChanged: vi.fn((listener: (payload: { seq: number }) => void) => {
+        notify = listener;
+        return () => undefined;
+      }),
+    });
+    render(<App />);
+    await screen.findByRole('button', { name: 'Листы в лотке — сканировать обороты' });
+
+    vi.useFakeTimers();
+    try {
+      // Проход оборотов прошёл так быстро, что интерфейс не увидел ни одного кадра `scan`.
+      current = done;
+      await act(async () => {
+        notify({ seq: 2 });
+        await Promise.resolve();
+      });
+      expect(screen.getByText('Сопоставляем проходы')).toBeDefined();
+
+      act(() => {
+        vi.advanceTimersByTime(1601);
+      });
+      expect(screen.queryByText('Сопоставляем проходы')).toBeNull();
+      expect(screen.getByText('6 страниц')).toBeDefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('KTD-8/AE13: несовпадение показывается при входе в editor после перезапуска; закрытие подтверждает', async () => {
     // Свежий процесс открывается сразу в editor (паузы merge нет) — модалка не проглочена.
     stubApi(

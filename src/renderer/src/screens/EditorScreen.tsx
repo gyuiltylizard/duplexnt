@@ -1,5 +1,4 @@
 import {
-  Fragment,
   memo,
   useEffect,
   useRef,
@@ -17,10 +16,12 @@ import {
   type SessionSnapshot,
   type Snapshot,
 } from '@shared';
+import { multiline } from '../components/multiline';
 import { useImageLoad } from '../components/useImageLoad';
 import { NewScanModal } from '../modals/NewScanModal';
 import { errorText, errorTextInline } from '../state/error-text';
 import { addressOf } from '../state/scanner-address';
+import { survivingPasses } from '../state/screen';
 import './editor-screen.css';
 
 // Экран `editor` (план M1, U24; M2, U9; UI_SPEC раздел 6; handoff M2, S6–S9): тулбар с «Новое
@@ -47,16 +48,6 @@ const SAVE_TOAST_MS = 6000;
 
 /** Коды отказа досканирования, которые лечатся повторным подключением (S17). */
 const RECONNECT_CODES: readonly string[] = ['scannerUnreachable', 'scannerCertificateChanged'];
-
-/** Текст локали с переводом строки — двумя строками (`preview.lost`, `preview.failed`). */
-function multiline(text: string): ReactNode {
-  return text.split('\n').map((line, index) => (
-    <Fragment key={index}>
-      {index > 0 && <br />}
-      {line}
-    </Fragment>
-  ));
-}
 
 /**
  * Миниатюра в ленте: обычная, потерянная (S18), строится или не построилась (S19), оборот с
@@ -313,8 +304,8 @@ export function EditorScreen({
   };
 
   // Тумблер 180° — у второго уцелевшего прохода (роль, не номер — KTD-4), включая прерванный
-  // и принятый; без прохода оборотов тумблера нет (S7).
-  const backsPass = session.passes.filter((pass) => pass.pages.length > 0)[1];
+  // и принятый; без прохода оборотов тумблера нет (S7). Правило уцелевшего — одно на renderer.
+  const backsPass = survivingPasses(session)[1];
   const setRotate = (event: ChangeEvent<HTMLInputElement>): void => {
     // Снимок — источник правды: при отказе команда не меняет ничего, и чекбокс вернётся сам.
     window.api.setRotateBacks({ rotate: event.target.checked }).then(
@@ -338,15 +329,13 @@ export function EditorScreen({
       (result) => {
         setSaving(false);
         if (!result.ok) {
-          // Отказ в диалоге — не ошибка: ничего не записано, тостов нет (KTD-3).
-          if (result.error.code !== 'canceled') {
-            onToast(
-              t('toast.saveFailed', { error: errorTextInline(t, result.error) }),
-              SAVE_TOAST_MS,
-            );
-          }
+          onToast(
+            t('toast.saveFailed', { error: errorTextInline(t, result.error) }),
+            SAVE_TOAST_MS,
+          );
           return;
         }
+        // Отказ в диалоге приходит успехом с `canceled` — не ошибка, тостов нет (KTD-3).
         if (!result.value.canceled) {
           onToast(
             t('toast.saved', { file: result.value.fileName, folder: result.value.directory }),
@@ -355,8 +344,13 @@ export function EditorScreen({
         }
       },
       (error: unknown) => {
+        // Мост не ответил — пользователь не должен гадать, записался ли файл.
         setSaving(false);
         console.error('[renderer] сохранение не ответило', error);
+        onToast(
+          t('toast.saveFailed', { error: errorTextInline(t, { code: 'invalidInput' }) }),
+          SAVE_TOAST_MS,
+        );
       },
     );
   };
@@ -491,14 +485,15 @@ export function EditorScreen({
       </header>
 
       <div className="editor-screen__body">
-        <aside
-          className="rail"
-          aria-label={t('editor.railLabel')}
-          ref={railRef}
-          onKeyDown={railKeyDown}
-        >
+        <aside className="rail" ref={railRef} onKeyDown={railKeyDown}>
           <div className="rail__scroll">
-            <ul className="thumbs" role="listbox" aria-orientation="horizontal">
+            {/* Имя — на самом listbox: скринридер объявляет его, а не контейнер (M1). */}
+            <ul
+              className="thumbs"
+              role="listbox"
+              aria-orientation="horizontal"
+              aria-label={t('editor.railLabel')}
+            >
               {order.map((entry, index) => (
                 <Thumb
                   key={entry.key}

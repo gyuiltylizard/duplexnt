@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { DomainError, Snapshot, StartupNotice } from '@shared';
+import type { DomainError, StartupNotice } from '@shared';
 import { NoticesBar } from './components/NoticesBar';
 import { Toast } from './components/Toast';
 import { DeviceModal } from './modals/DeviceModal';
@@ -67,36 +67,31 @@ export function App(): ReactNode {
   }, []);
 
   // Пауза `merge` (KTD-5): эфемерное состояние поверх `screenOf`, живёт только в renderer и
-  // после перезапуска не повторяется — сборка уже видна в редакторе. Переход ловится по смене
-  // выведенного экрана: «scan (проход оборотов завершён) → editor» и «flip → editor после
-  // „Обороты не нужны"». Таймер — эффектом: StrictMode перезапускает его, но не теряет.
+  // после перезапуска не повторяется — на старте процесса предыдущего экрана нет, переход
+  // не срабатывает. Переход ловится корректировкой состояния при рендере (react.dev «You
+  // Might Not Need an Effect», как `known` в SetupScreen) — это идемпотентно и переживает
+  // StrictMode double-render. Условие читает отчёт, а не промежуточные экраны: снимки могут
+  // прийти пачкой, и кадр `scan` между `flip` и `editor` легко пропустить.
   const [mergeHoldMs, setMergeHoldMs] = useState<number | null>(null);
-  const previousScreen = useRef<Screen | null>(null);
-  const backsPassSeen = useRef(false);
-  const watchMerge = useCallback((snapshot: Snapshot | null) => {
-    if (snapshot === null) {
-      return;
-    }
-    const screen = screenOf(snapshot);
-    const previous = previousScreen.current;
-    previousScreen.current = screen;
-    if (snapshot.pass !== null && snapshot.pass.expected !== null) {
-      backsPassSeen.current = true;
-    }
-    if (screen === 'editor' && previous !== null && previous !== 'editor') {
-      const report = snapshot.assembly?.report;
-      // Пауза — только после завершённого прохода оборотов: обрыв и «Остановить» ведут в
-      // editor без неё (сборка не «состоялась», плашка прерванного прохода говорит сама).
-      if (previous === 'scan' && backsPassSeen.current && report?.backsState === 'completed') {
+  const [previousScreen, setPreviousScreen] = useState<Screen | null>(null);
+  const currentScreen = snapshot === null ? null : screenOf(snapshot);
+  if (currentScreen !== previousScreen) {
+    setPreviousScreen(currentScreen);
+    if (
+      currentScreen === 'editor' &&
+      (previousScreen === 'scan' || previousScreen === 'flip') &&
+      snapshot !== null
+    ) {
+      const transitionReport = snapshot.assembly?.report;
+      // Пауза — только когда сборка «состоялась»: проход оборотов завершён или обороты не
+      // нужны. Обрыв и «Остановить» ведут в editor без неё — там говорит плашка прерванного.
+      if (transitionReport?.backsState === 'completed') {
         setMergeHoldMs(MERGE_PAUSE_MS);
-      } else if (previous === 'flip' && report?.backsDeclined === true) {
+      } else if (transitionReport?.backsDeclined === true) {
         setMergeHoldMs(MERGE_PAUSE_DECLINED_MS);
       }
     }
-    if (snapshot.pass === null) {
-      backsPassSeen.current = false;
-    }
-  }, []);
+  }
 
   useEffect(() => {
     if (mergeHoldMs === null) {
@@ -177,18 +172,12 @@ export function App(): ReactNode {
     );
   }, [showToast, t]);
 
-  // Переходы для паузы `merge` отслеживаются эффектом: ref-ы меняются вне рендера, и
-  // StrictMode double-render их не задваивает.
-  useEffect(() => {
-    watchMerge(snapshot);
-  }, [snapshot, watchMerge]);
-
-  if (snapshot === null) {
+  if (snapshot === null || currentScreen === null) {
     // Первый снимок ещё не пришёл: main отвечает за миллисекунды, рисовать нечего.
     return null;
   }
 
-  const screen = screenOf(snapshot);
+  const screen = currentScreen;
   if (screen === 'incompatible') {
     // Единственный экран: ни уведомлений, ни тостов, ни модалок над ним (S22).
     return (
@@ -240,6 +229,7 @@ export function App(): ReactNode {
           pass={snapshot.pass}
           launchFailure={launchFailure?.target === 'flip' ? launchFailure.error : null}
           onStart={startPass}
+          onOpenDevice={openDevice}
         />
       )}
       {merging && <MergeScreen report={report} />}
@@ -261,8 +251,9 @@ export function App(): ReactNode {
           }}
         />
       )}
-      {/* `device` открывается и из `editor` — ссылка «подключите заново» в плашке S17. */}
-      {deviceModal !== null && (screen === 'setup' || screen === 'editor') && (
+      {/* `device` открывается и из `editor` (ссылка в плашке S17), и из `flip` (плашка
+          отказа запуска оборотов — иначе из него не выбраться к подключению). */}
+      {deviceModal !== null && (screen === 'setup' || screen === 'editor' || screen === 'flip') && (
         <DeviceModal
           initialAddress={deviceModal.initialAddress}
           onClose={closeDevice}

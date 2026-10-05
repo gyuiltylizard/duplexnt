@@ -46,10 +46,15 @@ export function MismatchModal({ report, onClose }: MismatchModalProps): ReactNod
   let text: string;
   if (report.backsState === 'accepted') {
     title = t('mismatch.accepted.title', { backs: report.backs, fronts: report.fronts });
-    text = t('mismatch.accepted.text', {
-      count: report.unpairedSheets.length,
-      sheets: sheetsLabel(t, report.unpairedSheets),
-    });
+    // Принят может быть и длинный прерванный проход: непарных лиц нет, зато есть лишние
+    // обороты — перечень пустых листов в тексте был бы битым.
+    text =
+      report.unpairedSheets.length > 0
+        ? t('mismatch.accepted.text', {
+            count: report.unpairedSheets.length,
+            sheets: sheetsLabel(t, report.unpairedSheets),
+          })
+        : t('mismatch.accepted.textExtra');
   } else if (report.extraBacks > 0) {
     title = t('mismatch.extra.title', { backs: report.backs, fronts: report.fronts });
     text = t('mismatch.extra.text');
