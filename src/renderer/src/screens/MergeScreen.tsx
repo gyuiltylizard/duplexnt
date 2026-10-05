@@ -1,7 +1,9 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { AssemblyReport } from '@shared';
+import type { AssemblyReport, SessionAssembly } from '@shared';
 import type { TFunction } from 'i18next';
+import { useFocusWhen } from '../components/useFocusWhen';
+import { assemblyOutcome } from '../state/assembly-outcome';
 import './merge-screen.css';
 
 // Экран `merge` (план M2, U9; UI_SPEC раздел 5; handoff M2, S4): процессная пауза без органов
@@ -18,93 +20,94 @@ const ROW_CELLS_MAX = 12;
 const DOC_CELLS_MAX = 24;
 
 export interface MergeScreenProps {
-  readonly report: AssemblyReport;
+  readonly assembly: SessionAssembly;
 }
 
-/** Статусная строка: при несовпадении или принятом коротком проходе сообщает о нём первым. */
+/** Статусная строка: исход — общей классификацией, тот же, что увидит `mismatch` (KTD-8). */
 function statusText(t: TFunction, report: AssemblyReport): string {
-  if (report.backsDeclined) {
-    return t('merge.status.frontsOnly', { count: report.fronts });
+  switch (assemblyOutcome(report)) {
+    case 'frontsOnly':
+      return t('merge.status.frontsOnly', { count: report.fronts });
+    case 'accepted':
+      return t('merge.status.accepted', { pairs: report.pairs, fronts: report.fronts });
+    case 'fewer':
+      return t('merge.status.fewer', { fronts: report.fronts, backs: report.backs });
+    case 'extra':
+      return t('merge.status.extra', { count: report.extraBacks });
+    case 'ok':
+      return t('merge.status.ok', { pairs: report.pairs });
   }
-  if (report.backsState === 'accepted') {
-    return t('merge.status.accepted', { pairs: report.pairs, fronts: report.fronts });
-  }
-  if (report.unpairedSheets.length > 0) {
-    return t('merge.status.fewer', { fronts: report.fronts, backs: report.backs });
-  }
-  if (report.extraBacks > 0) {
-    return t('merge.status.extra', { count: report.extraBacks });
-  }
-  return t('merge.status.ok', { pairs: report.pairs });
 }
 
 function cells(count: number, max: number): number[] {
   return Array.from({ length: Math.max(1, Math.min(count, max)) }, (_, index) => index);
 }
 
-/**
- * Ряд «документ» повторяет фактическую сборку, а не идеальное чередование: непарные лица —
- * в начале (младшие листы без оборота), пары — чередованием, лишние обороты — в конце.
- */
-function documentSides(report: AssemblyReport): readonly ('front' | 'back')[] {
-  const sides: ('front' | 'back')[] = [
-    ...report.unpairedSheets.map(() => 'front' as const),
-    ...Array.from({ length: report.pairs }).flatMap(() => ['front', 'back'] as const),
-    ...Array.from({ length: report.extraBacks }, () => 'back' as const),
-  ];
-  if (sides.length === 0) {
-    // «Обороты не нужны»: набор — только лицевые.
-    return Array.from({ length: report.fronts }, () => 'front' as const);
-  }
-  return sides.slice(0, DOC_CELLS_MAX);
+/** Ряд диаграммы: подпись + ячейки одного прохода. */
+function Row({
+  label,
+  count,
+  side,
+}: {
+  readonly label: string;
+  readonly count: number;
+  readonly side: 'front' | 'back';
+}): ReactNode {
+  return (
+    <div className="merge-screen__row">
+      <div className="merge-screen__row-label">{label}</div>
+      {/* Обороты пришли в обратном порядке — их ряд заполняется с другого края. */}
+      <div
+        className={
+          side === 'back'
+            ? 'merge-screen__cells merge-screen__cells--reversed'
+            : 'merge-screen__cells'
+        }
+      >
+        {cells(count, ROW_CELLS_MAX).map((index) => (
+          <span key={index} className={`merge-screen__cell merge-screen__cell--${side}`} />
+        ))}
+      </div>
+    </div>
+  );
 }
 
-export function MergeScreen({ report }: MergeScreenProps): ReactNode {
+export function MergeScreen({ assembly }: MergeScreenProps): ReactNode {
   const { t } = useTranslation();
   const screenRef = useRef<HTMLElement>(null);
+  const { report } = assembly;
 
   // Фокусируемых элементов нет — фокус на контейнере экрана (handoff, «Клавиатура»).
-  useEffect(() => {
-    screenRef.current?.focus();
-  }, []);
+  useFocusWhen(screenRef, true);
 
   return (
     <main className="merge-screen" ref={screenRef} tabIndex={-1}>
       <h1 className="merge-screen__title">{t('merge.title')}</h1>
 
       <div className="merge-screen__diagram" aria-hidden="true">
-        <div className="merge-screen__row">
-          <div className="merge-screen__row-label">
-            {t('merge.rowFronts', { count: report.fronts })}
-          </div>
-          <div className="merge-screen__cells">
-            {cells(report.fronts, ROW_CELLS_MAX).map((index) => (
-              <span key={index} className="merge-screen__cell merge-screen__cell--front" />
-            ))}
-          </div>
-        </div>
+        <Row
+          label={t('merge.rowFronts', { count: report.fronts })}
+          count={report.fronts}
+          side="front"
+        />
         {!report.backsDeclined && report.backs > 0 && (
-          <div className="merge-screen__row">
-            <div className="merge-screen__row-label">
-              {t('merge.rowBacks', { count: report.backs })}
-            </div>
-            <div className="merge-screen__cells merge-screen__cells--reversed">
-              {cells(report.backs, ROW_CELLS_MAX).map((index) => (
-                <span key={index} className="merge-screen__cell merge-screen__cell--back" />
-              ))}
-            </div>
-          </div>
+          <Row
+            label={t('merge.rowBacks', { count: report.backs })}
+            count={report.backs}
+            side="back"
+          />
         )}
         <div className="merge-screen__row merge-screen__row--document">
           <div className="merge-screen__row-label merge-screen__row-label--strong">
             {t('merge.rowDocument')}
           </div>
+          {/* Ряд «документ» — из настоящего порядка сборки, а не повтора правила KTD-4. */}
           <div className="merge-screen__cells merge-screen__cells--document">
-            {documentSides(report).map((side, index) => (
+            {assembly.order.slice(0, DOC_CELLS_MAX).map((page) => (
               <span
-                key={index}
+                key={page.key}
                 className={
-                  side === 'back'
+                  page.side === 'back'
                     ? 'merge-screen__doc-cell merge-screen__doc-cell--back'
                     : 'merge-screen__doc-cell'
                 }

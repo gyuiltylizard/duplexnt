@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   pageImageUrl,
@@ -8,6 +8,7 @@ import {
   type Snapshot,
 } from '@shared';
 import type { TFunction } from 'i18next';
+import { useFocusWhen } from '../components/useFocusWhen';
 import { useImageLoad } from '../components/useImageLoad';
 import { lowerFirst } from '../state/error-text';
 import './scan-screen.css';
@@ -105,11 +106,7 @@ export function ScanScreen({ snapshot, pass, onStop }: ScanScreenProps): ReactNo
 
   // В S15 «Остановить» выпадает из обхода — фокус уходит на контейнер экрана, чтобы не
   // потеряться (handoff, «Клавиатура»).
-  useEffect(() => {
-    if (stopping) {
-      screenRef.current?.focus();
-    }
-  }, [stopping]);
+  useFocusWhen(screenRef, stopping);
 
   const pages = passPages(snapshot, pass);
   // `pass.pages` — число страниц этого запуска; прежние страницы досканируемого прохода — разница.

@@ -9,8 +9,9 @@ import {
   type ScannerInfo,
   type Snapshot,
 } from '@shared';
+import { LaunchFailureNotice } from '../components/LaunchFailureNotice';
 import { Segments } from '../components/Segments';
-import { errorText, errorTextInline } from '../state/error-text';
+import { errorText } from '../state/error-text';
 import { addressOf } from '../state/scanner-address';
 import './setup-screen.css';
 
@@ -318,31 +319,22 @@ export function SetupScreen({
         </div>
 
         {launchFailure !== null && (
-          <div
-            className={
-              launchFailure.code === 'scanNoPaper'
-                ? 'notice notice--warning'
-                : 'notice notice--danger'
+          <LaunchFailureNotice
+            error={launchFailure}
+            action={
+              launchFailure.code === 'scannerCertificateChanged' && scanner.kind !== 'none' ? (
+                <button
+                  type="button"
+                  className="btn btn--tinted"
+                  onClick={() => {
+                    onOpenDevice(addressOf(scanner.scanner));
+                  }}
+                >
+                  {t('setup.device.reconnect')}
+                </button>
+              ) : undefined
             }
-            role="alert"
-          >
-            <p className="notice__text">
-              {launchFailure.code === 'scanNoPaper'
-                ? errorText(t, launchFailure)
-                : t('setup.launch.failed', { error: errorTextInline(t, launchFailure) })}
-            </p>
-            {launchFailure.code === 'scannerCertificateChanged' && scanner.kind !== 'none' && (
-              <button
-                type="button"
-                className="btn btn--tinted"
-                onClick={() => {
-                  onOpenDevice(addressOf(scanner.scanner));
-                }}
-              >
-                {t('setup.device.reconnect')}
-              </button>
-            )}
-          </div>
+          />
         )}
       </section>
 

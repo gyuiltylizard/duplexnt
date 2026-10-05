@@ -24,9 +24,12 @@ function flipForm(session: SessionSnapshot): boolean {
   if (session.backsDeclined) {
     return false;
   }
-  const passes = survivingPasses(session);
-  const only = passes.length === 1 ? passes[0] : undefined;
-  return only !== undefined && (only.state === 'completed' || only.state === 'accepted');
+  const [only, second] = survivingPasses(session);
+  return (
+    second === undefined &&
+    only !== undefined &&
+    (only.state === 'completed' || only.state === 'accepted')
+  );
 }
 
 /**

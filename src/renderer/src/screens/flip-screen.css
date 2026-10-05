@@ -202,6 +202,19 @@
   background: var(--color-glyph-soft);
 }
 
+/* Ширины строк-имитаций — геометрия макета, вся в CSS. */
+.turn__line--1 {
+  width: 86%;
+}
+
+.turn__line--2 {
+  width: 72%;
+}
+
+.turn__line--3 {
+  width: 80%;
+}
+
 .turn__tray {
   position: absolute;
   left: 0;

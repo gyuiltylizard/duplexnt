@@ -1,6 +1,7 @@
 import {
   memo,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ChangeEvent,
@@ -20,7 +21,7 @@ import { multiline } from '../components/multiline';
 import { useImageLoad } from '../components/useImageLoad';
 import { NewScanModal } from '../modals/NewScanModal';
 import { errorText, errorTextInline } from '../state/error-text';
-import { addressOf } from '../state/scanner-address';
+import { addressOf, reconnectAddress } from '../state/scanner-address';
 import { survivingPasses } from '../state/screen';
 import './editor-screen.css';
 
@@ -46,24 +47,40 @@ export interface EditorScreenProps {
 /** Тосты сохранения — 6 с (UI_SPEC раздел 8). */
 const SAVE_TOAST_MS = 6000;
 
-/** Коды отказа досканирования, которые лечатся повторным подключением (S17). */
-const RECONNECT_CODES: readonly string[] = ['scannerUnreachable', 'scannerCertificateChanged'];
+/**
+ * Коды отказа досканирования, которые лечатся повторным подключением (S17). Список шире, чем
+ * у плашки `flip`: досканировать можно только на сканере прохода (KTD-27), поэтому и
+ * «не отвечает» ведёт к переподключению.
+ */
+const RESUME_RECONNECT_CODES: readonly string[] = [
+  'scannerUnreachable',
+  'scannerCertificateChanged',
+];
 
 /**
  * Миниатюра в ленте: обычная, потерянная (S18), строится или не построилась (S19), оборот с
- * тегом «об» и поворотом, непарный лист с янтарной точкой (S6). Мемоизирована: смена выбора
- * перерисовывает две карточки, а не всю ленту (`onSelect` стабилен и принимает ключ).
+ * тегом «об» и поворотом, непарный лист с янтарной точкой (S6). Пропсы — примитивы, чтобы
+ * `memo` переживал новый снимок (объекты порядка пересоздаются десериализацией IPC): тумблер
+ * и отметка сохранения не перерисовывают всю ленту, смена выбора — две карточки.
  */
 const Thumb = memo(function Thumb({
   sessionId,
-  entry,
+  pageKey,
+  side,
+  sheet,
+  rotate180,
+  lost,
   position,
   unpaired,
   selected,
   onSelect,
 }: {
   readonly sessionId: string;
-  readonly entry: AssembledPage;
+  readonly pageKey: string;
+  readonly side: AssembledPage['side'];
+  readonly sheet: number | null;
+  readonly rotate180: boolean;
+  readonly lost: boolean;
   /** Номер по порядку в наборе, с единицы. */
   readonly position: number;
   readonly unpaired: boolean;
@@ -74,7 +91,7 @@ const Thumb = memo(function Thumb({
   const image = useImageLoad();
 
   const select = (): void => {
-    onSelect(entry.key);
+    onSelect(pageKey);
   };
   const keyDown = (event: KeyboardEvent<HTMLElement>): void => {
     if (event.key === 'Enter' || event.key === ' ') {
@@ -85,7 +102,7 @@ const Thumb = memo(function Thumb({
 
   const classes = ['thumb'];
   let paper: ReactNode;
-  if (entry.lost) {
+  if (lost) {
     classes.push('thumb--lost');
     paper = <span className="thumb__label">{t('thumb.lost')}</span>;
   } else if (image.state === 'failed') {
@@ -102,7 +119,7 @@ const Thumb = memo(function Thumb({
           alt=""
           loading="lazy"
           decoding="async"
-          src={pageImageUrl(sessionId, 'thumb', entry.key)}
+          src={pageImageUrl(sessionId, 'thumb', pageKey)}
           onLoad={image.onLoad}
           onError={image.onError}
         />
@@ -114,25 +131,25 @@ const Thumb = memo(function Thumb({
     classes.push('thumb--selected');
   }
   // Поворот оборотов — только отображение: файлы не меняются (KTD-2).
-  if (entry.side === 'back' && entry.rotate180) {
+  if (side === 'back' && rotate180) {
     classes.push('thumb--rotated');
   }
 
-  const label = entry.lost
+  const label = lost
     ? t('thumb.lostLabel', { number: position })
     : unpaired
-      ? t('thumb.unpairedLabel', { number: entry.sheet ?? position })
+      ? t('thumb.unpairedLabel', { number: sheet ?? position })
       : t('thumb.alt', { number: position });
 
   return (
     <li
       role="option"
       aria-selected={selected}
-      aria-busy={!entry.lost && image.state === 'loading' ? true : undefined}
+      aria-busy={!lost && image.state === 'loading' ? true : undefined}
       aria-label={label}
-      title={!entry.lost && image.state === 'failed' ? t('thumb.failedTitle') : undefined}
+      title={!lost && image.state === 'failed' ? t('thumb.failedTitle') : undefined}
       tabIndex={selected ? 0 : -1}
-      data-key={entry.key}
+      data-key={pageKey}
       className={classes.join(' ')}
       onClick={select}
       onKeyDown={keyDown}
@@ -140,7 +157,7 @@ const Thumb = memo(function Thumb({
       <div className="thumb__paper">{paper}</div>
       <div className="thumb__foot">
         <span className="thumb__num">{position}</span>
-        {entry.side === 'back' && <span className="thumb__tag">{t('thumb.tagBacks')}</span>}
+        {side === 'back' && <span className="thumb__tag">{t('thumb.tagBacks')}</span>}
         {unpaired && (
           <span
             className="dot dot--warning thumb__flag"
@@ -213,7 +230,8 @@ export function EditorScreen({
   const order = snapshot.assembly?.order ?? [];
   const report = snapshot.assembly?.report;
   const total = order.length;
-  const unpairedSheets = report?.unpairedSheets ?? [];
+  // Set вместо поиска по массиву на каждой миниатюре; пересобирается только с новым отчётом.
+  const unpairedSheets = useMemo(() => new Set(report?.unpairedSheets ?? []), [report]);
 
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const selectedIndex = Math.max(
@@ -293,8 +311,7 @@ export function EditorScreen({
   };
 
   const reconnect = (): void => {
-    const { scanner } = snapshot;
-    onOpenDevice(scanner.kind === 'none' ? undefined : addressOf(scanner.scanner));
+    onOpenDevice(reconnectAddress(snapshot.scanner));
   };
 
   // «Подключите заново» из текста плашки — с адресом сканера прохода: именно его и надо
@@ -320,6 +337,11 @@ export function EditorScreen({
     );
   };
 
+  // Тосты сохранения живут дольше обычных (UI_SPEC раздел 8).
+  const saveToast = (text: string): void => {
+    onToast(text, SAVE_TOAST_MS);
+  };
+
   const save = (): void => {
     if (saving) {
       return;
@@ -329,17 +351,13 @@ export function EditorScreen({
       (result) => {
         setSaving(false);
         if (!result.ok) {
-          onToast(
-            t('toast.saveFailed', { error: errorTextInline(t, result.error) }),
-            SAVE_TOAST_MS,
-          );
+          saveToast(t('toast.saveFailed', { error: errorTextInline(t, result.error) }));
           return;
         }
         // Отказ в диалоге приходит успехом с `canceled` — не ошибка, тостов нет (KTD-3).
         if (!result.value.canceled) {
-          onToast(
+          saveToast(
             t('toast.saved', { file: result.value.fileName, folder: result.value.directory }),
-            SAVE_TOAST_MS,
           );
         }
       },
@@ -347,10 +365,7 @@ export function EditorScreen({
         // Мост не ответил — пользователь не должен гадать, записался ли файл.
         setSaving(false);
         console.error('[renderer] сохранение не ответило', error);
-        onToast(
-          t('toast.saveFailed', { error: errorTextInline(t, { code: 'invalidInput' }) }),
-          SAVE_TOAST_MS,
-        );
+        saveToast(t('toast.saveNoResponse'));
       },
     );
   };
@@ -392,7 +407,7 @@ export function EditorScreen({
       failureLine = (
         <>
           {t('editor.interrupted.resumeFailed', { error: errorTextInline(t, resumeFailure) })}
-          {RECONNECT_CODES.includes(resumeFailure.code) && (
+          {RESUME_RECONNECT_CODES.includes(resumeFailure.code) && (
             <>
               {' '}
               <button type="button" className="btn btn--link" onClick={reconnect}>
@@ -498,12 +513,16 @@ export function EditorScreen({
                 <Thumb
                   key={entry.key}
                   sessionId={session.id}
-                  entry={entry}
+                  pageKey={entry.key}
+                  side={entry.side}
+                  sheet={entry.sheet}
+                  rotate180={entry.rotate180}
+                  lost={entry.lost}
                   position={index + 1}
                   unpaired={
                     entry.side === 'front' &&
                     entry.sheet !== null &&
-                    unpairedSheets.includes(entry.sheet)
+                    unpairedSheets.has(entry.sheet)
                   }
                   selected={selected?.key === entry.key}
                   onSelect={setSelectedKey}

@@ -2,15 +2,14 @@ import {
   fail,
   ok,
   type Api,
-  type AssembledPage,
   type PassSnapshot,
-  type SessionAssembly,
   type SessionSnapshot,
   type Snapshot,
 } from '@shared';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../i18n';
+import { assemblyOf } from '../state/assembly-fixture';
 import { EditorScreen } from './EditorScreen';
 
 function pages(
@@ -34,57 +33,6 @@ function makePass(overrides: Partial<PassSnapshot>): PassSnapshot {
     rotate180: false,
     pages: pages(3),
     ...overrides,
-  };
-}
-
-/**
- * Сборка для фикстур — упрощённое зеркало ядра (KTD-4): лицевые по порядку, обороты обратным
- * порядком от последнего листа; непарными остаются младшие листы, лишние обороты — в конце.
- */
-function assemblyOf(session: SessionSnapshot): SessionAssembly {
-  const surviving = session.passes.filter((pass) => pass.pages.length > 0);
-  const frontsPass = surviving[0];
-  const backsPass = surviving[1];
-  const fronts = frontsPass?.pages ?? [];
-  const backs = backsPass?.pages ?? [];
-  const n = fronts.length;
-  const order: AssembledPage[] = [];
-  fronts.forEach((page, index) => {
-    const sheet = index + 1;
-    order.push({ key: page.key, side: 'front', sheet, rotate180: false, lost: page.lost });
-    const back = backs[n - sheet];
-    if (back !== undefined) {
-      order.push({
-        key: back.key,
-        side: 'back',
-        sheet,
-        rotate180: backsPass?.rotate180 ?? false,
-        lost: back.lost,
-      });
-    }
-  });
-  for (const back of backs.slice(n)) {
-    order.push({
-      key: back.key,
-      side: 'back',
-      sheet: null,
-      rotate180: backsPass?.rotate180 ?? false,
-      lost: back.lost,
-    });
-  }
-  const unpaired = Array.from({ length: Math.max(0, n - backs.length) }, (_, index) => index + 1);
-  return {
-    order,
-    report: {
-      fronts: n,
-      backs: backs.length,
-      pairs: Math.min(n, backs.length),
-      unpairedSheets: backsPass === undefined ? [] : unpaired,
-      extraBacks: Math.max(0, backs.length - n),
-      backsState: backsPass?.state ?? null,
-      backsDeclined: session.backsDeclined,
-      mismatch: backsPass !== undefined && backs.length !== n,
-    },
   };
 }
 

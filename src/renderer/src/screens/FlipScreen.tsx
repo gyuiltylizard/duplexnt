@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { DomainError, PassProgress, Snapshot } from '@shared';
+import { LaunchFailureNotice } from '../components/LaunchFailureNotice';
 import { multiline } from '../components/multiline';
-import { errorText, errorTextInline } from '../state/error-text';
-import { addressOf } from '../state/scanner-address';
+import { useFocusWhen } from '../components/useFocusWhen';
+import { reconnectAddress } from '../state/scanner-address';
 import './flip-screen.css';
 
 // Экран `flip` (план M2, U8; UI_SPEC раздел 4; handoff M2, S1–S3): кикер с числом листов,
@@ -26,8 +27,15 @@ export interface FlipScreenProps {
 /** Пункты чеклиста в порядке показа; первый — про входной лоток (решение handoff M2). */
 const CHECKS = ['tray', 'noFlip', 'keepOrder', 'stuck'] as const;
 
-/** Коды отказа, которые лечатся повторным подключением — с `flip` другого пути в `device` нет. */
-const RECONNECT_CODES: readonly string[] = ['scannerCertificateChanged', 'scannerNotConnected'];
+/**
+ * Отказы, после которых с `flip` нужна кнопка в `device`: других путей к подключению на
+ * экране нет. Шире списка `setup` (там есть строка устройства) и уже списка досканирования
+ * в `editor` (`scannerUnreachable` здесь лечится повторным нажатием, не переподключением).
+ */
+const FLIP_RECONNECT_CODES: readonly string[] = [
+  'scannerCertificateChanged',
+  'scannerNotConnected',
+];
 
 export function FlipScreen({
   snapshot,
@@ -42,11 +50,7 @@ export function FlipScreen({
 
   const busy = pass !== null;
   // В S2 обе кнопки недоступны — фокус уходит на контейнер экрана, как S15 M1.
-  useEffect(() => {
-    if (busy) {
-      screenRef.current?.focus();
-    }
-  }, [busy]);
+  useFocusWhen(screenRef, busy);
 
   // Число листов — страницы лицевого прохода; отчёт сборки уже считает их по роли (KTD-4).
   const fronts = snapshot.assembly?.report.fronts ?? 0;
@@ -70,15 +74,8 @@ export function FlipScreen({
     onStart();
   };
 
-  // Отказ запуска оборачивается в «Проход не начался: …»; отказ «Обороты не нужны» — не
-  // запуск, его текст идёт как есть.
+  // Отказ «Обороты не нужны» — не запуск: его текст идёт без обёртки «Проход не начался…».
   const failure = declineFailure ?? launchFailure;
-  const failureText =
-    failure === null
-      ? null
-      : declineFailure !== null || failure.code === 'scanNoPaper' || failure.code === 'scannerBusy'
-        ? errorText(t, failure)
-        : t('flip.launch.failed', { error: errorTextInline(t, failure) });
 
   return (
     <main className="flip-screen" ref={screenRef} tabIndex={-1}>
@@ -97,11 +94,11 @@ export function FlipScreen({
             </div>
             <div className="turn__front">
               <span className="turn__arrow">↑</span>
-              <span className="turn__top">ВЕРХ</span>
+              <span className="turn__top">{t('flip.illustrationTop')}</span>
               <span className="turn__lines">
-                <span className="turn__line" style={{ width: '86%' }} />
-                <span className="turn__line" style={{ width: '72%' }} />
-                <span className="turn__line" style={{ width: '80%' }} />
+                <span className="turn__line turn__line--1" />
+                <span className="turn__line turn__line--2" />
+                <span className="turn__line turn__line--3" />
               </span>
             </div>
             <span className="turn__tray" />
@@ -141,30 +138,26 @@ export function FlipScreen({
             <button type="button" className="btn btn--link" onClick={decline}>
               {t('flip.skip')}
             </button>
-          </>
-        )}
-
-        {!busy && failure !== null && (
-          <div
-            className={
-              failure.code === 'scanNoPaper' ? 'notice notice--warning' : 'notice notice--danger'
-            }
-            role="alert"
-          >
-            <p className="notice__text">{failureText}</p>
-            {RECONNECT_CODES.includes(failure.code) && (
-              <button
-                type="button"
-                className="btn btn--tinted"
-                onClick={() => {
-                  const { scanner } = snapshot;
-                  onOpenDevice(scanner.kind === 'none' ? undefined : addressOf(scanner.scanner));
-                }}
-              >
-                {t('setup.device.reconnect')}
-              </button>
+            {failure !== null && (
+              <LaunchFailureNotice
+                error={failure}
+                plain={declineFailure !== null}
+                action={
+                  FLIP_RECONNECT_CODES.includes(failure.code) ? (
+                    <button
+                      type="button"
+                      className="btn btn--tinted"
+                      onClick={() => {
+                        onOpenDevice(reconnectAddress(snapshot.scanner));
+                      }}
+                    >
+                      {t('setup.device.reconnect')}
+                    </button>
+                  ) : undefined
+                }
+              />
             )}
-          </div>
+          </>
         )}
       </div>
     </main>

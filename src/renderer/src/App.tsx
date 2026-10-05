@@ -18,6 +18,7 @@ import { IncompatibleScreen } from './screens/IncompatibleScreen';
 import { MergeScreen, MERGE_PAUSE_DECLINED_MS, MERGE_PAUSE_MS } from './screens/MergeScreen';
 import { ScanScreen } from './screens/ScanScreen';
 import { SetupScreen } from './screens/SetupScreen';
+import { assemblyLanded, mismatchDue } from './state/assembly-outcome';
 import { createSnapshotStore } from './state/snapshot-store';
 import { screenOf, type Screen } from './state/screen';
 import './app.css';
@@ -74,22 +75,17 @@ export function App(): ReactNode {
   // прийти пачкой, и кадр `scan` между `flip` и `editor` легко пропустить.
   const [mergeHoldMs, setMergeHoldMs] = useState<number | null>(null);
   const [previousScreen, setPreviousScreen] = useState<Screen | null>(null);
-  const currentScreen = snapshot === null ? null : screenOf(snapshot);
-  if (currentScreen !== previousScreen) {
-    setPreviousScreen(currentScreen);
+  const screen = snapshot === null ? null : screenOf(snapshot);
+  if (screen !== previousScreen) {
+    setPreviousScreen(screen);
+    const transitionReport = snapshot?.assembly?.report;
     if (
-      currentScreen === 'editor' &&
+      screen === 'editor' &&
       (previousScreen === 'scan' || previousScreen === 'flip') &&
-      snapshot !== null
+      transitionReport !== undefined &&
+      assemblyLanded(transitionReport)
     ) {
-      const transitionReport = snapshot.assembly?.report;
-      // Пауза — только когда сборка «состоялась»: проход оборотов завершён или обороты не
-      // нужны. Обрыв и «Остановить» ведут в editor без неё — там говорит плашка прерванного.
-      if (transitionReport?.backsState === 'completed') {
-        setMergeHoldMs(MERGE_PAUSE_MS);
-      } else if (transitionReport?.backsDeclined === true) {
-        setMergeHoldMs(MERGE_PAUSE_DECLINED_MS);
-      }
+      setMergeHoldMs(transitionReport.backsDeclined ? MERGE_PAUSE_DECLINED_MS : MERGE_PAUSE_MS);
     }
   }
 
@@ -172,12 +168,11 @@ export function App(): ReactNode {
     );
   }, [showToast, t]);
 
-  if (snapshot === null || currentScreen === null) {
+  if (snapshot === null || screen === null) {
     // Первый снимок ещё не пришёл: main отвечает за миллисекунды, рисовать нечего.
     return null;
   }
 
-  const screen = currentScreen;
   if (screen === 'incompatible') {
     // Единственный экран: ни уведомлений, ни тостов, ни модалок над ним (S22).
     return (
@@ -194,20 +189,21 @@ export function App(): ReactNode {
     (notice) => !dismissed.has(notice) && (notice !== 'pagesLost' || anyLost),
   );
 
-  const report = snapshot.assembly?.report;
+  const assembly = snapshot.assembly;
   // Пауза `merge` — поверх выведенного экрана `editor` (KTD-5).
-  const merging = screen === 'editor' && mergeHoldMs !== null && report !== undefined;
+  const merging = screen === 'editor' && mergeHoldMs !== null && assembly !== null;
   // `mismatch` (KTD-8): первый вход в editor за процесс при неподтверждённом несовпадении —
-  // включая вход через «Оставить как есть» и после перезапуска. Прерванный, но не принятый
-  // проход оборотов модалку не зовёт: решение ещё за человеком, его ведёт плашка S17.
-  const showMismatch =
+  // включая вход через «Оставить как есть» и после перезапуска; условие уместности — общий
+  // предикат `mismatchDue`. Подтверждение — на сессию, id сужается здесь же.
+  const mismatchSessionId =
     screen === 'editor' &&
     !merging &&
-    report !== undefined &&
-    report.mismatch &&
-    (report.backsState === 'completed' || report.backsState === 'accepted') &&
-    snapshot.session !== null &&
-    mismatchConfirmedFor !== snapshot.session.id;
+    assembly !== null &&
+    mismatchDue(assembly.report) &&
+    snapshot.session !== null
+      ? snapshot.session.id
+      : null;
+  const showMismatch = mismatchSessionId !== null && mismatchConfirmedFor !== mismatchSessionId;
 
   return (
     <div className="app">
@@ -232,7 +228,7 @@ export function App(): ReactNode {
           onOpenDevice={openDevice}
         />
       )}
-      {merging && <MergeScreen report={report} />}
+      {merging && <MergeScreen assembly={assembly} />}
       {screen === 'editor' && !merging && snapshot.session !== null && (
         <EditorScreen
           snapshot={snapshot}
@@ -243,11 +239,11 @@ export function App(): ReactNode {
           onToast={showToast}
         />
       )}
-      {showMismatch && (
+      {showMismatch && assembly !== null && (
         <MismatchModal
-          report={report}
+          report={assembly.report}
           onClose={() => {
-            setMismatchConfirmedFor(snapshot.session?.id ?? null);
+            setMismatchConfirmedFor(mismatchSessionId);
           }}
         />
       )}
