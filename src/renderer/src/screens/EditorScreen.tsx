@@ -85,7 +85,11 @@ const SAVE_TOAST_MS = 6000;
 /** «Сохранено … — можно закладывать новые листы» после «Сначала сохранить текущий» (S17). */
 const THEN_NEW_TOAST_MS = 3600;
 
-type EditorModal = 'save' | 'newscan' | 'revert';
+/**
+ * `saveThenNew` — `save`, открытая из `newscan` («Сначала сохранить текущий»): после полного
+ * успеха сессия закрывается.
+ */
+type EditorModal = 'save' | 'saveThenNew' | 'newscan' | 'revert';
 
 /** Пустая лента без сборки: стабильные ссылки для мемоизации. */
 const NO_PAGES: readonly AssembledPage[] = [];
@@ -137,8 +141,6 @@ export function EditorScreen({
   const positions = useMemo(() => new Map(visible.map((key, index) => [key, index])), [visible]);
 
   const [modal, setModal] = useState<EditorModal | null>(null);
-  /** `save` открыт из `newscan` («Сначала сохранить текущий»): после успеха — закрыть сессию. */
-  const [saveThenNew, setSaveThenNew] = useState(false);
   /** Идёт запись пакета (модалка `save`): правки заблокированы (KTD-9). */
   const [saving, setSaving] = useState(false);
 
@@ -508,11 +510,6 @@ export function EditorScreen({
     setModal('newscan');
   };
 
-  const openSave = (thenNew: boolean): void => {
-    setSaveThenNew(thenNew);
-    setModal('save');
-  };
-
   // Имена из модалки `save` — в документы одним шагом undo, до записи пакета (S16).
   const renameDocuments = (next: readonly string[]): Promise<boolean> => {
     const target = next.reduce(
@@ -546,8 +543,7 @@ export function EditorScreen({
       report.written.length === 1 && only !== undefined
         ? t('toast.saved', { file: only.fileName, folder: report.folder })
         : t('toast.savedMany', { count: report.written.length, folder: report.folder });
-    if (saveThenNew) {
-      setSaveThenNew(false);
+    if (modal === 'saveThenNew') {
       closeSession(t('toast.savedThenNew', { saved: text }));
       return;
     }
@@ -629,7 +625,7 @@ export function EditorScreen({
             className="btn btn--primary btn--small"
             disabled={total === 0}
             onClick={() => {
-              openSave(false);
+              setModal('save');
             }}
           >
             {documents.length > 1
@@ -808,7 +804,7 @@ export function EditorScreen({
         )}
       </div>
 
-      {modal === 'save' && (
+      {(modal === 'save' || modal === 'saveThenNew') && (
         <SaveModal
           documents={documents}
           defaultNames={defaultNames}
@@ -822,7 +818,6 @@ export function EditorScreen({
           onSaved={saved}
           onClose={() => {
             setModal(null);
-            setSaveThenNew(false);
           }}
         />
       )}
@@ -832,7 +827,7 @@ export function EditorScreen({
           deleted={deletedCount}
           saved={session.saved}
           onSaveFirst={() => {
-            openSave(true);
+            setModal('saveThenNew');
           }}
           onClose={() => {
             setModal(null);

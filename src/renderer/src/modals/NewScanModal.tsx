@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { DomainError } from '@shared';
 import { Modal } from '../components/Modal';
+import { useUnmounted } from '../components/useUnmounted';
 import { errorText } from '../state/error-text';
 
 // Модалка `newscan` (план M3, U9; handoff M3, S17; UI_SPEC §7.4): кикер и текст по состоянию
@@ -40,13 +41,7 @@ export function NewScanModal({
   const { t } = useTranslation();
   const [closing, setClosing] = useState(false);
   const [failure, setFailure] = useState<DomainError | null>(null);
-  const unmounted = useRef(false);
-  useEffect(() => {
-    unmounted.current = false;
-    return () => {
-      unmounted.current = true;
-    };
-  }, []);
+  const unmounted = useUnmounted();
 
   const kind = kindOf(total, saved);
 

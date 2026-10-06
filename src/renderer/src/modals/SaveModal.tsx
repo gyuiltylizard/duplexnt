@@ -7,6 +7,7 @@ import {
   type SaveMode,
 } from '@shared';
 import { Modal } from '../components/Modal';
+import { useUnmounted } from '../components/useUnmounted';
 import { errorText, errorTextInline } from '../state/error-text';
 import { asRequested, requestedNames, resultRows } from '../state/save-result';
 import { toneOf } from '../screens/EditorInspector';
@@ -81,13 +82,7 @@ export function SaveModal({
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
 
-  const unmounted = useRef(false);
-  useEffect(() => {
-    unmounted.current = false;
-    return () => {
-      unmounted.current = true;
-    };
-  }, []);
+  const unmounted = useUnmounted();
 
   // Папка — последняя выбранная в этом запуске, иначе «Документы» (KTD-5); её знает ядро.
   useEffect(() => {
@@ -101,7 +96,7 @@ export function SaveModal({
         console.error('[renderer] папка сохранения не ответила', error);
       },
     );
-  }, []);
+  }, [unmounted]);
 
   // После записи фокус — на основной кнопке: «Повторить неудавшиеся», «Готово» или снова
   // «Сохранить…» после отказа. Начальный фокус — на первом режиме (`Modal`).
@@ -127,11 +122,10 @@ export function SaveModal({
     },
   }));
   // «Один файл» при одном документе — это его имя; при нескольких — имя файла вне журнала.
-  const rows: Row[] =
-    mode === 'separate' || !several
-      ? docRows
-      : [{ value: fileName, placeholder: singleDefault, pages: total, onChange: setFileName }];
-  const writesDocNames = rows === docRows;
+  const perDocument = mode === 'separate' || !several;
+  const rows: Row[] = perDocument
+    ? docRows
+    : [{ value: fileName, placeholder: singleDefault, pages: total, onChange: setFileName }];
 
   const write = (requested: readonly string[], retry: boolean): void => {
     setWriting(true);
@@ -178,7 +172,7 @@ export function SaveModal({
     const requested = requestedNames(rows);
     setWriting(true);
     setFailure(null);
-    void (writesDocNames ? onRename(docNames) : Promise.resolve(true)).then((renamed) => {
+    void (perDocument ? onRename(docNames) : Promise.resolve(true)).then((renamed) => {
       if (unmounted.current) {
         return;
       }
@@ -219,7 +213,6 @@ export function SaveModal({
 
   const fileCount = mode === 'separate' ? documents.length : 1;
   const results = outcome === null ? null : resultRows(outcome.report, outcome.requested);
-  const failedCount = outcome?.report.failed.length ?? 0;
 
   let status: ReactNode;
   if (writing) {
@@ -247,34 +240,37 @@ export function SaveModal({
     status = <p className="modal__status" />;
   }
 
+  // Футер: выбор — «Отмена» + «Сохранить…»; частичный сбой — «Закрыть» + «Повторить
+  // неудавшиеся»; всё записано, но имена изменены — одна «Готово».
   let actions: ReactNode;
-  if (outcome === null) {
+  if (outcome !== null && outcome.report.failed.length === 0) {
+    const { report } = outcome;
     actions = (
-      <>
-        <button type="button" className="btn btn--ghost" disabled={writing} onClick={onClose}>
-          {t('save.cancel')}
-        </button>
-        <button
-          ref={primaryRef}
-          type="button"
-          className="btn btn--primary btn--small"
-          disabled={writing}
-          aria-busy={writing ? true : undefined}
-          onClick={submit}
-        >
-          {writing
-            ? t('save.submitting')
-            : fileCount === 1
-              ? t('save.submitOne')
-              : t('save.submitMany', { count: fileCount })}
-        </button>
-      </>
+      <button
+        ref={primaryRef}
+        type="button"
+        className="btn btn--primary btn--small"
+        onClick={() => {
+          onSaved(report);
+        }}
+      >
+        {t('save.done')}
+      </button>
     );
-  } else if (failedCount > 0) {
+  } else {
+    const retry = outcome?.requested ?? null;
+    let label: string;
+    if (retry !== null) {
+      label = t('save.retry');
+    } else if (fileCount === 1) {
+      label = t('save.submitOne');
+    } else {
+      label = t('save.submitMany', { count: fileCount });
+    }
     actions = (
       <>
         <button type="button" className="btn btn--ghost" disabled={writing} onClick={onClose}>
-          {t('save.close')}
+          {retry === null ? t('save.cancel') : t('save.close')}
         </button>
         <button
           ref={primaryRef}
@@ -283,25 +279,16 @@ export function SaveModal({
           disabled={writing}
           aria-busy={writing ? true : undefined}
           onClick={() => {
-            write(outcome.requested, true);
+            if (retry === null) {
+              submit();
+            } else {
+              write(retry, true);
+            }
           }}
         >
-          {writing ? t('save.submitting') : t('save.retry')}
+          {writing ? t('save.submitting') : label}
         </button>
       </>
-    );
-  } else {
-    actions = (
-      <button
-        ref={primaryRef}
-        type="button"
-        className="btn btn--primary btn--small"
-        onClick={() => {
-          onSaved(outcome.report);
-        }}
-      >
-        {t('save.done')}
-      </button>
     );
   }
 
