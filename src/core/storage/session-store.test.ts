@@ -1322,4 +1322,20 @@ describe('хранилище сессии: правки редактора (M3, 
     ]);
     expect(assembly.orderEdited).toBe(true);
   });
+
+  it('углы в другом порядке ключей — не правка: «сохранено» не снимается', async () => {
+    const { store } = await twoPasses();
+    const rotations = { 'p01-s01-0001': 90, 'p02-s01-0001': 180 } as const;
+    ok(await store.setEdits({ ...EMPTY_EDITS, rotations }, false));
+    ok(await store.markSaved());
+
+    ok(
+      await store.setEdits(
+        { ...EMPTY_EDITS, rotations: { 'p02-s01-0001': 180, 'p01-s01-0001': 90 } },
+        false,
+      ),
+    );
+
+    expect(store.snapshot()?.saved).toBe(true);
+  });
 });

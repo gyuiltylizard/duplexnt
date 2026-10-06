@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { MAX_DOCUMENT_NAME_LENGTH } from '@shared';
+import { EDIT_ANGLES, MAX_DOCUMENT_NAME_LENGTH } from '@shared';
 import { isPageKey } from './layout';
 
 // Схема правок редактора (M3; ADR 0004, амендмент 2026-10-06) — одна на журнал и на вход команды
@@ -22,7 +22,7 @@ export function editsSchemaOf(maxItems = Number.POSITIVE_INFINITY) {
     .strictObject({
       order: z.array(pageKeySchema).max(maxItems).readonly(),
       rotations: z
-        .record(pageKeySchema, z.union([z.literal(90), z.literal(180), z.literal(270)]))
+        .record(pageKeySchema, z.literal(EDIT_ANGLES))
         .refine((rotations) => Object.keys(rotations).length <= maxItems)
         .readonly(),
       deleted: z.array(pageKeySchema).max(maxItems).readonly(),

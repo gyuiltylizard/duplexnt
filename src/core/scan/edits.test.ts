@@ -8,6 +8,7 @@ import {
   pageAngle,
   rebaseEdits,
   remapCuts,
+  sameEdits,
   visibleKeysOf,
 } from './edits';
 
@@ -250,5 +251,17 @@ describe('правки: угол и признак правок', () => {
     ['имя единственного документа', edits({ names: ['Договор'] }), false, true],
   ])('%s', (_name, given, rotateBacks, expected) => {
     expect(hasEdits(given, rotateBacks)).toBe(expected);
+  });
+
+  it('равенство правок не зависит от порядка ключей углов', () => {
+    const left = edits({ rotations: { a: 90, b: 180 } });
+    const right = edits({ rotations: { b: 180, a: 90 } });
+
+    expect(sameEdits(left, right)).toBe(true);
+    expect(sameEdits(left, edits({ rotations: { a: 90 } }))).toBe(false);
+    expect(sameEdits(left, edits({ rotations: { a: 90, b: 270 } }))).toBe(false);
+    expect(
+      sameEdits(edits({ cuts: [1], names: ['', ''] }), edits({ cuts: [2], names: ['', ''] })),
+    ).toBe(false);
   });
 });

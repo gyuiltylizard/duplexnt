@@ -1,4 +1,10 @@
-import { EDIT_ANGLES, type EditAngle, type PageAngle, type SessionEdits } from '@shared';
+import {
+  EDIT_ANGLES,
+  type AssembledDocument,
+  type EditAngle,
+  type PageAngle,
+  type SessionEdits,
+} from '@shared';
 
 // Правки редактора поверх автопорядка (план M3, U2; ADR 0004, амендмент 2026-10-06). Чистые
 // функции над ключами страниц: ленту считает только ядро (KTD-2), нормализацию делает только
@@ -8,13 +14,6 @@ import { EDIT_ANGLES, type EditAngle, type PageAngle, type SessionEdits } from '
 // Канонический вид: в `order`, `rotations` и `deleted` только ключи живых страниц, без
 // повторов; разрезы строго внутри видимой ленты и по возрастанию — пустых документов нет;
 // имён ровно на одно больше, чем разрезов. Нормализация идемпотентна.
-
-/** Документ ленты: имя (пустое — по умолчанию) и отрезок видимой ленты. */
-export interface DocumentSpan {
-  readonly name: string;
-  readonly start: number;
-  readonly count: number;
-}
 
 function unique(keys: readonly string[], keep: (key: string) => boolean): string[] {
   const seen = new Set<string>();
@@ -131,7 +130,7 @@ export function rebaseEdits(
 }
 
 /** Документы ленты по разрезам (правки — уже в каноническом виде). */
-export function documentsOf(length: number, edits: SessionEdits): DocumentSpan[] {
+export function documentsOf(length: number, edits: SessionEdits): AssembledDocument[] {
   const bounds = [0, ...edits.cuts, length];
   return edits.names.map((name, index) => {
     const start = bounds[index] ?? 0;
@@ -142,6 +141,25 @@ export function documentsOf(length: number, edits: SessionEdits): DocumentSpan[]
 /** Угол страницы: ручной поворот плюс 180° прохода оборотов, по модулю 360 (KTD-4). */
 export function pageAngle(edit: EditAngle | undefined, rotate180: boolean): PageAngle {
   return (((edit ?? 0) + (rotate180 ? 180 : 0)) % 360) as PageAngle;
+}
+
+const sameList = <T>(left: readonly T[], right: readonly T[]): boolean =>
+  left.length === right.length && left.every((value, index) => value === right[index]);
+
+/**
+ * Равны ли правки по содержанию. Углы сравниваются по ключам, а не по порядку записи: журнал с
+ * диска и нормализованный вход могут перечислять их в разном порядке.
+ */
+export function sameEdits(left: SessionEdits, right: SessionEdits): boolean {
+  const leftAngles = Object.entries(left.rotations);
+  return (
+    sameList(left.order, right.order) &&
+    sameList(left.deleted, right.deleted) &&
+    sameList(left.cuts, right.cuts) &&
+    sameList(left.names, right.names) &&
+    leftAngles.length === Object.keys(right.rotations).length &&
+    leftAngles.every(([key, angle]) => right.rotations[key] === angle)
+  );
 }
 
 /** Есть ли что откатывать «Вернуть»: любая правка или включённый поворот оборотов (R8, R9). */

@@ -12,7 +12,7 @@ import {
   type SessionSnapshot,
 } from '@shared';
 import { autoKeysOf } from '../scan/assembly';
-import { rebaseEdits } from '../scan/edits';
+import { rebaseEdits, sameEdits } from '../scan/edits';
 import { isTempName, removeByPrefix, renameWithRetry, writeStreamAtomic } from './atomic-file';
 import {
   backsPassOf,
@@ -231,10 +231,10 @@ const NOTHING_LOST: ReadonlySet<string> = new Set();
  * Журнал с правками в каноническом виде против своих страниц (M3, KTD-3a, KTD-10). Если
  * состав страниц изменился относительно `previous` не через правку (досканирование, отброс
  * сегмента, сверка), разрезы переезжают вслед за страницами; правки исчезнувших ключей
- * вычищаются. Пустые правки не трогаются: им нечего нормализовать.
+ * вычищаются. Пустые правки уже канонические — на каждой странице прохода их не пересчитывают.
  */
 export function withRebasedEdits(previous: Journal | null, next: Journal): Journal {
-  if (next.edits === EMPTY_EDITS) {
+  if (sameEdits(next.edits, EMPTY_EDITS)) {
     return next;
   }
   const before = previous === null ? null : autoKeysOf(passSnapshotsOf(previous, NOTHING_LOST));
@@ -696,12 +696,9 @@ export function createSessionStore(
           return conflict('noBacksPass');
         }
         // Сравнение — после нормализации: состояние, которое приводится к записанному, правкой
-        // не считается и отметку о сохранении не снимает.
-        const normalized = withRebasedEdits(journal, { ...journal, edits }).edits;
-        if (
-          (backs?.rotate180 ?? false) === rotate180 &&
-          JSON.stringify(journal.edits) === JSON.stringify(normalized)
-        ) {
+        // не считается и отметку о сохранении не снимает. Страницы те же — переносить нечего.
+        const normalized = withRebasedEdits(null, { ...journal, edits }).edits;
+        if ((backs?.rotate180 ?? false) === rotate180 && sameEdits(journal.edits, normalized)) {
           return ok(undefined);
         }
         const passes = journal.passes.map((pass) =>

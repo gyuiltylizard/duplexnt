@@ -137,7 +137,6 @@ export type Journal = z.infer<typeof journalSchema>;
 export type JournalPass = Journal['passes'][number];
 export type JournalSegment = JournalPass['segments'][number];
 export type PassOrigin = NonNullable<JournalPass['origin']>;
-export type JournalEdits = Journal['edits'];
 
 type JournalV2 = z.infer<typeof journalV2Schema>;
 

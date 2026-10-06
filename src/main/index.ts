@@ -90,7 +90,7 @@ async function start(): Promise<void> {
   const thumbnails = createThumbnails(layoutOf(dataRoot).derivedDir, service);
   protocol.handle(PAGE_IMAGE_SCHEME, (request) =>
     handlePageImageRequest(request, {
-      sessionId: () => service.snapshot().session?.id ?? null,
+      sessionId: () => service.sessionId(),
       readPage: (key) => service.readPage(key),
       readThumbnail: (key) => thumbnails.get(key),
     }),

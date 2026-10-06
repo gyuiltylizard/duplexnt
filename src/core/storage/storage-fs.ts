@@ -111,3 +111,13 @@ export function storageFailure(error: unknown): DomainError {
     ? { code: 'storageFull' }
     : { code: 'storageFailed', details: { reason } };
 }
+
+/**
+ * Сбой записи файла пользователя (PDF): нехватку места пользователь может исправить сам,
+ * остальное — `saveWriteFailed` с кодом ФС.
+ */
+export function saveFailure(error: unknown): DomainError {
+  return storageFailure(error).code === 'storageFull'
+    ? { code: 'storageFull' }
+    : { code: 'saveWriteFailed', details: { reason: fsErrorCode(error) } };
+}

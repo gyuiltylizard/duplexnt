@@ -918,4 +918,29 @@ describe('служба прохода: пакетное сохранение (M3
     release();
     expect(await saving).toMatchObject({ ok: true, value: { failed: [] } });
   });
+
+  it('id сессии без снимка; после «Нового сканирования» повтор пакета закрытой сессии не идёт', async () => {
+    const root = await makeTempDataRoot();
+    const folder = await folderIn(root);
+    await seedSession(root, [{ number: 1, pages: 1, fixtures: [1] }]);
+    const { fs } = interceptFs(realStorageFs, (call) => {
+      if (call.op === 'rename' && call.to?.endsWith('А.pdf') === true) {
+        throw fsError('EIO');
+      }
+    });
+    const service = await openPassService(root, { fs, retry: { ceilingMs: 0 } });
+    const request = { mode: 'single', names: ['А'], retry: false } as const;
+    expect(await service.saveDocuments(folder, request)).toMatchObject({
+      ok: true,
+      value: { failed: [{ index: 0 }] },
+    });
+    const closedId = service.sessionId();
+    expect(closedId).toBe(service.snapshot().session?.id);
+
+    expect(await service.closeSession()).toMatchObject({ ok: true });
+    expect(await service.saveDocuments(folder, { ...request, retry: true })).toEqual(
+      fail('sessionConflict', { reason: 'noSession' }),
+    );
+    expect(service.sessionId()).toBeNull();
+  });
 });

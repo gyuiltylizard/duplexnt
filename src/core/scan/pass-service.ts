@@ -51,7 +51,7 @@ import {
   storedScannerOf,
   type StoredScanner,
 } from '../storage/stored-scanner';
-import { fsErrorCode, ioOf, storageFailure } from '../storage/storage-fs';
+import { ioOf, saveFailure, storageFailure } from '../storage/storage-fs';
 import { pagePixelLimit } from '../storage/thumbnails';
 import { openUnclosedJobs, type UnclosedJobs } from '../storage/unclosed-jobs';
 import { assembleSession, survivingOf } from './assembly';
@@ -87,6 +87,8 @@ export interface PassServiceOptions extends SessionStoreOptions {
 
 export interface PassService {
   snapshot(): Snapshot;
+  /** Id текущей сессии без сборки снимка: его спрашивает каждый запрос изображения. */
+  sessionId(): string | null;
   /** Проверка запомненного сканера при запуске; исход — в снимке. */
   checkRememberedScanner(signal?: AbortSignal): Promise<void>;
   /** Сканер подключён явным действием пользователя: запоминается, параметры сверяются (KTD-13). */
@@ -137,6 +139,8 @@ export interface PassService {
 
 /** Незавершённый пакет сохранения (M3, U4). */
 interface PendingBatch {
+  /** Пакет принадлежит сессии: после «Нового сканирования» повторять нечего. */
+  readonly sessionId: string;
   readonly mode: SaveMode;
   readonly folder: string;
   readonly documents: number;
@@ -339,10 +343,16 @@ export function createPassService(
     }
 
     const previous = request.retry ? pendingBatch : null;
-    if (request.retry && (previous?.mode !== request.mode || previous.documents !== spans.length)) {
+    if (
+      request.retry &&
+      (previous?.sessionId !== session.id ||
+        previous.mode !== request.mode ||
+        previous.documents !== spans.length)
+    ) {
       return conflict('noFailedFiles');
     }
     const batch: PendingBatch = previous ?? {
+      sessionId: session.id,
       mode: request.mode,
       folder,
       documents: spans.length,
@@ -659,6 +669,8 @@ export function createPassService(
   return {
     snapshot,
 
+    sessionId: () => store.snapshot()?.id ?? null,
+
     async checkRememberedScanner(signal) {
       // Повторная проверка не трогает ни идущий проход, ни рабочее подключение (ревью
       // сессии 9): интерфейс зовёт её только из «не отвечает», но ядро проверяет само.
@@ -819,11 +831,8 @@ export function createPassService(
         try {
           await writeFileAtomic(path, pdf.value, ioOf(options));
         } catch (error) {
-          // Перевод кодов — существующим помощником: он различает и ENOSPC, и EDQUOT.
-          const failure = storageFailure(error);
-          return failure.code === 'storageFull'
-            ? fail('storageFull')
-            : fail('saveWriteFailed', { reason: fsErrorCode(error) });
+          // Перевод кодов — один на `savePdf` и пакет: он различает и ENOSPC, и EDQUOT.
+          return { ok: false, error: saveFailure(error) };
         }
         // Отметка — только после успешного переименования и только на неизменившийся набор;
         // сессия не удаляется (R12). Файл при пропущенной отметке всё равно записан — успех.
@@ -853,6 +862,10 @@ export function createPassService(
         return conflict('passRunning');
       }
       const closed = await store.closeSession();
+      if (closed.ok) {
+        // Незавершённый пакет принадлежал закрытой сессии: повтор не допишет новую в её папку.
+        pendingBatch = null;
+      }
       notify();
       return closed;
     },

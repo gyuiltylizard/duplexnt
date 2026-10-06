@@ -4,6 +4,7 @@ import {
   MAX_DOCUMENT_NAME_LENGTH,
   ok,
   PROBE_TOKEN_MAX_LENGTH,
+  SAVE_MODES,
   type ConnectScannerRequest,
   type ProbeRequest,
   type Result,
@@ -61,7 +62,7 @@ export const setEditsRequestSchema = z.strictObject({
  * NTFS применяет ядро при записи (KTD-11), чтобы не отказывать человеку из-за «:» в имени.
  */
 export const saveDocumentsRequestSchema = z.strictObject({
-  mode: z.enum(['separate', 'single']),
+  mode: z.enum(SAVE_MODES),
   names: z.array(z.string().max(MAX_DOCUMENT_NAME_LENGTH)).min(1).max(MAX_EDIT_ITEMS).readonly(),
   retry: z.boolean(),
 }) satisfies z.ZodType<SaveDocumentsRequest>;

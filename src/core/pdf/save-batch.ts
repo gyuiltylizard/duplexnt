@@ -1,7 +1,7 @@
 import { join } from 'node:path';
-import { ok, type DomainError, type FailedFile, type Result, type SavedFile } from '@shared';
+import { ok, type FailedFile, type Result, type SavedFile } from '@shared';
 import { writeFileAtomic } from '../storage/atomic-file';
-import { fsErrorCode, isMissing, storageFailure, type StorageIo } from '../storage/storage-fs';
+import { isMissing, saveFailure, type StorageIo } from '../storage/storage-fs';
 
 // Пакетная запись PDF в папку (план M3, U4; KTD-5, KTD-11). Имена приходят из модалки и
 // приводятся к правилам NTFS; занятое имя получает суффикс « (2)», « (3)» — существующий файл не
@@ -51,7 +51,7 @@ export function sanitizeFileBase(name: string): string {
 }
 
 /** Ключ сравнения имён: NTFS не различает регистр. */
-export const nameKey = (fileName: string): string => fileName.toLowerCase();
+const nameKey = (fileName: string): string => fileName.toLowerCase();
 
 /** Первое свободное имя: «основа.pdf», затем «основа (2).pdf», «основа (3).pdf»… */
 export function pickFileName(base: string, taken: ReadonlySet<string>): string {
@@ -73,16 +73,9 @@ export interface BatchItem {
   readonly build: () => Promise<Result<Uint8Array>>;
 }
 
-export interface BatchOutcome {
+interface BatchOutcome {
   readonly written: readonly SavedFile[];
   readonly failed: readonly FailedFile[];
-}
-
-/** Перевод сбоя записи: нехватку места пользователь может исправить сам. */
-export function writeFailure(error: unknown): DomainError {
-  return storageFailure(error).code === 'storageFull'
-    ? { code: 'storageFull' }
-    : { code: 'saveWriteFailed', details: { reason: fsErrorCode(error) } };
 }
 
 /**
@@ -98,7 +91,7 @@ export async function writeBatch(
   try {
     existing = await io.fs.readdir(folder);
   } catch (error) {
-    return { ok: false, error: writeFailure(error) };
+    return { ok: false, error: saveFailure(error) };
   }
   const taken = new Set(existing.map(nameKey));
   const written: SavedFile[] = [];
@@ -131,7 +124,7 @@ export async function writeBatch(
       await writeFileAtomic(join(folder, fileName), pdf.value, io);
       written.push({ index: item.index, fileName });
     } catch (error) {
-      failed.push({ index: item.index, fileName, error: writeFailure(error) });
+      failed.push({ index: item.index, fileName, error: saveFailure(error) });
     }
   }
   return ok({ written, failed });
@@ -143,6 +136,6 @@ async function isFree(path: string, io: StorageIo): Promise<Result<boolean>> {
     await io.fs.size(path);
     return ok(false);
   } catch (error) {
-    return isMissing(error) ? ok(true) : { ok: false, error: writeFailure(error) };
+    return isMissing(error) ? ok(true) : { ok: false, error: saveFailure(error) };
   }
 }

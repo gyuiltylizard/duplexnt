@@ -43,6 +43,7 @@ const CONNECTED = {
 function setup(snapshot: Snapshot = EMPTY_SNAPSHOT) {
   const service = {
     snapshot: vi.fn(() => snapshot),
+    sessionId: vi.fn(() => null),
     checkRememberedScanner: vi.fn(() => Promise.resolve()),
     useScanner: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
     setParams: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),

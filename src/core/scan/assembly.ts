@@ -111,13 +111,14 @@ export const autoKeysOf = (passes: readonly PassSnapshot[]): string[] =>
 export function assembleSession(session: SessionSnapshot): SessionAssembly {
   const auto = autoAssembly(session.passes);
   const byKey = new Map(auto.pages.map((page) => [page.key, page]));
+  const autoKeys = [...byKey.keys()];
   // Снимок уже несёт канонические правки (их нормализует хранилище); повтор дешёв и страхует
   // сборку от мёртвых ключей при любом источнике снимка.
-  const edits = normalizeEdits([...byKey.keys()], session.edits);
+  const edits = normalizeEdits(autoKeys, session.edits);
   const unpaired = new Set(auto.report.unpairedSheets);
 
   const order: AssembledPage[] = [];
-  for (const key of visibleKeysOf([...byKey.keys()], edits)) {
+  for (const key of visibleKeysOf(autoKeys, edits)) {
     const page = byKey.get(key);
     if (page !== undefined) {
       order.push({

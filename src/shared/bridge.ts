@@ -66,7 +66,8 @@ export type SavePdfReport =
   | { readonly canceled: false; readonly fileName: string; readonly directory: string };
 
 /** Режим сохранения (M3, R11): по документам или всё одним файлом (R15 — границы не в счёт). */
-export type SaveMode = 'separate' | 'single';
+export const SAVE_MODES = ['separate', 'single'] as const;
+export type SaveMode = (typeof SAVE_MODES)[number];
 
 /**
  * «Сохранить» из модалки (M3, U4): имена файлов по документам (для «одного файла» — одно), папка —
