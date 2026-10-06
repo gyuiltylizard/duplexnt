@@ -342,7 +342,9 @@ export function createPassService(
       return fail('invalidInput', { field: 'names', problem: 'count' });
     }
 
+    // Новый пакет забывает прежний незавершённый: повтор относится только к последнему.
     const previous = request.retry ? pendingBatch : null;
+    pendingBatch = previous;
     if (
       request.retry &&
       (previous?.sessionId !== session.id ||
@@ -350,6 +352,13 @@ export function createPassService(
         previous.documents !== spans.length)
     ) {
       return conflict('noFailedFiles');
+    }
+    // Лента менялась после первой попытки: записанные файлы собраны со старой, и дописать к
+    // ним неудавшиеся по новой — значит молча получить пакет, где страница в двух файлах или
+    // ни в одном. Пакет пишется заново целиком.
+    if (previous !== null && previous.revision !== store.revision()) {
+      pendingBatch = null;
+      return conflict('batchStale');
     }
     const batch: PendingBatch = previous ?? {
       sessionId: session.id,
@@ -587,6 +596,10 @@ export function createPassService(
   async function startPass(): Promise<Result<PassReport>> {
     if (run !== null) {
       return conflict('passRunning');
+    }
+    // Запись PDF читает страницы сессии по ходу: новый проход поменял бы ленту под ней.
+    if (saving) {
+      return conflict('saving');
     }
     if (store.incompatible) {
       return fail('storageIncompatible');
@@ -860,6 +873,10 @@ export function createPassService(
     async closeSession() {
       if (run !== null) {
         return conflict('passRunning');
+      }
+      // Закрытие посреди записи унесло бы страницы недописанных документов (KTD-9).
+      if (saving) {
+        return conflict('saving');
       }
       const closed = await store.closeSession();
       if (closed.ok) {

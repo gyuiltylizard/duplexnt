@@ -27,6 +27,9 @@ function unique(keys: readonly string[], keep: (key: string) => boolean): string
   return result;
 }
 
+const sameList = <T>(left: readonly T[], right: readonly T[]): boolean =>
+  left.length === right.length && left.every((value, index) => value === right[index]);
+
 /**
  * Видимая лента: явный порядок, за ним — ключи, которых в нём нет, в автопорядке (досканирование
  * при ручном порядке дописывается в конец, R4); удалённые не показываются. Пустой `order` —
@@ -119,9 +122,7 @@ export function rebaseEdits(
   afterKeys: readonly string[],
   edits: SessionEdits,
 ): SessionEdits {
-  const changed =
-    beforeKeys !== null &&
-    (beforeKeys.length !== afterKeys.length || beforeKeys.some((key, i) => key !== afterKeys[i]));
+  const changed = beforeKeys !== null && !sameList(beforeKeys, afterKeys);
   const cuts =
     changed && edits.cuts.length > 0
       ? remapCuts(visibleKeysOf(beforeKeys, edits), visibleKeysOf(afterKeys, edits), edits.cuts)
@@ -142,9 +143,6 @@ export function documentsOf(length: number, edits: SessionEdits): AssembledDocum
 export function pageAngle(edit: EditAngle | undefined, rotate180: boolean): PageAngle {
   return (((edit ?? 0) + (rotate180 ? 180 : 0)) % 360) as PageAngle;
 }
-
-const sameList = <T>(left: readonly T[], right: readonly T[]): boolean =>
-  left.length === right.length && left.every((value, index) => value === right[index]);
 
 /**
  * Равны ли правки по содержанию. Углы сравниваются по ключам, а не по порядку записи: журнал с

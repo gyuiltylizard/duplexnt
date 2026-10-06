@@ -102,7 +102,14 @@ export async function writeBatch(
     let fileName = pickFileName(base, taken);
     // Имя занято и за неудавшимся документом: повтор и сводка называют его тем же именем.
     taken.add(nameKey(fileName));
-    const pdf = await item.build();
+    // Исключение сборки (сбой библиотеки PDF) — сбой этого документа, а не всего пакета:
+    // иначе потерялся бы учёт уже записанных файлов.
+    let pdf: Result<Uint8Array>;
+    try {
+      pdf = await item.build();
+    } catch (error) {
+      pdf = { ok: false, error: saveFailure(error) };
+    }
     if (!pdf.ok) {
       failed.push({ index: item.index, fileName, error: pdf.error });
       continue;

@@ -651,20 +651,22 @@ describe('служба прохода: сохранение PDF (M2, U6)', () =>
     });
   });
 
-  it('состояние перепроверяется после диалога: сессия закрыта, пока он висел, — отказ', async () => {
+  it('пока висит диалог сохранения, закрыть сессию нельзя — страницы целы, файл записан (KTD-9)', async () => {
     const root = await makeTempDataRoot();
     await savable(root);
     const target = await saveTarget(root);
     const service = await openPassService(root);
 
     const result = await service.savePdf(async () => {
-      // «Пока диалог висел»: пользователь успел закрыть сессию «Новым сканированием».
-      await service.closeSession();
+      // «Пока диалог висел»: попытка «Нового сканирования» отклоняется.
+      expect(await service.closeSession()).toEqual(fail('sessionConflict', { reason: 'saving' }));
+      expect(await service.startPass()).toEqual(fail('sessionConflict', { reason: 'saving' }));
       return target;
     });
 
-    expect(result).toEqual(fail('sessionConflict', { reason: 'noSession' }));
-    await expect(readFile(target)).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(result).toMatchObject({ ok: true, value: { canceled: false } });
+    expect((await PDFDocument.load(await readFile(target))).getPageCount()).toBe(4);
+    expect(service.snapshot().session?.passes).toHaveLength(2);
   });
 
   it('без сессии — noSession; сохранение не зовёт диалог', async () => {
@@ -859,13 +861,13 @@ describe('служба прохода: пакетное сохранение (M3
     );
   });
 
-  it('правка между попыткой и повтором — «сохранено» не ставится: записанное устарело (R13)', async () => {
+  it('правка между попыткой и повтором — повтор отклонён batchStale: пакет пишется заново (R13)', async () => {
     const root = await makeTempDataRoot();
     const folder = await folderIn(root);
     await seedSession(root, [{ number: 1, pages: 2, fixtures: [1, 2] }]);
-    let fail = true;
+    let failWrite = true;
     const { fs } = interceptFs(realStorageFs, (call) => {
-      if (fail && call.op === 'rename' && call.to?.endsWith('Б.pdf') === true) {
+      if (failWrite && call.op === 'rename' && call.to?.endsWith('Б.pdf') === true) {
         throw fsError('EIO');
       }
     });
@@ -882,13 +884,50 @@ describe('служба прохода: пакетное сохранение (M3
       { ...EMPTY_EDITS, rotations: { 'p01-s01-0001': 180 }, cuts: [1], names: ['', ''] },
       false,
     );
-    fail = false;
-    expect(await service.saveDocuments(folder, { ...request, retry: true })).toMatchObject({
+    failWrite = false;
+    expect(await service.saveDocuments(folder, { ...request, retry: true })).toEqual(
+      fail('sessionConflict', { reason: 'batchStale' }),
+    );
+    // Дописано ничего не было: смешанного пакета на диске нет; отметки «сохранено» нет.
+    expect((await readdir(folder)).sort()).toEqual(['А.pdf']);
+    expect(service.snapshot().session?.saved).toBe(false);
+    // Пакет забыт: следующий повтор — нечего повторять, новый пакет — по текущей ленте.
+    expect(await service.saveDocuments(folder, { ...request, retry: true })).toEqual(
+      fail('sessionConflict', { reason: 'noFailedFiles' }),
+    );
+    expect(await service.saveDocuments(folder, request)).toMatchObject({
       ok: true,
-      value: { failed: [] },
+      value: { failed: [], written: [{ fileName: 'А (2).pdf' }, { fileName: 'Б.pdf' }] },
+    });
+    expect(service.snapshot().session?.saved).toBe(true);
+  });
+
+  it('новый пакет забывает прежний незавершённый, даже если сам упал на папке', async () => {
+    const root = await makeTempDataRoot();
+    const folder = await folderIn(root);
+    await seedSession(root, [{ number: 1, pages: 1, fixtures: [1] }]);
+    let failWrite = true;
+    const { fs } = interceptFs(realStorageFs, (call) => {
+      if (failWrite && call.op === 'rename' && call.to?.endsWith('А.pdf') === true) {
+        throw fsError('EIO');
+      }
+    });
+    const service = await openPassService(root, { fs, retry: { ceilingMs: 0 } });
+    const request = { mode: 'single', names: ['А'], retry: false } as const;
+    expect(await service.saveDocuments(folder, request)).toMatchObject({
+      ok: true,
+      value: { failed: [{ index: 0 }] },
     });
 
-    expect(service.snapshot().session?.saved).toBe(false);
+    expect(await service.saveDocuments(join(root, 'нет такой'), request)).toMatchObject({
+      ok: false,
+      error: { code: 'saveWriteFailed' },
+    });
+    failWrite = false;
+    expect(await service.saveDocuments(folder, { ...request, retry: true })).toEqual(
+      fail('sessionConflict', { reason: 'noFailedFiles' }),
+    );
+    expect(await readdir(folder)).toEqual([]);
   });
 
   it('пока пишется пакет, правка отклоняется конфликтом saving (KTD-9)', async () => {
@@ -911,12 +950,22 @@ describe('служба прохода: пакетное сохранение (M3
     };
     const service = await openPassService(root, { fs: slowFs });
 
-    const saving = service.saveDocuments(folder, { mode: 'single', names: ['А'], retry: false });
+    const request = { mode: 'single', names: ['А'], retry: false } as const;
+    const saving = service.saveDocuments(folder, request);
+    const busy = fail('sessionConflict', { reason: 'saving' });
     expect(await service.setEdits({ ...EMPTY_EDITS, deleted: ['p01-s01-0001'] }, false)).toEqual(
-      fail('sessionConflict', { reason: 'saving' }),
+      busy,
     );
+    // Второй пакет, сохранение M2, закрытие сессии и новый проход — тоже ждут конца записи.
+    expect(await service.saveDocuments(folder, request)).toEqual(busy);
+    expect(await service.savePdf(() => Promise.resolve(join(folder, 'x.pdf')))).toEqual(busy);
+    expect(await service.closeSession()).toEqual(busy);
+    expect(await service.startPass()).toEqual(busy);
     release();
     expect(await saving).toMatchObject({ ok: true, value: { failed: [] } });
+    expect(await readdir(folder)).toEqual(['А.pdf']);
+    // Запись кончилась — флаг снят.
+    expect(await service.saveDocuments(folder, request)).toMatchObject({ ok: true });
   });
 
   it('id сессии без снимка; после «Нового сканирования» повтор пакета закрытой сессии не идёт', async () => {

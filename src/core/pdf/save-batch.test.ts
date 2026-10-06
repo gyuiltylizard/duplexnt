@@ -217,4 +217,64 @@ describe('пакетная запись (R12, R14)', () => {
     expect(outcome).toEqual(fail('saveWriteFailed', { reason: 'ENOENT' }));
     expect(built).toBe(0);
   });
+
+  it('занятость не узнать (сбой stat) — документ не записан, остальные записаны', async () => {
+    const folder = await folderWith();
+    const { fs } = interceptFs(realStorageFs, (call) => {
+      if (call.op === 'size' && call.path.endsWith('Акт.pdf')) {
+        throw fsError('EACCES');
+      }
+    });
+
+    const outcome = await writeBatch(folder, [item(0, 'Акт'), item(1, 'Счёт')], ioOf({ fs }));
+
+    expect(outcome).toEqual(
+      ok({
+        written: [{ index: 1, fileName: 'Счёт.pdf' }],
+        failed: [
+          {
+            index: 0,
+            fileName: 'Акт.pdf',
+            error: { code: 'saveWriteFailed', details: { reason: 'EACCES' } },
+          },
+        ],
+      }),
+    );
+    expect(await readdir(folder)).toEqual(['Счёт.pdf']);
+  });
+
+  it('несколько файлов появились во время сборки — имя сдвигается дальше, чужие целы', async () => {
+    const folder = await folderWith();
+    const racing = async (): Promise<Result<Uint8Array>> => {
+      await writeFile(join(folder, 'Акт.pdf'), 'первый чужой');
+      await writeFile(join(folder, 'Акт (2).pdf'), 'второй чужой');
+      return ok(bytesOf('наш'));
+    };
+
+    const outcome = await writeBatch(folder, [item(0, 'Акт', racing)], ioOf({}));
+
+    expect(outcome).toEqual(ok({ written: [{ index: 0, fileName: 'Акт (3).pdf' }], failed: [] }));
+    expect(await readFile(join(folder, 'Акт.pdf'), 'utf8')).toBe('первый чужой');
+    expect(await readFile(join(folder, 'Акт (2).pdf'), 'utf8')).toBe('второй чужой');
+  });
+
+  it('исключение сборки — сбой этого документа, пакет идёт дальше', async () => {
+    const folder = await folderWith();
+    const throwing = (): Promise<Result<Uint8Array>> => Promise.reject(new Error('pdf-lib упал'));
+
+    const outcome = await writeBatch(folder, [item(0, 'А', throwing), item(1, 'Б')], ioOf({}));
+
+    expect(outcome).toEqual(
+      ok({
+        written: [{ index: 1, fileName: 'Б.pdf' }],
+        failed: [
+          {
+            index: 0,
+            fileName: 'А.pdf',
+            error: { code: 'saveWriteFailed', details: { reason: 'UNKNOWN' } },
+          },
+        ],
+      }),
+    );
+  });
 });

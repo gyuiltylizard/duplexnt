@@ -87,6 +87,8 @@ export const SESSION_CONFLICT_REASONS = [
   'nothingToSave',
   /** Повторять нечего: прошлый пакет записан целиком или его не было (M3, U4). */
   'noFailedFiles',
+  /** Лента менялась после первой попытки пакета: дописывать к нему нельзя, только заново. */
+  'batchStale',
 ] as const;
 
 export type SessionConflictReason = (typeof SESSION_CONFLICT_REASONS)[number];
