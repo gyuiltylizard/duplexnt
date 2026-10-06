@@ -1,7 +1,7 @@
-/* Экран `editor` (U24; M2 U9): тулбар с правой зоной сохранения, лента в порядке сборки,
-   превью, статус-бар, плашка S17, тумблер 180° внизу ленты — по макету в объёме KTD-25,
-   CSS handoff'ов U19 (S16–S19) и M2 (S6–S9). Правой колонки инспектора нет — сетка из двух
-   колонок. Геометрия мок-листов — литералы макета (осознанное исключение DS). */
+/* Экран `editor` (U24; M2 U9; M3 U7): тулбар с документом и правой зоной сохранения, лента
+   группами по документам, превью, статус-бар с поворотом и удалением, инспектор, плашка S17,
+   тумблер 180° внизу ленты — CSS handoff'ов U19 (S16–S19), M2 (S6–S9) и M3 (S1–S13). Сетка из
+   трёх колонок. Геометрия мок-листов — литералы макета (осознанное исключение DS). */
 
 .editor-screen {
   flex: 1;
@@ -10,10 +10,11 @@
   flex-direction: column;
 }
 
+/* S1 M3: три колонки у тулбара и тела — правая зона тулбара встаёт над инспектором. */
 .editor-screen__toolbar,
 .editor-screen__body {
   display: grid;
-  grid-template-columns: var(--size-rail) minmax(0, 1fr);
+  grid-template-columns: var(--size-rail) minmax(0, 1fr) var(--size-inspector);
 }
 
 .editor-screen__toolbar {
@@ -21,15 +22,15 @@
   height: var(--size-toolbar);
   border-bottom: var(--border-width) solid var(--color-border-subtle);
   background: var(--color-bg-toolbar);
-  /* Правая зона S8–S9 (handoff M2). */
-  grid-template-columns: var(--size-rail) minmax(0, 1fr) auto;
 }
 
 .editor-screen__toolbar-right {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--space-4);
-  padding-right: var(--space-8);
+  padding: 0 var(--space-8);
+  border-left: var(--border-width) solid var(--color-border-subtle);
 }
 
 .editor-screen__unsaved {
@@ -54,16 +55,32 @@
 .editor-screen__toolbar-center {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  gap: var(--space-5);
   min-width: 0;
   padding: 0 var(--space-8);
 }
 
-.editor-screen__count {
-  font-weight: var(--font-weight-semibold);
-  font-size: var(--font-size-m);
-  line-height: var(--leading-snug);
+.editor-screen__doc-mark {
+  flex: none;
+  width: var(--size-dot);
+  height: var(--size-dot);
+  border-radius: var(--radius-xs);
+  background: var(--doc-color);
+}
+
+.editor-screen__doc-title {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
+  font: var(--font-weight-semibold) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
+}
+
+.editor-screen__doc-pos {
+  white-space: nowrap;
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-snug) var(--font-family-mono);
+  color: var(--color-text-subtle);
 }
 
 .editor-screen__body {
@@ -71,7 +88,7 @@
   min-height: 0;
 }
 
-/* — лента слева: порядок сборки, внизу — тумблер 180° (S7) — */
+/* — лента слева: группы документов, внизу — тумблер 180° (S7 M2) — */
 
 .rail {
   min-height: 0;
@@ -87,6 +104,109 @@
   overflow-y: auto;
   overflow-x: hidden;
   padding: var(--space-6) var(--space-7) var(--space-8);
+}
+
+/* — S5 M3: панель мультивыделения — */
+
+.rail__top {
+  flex: none;
+  padding: var(--space-4) var(--space-7) 0;
+}
+
+.rail__selection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-l);
+  background: var(--color-bg-inverse);
+}
+
+.rail__selection-text {
+  margin: 0;
+  font: var(--font-weight-medium) var(--font-size-s) / var(--leading-normal) var(--font-family-sans);
+  color: var(--color-text-on-inverse);
+}
+
+.rail__selection-actions {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.rail__selection-clear {
+  padding: var(--space-4) var(--space-3);
+  border: 0;
+  background: none;
+  color: var(--color-text-on-inverse-muted);
+  font: var(--font-weight-medium) var(--font-size-s) / var(--leading-snug) var(--font-family-sans);
+  cursor: pointer;
+}
+
+.rail__selection-clear:focus-visible {
+  outline: var(--space-1) solid var(--color-border-focus);
+  outline-offset: var(--space-1);
+}
+
+/* — S2 M3: группа документа — */
+
+.doc-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding-bottom: var(--space-8);
+}
+
+.doc-group__divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-1) 0 var(--space-5);
+}
+
+.doc-group__pill {
+  flex: none;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-xl);
+  background: var(--color-accent);
+  color: var(--color-text-on-accent);
+  white-space: nowrap;
+  font: var(--font-weight-semibold) var(--font-size-xxs) / var(--leading-none)
+    var(--font-family-mono);
+  letter-spacing: var(--tracking-wide);
+}
+
+.doc-group__rule {
+  flex: 1;
+  height: 0;
+  border-top: var(--border-width-dashed) dashed var(--color-accent);
+}
+
+.doc-group__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+/* Имя документа: геометрия поля S3 — U8 заменит текст полем ввода без сдвига заголовка.
+   Пока это текст, длинное имя режется многоточием. */
+.doc-group__name {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius-m);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-primary);
+  font: var(--font-weight-semibold) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
+}
+
+.doc-group__count {
+  flex: none;
+  white-space: nowrap;
+  font: var(--font-weight-regular) var(--font-size-xs) / var(--leading-none) var(--font-family-mono);
+  color: var(--color-text-faint);
 }
 
 .rail__footer {
@@ -106,9 +226,10 @@
   list-style: none;
 }
 
-/* — миниатюра: без перетаскивания и split-бара (M1) — */
+/* — миниатюра; перетаскивание и split-бар — U8 — */
 
 .thumb {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -122,6 +243,13 @@
 .thumb--selected {
   background: var(--color-bg-selected);
   border-color: var(--color-border-focus);
+}
+
+/* S4 M3: в выделении из нескольких — тёмная рамка и кольцо. */
+.thumb--in-selection {
+  background: var(--color-bg-selected);
+  border-color: var(--color-border-inverse);
+  box-shadow: var(--shadow-ring-selected);
 }
 
 .thumb__paper {
@@ -195,11 +323,24 @@
   flex: none;
 }
 
-/* Поворот оборотов при включённом тумблере — только transform, файлы не меняются (S7). */
-.thumb--rotated .thumb__img,
-.preview__paper--rotated .preview__img {
+/* S4 M3: угол — только отображение, без анимации (KTD-4). Рамка карточки остаётся портретной,
+   чтобы сетка не прыгала; альбомная страница вписывается в неё уменьшенной (1 / 1,414 —
+   пропорция листа). */
+.thumb--angle-90 .thumb__img,
+.thumb--angle-270 .thumb__img {
+  object-fit: contain;
+}
+
+.thumb--angle-90 .thumb__img {
+  transform: rotate(90deg) scale(0.7071);
+}
+
+.thumb--angle-180 .thumb__img {
   transform: rotate(180deg);
-  transition: transform var(--duration-fast) var(--ease-standard);
+}
+
+.thumb--angle-270 .thumb__img {
+  transform: rotate(270deg) scale(0.7071);
 }
 
 /* S18: потерянная страница — пунктир; S19: не построилась — сплошная рамка */
@@ -344,6 +485,91 @@
   text-align: center;
 }
 
+/* — S8 M3: превью под углом, начало документа — */
+
+.preview__paper--landscape {
+  width: 100%;
+  height: auto;
+  max-height: 100%;
+  aspect-ratio: 1.414 / 1;
+}
+
+/* Изображение в альбомной бумаге: рамка с переставленными сторонами, повёрнутая на месте. */
+.preview__paper--angle-90 .preview__img,
+.preview__paper--angle-270 .preview__img {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(100% / 1.414);
+  height: calc(100% * 1.414);
+}
+
+.preview__paper--angle-90 .preview__img {
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+
+.preview__paper--angle-180 .preview__img {
+  transform: rotate(180deg);
+}
+
+.preview__paper--angle-270 .preview__img {
+  transform: translate(-50%, -50%) rotate(270deg);
+}
+
+.preview__paper--doc-start {
+  border-top: var(--border-width-thick) solid var(--doc-color);
+}
+
+.preview__doc-start {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  z-index: var(--z-raised);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-s);
+  background: var(--color-bg-paper);
+  color: var(--doc-color);
+  font: var(--font-weight-medium) var(--font-size-xxs) / var(--leading-none) var(--font-family-mono);
+  letter-spacing: var(--tracking-caps);
+}
+
+/* — S10 M3: пустой редактор — */
+
+.stage__empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  padding: var(--space-11);
+  text-align: center;
+}
+
+.stage__empty-title {
+  margin: 0;
+  font: var(--font-weight-semibold) var(--font-size-xl) / var(--leading-snug)
+    var(--font-family-sans);
+}
+
+.stage__empty-text {
+  max-width: 420px;
+  margin: 0;
+  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-relaxed)
+    var(--font-family-sans);
+  color: var(--color-text-muted);
+  text-wrap: pretty;
+}
+
+.rail__empty {
+  margin: 0;
+  padding: var(--space-8) 0;
+  text-align: center;
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-relaxed)
+    var(--font-family-sans);
+  color: var(--color-text-subtle);
+}
+
 .stage__statusbar {
   flex: none;
   height: var(--size-statusbar);
@@ -364,6 +590,224 @@
   color: var(--color-text-secondary);
   min-width: 96px;
   text-align: center;
+}
+
+/* S9 M3: инструменты статус-бара. */
+.stage__divider {
+  width: var(--border-width);
+  height: 18px;
+  margin: 0 var(--space-3);
+  background: var(--color-border-default);
+}
+
+.stage__tool {
+  font-size: var(--font-size-l);
+}
+
+.stage__tool:hover:not(:disabled) {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.stage__tool--danger:hover:not(:disabled) {
+  border-color: var(--color-border-danger-soft);
+  color: var(--color-danger);
+}
+
+/* — S11–S13 M3: инспектор — */
+
+.inspector {
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-panel);
+  border-left: var(--border-width) solid var(--color-border-subtle);
+}
+
+.inspector__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding: var(--space-8);
+  border-bottom: var(--border-width) solid var(--color-border-subtle);
+}
+
+.inspector__section--details {
+  padding: var(--space-6) var(--space-8);
+}
+
+.inspector__section .kicker {
+  margin: 0;
+}
+
+.inspector__heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.inspector__meta {
+  font: var(--font-weight-regular) var(--font-size-xs) / var(--leading-none) var(--font-family-mono);
+  color: var(--color-text-faint);
+}
+
+.inspector__note {
+  margin: 0;
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-relaxed)
+    var(--font-family-sans);
+  color: var(--color-text-subtle);
+  text-wrap: pretty;
+}
+
+.details-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  width: 100%;
+  padding: var(--space-1) 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.details-toggle__rule {
+  flex: 1;
+  height: 0;
+  border-top: var(--border-width) solid var(--color-border-subtle);
+}
+
+.details-toggle__summary {
+  white-space: nowrap;
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-none) var(--font-family-mono);
+  color: var(--color-text-faint);
+}
+
+.details-toggle__arrow {
+  font: var(--font-weight-regular) var(--font-size-xs) / var(--leading-none) var(--font-family-sans);
+  color: var(--color-text-hint);
+}
+
+.details-toggle[aria-expanded='true'] .details-toggle__arrow {
+  transform: rotate(180deg);
+}
+
+.details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+/* Свёрнутые ДЕТАЛИ: без этого правила `hidden` проигрывает `display: flex`. */
+.details[hidden] {
+  display: none;
+}
+
+.details__title {
+  margin: 0;
+  font: var(--font-weight-semibold) var(--font-size-xl) / var(--leading-snug)
+    var(--font-family-sans);
+}
+
+.details__note {
+  margin: 0;
+  padding: var(--space-5) var(--space-6);
+  border-radius: var(--radius-l);
+  background: var(--color-bg-accent-soft);
+  color: var(--color-text-primary);
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-relaxed)
+    var(--font-family-sans);
+  text-wrap: pretty;
+}
+
+.doc-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.doc-list__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  width: 100%;
+  padding: var(--space-4) var(--space-6);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-l);
+  background: var(--color-bg-surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.doc-list__item[aria-current='true'] {
+  border-color: var(--color-border-focus);
+  background: var(--color-bg-paper);
+}
+
+.doc-list__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.doc-list__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--font-weight-medium) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
+}
+
+.doc-list__meta {
+  font: var(--font-weight-regular) var(--font-size-xs) / var(--leading-snug) var(--font-family-mono);
+  color: var(--color-text-hint);
+}
+
+.doc-list__item:focus-visible,
+.details-toggle:focus-visible {
+  outline: var(--space-1) solid var(--color-border-focus);
+  outline-offset: var(--space-1);
+}
+
+.checks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.check__icon {
+  flex: none;
+  font: var(--font-weight-medium) var(--font-size-s) / var(--leading-relaxed)
+    var(--font-family-sans);
+  color: var(--color-accent);
+}
+
+.check--warning .check__icon {
+  color: var(--color-warning);
+}
+
+.check__text {
+  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-relaxed)
+    var(--font-family-sans);
+  color: var(--color-text-secondary);
+  text-wrap: pretty;
 }
 
 /* — тумблер «повернуть обороты на 180°» (S7) — рецепт «Переключатель» дизайн-системы — */
@@ -434,11 +878,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .thumb--rotated .thumb__img,
-  .preview__paper--rotated .preview__img {
-    transition: none;
-  }
-
   .toggle__track,
   .toggle__track::after {
     transition: none;

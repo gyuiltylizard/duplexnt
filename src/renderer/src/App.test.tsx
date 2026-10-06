@@ -169,7 +169,7 @@ describe('каркас приложения', () => {
     expect(startPass).toHaveBeenCalledTimes(1);
   });
 
-  it('сессия со страницами без прохода — editor со счётчиком страниц', async () => {
+  it('сессия со страницами без прохода — editor с позицией в наборе', async () => {
     stubApi(
       makeSnapshot({
         session: {
@@ -192,7 +192,45 @@ describe('каркас приложения', () => {
     );
     render(<App />);
 
-    expect(await screen.findByText('5 страниц')).toBeDefined();
+    expect(await screen.findByText('стр. 1 из 5')).toBeDefined();
+  });
+
+  it('M3: правка в StrictMode — одна подписка на сочетания, Delete шлёт один setEdits', async () => {
+    const setEdits = vi.fn(() => Promise.resolve(ok(undefined)));
+    stubApi(
+      makeSnapshot({
+        session: {
+          id: 'session.x',
+          backsDeclined: true,
+          saved: false,
+          edits: EMPTY_EDITS,
+          passes: [
+            {
+              number: 1,
+              state: 'completed',
+              paramsKnown: true,
+              scanner: null,
+              rotate180: false,
+              pages: pages(3),
+            },
+          ],
+        },
+        // Односторонний набор после «Обороты не нужны» — сразу editor.
+      }),
+      { setEdits },
+    );
+    render(
+      <StrictMode>
+        <App />
+      </StrictMode>,
+    );
+    await screen.findByText('стр. 1 из 3');
+
+    fireEvent.keyDown(document.body, { key: 'Delete' });
+    expect(setEdits).toHaveBeenCalledExactlyOnceWith({
+      edits: { ...EMPTY_EDITS, deleted: ['p01-s01-0001'] },
+      rotate180: false,
+    });
   });
 
   it('несовместимые данные — свой экран вместо любого другого', async () => {
@@ -579,7 +617,7 @@ describe('каркас приложения', () => {
         vi.advanceTimersByTime(2);
       });
       expect(screen.queryByText('Сопоставляем проходы')).toBeNull();
-      expect(screen.getByText('6 страниц')).toBeDefined();
+      expect(screen.getByText('стр. 1 из 6')).toBeDefined();
     } finally {
       vi.useRealTimers();
     }
@@ -642,7 +680,7 @@ describe('каркас приложения', () => {
         vi.advanceTimersByTime(1201);
       });
       expect(screen.queryByText('Сопоставляем проходы')).toBeNull();
-      expect(screen.getByText('3 страницы')).toBeDefined();
+      expect(screen.getByText('стр. 1 из 3')).toBeDefined();
     } finally {
       vi.useRealTimers();
     }
@@ -713,7 +751,7 @@ describe('каркас приложения', () => {
         vi.advanceTimersByTime(1601);
       });
       expect(screen.queryByText('Сопоставляем проходы')).toBeNull();
-      expect(screen.getByText('6 страниц')).toBeDefined();
+      expect(screen.getByText('стр. 1 из 6')).toBeDefined();
     } finally {
       vi.useRealTimers();
     }

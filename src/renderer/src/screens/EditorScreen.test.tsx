@@ -1,111 +1,19 @@
-import {
-  EMPTY_EDITS,
-  fail,
-  ok,
-  type Api,
-  type PassSnapshot,
-  type SessionSnapshot,
-  type Snapshot,
-} from '@shared';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { EMPTY_EDITS, fail, ok } from '@shared';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../i18n';
-import { assemblyOf } from '../state/assembly-fixture';
-import { EditorScreen } from './EditorScreen';
+import { makePass, makeSnapshot, pages, renderEditor, stubApi, twoPass } from './editor-fixture';
 
-function pages(
-  count: number,
-  from = 1,
-  prefix = 'p01-s01',
-): { key: string; number: number; lost: boolean }[] {
-  return Array.from({ length: count }, (_, index) => ({
-    key: `${prefix}-${String(from + index).padStart(4, '0')}`,
-    number: from + index,
-    lost: false,
-  }));
-}
+// Экран `editor`: поведение M1–M2 (лента, превью, тумблер, сохранение, плашка прохода). Правки,
+// выделение, документы и инспектор M3 — в EditorScreen.edits.test.tsx; хелперы — editor-fixture.
 
-function makePass(overrides: Partial<PassSnapshot>): PassSnapshot {
-  return {
-    number: 1,
-    state: 'completed',
-    paramsKnown: true,
-    scanner: null,
-    rotate180: false,
-    pages: pages(3),
-    ...overrides,
-  };
-}
-
-function makeSnapshot(
-  passes: PassSnapshot[],
-  overrides: Partial<Snapshot> = {},
-  sessionOverrides: Partial<SessionSnapshot> = {},
-): Snapshot {
-  const session: SessionSnapshot = {
-    id: 'session.x',
-    backsDeclined: false,
-    saved: false,
-    edits: EMPTY_EDITS,
-    passes,
-    ...sessionOverrides,
-  };
-  return {
-    seq: 1,
-    scanner: { kind: 'none' },
-    pass: null,
-    canResume: false,
-    canAccept: false,
-    storage: { incompatible: false, unsaved: false },
-    notices: [],
-    ...overrides,
-    session,
-    assembly: overrides.assembly === undefined ? assemblyOf(session) : overrides.assembly,
-  };
-}
-
-function stubApi(overrides: Partial<Record<keyof Api, unknown>> = {}) {
-  const api = {
-    acceptPass: vi.fn(() => Promise.resolve(ok(undefined))),
-    closeSession: vi.fn(() => Promise.resolve(ok(undefined))),
-    setEdits: vi.fn(() => Promise.resolve(ok(undefined))),
-    savePdf: vi.fn(() =>
-      Promise.resolve(ok({ canceled: false, fileName: 'Скан.pdf', directory: 'Документы' })),
-    ),
-    ...overrides,
-  } as unknown as Api;
-  vi.stubGlobal('api', api);
-  return api;
-}
-
-function renderEditor(
-  snapshot: Snapshot,
-  overrides: Partial<Parameters<typeof EditorScreen>[0]> = {},
-) {
-  if (snapshot.session === null) {
-    throw new Error('в фикстуре нет сессии');
+/** Клавиша на текущей миниатюре — точке входа клавиатуры в ленту (роуминг tabindex). */
+function pressOnCurrent(key: string): void {
+  const current = document.querySelector('[role="option"][tabindex="0"]');
+  if (current === null) {
+    throw new Error('нет текущей миниатюры');
   }
-  const onToast = vi.fn();
-  const view = render(
-    <EditorScreen
-      snapshot={snapshot}
-      session={snapshot.session}
-      resumeFailure={null}
-      onResume={vi.fn()}
-      onOpenDevice={vi.fn()}
-      onToast={onToast}
-      {...overrides}
-    />,
-  );
-  return { view, onToast };
-}
-
-/** Двусторонняя фикстура: 3 лица + обороты обратным порядком (AE1). */
-function twoPass(backCount = 3, backsState: PassSnapshot['state'] = 'completed') {
-  return makeSnapshot([
-    makePass({ pages: pages(3) }),
-    makePass({ number: 2, state: backsState, pages: pages(backCount, 1, 'p02-s01') }),
-  ]);
+  fireEvent.keyDown(current, { key });
 }
 
 afterEach(() => {
@@ -119,7 +27,7 @@ describe('экран editor', () => {
     renderEditor(makeSnapshot([makePass({ pages: pages(4) })]));
 
     expect(screen.getAllByRole('option').length).toBe(4);
-    expect(screen.getByText('4 страницы')).toBeDefined();
+    expect(screen.getByText('стр. 1 из 4')).toBeDefined();
     expect(screen.getByText('1 из 4')).toBeDefined();
 
     fireEvent.click(screen.getAllByRole('option')[2] as Element);
@@ -177,8 +85,8 @@ describe('экран editor', () => {
     renderEditor(snapshot);
 
     const options = screen.getAllByRole('option');
-    expect((options[1] as Element).className).toContain('thumb--rotated');
-    expect((options[0] as Element).className).not.toContain('thumb--rotated');
+    expect((options[1] as Element).className).toContain('thumb--angle-180');
+    expect((options[0] as Element).className).not.toContain('thumb--angle-');
 
     const toggle = screen.getByRole('checkbox', { name: 'Повернуть обороты на 180°' });
     expect((toggle as HTMLInputElement).checked).toBe(true);
@@ -264,14 +172,13 @@ describe('экран editor', () => {
       ]),
     );
 
-    const rail = screen.getByLabelText('Отсканированные страницы');
-    fireEvent.keyDown(rail, { key: 'ArrowRight' });
+    pressOnCurrent('ArrowRight');
     expect(screen.getByText('2 из 4')).toBeDefined();
-    fireEvent.keyDown(rail, { key: 'ArrowRight' });
+    pressOnCurrent('ArrowRight');
     expect(screen.getByText('3 из 4')).toBeDefined();
-    fireEvent.keyDown(rail, { key: 'Home' });
+    pressOnCurrent('Home');
     expect(screen.getByText('1 из 4')).toBeDefined();
-    fireEvent.keyDown(rail, { key: 'End' });
+    pressOnCurrent('End');
     expect(screen.getByText('4 из 4')).toBeDefined();
   });
 
@@ -443,27 +350,26 @@ describe('экран editor', () => {
 
     fireEvent.click(screen.getAllByRole('option')[1] as Element);
     expect(screen.getByText('СТРАНИЦА 2')).toBeDefined();
-    expect(screen.getByText(/Файл этой страницы потерян/)).toBeDefined();
+    expect(screen.getByText(/Запись о ней есть, а файла на диске нет/)).toBeDefined();
   });
 
   it('стрелки двигают фокус вместе с выбором (роуминг tabindex)', () => {
     stubApi();
     renderEditor(makeSnapshot([makePass({ pages: pages(3) })]));
 
-    const rail = screen.getByLabelText('Отсканированные страницы');
     const options = screen.getAllByRole('option');
     expect(options[0]?.getAttribute('tabindex')).toBe('0');
     expect(options[1]?.getAttribute('tabindex')).toBe('-1');
 
-    fireEvent.keyDown(rail, { key: 'ArrowRight' });
+    pressOnCurrent('ArrowRight');
     expect(document.activeElement).toBe(options[1]);
     expect(options[1]?.getAttribute('tabindex')).toBe('0');
     expect(options[0]?.getAttribute('tabindex')).toBe('-1');
 
     // ↑/↓ — синонимы ←/→.
-    fireEvent.keyDown(rail, { key: 'ArrowDown' });
+    pressOnCurrent('ArrowDown');
     expect(document.activeElement).toBe(options[2]);
-    fireEvent.keyDown(rail, { key: 'ArrowUp' });
+    pressOnCurrent('ArrowUp');
     expect(document.activeElement).toBe(options[1]);
   });
 
@@ -537,13 +443,11 @@ describe('экран editor', () => {
     expect(api.closeSession).not.toHaveBeenCalled();
   });
 
-  it('скрытых элементов макета M3+ нет в разметке', () => {
+  it('элементов вех после M3 нет в разметке: «Добавить», «Пересканировать», пустые обороты', () => {
     stubApi();
     renderEditor(makeSnapshot([makePass({})]));
 
     expect(screen.queryByText(/Добавить/)).toBeNull();
-    expect(screen.queryByText('↻')).toBeNull();
-    expect(screen.queryByText(/Удалить страницу/)).toBeNull();
     expect(screen.queryByText(/Пересканировать/)).toBeNull();
     expect(screen.queryByText(/пустые/)).toBeNull();
   });

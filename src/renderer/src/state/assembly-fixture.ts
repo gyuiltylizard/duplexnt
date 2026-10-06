@@ -1,4 +1,4 @@
-import type { AssembledPage, SessionAssembly, SessionSnapshot } from '@shared';
+import type { AssembledDocument, AssembledPage, SessionAssembly, SessionSnapshot } from '@shared';
 
 /** Пустая лента без правок: основа для снимков, где важен только отчёт. */
 export const NO_EDITS_ASSEMBLY: Omit<SessionAssembly, 'report'> = {
@@ -77,4 +77,21 @@ export function assemblyOf(session: SessionSnapshot): SessionAssembly {
       mismatch: backsPass !== undefined && backs.length !== n,
     },
   };
+}
+
+/**
+ * ТОЛЬКО ДЛЯ ТЕСТОВ: документы ленты длины `length` по разрезам — как их отдало бы ядро (R10).
+ * Пустая лента — один пустой документ.
+ */
+export function documentsOf(
+  length: number,
+  cuts: readonly number[] = [],
+  names: readonly string[] = [],
+): AssembledDocument[] {
+  const bounds = [0, ...cuts, length];
+  return bounds.slice(0, -1).map((start, index) => ({
+    name: names[index] ?? '',
+    start,
+    count: (bounds[index + 1] ?? length) - start,
+  }));
 }

@@ -48,6 +48,14 @@ export function toggled(selection: Selection, key: string, visible: readonly str
   if (keys.length === 0) {
     return selection;
   }
+  // Убрали не текущую — текущая остаётся; якорь, если убрали его, переходит на текущую.
+  if (selection.current !== null && key !== selection.current) {
+    const anchor =
+      selection.anchor !== null && keys.includes(selection.anchor)
+        ? selection.anchor
+        : selection.current;
+    return { current: selection.current, anchor, keys };
+  }
   const position = visible.indexOf(key);
   const nearest = keys.reduce((best, candidate) =>
     Math.abs(visible.indexOf(candidate) - position) < Math.abs(visible.indexOf(best) - position)

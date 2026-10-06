@@ -438,6 +438,78 @@
   pointer-events: none;
 }
 
+/* — тон документа (handoff M3): цвет берут значок, метка тулбара, кромка превью — */
+
+.doc-tone--1 {
+  --doc-color: var(--color-doc-1);
+}
+
+.doc-tone--2 {
+  --doc-color: var(--color-doc-2);
+}
+
+.doc-tone--3 {
+  --doc-color: var(--color-doc-3);
+}
+
+.doc-tone--4 {
+  --doc-color: var(--color-doc-4);
+}
+
+.doc-badge {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--size-badge);
+  height: var(--size-badge);
+  border-radius: var(--radius-m);
+  background: var(--doc-color);
+  color: var(--color-text-on-accent);
+  font: var(--font-weight-semibold) var(--font-size-xs) / var(--leading-none)
+    var(--font-family-mono);
+}
+
+.doc-badge--small {
+  width: var(--size-badge-s);
+  height: var(--size-badge-s);
+  border-radius: var(--radius-s);
+}
+
+/* — таблица фактов: ДЕТАЛИ инспектора и сводка `save` (handoff M3) — */
+
+.facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-px);
+  margin: 0;
+  overflow: hidden;
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-l);
+  background: var(--color-border-subtle);
+}
+
+.facts__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-5);
+  padding: var(--space-4) var(--space-6);
+  background: var(--color-bg-surface);
+}
+
+.facts__key {
+  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
+  color: var(--color-text-muted);
+}
+
+.facts__value {
+  margin: 0;
+  text-align: right;
+  font: var(--font-weight-medium) var(--font-size-m) / var(--leading-snug) var(--font-family-mono);
+  color: var(--color-text-primary);
+}
+
 /* — тост — */
 
 .toast {

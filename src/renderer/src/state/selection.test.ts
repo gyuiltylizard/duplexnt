@@ -55,6 +55,13 @@ describe('выделение', () => {
     expect(toggled(three, 'c', TAPE)).toEqual({ current: 'd', anchor: 'd', keys: ['a', 'd'] });
   });
 
+  it('Ctrl — убрать не текущую: текущая остаётся, убранный якорь переходит на неё', () => {
+    const three = { current: 'd', anchor: 'a', keys: ['a', 'c', 'd'] };
+
+    expect(toggled(three, 'c', TAPE)).toEqual({ current: 'd', anchor: 'a', keys: ['a', 'd'] });
+    expect(toggled(three, 'a', TAPE)).toEqual({ current: 'd', anchor: 'd', keys: ['c', 'd'] });
+  });
+
   it('Ctrl — последнюю убрать нельзя', () => {
     expect(toggled(single('c'), 'c', TAPE)).toEqual(single('c'));
   });
