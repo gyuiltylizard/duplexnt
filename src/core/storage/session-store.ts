@@ -3,6 +3,7 @@ import {
   EMPTY_EDITS,
   fail,
   ok,
+  sameEdits,
   sessionConflict,
   type DomainError,
   type PassSnapshot,
@@ -12,7 +13,7 @@ import {
   type SessionSnapshot,
 } from '@shared';
 import { autoKeysOf } from '../scan/assembly';
-import { rebaseEdits, sameEdits } from '../scan/edits';
+import { rebaseEdits } from '../scan/edits';
 import { isTempName, removeByPrefix, renameWithRetry, writeStreamAtomic } from './atomic-file';
 import {
   backsPassOf,

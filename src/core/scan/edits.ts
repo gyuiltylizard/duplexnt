@@ -1,5 +1,6 @@
 import {
   EDIT_ANGLES,
+  sameList,
   type AssembledDocument,
   type EditAngle,
   type PageAngle,
@@ -26,9 +27,6 @@ function unique(keys: readonly string[], keep: (key: string) => boolean): string
   }
   return result;
 }
-
-const sameList = <T>(left: readonly T[], right: readonly T[]): boolean =>
-  left.length === right.length && left.every((value, index) => value === right[index]);
 
 /**
  * Видимая лента: явный порядок, за ним — ключи, которых в нём нет, в автопорядке (досканирование
@@ -142,22 +140,6 @@ export function documentsOf(length: number, edits: SessionEdits): AssembledDocum
 /** Угол страницы: ручной поворот плюс 180° прохода оборотов, по модулю 360 (KTD-4). */
 export function pageAngle(edit: EditAngle | undefined, rotate180: boolean): PageAngle {
   return (((edit ?? 0) + (rotate180 ? 180 : 0)) % 360) as PageAngle;
-}
-
-/**
- * Равны ли правки по содержанию. Углы сравниваются по ключам, а не по порядку записи: журнал с
- * диска и нормализованный вход могут перечислять их в разном порядке.
- */
-export function sameEdits(left: SessionEdits, right: SessionEdits): boolean {
-  const leftAngles = Object.entries(left.rotations);
-  return (
-    sameList(left.order, right.order) &&
-    sameList(left.deleted, right.deleted) &&
-    sameList(left.cuts, right.cuts) &&
-    sameList(left.names, right.names) &&
-    leftAngles.length === Object.keys(right.rotations).length &&
-    leftAngles.every(([key, angle]) => right.rotations[key] === angle)
-  );
 }
 
 /** Есть ли что откатывать «Вернуть»: любая правка или включённый поворот оборотов (R8, R9). */

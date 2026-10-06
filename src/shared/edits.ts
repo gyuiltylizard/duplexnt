@@ -30,3 +30,24 @@ export const EMPTY_EDITS: SessionEdits = {
   cuts: [],
   names: [''],
 };
+
+/** Списки равны поэлементно. */
+export const sameList = <T>(left: readonly T[], right: readonly T[]): boolean =>
+  left.length === right.length && left.every((value, index) => value === right[index]);
+
+/**
+ * Равны ли правки по содержанию. Углы сравниваются по ключам, а не по порядку записи: журнал с
+ * диска и нормализованный вход могут перечислять их в разном порядке. Общая для ядра (запись
+ * без изменений не идёт в журнал) и редактора (жест без изменений — не шаг undo).
+ */
+export function sameEdits(left: SessionEdits, right: SessionEdits): boolean {
+  const leftAngles = Object.entries(left.rotations);
+  return (
+    sameList(left.order, right.order) &&
+    sameList(left.deleted, right.deleted) &&
+    sameList(left.cuts, right.cuts) &&
+    sameList(left.names, right.names) &&
+    leftAngles.length === Object.keys(right.rotations).length &&
+    leftAngles.every(([key, angle]) => right.rotations[key] === angle)
+  );
+}

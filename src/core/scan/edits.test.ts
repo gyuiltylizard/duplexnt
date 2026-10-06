@@ -1,4 +1,4 @@
-import { EMPTY_EDITS, type SessionEdits } from '@shared';
+import { EMPTY_EDITS, sameEdits, type SessionEdits } from '@shared';
 import { describe, expect, it } from 'vitest';
 import {
   documentsOf,
@@ -8,7 +8,6 @@ import {
   pageAngle,
   rebaseEdits,
   remapCuts,
-  sameEdits,
   visibleKeysOf,
 } from './edits';
 

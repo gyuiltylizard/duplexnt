@@ -42,6 +42,8 @@ export {
   EDIT_ANGLES,
   EMPTY_EDITS,
   MAX_DOCUMENT_NAME_LENGTH,
+  sameEdits,
+  sameList,
   type EditAngle,
   type SessionEdits,
 } from './edits';
