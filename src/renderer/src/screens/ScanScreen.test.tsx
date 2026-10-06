@@ -1,4 +1,4 @@
-import type { PassProgress, Snapshot } from '@shared';
+import { EMPTY_EDITS, type PassProgress, type Snapshot } from '@shared';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../i18n';
@@ -43,6 +43,7 @@ function running(pageCount: number, passPages: number, phase: PassProgress['phas
       id: 'session.x',
       backsDeclined: false,
       saved: false,
+      edits: EMPTY_EDITS,
       passes: [
         {
           number: 1,
@@ -84,6 +85,7 @@ describe('экран scan', () => {
         id: 'session.x',
         backsDeclined: false,
         saved: false,
+        edits: EMPTY_EDITS,
         passes: [
           {
             number: 1,
@@ -124,6 +126,7 @@ describe('экран scan', () => {
         id: 'session.x',
         backsDeclined: false,
         saved: false,
+        edits: EMPTY_EDITS,
         passes: [
           {
             number: 2,
@@ -224,6 +227,7 @@ describe('экран scan', () => {
         id: 'session.x',
         backsDeclined: false,
         saved: false,
+        edits: EMPTY_EDITS,
         passes: [
           {
             number: 1,
@@ -258,6 +262,7 @@ describe('экран scan', () => {
         id: 'session.x',
         backsDeclined: false,
         saved: false,
+        edits: EMPTY_EDITS,
         passes: [
           {
             number: 1,
@@ -314,6 +319,7 @@ describe('экран scan', () => {
         id: 'session.x',
         backsDeclined: false,
         saved: false,
+        edits: EMPTY_EDITS,
         passes: [
           {
             number: 1,

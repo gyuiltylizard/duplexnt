@@ -2,6 +2,7 @@ import { mkdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { PDFDocument } from '@cantoo/pdf-lib';
 import { expect, it } from 'vitest';
+import { EMPTY_EDITS } from '@shared';
 import { probeScanner } from '../../src/core/escl/connect';
 import { openPassService } from '../../src/core/scan/pass-service';
 import { describeLive } from '../support/live-device';
@@ -18,7 +19,8 @@ import { unwrap } from '../support/result';
 // Перед запуском пачка лежит в лотке ЛИЦОМ ВВЕРХ, лист 1 сверху. После первого прохода тест
 // ждёт: разверни пачку на 180° в плоскости (не переворачивая листы) и положи обратно — второй
 // проход стартует сам, как только лоток перестанет быть пустым. Итоговый PDF кладётся в
-// temp/duplexnt-live-two-pass.pdf — порядок страниц сверяется глазами по номерам (AE2).
+// temp/duplexnt-live-two-pass.pdf (если имя занято прошлым прогоном — с суффиксом « (2)», путь
+// печатается в конце) — порядок страниц сверяется глазами по номерам (AE2).
 //
 // Поворота оборотов в штатном потоке НЕТ: после разворота пачки они приходят в правильной
 // ориентации (техбаза, «Физическое действие пользователя»; подтверждено живым прогоном
@@ -88,10 +90,19 @@ describeLive('два прохода на живом сканере (AE2)', (host
 
       // Штатный поток: пачка развёрнута правильно, обороты пришли в правильной ориентации —
       // тумблер НЕ включается, поворота в PDF нет.
-      await mkdir(resolve('temp'), { recursive: true });
-      const target = resolve('temp', 'duplexnt-live-two-pass.pdf');
-      const saved = unwrap(await service.savePdf(() => Promise.resolve(target)));
-      expect(saved).toMatchObject({ canceled: false });
+      // Пакетное сохранение не перезаписывает файл прошлого прогона, а берёт имя с суффиксом
+      // « (2)» — путь берётся из отчёта.
+      const outDir = resolve('temp');
+      await mkdir(outDir, { recursive: true });
+      const saveOne = async (name: string): Promise<string> => {
+        const saved = unwrap(
+          await service.saveDocuments(outDir, { mode: 'single', names: [name], retry: false }),
+        );
+        expect(saved.failed).toEqual([]);
+        expect(saved.written).toHaveLength(1);
+        return resolve(outDir, saved.written[0]?.fileName ?? '');
+      };
+      const target = await saveOne('duplexnt-live-two-pass');
 
       const document = await PDFDocument.load(await readFile(target));
       expect(document.getPageCount()).toBe(fronts.pages * 2);
@@ -106,21 +117,20 @@ describeLive('два прохода на живом сканере (AE2)', (host
 
       // AE8/AE12 без пересканирования: аварийный тумблер снимает отметку сохранения и кладёт
       // /Rotate 180 только на обороты; выключение возвращает.
-      unwrap(await service.setRotateBacks(true));
+      unwrap(await service.setEdits(EMPTY_EDITS, true));
       expect(service.snapshot().session?.saved).toBe(false);
-      const rotatedTarget = resolve('temp', 'duplexnt-live-two-pass-rotated.pdf');
-      unwrap(await service.savePdf(() => Promise.resolve(rotatedTarget)));
+      const rotatedTarget = await saveOne('duplexnt-live-two-pass-rotated');
       const rotated = await PDFDocument.load(await readFile(rotatedTarget));
       for (const [index, page] of rotated.getPages().entries()) {
         expect(page.getRotation().angle, `страница ${index + 1}`).toBe(index % 2 === 1 ? 180 : 0);
       }
-      unwrap(await service.setRotateBacks(false));
+      unwrap(await service.setEdits(EMPTY_EDITS, false));
 
       console.info(
         `[live] PDF сохранён: ${target} (${fronts.pages * 2} страниц). ` +
           'Открой его и сверь порядок по номерам: 1 FRONT, 1 BACK, 2 FRONT, 2 BACK, … — ' +
-          'все страницы должны быть прямыми, без поворота. Файл *-rotated.pdf — проверка ' +
-          'аварийного тумблера, там обороты нарочно вверх ногами.',
+          'все страницы должны быть прямыми, без поворота. ' +
+          `Файл ${rotatedTarget} — проверка аварийного тумблера, там обороты нарочно вверх ногами.`,
       );
     },
     TIMEOUT_MS,

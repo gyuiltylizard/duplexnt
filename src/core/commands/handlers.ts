@@ -1,3 +1,4 @@
+import { stat } from 'node:fs/promises';
 import {
   fail,
   ok,
@@ -21,8 +22,9 @@ import {
   connectScannerRequestSchema,
   noRequestSchema,
   parseInput,
+  saveDocumentsRequestSchema,
   scanParamsSchema,
-  setRotateBacksRequestSchema,
+  setEditsRequestSchema,
 } from './schemas';
 
 // Обработчики команд моста (ADR 0005; план M1, U18, KTD-39): вход приходит непроверенным и
@@ -37,11 +39,12 @@ export interface CommandContext {
   readonly service: PassService;
   /** Открывает каталог данных в проводнике; какой — знает main (KTD-39). */
   readonly openDataFolder: () => Promise<Result<void>>;
-  /**
-   * Диалог «Сохранить как» (M2, KTD-3): путь выбранного файла, `null` — пользователь отказался.
-   * Имя по умолчанию и подтверждение перезаписи — обязанность main и диалога ОС.
-   */
-  readonly askSavePdfPath: () => Promise<string | null>;
+  /** Папка сохранения пакета по умолчанию (M3, KTD-5): «Документы» пользователя. */
+  readonly defaultSaveFolder: string;
+  /** Диалог выбора папки (M3, KTD-5), открытый на текущей; `null` — пользователь отказался. */
+  readonly askSaveFolder: (current: string) => Promise<string | null>;
+  /** Есть ли папка на диске; подмена для тестов. */
+  readonly folderExists?: (path: string) => Promise<boolean>;
   /** Список найденных устройств изменился; `seq` — номер изменения. */
   readonly onDiscoveryChanged: (seq: number) => void;
   /** Подмена для тестов. */
@@ -56,6 +59,14 @@ export interface Commands {
 }
 
 const NO_DISCOVERY: DiscoveryState = { scanners: [], failure: null };
+
+const isDirectory = async (path: string): Promise<boolean> => {
+  try {
+    return (await stat(path)).isDirectory();
+  } catch {
+    return false;
+  }
+};
 
 /**
  * Адрес из полей модалки: хост — как ввёл пользователь (хост, хост с портом или URL), поля
@@ -91,6 +102,12 @@ export function createCommands(context: CommandContext): Commands {
 
   let discovery: Discovery | null = null;
   let discoverySeq = 0;
+  const folderExists = context.folderExists ?? isDirectory;
+  /**
+   * Папка пакетного сохранения (M3, KTD-5): выбранная помнится в настройках между запусками.
+   * Пропавшая с диска (вынута флешка) уступает «Документам» — но не забывается.
+   */
+  let saveFolder = service.rememberedSaveFolder() ?? context.defaultSaveFolder;
   let announced = false;
 
   // `onChange` поиска вызывается из обработчика сокета: исключение в нём стало бы необработанным.
@@ -204,11 +221,34 @@ export function createCommands(context: CommandContext): Commands {
       stopPass: withoutRequest(() => done(() => service.stopPass())),
       acceptPass: withoutRequest(() => done(() => service.acceptPass())),
       declineBacks: withoutRequest(() => done(() => service.declineBacks())),
-      setRotateBacks: async (rawRequest) => {
-        const request = parseInput(setRotateBacksRequestSchema, rawRequest);
-        return request.ok ? done(() => service.setRotateBacks(request.value.rotate)) : request;
+      setEdits: async (rawRequest) => {
+        const request = parseInput(setEditsRequestSchema, rawRequest);
+        return request.ok
+          ? service.setEdits(request.value.edits, request.value.rotate180)
+          : request;
       },
-      savePdf: withoutRequest(() => service.savePdf(context.askSavePdfPath)),
+
+      // Папка пакета живёт здесь, как поиск устройств: её выбирает main, пишет служба. В снимок
+      // она не идёт — там нет абсолютных путей (KTD-39); модалка берёт её командой.
+      getSaveFolder: withoutRequest(async () => {
+        if (saveFolder !== context.defaultSaveFolder && !(await folderExists(saveFolder))) {
+          saveFolder = context.defaultSaveFolder;
+        }
+        return ok(saveFolder);
+      }),
+      chooseSaveFolder: withoutRequest(async () => {
+        const picked = await context.askSaveFolder(saveFolder);
+        if (picked !== null) {
+          saveFolder = picked;
+          // Отказ записи настроек не мешает: папка остаётся в памяти до выхода.
+          await service.rememberSaveFolder(picked);
+        }
+        return ok({ canceled: picked === null, folder: saveFolder });
+      }),
+      saveDocuments: async (rawRequest) => {
+        const request = parseInput(saveDocumentsRequestSchema, rawRequest);
+        return request.ok ? service.saveDocuments(saveFolder, request.value) : request;
+      },
       closeSession: withoutRequest(() => done(() => service.closeSession())),
 
       openDataFolder: withoutRequest(() => done(() => context.openDataFolder())),

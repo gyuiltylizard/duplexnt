@@ -1,6 +1,8 @@
 import {
-  memo,
+  useCallback,
   useEffect,
+  useEffectEvent,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -10,26 +12,57 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  pageImageUrl,
+  type AssembledDocument,
   type AssembledPage,
   type DomainError,
-  type ScannerInfo,
+  type SaveDocumentsReport,
+  type SessionEdits,
   type SessionSnapshot,
   type Snapshot,
 } from '@shared';
-import { multiline } from '../components/multiline';
-import { useImageLoad } from '../components/useImageLoad';
+import type { ToastAction } from '../components/Toast';
 import { NewScanModal } from '../modals/NewScanModal';
-import { errorText, errorTextInline } from '../state/error-text';
-import { addressOf, reconnectAddress } from '../state/scanner-address';
+import { RevertModal } from '../modals/RevertModal';
+import { SaveModal } from '../modals/SaveModal';
+import {
+  deleted,
+  moved,
+  renamed,
+  REVERTED,
+  rotated,
+  separated,
+  withCut,
+  withoutCut,
+  type DropSide,
+} from '../state/edits';
+import { errorTextInline } from '../state/error-text';
+import type { EditState } from '../state/history';
 import { survivingPasses } from '../state/screen';
+import {
+  afterRemoval,
+  collapsed,
+  contiguousRange,
+  ranged,
+  selectionOf,
+  single,
+  targetsOf,
+  toggled,
+} from '../state/selection';
+import { EditorInspector, toneOf } from './EditorInspector';
+import { EditorPassBanner } from './EditorPassBanner';
+import { EditorPreview } from './EditorPreview';
+import { docNameId, EditorRail } from './EditorRail';
+import type { PickMode } from './EditorThumb';
+import { useEditorEdits } from './useEditorEdits';
 import './editor-screen.css';
 
-// Экран `editor` (план M1, U24; M2, U9; UI_SPEC раздел 6; handoff M2, S6–S9): тулбар с «Новое
-// сканирование» и правой зоной сохранения, лента в порядке сборки (AE1: 1л, 1о, 2л, 2о, …)
-// с тегом «об» на оборотах и пометкой непарного листа, превью, тумблер «повернуть обороты
-// на 180°» внизу ленты, плашка прерванного прохода. Инспектора, «Добавить» и правок страниц
-// нет (KTD-25 M1 продолжает действовать).
+// Экран `editor` (план M1, U24; M2, U9; M3, U7–U8; UI_SPEC раздел 6; handoff M3, S1–S15):
+// тулбар с документом текущей страницы и правой зоной сохранения, лента группами по документам
+// из снимка (AE1: 1л, 1о, 2л, 2о, …; `EditorRail`), превью под углом из ядра, статус-бар с
+// поворотом и удалением, инспектор с плашкой правок, тумблер 180° внизу ленты, плашка
+// прерванного прохода. Каждая правка — перенос, поворот, удаление, граница, имя, тумблер,
+// «Вернуть» — один `setEdits` и один шаг undo (KTD-3); ленту считает только ядро (KTD-2).
+// Модалки `save`, `newscan`, `revert` — одна за раз (M3, U9; handoff M3, S14, S16, S17).
 
 export interface EditorScreenProps {
   readonly snapshot: Snapshot;
@@ -40,180 +73,54 @@ export interface EditorScreenProps {
   readonly onResume: () => void;
   /** Ссылка «подключите заново» в отказе досканирования (S17). */
   readonly onOpenDevice: (initialAddress?: string) => void;
-  /** Тосты живут в App (новый гасит предыдущий); сохранение показывает их дольше обычного. */
-  readonly onToast: (text: string, durationMs?: number) => void;
+  /**
+   * Тосты живут в App (новый гасит предыдущий); сохранение показывает их дольше обычного, а
+   * тост полного успеха несёт кнопку «Новое сканирование» (S18).
+   */
+  readonly onToast: (text: string, durationMs?: number, action?: ToastAction) => void;
 }
 
 /** Тосты сохранения — 6 с (UI_SPEC раздел 8). */
 const SAVE_TOAST_MS = 6000;
+/** «Сохранено … — можно закладывать новые листы» после «Сначала сохранить текущий» (S17). */
+const THEN_NEW_TOAST_MS = 3600;
 
 /**
- * Коды отказа досканирования, которые лечатся повторным подключением (S17). Список шире, чем
- * у плашки `flip`: досканировать можно только на сканере прохода (KTD-27), поэтому и
- * «не отвечает» ведёт к переподключению.
+ * `saveThenNew` — `save`, открытая из `newscan` («Сначала сохранить текущий»): после полного
+ * успеха сессия закрывается.
  */
-const RESUME_RECONNECT_CODES: readonly string[] = [
-  'scannerUnreachable',
-  'scannerCertificateChanged',
-];
+type EditorModal = 'save' | 'saveThenNew' | 'newscan' | 'revert';
+
+/** Пустая лента без сборки: стабильные ссылки для мемоизации. */
+const NO_PAGES: readonly AssembledPage[] = [];
+const NO_DOCUMENTS: readonly AssembledDocument[] = [];
+
+/** Сегодняшняя дата для имени по умолчанию — локальная, не UTC (как имя файла в M2). */
+const todayStamp = (): string => new Intl.DateTimeFormat('sv-SE').format(new Date());
+
+/** Типы `<input>`, где Ctrl+Z и Delete — текстовые: ленточные сочетания их не перехватывают. */
+const NON_TEXT_INPUTS: readonly string[] = ['checkbox', 'radio', 'button', 'submit', 'reset'];
+
+function isTextField(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  if (target instanceof HTMLInputElement) {
+    return !NON_TEXT_INPUTS.includes(target.type);
+  }
+  return target instanceof HTMLTextAreaElement || target.isContentEditable;
+}
 
 /**
- * Миниатюра в ленте: обычная, потерянная (S18), строится или не построилась (S19), оборот с
- * тегом «об» и поворотом, непарный лист с янтарной точкой (S6). Пропсы — примитивы, чтобы
- * `memo` переживал новый снимок (объекты порядка пересоздаются десериализацией IPC): тумблер
- * и отметка сохранения не перерисовывают всю ленту, смена выбора — две карточки.
+ * Буква сочетания с Ctrl: по `key` для латиницы, иначе по физической клавише — в русской
+ * раскладке Ctrl+Z приходит с `key` «я».
  */
-const Thumb = memo(function Thumb({
-  sessionId,
-  pageKey,
-  side,
-  sheet,
-  rotate180,
-  lost,
-  position,
-  unpaired,
-  selected,
-  onSelect,
-}: {
-  readonly sessionId: string;
-  readonly pageKey: string;
-  readonly side: AssembledPage['side'];
-  readonly sheet: number | null;
-  readonly rotate180: boolean;
-  readonly lost: boolean;
-  /** Номер по порядку в наборе, с единицы. */
-  readonly position: number;
-  readonly unpaired: boolean;
-  readonly selected: boolean;
-  readonly onSelect: (key: string) => void;
-}): ReactNode {
-  const { t } = useTranslation();
-  const image = useImageLoad();
-
-  const select = (): void => {
-    onSelect(pageKey);
-  };
-  const keyDown = (event: KeyboardEvent<HTMLElement>): void => {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      select();
-    }
-  };
-
-  const classes = ['thumb'];
-  let paper: ReactNode;
-  if (lost) {
-    classes.push('thumb--lost');
-    paper = <span className="thumb__label">{t('thumb.lost')}</span>;
-  } else if (image.state === 'failed') {
-    classes.push('thumb--failed');
-    paper = <span className="thumb__label">{t('thumb.failed')}</span>;
-  } else {
-    if (image.state === 'loading') {
-      classes.push('thumb--loading');
-    }
-    paper = (
-      <>
-        <img
-          className="thumb__img"
-          alt=""
-          loading="lazy"
-          decoding="async"
-          src={pageImageUrl(sessionId, 'thumb', pageKey)}
-          onLoad={image.onLoad}
-          onError={image.onError}
-        />
-        {image.state === 'loading' && <span className="skeleton skeleton--cover" />}
-      </>
-    );
+function shortcutLetter(event: globalThis.KeyboardEvent): string {
+  const key = event.key.toLowerCase();
+  if (/^[a-z]$/u.test(key)) {
+    return key;
   }
-  if (selected) {
-    classes.push('thumb--selected');
-  }
-  // Поворот оборотов — только отображение: файлы не меняются (KTD-2).
-  if (side === 'back' && rotate180) {
-    classes.push('thumb--rotated');
-  }
-
-  const label = lost
-    ? t('thumb.lostLabel', { number: position })
-    : unpaired
-      ? t('thumb.unpairedLabel', { number: sheet ?? position })
-      : t('thumb.alt', { number: position });
-
-  return (
-    <li
-      role="option"
-      aria-selected={selected}
-      aria-busy={!lost && image.state === 'loading' ? true : undefined}
-      aria-label={label}
-      title={!lost && image.state === 'failed' ? t('thumb.failedTitle') : undefined}
-      tabIndex={selected ? 0 : -1}
-      data-key={pageKey}
-      className={classes.join(' ')}
-      onClick={select}
-      onKeyDown={keyDown}
-    >
-      <div className="thumb__paper">{paper}</div>
-      <div className="thumb__foot">
-        <span className="thumb__num">{position}</span>
-        {side === 'back' && <span className="thumb__tag">{t('thumb.tagBacks')}</span>}
-        {unpaired && (
-          <span
-            className="dot dot--warning thumb__flag"
-            title={t('thumb.unpairedTitle')}
-            aria-hidden="true"
-          />
-        )}
-      </div>
-    </li>
-  );
-});
-
-/** Превью: сама страница; потерянная — пунктирный лист S18; не открылась — текст S19. */
-function Preview({
-  sessionId,
-  entry,
-  position,
-}: {
-  readonly sessionId: string;
-  readonly entry: AssembledPage;
-  readonly position: number;
-}): ReactNode {
-  const { t } = useTranslation();
-  const image = useImageLoad();
-
-  // Потерянная страница и не открывшийся файл показываются одинаково устроенным листом:
-  // угловая метка и текст; различаются пунктиром и ключом текста.
-  if (entry.lost || image.state === 'failed') {
-    return (
-      <div className={entry.lost ? 'preview__paper preview__paper--lost' : 'preview__paper'}>
-        <div className="preview__corner">{t('preview.corner', { number: position })}</div>
-        <p className="preview__empty">
-          {multiline(entry.lost ? t('preview.lost') : t('preview.failed'))}
-        </p>
-      </div>
-    );
-  }
-  const classes = ['preview__paper'];
-  if (image.state === 'loading') {
-    classes.push('preview__paper--loading');
-  }
-  if (entry.side === 'back' && entry.rotate180) {
-    classes.push('preview__paper--rotated');
-  }
-  return (
-    <div className={classes.join(' ')} aria-busy={image.state === 'loading' ? true : undefined}>
-      <img
-        className="preview__img"
-        alt={t('thumb.alt', { number: position })}
-        src={pageImageUrl(sessionId, 'page', entry.key)}
-        onLoad={image.onLoad}
-        onError={image.onError}
-      />
-      {image.state === 'loading' && <span className="skeleton skeleton--cover" />}
-    </div>
-  );
+  return event.code.startsWith('Key') ? event.code.slice(3).toLowerCase() : key;
 }
 
 export function EditorScreen({
@@ -226,57 +133,162 @@ export function EditorScreen({
 }: EditorScreenProps): ReactNode {
   const { t } = useTranslation();
 
-  // Лента — порядок сборки (KTD-4, derived); до приёмки прерванных оборотов — фактические пары.
-  const order = snapshot.assembly?.order ?? [];
-  const report = snapshot.assembly?.report;
+  // Лента и документы — готовыми из снимка (KTD-2): renderer ничего не пересчитывает.
+  const order = snapshot.assembly?.order ?? NO_PAGES;
+  const documents = snapshot.assembly?.documents ?? NO_DOCUMENTS;
   const total = order.length;
-  // Set вместо поиска по массиву на каждой миниатюре; пересобирается только с новым отчётом.
-  const unpairedSheets = useMemo(() => new Set(report?.unpairedSheets ?? []), [report]);
+  const visible = useMemo(() => order.map((entry) => entry.key), [order]);
+  const positions = useMemo(() => new Map(visible.map((key, index) => [key, index])), [visible]);
 
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
-  const selectedIndex = Math.max(
-    0,
-    order.findIndex((entry) => entry.key === selectedKey),
-  );
-  const selected = order[selectedIndex];
-
-  const [newScanOpen, setNewScanOpen] = useState(false);
-  const [acceptFailure, setAcceptFailure] = useState<DomainError | null>(null);
+  const [modal, setModal] = useState<EditorModal | null>(null);
+  /** Идёт запись пакета (модалка `save`): правки заблокированы (KTD-9). */
   const [saving, setSaving] = useState(false);
 
-  // Стрелки двигают выбор по всей ленте — фокус должен следовать за ним (роуминг tabindex).
+  // Правки недоступны на время записи (KTD-9): ядро их всё равно отклонило бы.
+  const edits = useEditorEdits({
+    seq: snapshot.seq,
+    session,
+    visible,
+    locked: saving,
+    // Правка не записалась — человек должен знать, что лента осталась прежней. Текст ошибки
+    // длинный — показывается столько же, сколько ошибка сохранения.
+    onFailed: (error) => {
+      onToast(
+        error === null
+          ? t('toast.editNoResponse')
+          : t('toast.editFailed', { error: errorTextInline(t, error) }),
+        SAVE_TOAST_MS,
+      );
+    },
+  });
+  const { selection, setSelection } = edits;
+  const currentIndex = selection.current === null ? -1 : (positions.get(selection.current) ?? -1);
+  const currentEntry = order[currentIndex];
+  const targets = targetsOf(selection);
+  /** Новое состояние с текущим тумблером: большинство жестов его не трогает. */
+  const withEdits = (next: SessionEdits): EditState => ({
+    edits: next,
+    rotate180: edits.current.rotate180,
+  });
+
+  // Документ текущей страницы — по отрезкам сборки.
+  const currentDocument =
+    currentIndex < 0
+      ? null
+      : documents.findIndex(
+          (doc) => currentIndex >= doc.start && currentIndex < doc.start + doc.count,
+        );
+  const currentDoc = currentDocument === null ? undefined : documents[currentDocument];
+
+  // Имя по умолчанию: одиночный документ — «Скан ГГГГ-ММ-ДД», иначе «Документ N» (S3).
+  const [today] = useState(todayStamp);
+  const defaultNames = useMemo(
+    () =>
+      Array.from({ length: documents.length }, (_, index) =>
+        documents.length === 1
+          ? t('editor.doc.defaultSingleName', { date: today })
+          : t('editor.doc.defaultName', { number: index + 1 }),
+      ),
+    [documents.length, today, t],
+  );
+  const names = useMemo(
+    () => documents.map((doc, index) => (doc.name !== '' ? doc.name : (defaultNames[index] ?? ''))),
+    [documents, defaultNames],
+  );
+
+  // Стрелки двигают текущую по всей ленте — фокус следует за ней (роуминг tabindex). После
+  // удаления с клавиатуры фокус уходит на страницу, вставшую на место удалённой; после
+  // постановки границы — в поле имени нового документа, текст выделен (handoff M3, Границы).
   const railRef = useRef<HTMLElement>(null);
   const focusKey = useRef<string | null>(null);
+  const focusAfterEdit = useRef(false);
+  const focusName = useRef<number | null>(null);
   useEffect(() => {
-    if (focusKey.current !== null) {
-      railRef.current
-        ?.querySelector<HTMLElement>(`[data-key="${CSS.escape(focusKey.current)}"]`)
-        ?.focus();
+    if (focusName.current !== null && !edits.busy) {
+      const field = railRef.current?.querySelector<HTMLInputElement>(
+        `#${docNameId(focusName.current)}`,
+      );
+      focusName.current = null;
+      field?.focus();
+      field?.select();
+      return;
+    }
+    let key = focusKey.current;
+    if (key === null && focusAfterEdit.current && !edits.busy) {
+      focusAfterEdit.current = false;
+      key = selection.current;
+    }
+    if (key !== null) {
+      railRef.current?.querySelector<HTMLElement>(`[data-key="${CSS.escape(key)}"]`)?.focus();
       focusKey.current = null;
     }
   });
 
+  const focusInRail = (): boolean => railRef.current?.contains(document.activeElement) ?? false;
+
+  /** Ключ ленты по позиции, прижатой к краям. */
+  const keyAt = (index: number): string | undefined =>
+    visible[Math.min(Math.max(index, 0), total - 1)];
+
   const selectAt = (index: number, focus: boolean): void => {
-    const entry = order[Math.min(Math.max(index, 0), total - 1)];
-    if (entry !== undefined) {
-      setSelectedKey(entry.key);
+    const key = keyAt(index);
+    if (key !== undefined) {
+      setSelection(single(key));
       if (focus) {
-        focusKey.current = entry.key;
+        focusKey.current = key;
       }
     }
   };
 
+  // Клик, Shift+клик, Ctrl+клик (S4). Миниатюра получает стабильный обработчик — `memo` не
+  // перерисовывает всю ленту при смене выделения; свежие выделение и лента — через ref.
+  const pickRef = useRef<(key: string, mode: PickMode) => void>(() => undefined);
+  useLayoutEffect(() => {
+    pickRef.current = (key, mode) => {
+      setSelection(
+        mode === 'range'
+          ? ranged(selection, key, visible)
+          : mode === 'toggle'
+            ? toggled(selection, key, visible)
+            : single(key),
+      );
+    };
+  });
+  const pick = useCallback((key: string, mode: PickMode) => {
+    pickRef.current(key, mode);
+  }, []);
+
   const railKeyDown = (event: KeyboardEvent<HTMLElement>): void => {
+    // Esc — выделение сжимается до текущей, откуда бы в ленте ни нажали.
+    if (event.key === 'Escape') {
+      setSelection(collapsed(selection));
+      return;
+    }
+    // Остальное — только на миниатюрах: стрелки на кнопках панели выделения и тумблере не
+    // должны уводить фокус в ленту.
+    if (!(event.target instanceof Element) || event.target.closest('[role="option"]') === null) {
+      return;
+    }
+    const ctrl = event.ctrlKey || event.metaKey;
+    if (event.key === ' ' && ctrl) {
+      event.preventDefault();
+      if (selection.current !== null) {
+        const next = toggled(selection, selection.current, visible);
+        setSelection(next);
+        focusKey.current = next.current;
+      }
+      return;
+    }
     let target: number;
     switch (event.key) {
       // ↑/↓ — синонимы ←/→: скринридеры ждут вертикальных стрелок у listbox.
       case 'ArrowLeft':
       case 'ArrowUp':
-        target = selectedIndex - 1;
+        target = currentIndex - 1;
         break;
       case 'ArrowRight':
       case 'ArrowDown':
-        target = selectedIndex + 1;
+        target = currentIndex + 1;
         break;
       case 'Home':
         target = 0;
@@ -288,195 +300,330 @@ export function EditorScreen({
         return;
     }
     event.preventDefault();
-    selectAt(target, true);
+    const key = keyAt(target);
+    if (key === undefined) {
+      return;
+    }
+    // Shift — диапазон от якоря; без него выделение сжимается до новой текущей.
+    setSelection(event.shiftKey ? ranged(selection, key, visible) : single(key));
+    focusKey.current = key;
   };
 
-  const accept = (): void => {
-    setAcceptFailure(null);
-    window.api.acceptPass().then(
-      (result) => {
-        if (!result.ok) {
-          setAcceptFailure(result.error);
-        }
+  // ↻ — +90° по часовой текущей или всему выделению, один шаг; тоста нет — поворот виден (S9).
+  const rotate = (): void => {
+    if (targets.length > 0) {
+      edits.edit(withEdits(rotated(edits.current.edits, targets)), targets);
+    }
+  };
+
+  // Удаление — пометка, без подтверждения: тост подсказывает Ctrl+Z (S9). Текущей после
+  // удаления становится страница, вставшая на место удалённой.
+  const remove = (fromRail: boolean): void => {
+    if (targets.length === 0) {
+      return;
+    }
+    const before = visible;
+    const removing = targets;
+    const sent = edits.edit(withEdits(deleted(edits.current.edits, before, removing)), removing, {
+      select: (after) => afterRemoval(before, removing, after),
+      onSuccess: () => {
+        onToast(
+          removing.length === 1
+            ? t('toast.deletedOne')
+            : t('toast.deletedMany', { count: removing.length }),
+        );
       },
-      (error: unknown) => {
-        console.error('[renderer] принятие прохода не ответило', error);
+    });
+    if (sent && fromRail) {
+      focusAfterEdit.current = true;
+    }
+  };
+
+  // Перенос (S6): группа — с внутренним порядком ленты; бросок на исходное место — шага нет.
+  // После переноса выделены перенесённые страницы на новом месте, текущая — прежняя.
+  const move = (keys: readonly string[], target: string, side: DropSide): void => {
+    const next = moved(edits.current.edits, visible, keys, target, side);
+    if (next === null) {
+      return;
+    }
+    const current = selection.current;
+    const fromRail = focusInRail();
+    const sent = edits.edit(withEdits(next), keys, {
+      select: (after) => {
+        const chosen = selectionOf(keys, after);
+        return chosen !== null && current !== null && chosen.keys.includes(current)
+          ? { ...chosen, current, anchor: current }
+          : chosen;
       },
-    );
+    });
+    // Миниатюра, сменившая группу, перемонтируется — фокус вернётся на текущую после снимка.
+    if (sent && fromRail) {
+      focusAfterEdit.current = true;
+    }
   };
 
-  const resume = (): void => {
-    setAcceptFailure(null);
-    onResume();
+  /** После постановки границы — фокус в поле имени нового документа (номер с нуля). */
+  const editBoundary = (next: SessionEdits, docIndex: number, onSuccess?: () => void): void => {
+    edits.edit(withEdits(next), [], {
+      onSuccess: () => {
+        focusName.current = docIndex;
+        onSuccess?.();
+      },
+    });
   };
 
-  const reconnect = (): void => {
-    onOpenDevice(reconnectAddress(snapshot.scanner));
+  // Граница перед позицией ленты: split-бар, кнопка тулбара (S7, S1). Новый документ — тот,
+  // что начинается с этой позиции.
+  const split = (position: number): void => {
+    const next = withCut(edits.current.edits, position, total);
+    if (next !== null) {
+      editBoundary(next, next.cuts.indexOf(position) + 1);
+    }
   };
 
-  // «Подключите заново» из текста плашки — с адресом сканера прохода: именно его и надо
-  // вернуть, чтобы досканировать (KTD-27).
-  const reconnectPassScanner = (scanner: ScannerInfo | null): void => {
-    onOpenDevice(scanner === null ? undefined : addressOf(scanner));
+  // Снять границу: «✕» разделителя или split-бар (S2, S7); имя уходит вместе с ней (R12).
+  // «✕» исчезает вместе с разделителем — фокус клавиатуры переходит на текущую страницу.
+  const unsplit = (docIndex: number, fromDivider: boolean): void => {
+    const sent = edits.edit(withEdits(withoutCut(edits.current.edits, docIndex)), []);
+    if (sent && fromDivider) {
+      focusAfterEdit.current = true;
+    }
   };
+
+  // Имя документа (S3): фиксация по Enter или уходу фокуса, один шаг; без изменений — ничего.
+  const rename = (docIndex: number, name: string): boolean => {
+    const next = renamed(edits.current.edits, docIndex, name);
+    return next !== edits.current.edits && edits.edit(withEdits(next), []);
+  };
+
+  // «Выделить в документ» (S5): подряд — границы до и после куска одним шагом; иначе тост.
+  const group = (): void => {
+    const range = contiguousRange(visible, selection.keys);
+    if (range === null) {
+      onToast(t('toast.notContiguous'));
+      return;
+    }
+    const result = separated(edits.current.edits, range.from, range.to, total);
+    editBoundary(result.edits, result.document, () => {
+      onToast(t('toast.docCreated', { count: range.to - range.from + 1 }));
+    });
+  };
+
+  // «Вернуть всё» (S14): пустые правки и выключенный тумблер одним шагом; Ctrl+Z вернёт всё.
+  const revert = (): void => {
+    setModal(null);
+    const sent = edits.edit(REVERTED, [], {
+      onSuccess: () => {
+        onToast(t('toast.reverted'));
+      },
+    });
+    // Плашка с «Вернуть» исчезнет — фокус клавиатуры уходит на текущую страницу.
+    if (sent) {
+      focusAfterEdit.current = true;
+    }
+  };
+
+  // Тулбар (S1): «+ Новый документ с этой страницы» — если текущая не первая и границы перед
+  // ней ещё нет.
+  const atDocStart = currentDoc?.start === currentIndex;
+  const canSplitHere = currentIndex > 0 && !atDocStart;
+
+  // Ctrl+Z, Ctrl+Y / Ctrl+Shift+Z, Delete — на всём экране, кроме текстовых полей и модалок
+  // (handoff M3, Undo/Redo). Подписка — одна на монтирование: StrictMode её переживает.
+  const shortcut = useEffectEvent((event: globalThis.KeyboardEvent) => {
+    const ctrl = event.ctrlKey || event.metaKey;
+    const letter = ctrl ? shortcutLetter(event) : '';
+    // Зажатая Delete не удаляет страницу за страницей — одно нажатие, одно удаление.
+    const deleteKey = event.key === 'Delete' && !ctrl && !event.shiftKey && !event.repeat;
+    // Чужие клавиши отсеиваются до поиска модалки в DOM.
+    if (letter !== 'z' && letter !== 'y' && !deleteKey) {
+      return;
+    }
+    if (
+      event.defaultPrevented ||
+      event.altKey ||
+      modal !== null ||
+      isTextField(event.target) ||
+      document.querySelector('[aria-modal="true"]') !== null
+    ) {
+      return;
+    }
+    if (letter === 'z' || letter === 'y') {
+      event.preventDefault();
+      // Откат может перегруппировать ленту — фокус из ленты вернётся на текущую после снимка.
+      const fromRail = focusInRail();
+      const sent = letter === 'z' && !event.shiftKey ? edits.undo() : edits.redo();
+      if (sent && fromRail) {
+        focusAfterEdit.current = true;
+      }
+      return;
+    }
+    event.preventDefault();
+    remove(focusInRail());
+  });
+  useEffect(() => {
+    const listener = (event: globalThis.KeyboardEvent): void => {
+      shortcut(event);
+    };
+    document.addEventListener('keydown', listener);
+    return () => {
+      document.removeEventListener('keydown', listener);
+    };
+  }, []);
 
   // Тумблер 180° — у второго уцелевшего прохода (роль, не номер — KTD-4), включая прерванный
   // и принятый; без прохода оборотов тумблера нет (S7). Правило уцелевшего — одно на renderer.
   const backsPass = survivingPasses(session)[1];
   const setRotate = (event: ChangeEvent<HTMLInputElement>): void => {
-    // Снимок — источник правды: при отказе команда не меняет ничего, и чекбокс вернётся сам.
-    window.api.setRotateBacks({ rotate: event.target.checked }).then(
-      (result) => {
-        if (!result.ok) {
-          console.error('[renderer] поворот оборотов не принят', result.error);
-        }
-      },
-      (error: unknown) => {
-        console.error('[renderer] поворот оборотов не отправлен', error);
-      },
-    );
+    // Тумблер — правка (KTD-3, S15): шаг undo с текущими правками снимка. Снимок — источник
+    // правды: при отказе команда не меняет ничего, и чекбокс вернётся сам.
+    edits.edit({ edits: edits.current.edits, rotate180: event.target.checked }, []);
   };
 
-  // Тосты сохранения живут дольше обычных (UI_SPEC раздел 8).
-  const saveToast = (text: string): void => {
-    onToast(text, SAVE_TOAST_MS);
-  };
-
-  const save = (): void => {
-    if (saving) {
-      return;
-    }
-    setSaving(true);
-    window.api.savePdf().then(
+  // Закрытие сессии без модалки: пустая сессия и «Сначала сохранить текущий» после записи
+  // (`saved` — текст тоста сохранения). Отказ и молчание моста — тостом: сессия цела (S17), а
+  // после записи человек должен узнать и то, что файлы сохранены.
+  const closeSession = (saved?: string): void => {
+    const failed = (reason: string): void => {
+      onToast(
+        saved === undefined
+          ? t('toast.closeFailed', { error: reason })
+          : t('toast.savedCloseFailed', { saved, error: reason }),
+        SAVE_TOAST_MS,
+      );
+    };
+    window.api.closeSession().then(
       (result) => {
-        setSaving(false);
         if (!result.ok) {
-          saveToast(t('toast.saveFailed', { error: errorTextInline(t, result.error) }));
+          failed(errorTextInline(t, result.error));
           return;
         }
-        // Отказ в диалоге приходит успехом с `canceled` — не ошибка, тостов нет (KTD-3).
-        if (!result.value.canceled) {
-          saveToast(
-            t('toast.saved', { file: result.value.fileName, folder: result.value.directory }),
-          );
+        if (saved !== undefined) {
+          onToast(t('toast.savedThenNew', { saved }), THEN_NEW_TOAST_MS);
         }
       },
       (error: unknown) => {
-        // Мост не ответил — пользователь не должен гадать, записался ли файл.
-        setSaving(false);
-        console.error('[renderer] сохранение не ответило', error);
-        saveToast(t('toast.saveNoResponse'));
+        console.error('[renderer] закрытие сессии не ответило', error);
+        failed(t('toast.closeNoResponse'));
       },
     );
   };
 
-  // Плашка S17: последний проход прерван. Ноль страниц проход иметь не может — сессии бы не было.
-  const last = session.passes[session.passes.length - 1];
-  let banner: ReactNode = null;
-  if (last?.state === 'interrupted') {
-    const lastNumber = last.pages[last.pages.length - 1]?.number ?? 0;
-    // Текст без кнопки досканирования объясняет почему; при «подключён не тот (или никакой)»
-    // ссылка ведёт в `device` с адресом сканера прохода — иначе из `editor` в модалку не
-    // попасть и проход не досканировать (тупик, ревью сессии 9; текст ссылки — Copy).
-    const text: ReactNode = snapshot.canResume ? (
-      t('editor.interrupted.text', { next: lastNumber + 1 })
-    ) : last.paramsKnown ? (
-      <>
-        {t('editor.interrupted.textOtherScanner', {
-          name: last.scanner?.name ?? last.scanner?.host ?? '',
-        })}{' '}
-        <button
-          type="button"
-          className="btn btn--link"
-          onClick={() => {
-            reconnectPassScanner(last.scanner);
-          }}
-        >
-          {t('editor.interrupted.reconnect')}
-        </button>
-      </>
-    ) : (
-      t('editor.interrupted.textParamsUnknown')
-    );
-    // Свежий отказ «Оставить как есть» виден и под висящим отказом досканирования:
-    // показывается последнее действие, а не первое.
-    let failureLine: ReactNode = null;
-    if (acceptFailure !== null) {
-      failureLine = errorText(t, acceptFailure);
-    } else if (resumeFailure !== null) {
-      failureLine = (
-        <>
-          {t('editor.interrupted.resumeFailed', { error: errorTextInline(t, resumeFailure) })}
-          {RESUME_RECONNECT_CODES.includes(resumeFailure.code) && (
-            <>
-              {' '}
-              <button type="button" className="btn btn--link" onClick={reconnect}>
-                {t('editor.interrupted.reconnect')}
-              </button>
-            </>
-          )}
-        </>
-      );
+  // «Новое сканирование»: сессия без страниц — ни ленты, ни удалённых — закрывается без
+  // вопросов, иначе модалка `newscan` (S17).
+  const deletedCount = snapshot.assembly?.deleted ?? 0;
+  const newScan = (): void => {
+    if (total === 0 && deletedCount === 0) {
+      closeSession();
+      return;
     }
-    banner = (
-      <div className="pass-banner" role="region" aria-labelledby="pass-banner-title">
-        <div className="pass-banner__kicker">
-          <span className="dot dot--warning" aria-hidden="true" />
-          <span className="kicker kicker--warning">{t('editor.interrupted.kicker')}</span>
-        </div>
-        <h2 id="pass-banner-title" className="pass-banner__title">
-          {t('editor.interrupted.title', { last: lastNumber })}
-        </h2>
-        <p className="pass-banner__text">{text}</p>
-        <div className="pass-banner__actions">
-          {snapshot.canResume && (
-            <button type="button" className="btn btn--primary btn--small" onClick={resume}>
-              {t('editor.interrupted.resume')}
-            </button>
-          )}
-          {snapshot.canAccept && (
-            <button type="button" className="btn btn--tinted" onClick={accept}>
-              {t('editor.interrupted.accept')}
-            </button>
-          )}
-          <button
-            type="button"
-            className="btn btn--ghost"
-            onClick={() => {
-              setNewScanOpen(true);
-            }}
-          >
-            {t('editor.interrupted.newScan')}
-          </button>
-        </div>
-        {failureLine !== null && (
-          <p className="pass-banner__status pass-banner__status--danger" role="alert">
-            {failureLine}
-          </p>
-        )}
-      </div>
+    setModal('newscan');
+  };
+
+  // Имена, тронутые в модалке `save`, — в документы одним шагом undo, до записи пакета (S16).
+  // Только тронутые: нетронутые строки показывают живые имена, откатывать ими нечего.
+  const renameDocuments = (next: ReadonlyMap<number, string>): Promise<boolean> => {
+    const target = [...next].reduce(
+      (state, [index, name]) => renamed(state, index, name),
+      edits.current.edits,
     );
-  }
+    if (target === edits.current.edits) {
+      return Promise.resolve(true);
+    }
+    return new Promise((resolve) => {
+      const sent = edits.edit(withEdits(target), [], {
+        onSuccess: () => {
+          resolve(true);
+        },
+        onFailure: () => {
+          resolve(false);
+        },
+      });
+      if (!sent) {
+        resolve(false);
+      }
+    });
+  };
+
+  // Пакет записан целиком: тост 6 с с кнопкой «Новое сканирование» — она открывает `newscan`,
+  // а не закрывает сессию молча (S18). После «Сначала сохранить текущий» — сразу закрытие.
+  const saved = (report: SaveDocumentsReport): void => {
+    setModal(null);
+    const [only] = report.written;
+    const text =
+      report.written.length === 1 && only !== undefined
+        ? t('toast.saved', { file: only.fileName, folder: report.folder })
+        : t('toast.savedMany', { count: report.written.length, folder: report.folder });
+    if (modal === 'saveThenNew') {
+      closeSession(text);
+      return;
+    }
+    onToast(text, SAVE_TOAST_MS, {
+      label: t('toast.newScanAction'),
+      // Тост лежит поверх затемнения: открытую модалку — запись, откат, подключение — кнопка не
+      // подменяет.
+      onClick: () => {
+        if (document.querySelector('[aria-modal="true"]') === null) {
+          setModal('newscan');
+        }
+      },
+    });
+  };
+
+  const rotateLabel =
+    targets.length > 1 ? t('editor.rotateMany', { count: targets.length }) : t('editor.rotate');
+  const deleteLabel =
+    targets.length > 1 ? t('editor.deleteMany', { count: targets.length }) : t('editor.delete');
 
   return (
     <main className="editor-screen">
       <header className="editor-screen__toolbar">
         <div className="editor-screen__toolbar-left">
-          <button
-            type="button"
-            className="btn btn--secondary"
-            onClick={() => {
-              setNewScanOpen(true);
-            }}
-          >
+          <button type="button" className="btn btn--secondary" onClick={newScan}>
             <span aria-hidden="true">↺</span> {t('editor.newScan')}
           </button>
         </div>
-        <div className="editor-screen__toolbar-center">
-          <div className="editor-screen__count">{t('editor.count', { count: total })}</div>
+        {/* S1: документ текущей страницы — тон, имя, позиция. */}
+        <div
+          className={
+            currentDocument === null
+              ? 'editor-screen__toolbar-center'
+              : `editor-screen__toolbar-center ${toneOf(currentDocument)}`
+          }
+        >
+          {currentDoc === undefined || currentDocument === null ? (
+            <span className="editor-screen__doc-title">{t('editor.noPages')}</span>
+          ) : (
+            <>
+              <span className="editor-screen__doc-mark" aria-hidden="true" />
+              <span className="editor-screen__doc-title">{names[currentDocument]}</span>
+              <span className="editor-screen__doc-pos">
+                {documents.length > 1
+                  ? t('editor.docPosition', {
+                      doc: currentDocument + 1,
+                      docs: documents.length,
+                      page: currentIndex - currentDoc.start + 1,
+                      pages: currentDoc.count,
+                    })
+                  : t('editor.pagePosition', { page: currentIndex + 1, pages: total })}
+              </span>
+              {canSplitHere && (
+                <button
+                  type="button"
+                  className="btn btn--tinted editor-screen__split"
+                  disabled={saving}
+                  onClick={() => {
+                    split(currentIndex);
+                  }}
+                >
+                  {t('editor.splitHere')}
+                </button>
+              )}
+            </>
+          )}
         </div>
         <div className="editor-screen__toolbar-right">
-          {/* S9: точка несохранённого; скрыта, когда набор пуст или сохранён. */}
+          {/* S9 M2: точка несохранённого; скрыта, когда набор пуст или сохранён. */}
           {!session.saved && total > 0 && (
             <span
               className="editor-screen__unsaved dot dot--warning"
@@ -486,116 +633,229 @@ export function EditorScreen({
               <span className="visually-hidden">{t('editor.unsaved')}</span>
             </span>
           )}
-          {/* S8: блокировка на время сборки и записи — защита от повторного нажатия. */}
+          {/* S1: «Сохранить документ» при одном документе, «Сохранить N файлов» при нескольких;
+              пустая лента — сохранять нечего. */}
           <button
             type="button"
             className="btn btn--primary btn--small"
-            disabled={saving || total === 0}
-            aria-busy={saving ? true : undefined}
-            onClick={save}
+            disabled={total === 0}
+            onClick={() => {
+              setModal('save');
+            }}
           >
-            {saving ? t('editor.saving') : t('editor.save')}
+            {documents.length > 1
+              ? t('editor.saveFiles', { count: documents.length })
+              : t('editor.save')}
           </button>
         </div>
       </header>
 
       <div className="editor-screen__body">
-        <aside className="rail" ref={railRef} onKeyDown={railKeyDown}>
-          <div className="rail__scroll">
-            {/* Имя — на самом listbox: скринридер объявляет его, а не контейнер (M1). */}
-            <ul
-              className="thumbs"
-              role="listbox"
-              aria-orientation="horizontal"
-              aria-label={t('editor.railLabel')}
-            >
-              {order.map((entry, index) => (
-                <Thumb
-                  key={entry.key}
-                  sessionId={session.id}
-                  pageKey={entry.key}
-                  side={entry.side}
-                  sheet={entry.sheet}
-                  rotate180={entry.rotate180}
-                  lost={entry.lost}
-                  position={index + 1}
-                  unpaired={
-                    entry.side === 'front' &&
-                    entry.sheet !== null &&
-                    unpairedSheets.has(entry.sheet)
-                  }
-                  selected={selected?.key === entry.key}
-                  onSelect={setSelectedKey}
-                />
-              ))}
-            </ul>
-          </div>
-          {backsPass !== undefined && (
-            <footer className="rail__footer">
-              <label className="toggle-row" title={t('editor.rotateBacksTitle')}>
-                <span className="toggle">
-                  <input
-                    className="toggle__input"
-                    type="checkbox"
-                    checked={backsPass.rotate180}
-                    onChange={setRotate}
-                  />
-                  <span className="toggle__track" aria-hidden="true" />
-                </span>
-                <span className="toggle-row__label">{t('editor.rotateBacks')}</span>
-              </label>
-            </footer>
-          )}
-        </aside>
+        <EditorRail
+          sessionId={session.id}
+          order={order}
+          documents={documents}
+          defaultNames={defaultNames}
+          selection={selection}
+          locked={saving}
+          busy={edits.busy}
+          railRef={railRef}
+          onKeyDown={railKeyDown}
+          onPick={pick}
+          onSelect={setSelection}
+          onClearSelection={() => {
+            // Панель исчезнет вместе с кнопкой — фокус переходит на текущую страницу.
+            setSelection(collapsed(selection));
+            focusKey.current = selection.current;
+          }}
+          onGroup={group}
+          onSplit={split}
+          onUnsplit={unsplit}
+          onRename={rename}
+          onMove={move}
+          footer={
+            backsPass !== undefined && (
+              <footer className="rail__footer">
+                <label className="toggle-row" title={t('editor.rotateBacksTitle')}>
+                  <span className="toggle">
+                    <input
+                      className="toggle__input"
+                      type="checkbox"
+                      checked={backsPass.rotate180}
+                      disabled={saving}
+                      onChange={setRotate}
+                    />
+                    <span className="toggle__track" aria-hidden="true" />
+                  </span>
+                  <span className="toggle-row__label">{t('editor.rotateBacks')}</span>
+                </label>
+              </footer>
+            )
+          }
+        />
 
         <section className="stage">
-          {banner}
-          <div className="preview">
-            {selected !== undefined && (
-              <Preview
-                key={selected.key}
+          <EditorPassBanner
+            snapshot={snapshot}
+            session={session}
+            resumeFailure={resumeFailure}
+            onResume={onResume}
+            onOpenDevice={onOpenDevice}
+            onNewScan={newScan}
+          />
+          {currentEntry === undefined ? (
+            // S10: все страницы удалены — подсказка, как вернуть.
+            total === 0 && (
+              <div className="stage__empty">
+                <h2 className="stage__empty-title">{t('editor.empty.title')}</h2>
+                <p className="stage__empty-text">{t('editor.empty.text')}</p>
+              </div>
+            )
+          ) : (
+            <div className="preview">
+              <EditorPreview
+                key={currentEntry.key}
                 sessionId={session.id}
-                entry={selected}
-                position={selectedIndex + 1}
+                entry={currentEntry}
+                position={currentIndex + 1}
+                docStart={
+                  currentDocument !== null && currentDocument > 0 && atDocStart
+                    ? currentDocument + 1
+                    : null
+                }
+                tone={toneOf(currentDocument ?? 0)}
               />
-            )}
-          </div>
+            </div>
+          )}
           <footer className="stage__statusbar">
             <button
               type="button"
               className="btn btn--icon"
               aria-label={t('editor.prev')}
-              aria-disabled={selectedIndex === 0 ? true : undefined}
+              disabled={total === 0}
+              aria-disabled={total > 0 && currentIndex <= 0 ? true : undefined}
               onClick={() => {
-                selectAt(selectedIndex - 1, false);
+                selectAt(currentIndex - 1, false);
               }}
             >
               ←
             </button>
             <div className="stage__counter">
-              {t('editor.position', { current: selectedIndex + 1, total })}
+              {total === 0
+                ? t('editor.positionNone')
+                : t('editor.position', { current: currentIndex + 1, total })}
             </div>
             <button
               type="button"
               className="btn btn--icon"
               aria-label={t('editor.next')}
-              aria-disabled={selectedIndex >= total - 1 ? true : undefined}
+              disabled={total === 0}
+              aria-disabled={total > 0 && currentIndex >= total - 1 ? true : undefined}
               onClick={() => {
-                selectAt(selectedIndex + 1, false);
+                selectAt(currentIndex + 1, false);
               }}
             >
               →
             </button>
+            <span className="stage__divider" aria-hidden="true" />
+            <button
+              type="button"
+              className="btn btn--icon stage__tool"
+              aria-label={rotateLabel}
+              title={rotateLabel}
+              disabled={total === 0 || saving}
+              onClick={rotate}
+            >
+              ↻
+            </button>
+            <button
+              type="button"
+              className="btn btn--icon stage__tool stage__tool--danger"
+              aria-label={deleteLabel}
+              title={deleteLabel}
+              disabled={total === 0 || saving}
+              onClick={() => {
+                remove(false);
+              }}
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 14 14"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.2"
+                strokeLinecap="round"
+                aria-hidden="true"
+              >
+                <path d="M2.5 3.6h9" />
+                <path d="M5.6 3.6V2.4h2.8v1.2" />
+                <path d="M3.7 3.6l.55 7.4h5.5l.55-7.4" />
+                <path d="M5.9 5.8v3M8.1 5.8v3" />
+              </svg>
+            </button>
           </footer>
         </section>
+
+        {snapshot.assembly !== null && (
+          <EditorInspector
+            assembly={snapshot.assembly}
+            entry={currentEntry}
+            position={currentIndex + 1}
+            currentDocument={currentDocument}
+            names={names}
+            frontsOnly={backsPass === undefined}
+            locked={saving}
+            onPickDocument={(index) => {
+              const first = visible[documents[index]?.start ?? -1];
+              if (first !== undefined) {
+                setSelection(single(first));
+              }
+            }}
+            onRevert={() => {
+              setModal('revert');
+            }}
+          />
+        )}
       </div>
 
-      {newScanOpen && (
-        <NewScanModal
-          pageCount={total}
-          onClose={() => {
-            setNewScanOpen(false);
+      {(modal === 'save' || modal === 'saveThenNew') && (
+        <SaveModal
+          documents={documents}
+          defaultNames={defaultNames}
+          singleDefault={t('editor.doc.defaultSingleName', { date: today })}
+          total={total}
+          onRename={renameDocuments}
+          editsBusy={edits.busy}
+          onWriting={setSaving}
+          onNeedCuts={() => {
+            onToast(t('toast.needCuts'));
           }}
+          onSaved={saved}
+          onClose={() => {
+            setModal(null);
+          }}
+        />
+      )}
+      {modal === 'newscan' && (
+        <NewScanModal
+          total={total}
+          deleted={deletedCount}
+          saved={session.saved}
+          onSaveFirst={() => {
+            setModal('saveThenNew');
+          }}
+          onClose={() => {
+            setModal(null);
+          }}
+        />
+      )}
+      {modal === 'revert' && (
+        <RevertModal
+          onCancel={() => {
+            setModal(null);
+          }}
+          onConfirm={revert}
         />
       )}
     </main>

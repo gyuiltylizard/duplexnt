@@ -2,6 +2,7 @@ import { mkdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PDFDocument } from '@cantoo/pdf-lib';
 import { describe, expect, it } from 'vitest';
+import { EMPTY_EDITS } from '@shared';
 import { probeScanner, type ConnectedScanner } from '../../src/core/escl/connect';
 import type { ScanJobLimits } from '../../src/core/escl/scan-job';
 import {
@@ -115,19 +116,18 @@ describe('два прохода через эмулятор (M2)', () => {
 
     expect(unwrap(await service.startPass())).toMatchObject({ end: 'completed', pages: 3 });
     expect(unwrap(await service.startPass())).toMatchObject({ end: 'completed', pages: 3 });
-    unwrap(await service.setRotateBacks(true));
+    unwrap(await service.setEdits(EMPTY_EDITS, true));
 
     const outDir = join(root, 'выход');
     await mkdir(outDir, { recursive: true });
-    const target = join(outDir, 'скан.pdf');
-    expect(unwrap(await service.savePdf(() => Promise.resolve(target)))).toEqual({
-      canceled: false,
-      fileName: 'скан.pdf',
-      directory: outDir,
-    });
+    expect(
+      unwrap(
+        await service.saveDocuments(outDir, { mode: 'single', names: ['скан'], retry: false }),
+      ),
+    ).toEqual({ folder: outDir, written: [{ index: 0, fileName: 'скан.pdf' }], failed: [] });
 
     // PDF несёт собранный порядок; /Rotate 180 — только на оборотах (AE8).
-    const document = await PDFDocument.load(await readFile(target));
+    const document = await PDFDocument.load(await readFile(join(outDir, 'скан.pdf')));
     expect(document.getPageCount()).toBe(6);
     expect(document.getPages().map((page) => page.getRotation().angle)).toEqual([
       0, 180, 0, 180, 0, 180,
@@ -267,7 +267,10 @@ describe('два прохода через эмулятор (M2)', () => {
     ).toBe(true);
 
     expect(service.snapshot().session?.passes.map((pass) => pass.number)).toEqual([1, 3]);
-    expect(await service.setRotateBacks(true)).toEqual({ ok: true, value: undefined });
+    expect(await service.setEdits(EMPTY_EDITS, true)).toEqual({
+      ok: true,
+      value: { seq: service.snapshot().seq },
+    });
     expect(service.snapshot().session?.passes.map((pass) => [pass.number, pass.rotate180])).toEqual(
       [
         [1, false],

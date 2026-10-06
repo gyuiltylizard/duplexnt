@@ -9,7 +9,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import type { DomainError, StartupNotice } from '@shared';
 import { NoticesBar } from './components/NoticesBar';
-import { Toast } from './components/Toast';
+import { Toast, type ToastAction } from './components/Toast';
 import { DeviceModal } from './modals/DeviceModal';
 import { MismatchModal } from './modals/MismatchModal';
 import { EditorScreen } from './screens/EditorScreen';
@@ -19,6 +19,7 @@ import { MergeScreen, MERGE_PAUSE_DECLINED_MS, MERGE_PAUSE_MS } from './screens/
 import { ScanScreen } from './screens/ScanScreen';
 import { SetupScreen } from './screens/SetupScreen';
 import { assemblyLanded, mismatchDue } from './state/assembly-outcome';
+import { tapeOf } from './state/history';
 import { createSnapshotStore } from './state/snapshot-store';
 import { screenOf, type Screen } from './state/screen';
 import './app.css';
@@ -27,12 +28,14 @@ import './app.css';
 // нет (KTD-23). Здесь живёт то, что переживает смену экрана: закрытые уведомления запуска,
 // единственный тост (новый гасит предыдущий сменой `key`), модалка `device`, отказ последнего
 // запуска прохода (экран на время запуска уходит и возвращается, S6), пауза `merge` поверх
-// `screenOf` (M2, KTD-5) и подтверждение модалки `mismatch` (M2, KTD-8).
+// `screenOf` (M2, KTD-5), подтверждение модалки `mismatch` (M2, KTD-8) и тост о страницах,
+// дописанных в конец ленты при ручном порядке (M3, AE9).
 
 interface ToastState {
   readonly id: number;
   readonly text: string;
   readonly durationMs: number | undefined;
+  readonly action: ToastAction | undefined;
 }
 
 /**
@@ -63,8 +66,8 @@ export function App(): ReactNode {
     setToast(null);
   }, []);
   // Номер растёт от предыдущего: новый тост со сменой `key` перезапускает срок показа.
-  const showToast = useCallback((text: string, durationMs?: number) => {
-    setToast((previous) => ({ id: (previous?.id ?? 0) + 1, text, durationMs }));
+  const showToast = useCallback((text: string, durationMs?: number, action?: ToastAction) => {
+    setToast((previous) => ({ id: (previous?.id ?? 0) + 1, text, durationMs, action }));
   }, []);
 
   // Пауза `merge` (KTD-5): эфемерное состояние поверх `screenOf`, живёт только в renderer и
@@ -100,6 +103,37 @@ export function App(): ReactNode {
       clearTimeout(timer);
     };
   }, [mergeHoldMs]);
+
+  // AE9 (handoff M3, «Досканирование при ручном порядке»): при ручном порядке новые страницы
+  // встают в конец ленты — об этом тост. Ловится здесь, а не в `editor`: на время прохода экран
+  // уходит на `scan` и размонтируется. Сравнивается последний показанный `editor` той же сессии:
+  // лента изменилась не через правку (подпись `tapeOf`) и выросла. При автопорядке страницы
+  // встают по схеме — тоста нет.
+  const editorSeen = useRef<{
+    readonly id: string;
+    readonly tape: string;
+    readonly total: number;
+  } | null>(null);
+  useEffect(() => {
+    const session = snapshot?.session ?? null;
+    const shown = snapshot?.assembly ?? null;
+    if (screen !== 'editor' || mergeHoldMs !== null || session === null || shown === null) {
+      return;
+    }
+    const seen = editorSeen.current;
+    const tape = tapeOf(session);
+    const total = shown.order.length;
+    editorSeen.current = { id: session.id, tape, total };
+    if (
+      seen !== null &&
+      seen.id === session.id &&
+      seen.tape !== tape &&
+      shown.orderEdited &&
+      total > seen.total
+    ) {
+      showToast(t('toast.appended', { count: total - seen.total }));
+    }
+  }, [snapshot, screen, mergeHoldMs, showToast, t]);
 
   // Подтверждение `mismatch` — на время жизни процесса и на конкретную сессию (KTD-8):
   // после перезапуска модалка показывается снова, новая сессия начинает с чистого листа.
@@ -261,6 +295,7 @@ export function App(): ReactNode {
           key={toast.id}
           text={toast.text}
           durationMs={toast.durationMs}
+          action={toast.action}
           onExpire={expireToast}
         />
       )}

@@ -1,0 +1,167 @@
+/* Модалка `save` (план M3, U9; handoff M3, S16) — стили из handoff'а дословно. */
+
+.save-modal .kicker {
+  margin: 0;
+}
+.save-modal__modes {
+  display: flex;
+  gap: var(--space-4);
+}
+.save-mode {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-6);
+  border: var(--border-width) solid var(--color-border-default);
+  border-radius: var(--radius-l);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  text-align: left;
+  font: var(--font-weight-medium) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
+  cursor: pointer;
+}
+.save-mode:hover {
+  border-color: var(--color-accent);
+}
+.save-mode[aria-checked='true'] {
+  border-color: var(--color-border-focus);
+  background: var(--color-bg-selected);
+}
+.save-mode[aria-disabled='true'] {
+  opacity: var(--opacity-disabled);
+  cursor: default;
+}
+.save-mode[aria-disabled='true']:hover {
+  border-color: var(--color-border-default);
+}
+.save-mode__hint {
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-normal)
+    var(--font-family-sans);
+  color: var(--color-text-subtle);
+}
+
+.save-files,
+.save-result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: hidden;
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-l);
+  background: var(--color-border-subtle);
+}
+.save-files--scroll,
+.save-result {
+  max-height: 352px; /* десять строк — порог макета */
+  overflow-y: auto;
+}
+.save-file {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-6);
+  background: var(--color-bg-surface);
+}
+.save-file__name {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-3);
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius-m);
+  background: none;
+  color: var(--color-text-primary);
+  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
+  outline: none;
+}
+.save-file__name::placeholder {
+  color: var(--color-text-hint);
+}
+.save-file__name:hover,
+.save-file__name:focus {
+  background: var(--color-bg-paper);
+}
+.save-file__name:hover {
+  border-color: var(--color-border-strong);
+}
+.save-file__name:focus {
+  border-color: var(--color-border-focus);
+}
+.save-file__name:disabled {
+  border-color: transparent;
+  background: none;
+  color: var(--color-text-muted);
+}
+.save-file__ext,
+.save-file__meta {
+  flex: none;
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-snug) var(--font-family-mono);
+  color: var(--color-text-hint);
+}
+
+.save-folder {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-6);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-l);
+  background: var(--color-bg-surface);
+}
+.save-folder__icon {
+  flex: none;
+  width: 15px;
+  height: 12px;
+  border: var(--border-width) solid var(--color-border-heavy);
+  border-top-width: var(--border-width-thick);
+  border-radius: var(--radius-xs);
+}
+/* Длинный путь режется с начала — видна сама папка. */
+.save-folder__path {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-normal)
+    var(--font-family-sans);
+  color: var(--color-text-primary);
+}
+
+.save-result__row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-6);
+  background: var(--color-bg-surface);
+}
+.save-result__icon {
+  flex: none;
+  font: var(--font-weight-medium) var(--font-size-s) / var(--leading-relaxed)
+    var(--font-family-sans);
+  color: var(--color-success);
+}
+.save-result__row--failed .save-result__icon {
+  color: var(--color-danger);
+}
+.save-result__name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
+}
+.save-result__note {
+  display: block;
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-relaxed)
+    var(--font-family-sans);
+  color: var(--color-text-subtle);
+}
+.save-result__row--failed .save-result__note {
+  color: var(--color-danger);
+}

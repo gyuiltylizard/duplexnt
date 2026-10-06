@@ -1,4 +1,10 @@
-import type { PassProgress, PassSnapshot, SessionSnapshot, Snapshot } from '@shared';
+import {
+  EMPTY_EDITS,
+  type PassProgress,
+  type PassSnapshot,
+  type SessionSnapshot,
+  type Snapshot,
+} from '@shared';
 import { describe, expect, it } from 'vitest';
 import { screenOf } from './screen';
 
@@ -19,6 +25,7 @@ function makeSession(overrides: Partial<SessionSnapshot>): SessionSnapshot {
     id: 'session.20261003-120000-abcd',
     backsDeclined: false,
     saved: false,
+    edits: EMPTY_EDITS,
     passes: [makePass({})],
     ...overrides,
   };

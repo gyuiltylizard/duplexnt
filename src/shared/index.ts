@@ -10,6 +10,7 @@ export {
   PAGE_IMAGE_VIEWS,
   pageImageUrl,
   PROBE_TOKEN_MAX_LENGTH,
+  SAVE_MODES,
   type Api,
   type BridgeCommand,
   type BridgeCommands,
@@ -24,12 +25,28 @@ export {
   type PageImageView,
   type ProbeRequest,
   type ProbeResult,
-  type SavePdfReport,
-  type SetRotateBacksRequest,
+  type FailedFile,
+  type SavedFile,
+  type SaveDocumentsReport,
+  type SaveDocumentsRequest,
+  type SaveFolderChoice,
+  type SaveMode,
+  type SetEditsReport,
+  type SetEditsRequest,
   type Unsubscribe,
 } from './bridge';
 
 export type { DiscoveredScanner, DiscoveryState } from './discovery';
+
+export {
+  EDIT_ANGLES,
+  EMPTY_EDITS,
+  MAX_DOCUMENT_NAME_LENGTH,
+  sameEdits,
+  sameList,
+  type EditAngle,
+  type SessionEdits,
+} from './edits';
 
 export {
   COLOR_MODES,
@@ -43,8 +60,10 @@ export {
 } from './scan-params';
 
 export type {
+  AssembledDocument,
   AssembledPage,
   AssemblyReport,
+  PageAngle,
   PageSnapshot,
   PassProgress,
   PassReport,

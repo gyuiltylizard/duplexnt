@@ -1,4 +1,4 @@
-import type { PageSnapshot, PassSnapshot, SessionSnapshot } from '@shared';
+import { EMPTY_EDITS, type PageSnapshot, type PassSnapshot, type SessionSnapshot } from '@shared';
 import { describe, expect, it } from 'vitest';
 import { assembleSession } from './assembly';
 
@@ -33,6 +33,7 @@ const sessionOf = (
   id: 'a1b2c3d4e5f60718',
   backsDeclined: false,
   saved: false,
+  edits: EMPTY_EDITS,
   passes,
   ...extra,
 });
@@ -159,18 +160,18 @@ describe('сборка: роль прохода и флаг поворота', (
     ]);
     const { order } = assembleSession(session);
 
-    expect(order.map((page) => [page.side, page.rotate180])).toEqual([
-      ['front', false],
-      ['back', true],
-      ['front', false],
-      ['back', true],
+    expect(order.map((page) => [page.side, page.angle])).toEqual([
+      ['front', 0],
+      ['back', 180],
+      ['front', 0],
+      ['back', 180],
     ]);
   });
 
   it('выключенный поворот — обороты без признака', () => {
     const { order } = assembleSession(sessionOf([passOf(1, 1), passOf(2, 1)]));
 
-    expect(order.every((page) => !page.rotate180)).toBe(true);
+    expect(order.every((page) => page.angle === 0)).toBe(true);
   });
 });
 
@@ -197,5 +198,89 @@ describe('сборка: ничего не теряется', () => {
       'p03-s01-0002',
     ]);
     expect(report).toMatchObject({ fronts: 1, backs: 1, pairs: 1 });
+  });
+});
+
+describe('сборка: правки поверх автопорядка (M3, U2)', () => {
+  const keysOf = (session: SessionSnapshot): string[] =>
+    assembleSession(session).order.map((page) => page.key);
+
+  it('без правок: один документ на всю ленту, флагов правок нет', () => {
+    const assembly = assembleSession(sessionOf([passOf(1, 2), passOf(2, 2)]));
+
+    expect(assembly.documents).toEqual([{ name: '', start: 0, count: 4 }]);
+    expect(assembly).toMatchObject({ orderEdited: false, hasEdits: false, deleted: 0 });
+  });
+
+  it('явный порядок, удаление, угол и разрез — в ленте и документах', () => {
+    const session = sessionOf([passOf(1, 3)], {
+      edits: {
+        order: ['p01-s01-0003', 'p01-s01-0001', 'p01-s01-0002'],
+        rotations: { 'p01-s01-0001': 90 },
+        deleted: ['p01-s01-0002'],
+        cuts: [1],
+        names: ['Счёт', 'Акт'],
+      },
+    });
+    const assembly = assembleSession(session);
+
+    expect(keysOf(session)).toEqual(['p01-s01-0003', 'p01-s01-0001']);
+    expect(assembly.order.map((page) => page.angle)).toEqual([0, 90]);
+    expect(assembly.documents).toEqual([
+      { name: 'Счёт', start: 0, count: 1 },
+      { name: 'Акт', start: 1, count: 1 },
+    ]);
+    expect(assembly).toMatchObject({ orderEdited: true, hasEdits: true, deleted: 1 });
+  });
+
+  it('ручной угол складывается с поворотом оборотов по модулю 360', () => {
+    const session = sessionOf([passOf(1, 1), passOf(2, 1, { rotate180: true })], {
+      edits: { ...EMPTY_EDITS, rotations: { 'p01-s01-0001': 270, 'p02-s01-0001': 270 } },
+    });
+
+    expect(assembleSession(session).order.map((page) => page.angle)).toEqual([270, 90]);
+  });
+
+  it('включённый поворот оборотов — тоже правка: «Вернуть» его сбрасывает (R8, R9)', () => {
+    const session = sessionOf([passOf(1, 1), passOf(2, 1, { rotate180: true })]);
+
+    expect(assembleSession(session)).toMatchObject({ hasEdits: true, orderEdited: false });
+  });
+
+  it('отчёт пар считается по проходам: удаление лишнего оборота пометку не снимает (KTD-7)', () => {
+    const plain = sessionOf([passOf(1, 3), passOf(2, 1)]);
+    const edited = sessionOf([passOf(1, 3), passOf(2, 1)], {
+      edits: { ...EMPTY_EDITS, deleted: ['p02-s01-0001'], order: ['p01-s01-0003'] },
+    });
+
+    expect(assembleSession(edited).report).toEqual(assembleSession(plain).report);
+    expect(assembleSession(edited).report.unpairedSheets).toEqual([1, 2]);
+  });
+
+  it('непарность — признак страницы: листы без оборота помечены и после переноса', () => {
+    const session = sessionOf([passOf(1, 3), passOf(2, 1)], {
+      edits: { ...EMPTY_EDITS, order: ['p01-s01-0002', 'p01-s01-0001'] },
+    });
+    const flagged = assembleSession(session)
+      .order.filter((page) => page.unpaired)
+      .map((page) => page.key);
+
+    expect(flagged).toEqual(['p01-s01-0002', 'p01-s01-0001']);
+  });
+
+  it('правки с мёртвыми ключами отбрасываются при сборке', () => {
+    const session = sessionOf([passOf(1, 2)], {
+      edits: {
+        order: ['p09-s01-0001', 'p01-s01-0002'],
+        rotations: { 'p09-s01-0001': 90 },
+        deleted: ['p09-s01-0002'],
+        cuts: [],
+        names: [''],
+      },
+    });
+    const assembly = assembleSession(session);
+
+    expect(assembly.order.map((page) => page.key)).toEqual(['p01-s01-0002', 'p01-s01-0001']);
+    expect(assembly.deleted).toBe(0);
   });
 });

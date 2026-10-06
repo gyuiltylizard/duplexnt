@@ -10,7 +10,7 @@ import { assemblePdf, jfifDpi, type PdfPageInput } from './assemble';
 
 const pageOf = (bytes: Uint8Array, extra: Partial<PdfPageInput> = {}): PdfPageInput => ({
   bytes,
-  rotate180: false,
+  angle: 0,
   dpi: 300,
   pixelLimit: null,
   ...extra,
@@ -67,15 +67,19 @@ describe('сборка PDF: без перекодирования, порядо�
     expect(String(stream?.dict.get(PDFName.of('Filter')))).toBe('/DCTDecode');
   });
 
-  it('/Rotate 180 стоит только на повёрнутых страницах; байты изображения не меняются', async () => {
+  it('/Rotate стоит только на повёрнутых страницах, углом страницы; байты не меняются (M3, KTD-4)', async () => {
     const source = fixture(2);
     const pdf = unwrap(
-      await assemblePdf([pageOf(fixture(1)), pageOf(source, { rotate180: true })]),
+      await assemblePdf([
+        pageOf(fixture(1)),
+        pageOf(source, { angle: 90 }),
+        pageOf(fixture(1), { angle: 180 }),
+        pageOf(fixture(1), { angle: 270 }),
+      ]),
     );
 
     const document = await PDFDocument.load(pdf);
-    expect(document.getPage(0).getRotation().angle).toBe(0);
-    expect(document.getPage(1).getRotation().angle).toBe(180);
+    expect(document.getPages().map((page) => page.getRotation().angle)).toEqual([0, 90, 180, 270]);
 
     const streams = await imageStreams(pdf);
     expect(Buffer.from(streams[1] ?? []).equals(source)).toBe(true);

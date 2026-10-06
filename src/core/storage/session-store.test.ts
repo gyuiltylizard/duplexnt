@@ -1,9 +1,11 @@
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { assert, describe, expect, it } from 'vitest';
+import { EMPTY_EDITS, type SessionEdits } from '@shared';
 import { fsError, interceptFs, type FsCall } from '../../../test/support/intercept-fs';
 import { makeTempDataRoot } from '../../../test/support/temp-data-root';
-import { parseJournal, type Journal, type PassOrigin } from './journal';
+import { assembleSession } from '../scan/assembly';
+import { JOURNAL_VERSION, parseJournal, type Journal, type PassOrigin } from './journal';
 import { layoutOf } from './layout';
 import { createSessionStore, NO_SESSION, type SessionStoreOptions } from './session-store';
 import { realStorageFs, StorageError } from './storage-fs';
@@ -117,6 +119,7 @@ describe('хранилище сессии: проход', () => {
           ],
         },
       ],
+      edits: EMPTY_EDITS,
     });
   });
 
@@ -724,7 +727,8 @@ describe('хранилище сессии: пустая сессия равна 
     await mkdir(layout.pagesDir, { recursive: true });
     await writeFile(join(layout.pagesDir, 'p01-s02-0001.jpg'), page(9));
     const journal: Journal = {
-      version: 2,
+      version: JOURNAL_VERSION,
+      edits: EMPTY_EDITS,
       sessionId: SESSION,
       nextPass: 2,
       passes: [
@@ -792,7 +796,8 @@ describe('хранилище сессии: запись проверяется �
 
 describe('хранилище сессии: потолки счётчиков', () => {
   const journalWith = (overrides: Partial<Journal>, pageCount = 0, nextSegment = 2): Journal => ({
-    version: 2,
+    version: JOURNAL_VERSION,
+    edits: EMPTY_EDITS,
     sessionId: SESSION,
     nextPass: 2,
     passes: [
@@ -891,7 +896,8 @@ describe('хранилище сессии: миниатюры отброшенн
 
 describe('хранилище сессии: нечитаемый журнал, который сверка не сохранила в стороне', () => {
   const JOURNAL: Journal = {
-    version: 2,
+    version: JOURNAL_VERSION,
+    edits: EMPTY_EDITS,
     sessionId: SESSION,
     nextPass: 2,
     passes: [
@@ -966,23 +972,23 @@ describe('хранилище сессии: флаги журнала v2 (M2, U1)
     return context;
   }
 
-  it('setRotateBacks ставит флаг на проход оборотов, идемпотентен, переживает запись', async () => {
+  it('тумблер 180° (setEdits) ставит флаг на проход оборотов, идемпотентен, переживает запись', async () => {
     const { store, journalOnDisk } = await twoPasses();
 
-    ok(await store.setRotateBacks(true));
-    ok(await store.setRotateBacks(true));
+    ok(await store.setEdits(EMPTY_EDITS, true));
+    ok(await store.setEdits(EMPTY_EDITS, true));
 
     expect(store.snapshot()?.passes.map((pass) => pass.rotate180)).toEqual([false, true]);
     expect((await journalOnDisk()).passes.map((pass) => pass.rotate180)).toEqual([false, true]);
 
-    ok(await store.setRotateBacks(false));
+    ok(await store.setEdits(EMPTY_EDITS, false));
     expect(store.snapshot()?.passes.map((pass) => pass.rotate180)).toEqual([false, false]);
   });
 
-  it('setRotateBacks без прохода оборотов — noBacksPass; без сессии — noSession', async () => {
+  it('тумблер 180° без прохода оборотов — noBacksPass; без сессии — noSession', async () => {
     const { store, accept } = await setup();
 
-    expect(await store.setRotateBacks(true)).toMatchObject({
+    expect(await store.setEdits(EMPTY_EDITS, true)).toMatchObject({
       ok: false,
       error: { code: 'sessionConflict', details: { reason: 'noSession' } },
     });
@@ -990,7 +996,7 @@ describe('хранилище сессии: флаги журнала v2 (M2, U1)
     ok(await store.beginPass(ORIGIN));
     await accept(1, 2);
     ok(await store.endSegment('completed'));
-    expect(await store.setRotateBacks(true)).toMatchObject({
+    expect(await store.setEdits(EMPTY_EDITS, true)).toMatchObject({
       ok: false,
       error: { code: 'sessionConflict', details: { reason: 'noBacksPass' } },
     });
@@ -1009,7 +1015,7 @@ describe('хранилище сессии: флаги журнала v2 (M2, U1)
     await accept(4, 5);
     ok(await store.endSegment('completed'));
 
-    ok(await store.setRotateBacks(true));
+    ok(await store.setEdits(EMPTY_EDITS, true));
 
     const passes = store.snapshot()?.passes ?? [];
     expect(passes.map((pass) => [pass.number, pass.rotate180])).toEqual([
@@ -1045,7 +1051,7 @@ describe('хранилище сессии: флаги журнала v2 (M2, U1)
     expect((await journalOnDisk()).saved).toBe(true);
 
     // «Сохранил → включил тумблер» — индикация несохранённого возвращается (AE12).
-    ok(await store.setRotateBacks(true));
+    ok(await store.setEdits(EMPTY_EDITS, true));
     expect(store.snapshot()?.saved).toBe(false);
 
     ok(await store.markSaved());
@@ -1070,7 +1076,7 @@ describe('хранилище сессии: флаги журнала v2 (M2, U1)
     const revision = store.revision();
 
     // «Пока PDF собирался и писался» — пользователь щёлкнул тумблер поворота.
-    ok(await store.setRotateBacks(true));
+    ok(await store.setEdits(EMPTY_EDITS, true));
     ok(await store.markSaved(revision));
 
     expect(store.snapshot()?.saved).toBe(false);
@@ -1084,7 +1090,7 @@ describe('хранилище сессии: флаги журнала v2 (M2, U1)
     const { store, accept } = await twoPasses();
     const before = store.revision();
 
-    ok(await store.setRotateBacks(true));
+    ok(await store.setEdits(EMPTY_EDITS, true));
     expect(store.revision()).toBeGreaterThan(before);
 
     const afterToggle = store.revision();
@@ -1095,7 +1101,7 @@ describe('хранилище сессии: флаги журнала v2 (M2, U1)
 
   it('новая сессия не наследует флаги закрытой', async () => {
     const { store, accept } = await twoPasses();
-    ok(await store.setRotateBacks(true));
+    ok(await store.setEdits(EMPTY_EDITS, true));
     ok(await store.markSaved());
     ok(await store.closeSession());
 
@@ -1104,5 +1110,232 @@ describe('хранилище сессии: флаги журнала v2 (M2, U1)
 
     expect(store.snapshot()).toMatchObject({ backsDeclined: false, saved: false });
     expect(store.snapshot()?.passes.map((pass) => pass.rotate180)).toEqual([false]);
+  });
+});
+
+describe('хранилище сессии: правки редактора (M3, U1)', () => {
+  const EDITS: SessionEdits = {
+    order: ['p02-s01-0001', 'p01-s01-0001'],
+    rotations: { 'p01-s01-0002': 90 },
+    deleted: ['p02-s01-0002'],
+    cuts: [2],
+    names: ['', 'Договор'],
+  };
+
+  async function twoPasses() {
+    const context = await setup();
+    const { store, accept } = context;
+    ok(await store.beginPass(ORIGIN));
+    await accept(1, 2);
+    ok(await store.endSegment('completed'));
+    ok(await store.beginPass(ORIGIN));
+    await accept(3, 4);
+    ok(await store.endSegment('completed'));
+    return context;
+  }
+
+  it('правки и поворот оборотов пишутся одной записью журнала и видны в снимке дословно', async () => {
+    const { store, calls, journalOnDisk } = await twoPasses();
+    const renamesBefore = calls.filter(isJournalRename).length;
+
+    ok(await store.setEdits(EDITS, true));
+
+    expect(calls.filter(isJournalRename).length - renamesBefore).toBe(1);
+    expect(store.snapshot()?.edits).toEqual(EDITS);
+    const journal = await journalOnDisk();
+    expect(journal.edits).toEqual(EDITS);
+    expect(journal.passes.map((pass) => pass.rotate180)).toEqual([false, true]);
+  });
+
+  it('правка снимает отметку «сохранено»; то же состояние повторно — ни записи, ни снятия', async () => {
+    const { store, calls } = await twoPasses();
+    ok(await store.setEdits(EDITS, false));
+    ok(await store.markSaved());
+    const renamesBefore = calls.filter(isJournalRename).length;
+
+    ok(await store.setEdits(EDITS, false));
+    expect(store.snapshot()?.saved).toBe(true);
+    expect(calls.filter(isJournalRename).length).toBe(renamesBefore);
+
+    ok(await store.setEdits(EMPTY_EDITS, false));
+    expect(store.snapshot()).toMatchObject({ saved: false, edits: EMPTY_EDITS });
+  });
+
+  it('удаление — пометка в правках: файлы на месте, пометки сегментов не трогаются', async () => {
+    const { store, pageFiles, journalOnDisk } = await twoPasses();
+    const before = await pageFiles();
+
+    ok(await store.setEdits({ ...EMPTY_EDITS, deleted: ['p01-s01-0001', 'p02-s01-0002'] }, false));
+
+    expect(await pageFiles()).toEqual(before);
+    expect((await journalOnDisk()).deletions).toEqual([]);
+    expect(ok(await store.readPage('p01-s01-0001'))).toEqual(page(1));
+  });
+
+  it('во время прохода правка отклоняется: лента растёт (KTD-9)', async () => {
+    const { store, accept } = await setup();
+    ok(await store.beginPass(ORIGIN));
+    await accept(1, 2);
+
+    expect(await store.setEdits(EDITS, false)).toMatchObject({
+      ok: false,
+      error: { code: 'sessionConflict', details: { reason: 'passRunning' } },
+    });
+    expect(store.snapshot()?.edits).toEqual(EMPTY_EDITS);
+  });
+
+  it('без сессии — noSession; поворот без прохода оборотов — noBacksPass, без поворота — можно', async () => {
+    const { store, accept } = await setup();
+    expect(await store.setEdits(EDITS, false)).toMatchObject({
+      ok: false,
+      error: { code: 'sessionConflict', details: { reason: 'noSession' } },
+    });
+
+    ok(await store.beginPass(ORIGIN));
+    await accept(1, 2);
+    ok(await store.endSegment('completed'));
+    expect(await store.setEdits(EMPTY_EDITS, true)).toMatchObject({
+      ok: false,
+      error: { code: 'sessionConflict', details: { reason: 'noBacksPass' } },
+    });
+    const fronts: SessionEdits = { ...EMPTY_EDITS, rotations: { 'p01-s01-0001': 270 } };
+    ok(await store.setEdits(fronts, false));
+    expect(store.snapshot()?.edits).toEqual(fronts);
+  });
+
+  it('отказ записи журнала — правка не принята, состояние прежнее', async () => {
+    let failWrites = false;
+    const { store, accept } = await setup((call) => {
+      if (failWrites && isJournalRename(call)) {
+        throw fsError('EPERM');
+      }
+    });
+    ok(await store.beginPass(ORIGIN));
+    await accept(1, 1);
+    ok(await store.endSegment('completed'));
+    failWrites = true;
+
+    expect(await store.setEdits(EDITS, false)).toMatchObject({ ok: false });
+    expect(store.snapshot()?.edits).toEqual(EMPTY_EDITS);
+    expect(store.unsaved()).toBe(false);
+  });
+
+  it('новая сессия не наследует правки закрытой', async () => {
+    const { store, accept } = await twoPasses();
+    ok(await store.setEdits(EDITS, true));
+    ok(await store.closeSession());
+
+    ok(await store.beginPass(ORIGIN));
+    await accept(1, 1);
+
+    expect(store.snapshot()?.edits).toEqual(EMPTY_EDITS);
+  });
+
+  it('досканирование вставило оборот в середину — разрез переехал вслед; «Остановить» вернул его (KTD-10)', async () => {
+    const { store, accept, journalOnDisk } = await setup();
+    ok(await store.beginPass(ORIGIN));
+    await accept(1, 3);
+    ok(await store.endSegment('completed'));
+    // Обороты прерваны на первом: пришёл оборот листа 3. Лента f1 f2 f3 b1, разрез перед f3.
+    ok(await store.beginPass(ORIGIN));
+    await accept(4, 4);
+    ok(await store.endSegment('interrupted'));
+    ok(await store.setEdits({ ...EMPTY_EDITS, cuts: [2], names: ['', 'Третий'] }, false));
+
+    ok(await store.resumePass());
+    await accept(5, 5);
+
+    // Оборот листа 2 лёг между f2 и f3: разрез остался перед f3.
+    expect(store.snapshot()?.edits).toMatchObject({ cuts: [3], names: ['', 'Третий'] });
+    expect((await journalOnDisk()).edits.cuts).toEqual([3]);
+
+    ok(await store.discardSegment());
+    expect(store.snapshot()?.edits).toMatchObject({ cuts: [2], names: ['', 'Третий'] });
+  });
+
+  it('правка нормализуется перед записью: разрез перед первой позицией снят, мёртвый ключ вычищен', async () => {
+    const { store, journalOnDisk } = await twoPasses();
+
+    ok(
+      await store.setEdits(
+        {
+          order: [],
+          rotations: { 'p09-s01-0001': 90, 'p01-s01-0001': 180 },
+          deleted: [],
+          cuts: [0, 2],
+          names: ['Пусто', 'Начало', 'Конец'],
+        },
+        false,
+      ),
+    );
+
+    const expected: SessionEdits = {
+      order: [],
+      rotations: { 'p01-s01-0001': 180 },
+      deleted: [],
+      cuts: [2],
+      names: ['Начало', 'Конец'],
+    };
+    expect(store.snapshot()?.edits).toEqual(expected);
+    expect((await journalOnDisk()).edits).toEqual(expected);
+  });
+
+  it('состояние, которое нормализуется к записанному, — не правка: «сохранено» не снимается', async () => {
+    const { store } = await twoPasses();
+    ok(await store.setEdits({ ...EMPTY_EDITS, cuts: [2], names: ['', 'Б'] }, false));
+    ok(await store.markSaved());
+
+    ok(await store.setEdits({ ...EMPTY_EDITS, cuts: [0, 2], names: ['', '', 'Б'] }, false));
+
+    expect(store.snapshot()?.saved).toBe(true);
+  });
+
+  it('досканирование при ручном порядке: новые страницы в конце ленты, в последнем документе (AE9)', async () => {
+    const { store, accept } = await setup();
+    ok(await store.beginPass(ORIGIN));
+    await accept(1, 2);
+    ok(await store.endSegment('interrupted'));
+    const manual: SessionEdits = {
+      ...EMPTY_EDITS,
+      order: ['p01-s01-0002', 'p01-s01-0001'],
+      cuts: [1],
+      names: ['', 'Хвост'],
+    };
+    ok(await store.setEdits(manual, false));
+
+    ok(await store.resumePass());
+    await accept(3, 4);
+    ok(await store.endSegment('completed'));
+
+    const session = store.snapshot();
+    expect(session?.edits).toEqual(manual);
+    const assembly = assembleSession(session ?? assert.fail('сессии нет'));
+    expect(assembly.order.map((page) => page.key)).toEqual([
+      'p01-s01-0002',
+      'p01-s01-0001',
+      'p01-s02-0001',
+      'p01-s02-0002',
+    ]);
+    expect(assembly.documents.map((doc) => [doc.name, doc.count])).toEqual([
+      ['', 1],
+      ['Хвост', 3],
+    ]);
+    expect(assembly.orderEdited).toBe(true);
+  });
+
+  it('углы в другом порядке ключей — не правка: «сохранено» не снимается', async () => {
+    const { store } = await twoPasses();
+    const rotations = { 'p01-s01-0001': 90, 'p02-s01-0001': 180 } as const;
+    ok(await store.setEdits({ ...EMPTY_EDITS, rotations }, false));
+    ok(await store.markSaved());
+
+    ok(
+      await store.setEdits(
+        { ...EMPTY_EDITS, rotations: { 'p02-s01-0001': 180, 'p01-s01-0001': 90 } },
+        false,
+      ),
+    );
+
+    expect(store.snapshot()?.saved).toBe(true);
   });
 });

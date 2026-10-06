@@ -1,0 +1,400 @@
+import {
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+  type KeyboardEvent,
+  type ReactNode,
+  type RefObject,
+} from 'react';
+import { useTranslation } from 'react-i18next';
+import { MAX_DOCUMENT_NAME_LENGTH, type AssembledDocument, type AssembledPage } from '@shared';
+import type { DropSide } from '../state/edits';
+import { single, type Selection } from '../state/selection';
+import { toneOf } from './EditorInspector';
+import { EditorThumb, type PickMode, type SplitKind, type ThumbDrag } from './EditorThumb';
+
+// Лента редактора (план M3, U7–U8; handoff M3, S2–S7): панель мультивыделения, группы по
+// документам с разделителем «✕» и полем имени, миниатюры с split-баром и перетаскиванием.
+// Решает только «что и куда» — сами правки строит и шлёт экран (жесты `state/edits.ts`, KTD-8).
+
+/**
+ * Тип данных перетаскивания — свой: с `text/plain` бросок на поле имени вставил бы в него
+ * ключи страниц. Перетаскивание внутри окна, данные — только для порядка.
+ */
+const DRAG_TYPE = 'application/x-duplexnt-pages';
+
+/** id поля имени документа `docIndex` (с нуля): подпись группы и фокус после границы. */
+export const docNameId = (docIndex: number): string => `doc-name-${String(docIndex)}`;
+
+interface Drop {
+  readonly key: string;
+  readonly side: DropSide;
+}
+
+/**
+ * Поле имени документа (S3): ввод локален, фиксация — по Enter или уходу фокуса одним
+ * `setEdits`; Esc возвращает сохранённое значение. Отправленное имя показывается до снимка с
+ * ним — без мелькания прежнего; команда завершилась (снимок, отказ) — поле снова показывает
+ * снимок. Команда не ушла (другая в полёте, запись) — черновик остаётся в поле и уйдёт
+ * следующим Enter или уходом фокуса.
+ */
+function DocName({
+  index,
+  value,
+  placeholder,
+  disabled,
+  busy,
+  onCommit,
+}: {
+  readonly index: number;
+  readonly value: string;
+  readonly placeholder: string;
+  readonly disabled: boolean;
+  readonly busy: boolean;
+  readonly onCommit: (docIndex: number, name: string) => boolean;
+}): ReactNode {
+  const { t } = useTranslation();
+  const [draft, setDraft] = useState<{ readonly text: string; readonly sent: boolean } | null>(
+    null,
+  );
+  if (draft?.sent === true && !busy) {
+    setDraft(null);
+  }
+
+  const commit = (): void => {
+    if (draft === null || draft.sent) {
+      return;
+    }
+    if (draft.text === value) {
+      setDraft(null);
+      return;
+    }
+    if (onCommit(index, draft.text)) {
+      setDraft({ text: draft.text, sent: true });
+    }
+  };
+
+  const keyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      commit();
+    } else if (event.key === 'Escape') {
+      // Esc в поле — отмена ввода, а не сжатие выделения ленты; фокус остаётся в поле.
+      event.stopPropagation();
+      if (draft?.sent !== true) {
+        setDraft(null);
+      }
+    }
+  };
+
+  return (
+    <input
+      id={docNameId(index)}
+      className="doc-group__name"
+      type="text"
+      value={draft?.text ?? value}
+      placeholder={placeholder}
+      maxLength={MAX_DOCUMENT_NAME_LENGTH}
+      aria-label={t('editor.doc.nameLabel', { number: index + 1 })}
+      disabled={disabled}
+      onChange={(event) => {
+        setDraft({ text: event.target.value, sent: false });
+      }}
+      onBlur={commit}
+      onKeyDown={keyDown}
+    />
+  );
+}
+
+export interface EditorRailProps {
+  readonly sessionId: string;
+  readonly order: readonly AssembledPage[];
+  readonly documents: readonly AssembledDocument[];
+  /** Имена по умолчанию — плейсхолдеры полей имени (S3). */
+  readonly defaultNames: readonly string[];
+  readonly selection: Selection;
+  /** Идёт запись (KTD-9): поля имени и «✕» недоступны. */
+  readonly locked: boolean;
+  /** Команда в полёте: отправленное имя ждёт снимка. */
+  readonly busy: boolean;
+  readonly railRef: RefObject<HTMLElement | null>;
+  readonly onKeyDown: (event: KeyboardEvent<HTMLElement>) => void;
+  /** Стабильный: миниатюры под `memo`. */
+  readonly onPick: (key: string, mode: PickMode) => void;
+  readonly onSelect: (selection: Selection) => void;
+  readonly onClearSelection: () => void;
+  readonly onGroup: () => void;
+  /** Граница перед позицией ленты (с нуля). */
+  readonly onSplit: (position: number) => void;
+  /** Снять границу перед документом (с нуля); `fromDivider` — «✕» разделителя, не split-бар. */
+  readonly onUnsplit: (docIndex: number, fromDivider: boolean) => void;
+  /** Имя документа (с нуля); `false` — команда не ушла. */
+  readonly onRename: (docIndex: number, name: string) => boolean;
+  readonly onMove: (keys: readonly string[], target: string, side: DropSide) => void;
+  /** Низ ленты — тумблер 180° (S15). */
+  readonly footer: ReactNode;
+}
+
+export function EditorRail({
+  sessionId,
+  order,
+  documents,
+  defaultNames,
+  selection,
+  locked,
+  busy,
+  railRef,
+  onKeyDown,
+  onPick,
+  onSelect,
+  onClearSelection,
+  onGroup,
+  onSplit,
+  onUnsplit,
+  onRename,
+  onMove,
+  footer,
+}: EditorRailProps): ReactNode {
+  const { t } = useTranslation();
+  const total = order.length;
+  const selectedKeys = useMemo(() => new Set(selection.keys), [selection.keys]);
+  const multi = selection.keys.length > 1;
+  // Правки доступны сейчас: нет записи и команды в полёте — можно тянуть, split-бар виден.
+  const editable = !locked && !busy;
+
+  // Позиция, перед которой стоит граница, → номер документа, который с неё начинается.
+  const starts = useMemo(
+    () => new Map(documents.slice(1).map((doc, index) => [doc.start, index + 1])),
+    [documents],
+  );
+
+  // Перетаскивание (S6): что тянут и где маркер вставки.
+  const [dragged, setDragged] = useState<readonly string[] | null>(null);
+  const [drop, setDrop] = useState<Drop | null>(null);
+  const draggedKeys = useMemo(() => new Set(dragged), [dragged]);
+
+  const finishDrag = (): void => {
+    setDragged(null);
+    setDrop(null);
+  };
+
+  // Обработчики миниатюр — стабильные (`memo` не перерисовывает ленту на каждый `dragover`);
+  // свежие выделение, лента и состояние переноса — через ref.
+  const latest = useRef<ThumbDrag & { readonly split: (key: string) => void }>({
+    split: () => undefined,
+    start: () => undefined,
+    over: () => undefined,
+  });
+  useLayoutEffect(() => {
+    latest.current = {
+      split: (key) => {
+        const position = order.findIndex((entry) => entry.key === key);
+        const docIndex = starts.get(position);
+        if (docIndex === undefined) {
+          onSplit(position);
+        } else {
+          onUnsplit(docIndex, false);
+        }
+      },
+      start: (key, event) => {
+        // Тянут выделенную из нескольких — едет всё выделение в порядке ленты; иначе одна
+        // страница, и выделение переходит на неё.
+        const group = multi && selectedKeys.has(key);
+        const keys = group ? selection.keys : [key];
+        if (!group) {
+          onSelect(single(key));
+        }
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData(DRAG_TYPE, keys.join('\n'));
+        setDragged(keys);
+        setDrop(null);
+      },
+      over: (key, event) => {
+        if (dragged === null) {
+          return; // чужое перетаскивание — файлы, текст: лента его не принимает
+        }
+        event.stopPropagation();
+        // Над перетаскиваемой страницей маркера нет: бросок туда ничего не делает.
+        if (draggedKeys.has(key)) {
+          if (drop !== null) {
+            setDrop(null);
+          }
+          return;
+        }
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+        const rect = event.currentTarget.getBoundingClientRect();
+        const side: DropSide = event.clientX < rect.left + rect.width / 2 ? 'before' : 'after';
+        if (drop?.key !== key || drop.side !== side) {
+          setDrop({ key, side });
+        }
+      },
+    };
+  });
+  const drag = useMemo<ThumbDrag>(
+    () => ({
+      start: (key, event) => {
+        latest.current.start(key, event);
+      },
+      over: (key, event) => {
+        latest.current.over(key, event);
+      },
+    }),
+    [],
+  );
+  const split = useMemo(
+    () => (key: string) => {
+      latest.current.split(key);
+    },
+    [],
+  );
+
+  // Зазоры между миниатюрами: бросок туда ложится на последний показанный маркер.
+  const scrollDragOver = (event: DragEvent<HTMLElement>): void => {
+    if (dragged !== null && drop !== null) {
+      event.preventDefault();
+    }
+  };
+  // Указатель ушёл из ленты — маркер гаснет: бросок вне ленты отменяет перенос.
+  const scrollDragLeave = (event: DragEvent<HTMLElement>): void => {
+    const next = event.relatedTarget;
+    if (!(next instanceof Node) || !event.currentTarget.contains(next)) {
+      setDrop(null);
+    }
+  };
+  const scrollDrop = (event: DragEvent<HTMLElement>): void => {
+    if (dragged === null) {
+      return;
+    }
+    event.preventDefault();
+    if (drop !== null) {
+      onMove(dragged, drop.key, drop.side);
+    }
+    finishDrag();
+  };
+
+  const splitKind = (position: number): SplitKind =>
+    position === 0 || !editable ? null : starts.has(position) ? 'remove' : 'add';
+
+  return (
+    <aside className="rail" aria-label={t('editor.railLabel')} ref={railRef} onKeyDown={onKeyDown}>
+      {/* S5: панель мультивыделения. */}
+      {multi && (
+        <div className="rail__top">
+          <div className="rail__selection" role="region" aria-label={t('editor.selection.label')}>
+            <p className="rail__selection-text">
+              {t('editor.selection.text', { count: selection.keys.length })}
+            </p>
+            <div className="rail__selection-actions">
+              <button
+                type="button"
+                className="rail__selection-group"
+                disabled={locked}
+                onClick={onGroup}
+              >
+                {t('editor.selection.group')}
+              </button>
+              <button type="button" className="rail__selection-clear" onClick={onClearSelection}>
+                {t('editor.selection.clear')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      <div
+        className="rail__scroll"
+        onDragOver={scrollDragOver}
+        onDragLeave={scrollDragLeave}
+        onDrop={scrollDrop}
+        onDragEnd={finishDrag}
+      >
+        {total === 0 ? (
+          <p className="rail__empty">{t('editor.empty.rail')}</p>
+        ) : (
+          // S2: группа на документ, в каждой свой listbox; номер миниатюры — сквозной. Ключ —
+          // первая страница документа: черновик имени едет с документом, а не с номером.
+          documents.map((doc, index) => (
+            <section
+              key={order[doc.start]?.key ?? index}
+              className={`doc-group ${toneOf(index)}`}
+              aria-labelledby={docNameId(index)}
+            >
+              {index > 0 && (
+                <div className="doc-group__divider">
+                  <span className="doc-group__pill">{t('editor.doc.newPill')}</span>
+                  <span className="doc-group__rule" aria-hidden="true" />
+                  <button
+                    type="button"
+                    className="doc-group__unsplit"
+                    title={t('editor.doc.unsplit')}
+                    aria-label={t('editor.doc.unsplitLabel', { number: index + 1 })}
+                    disabled={locked}
+                    onClick={() => {
+                      onUnsplit(index, true);
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+              <div className="doc-group__header">
+                <span className="doc-badge" aria-hidden="true">
+                  {index + 1}
+                </span>
+                <DocName
+                  key={order[doc.start]?.key ?? index}
+                  index={index}
+                  value={doc.name}
+                  placeholder={defaultNames[index] ?? ''}
+                  disabled={locked}
+                  busy={busy}
+                  onCommit={onRename}
+                />
+                <span className="doc-group__count">
+                  {t('editor.doc.count', { count: doc.count })}
+                </span>
+              </div>
+              <ul
+                className="thumbs"
+                role="listbox"
+                aria-multiselectable="true"
+                aria-orientation="horizontal"
+                aria-label={t('editor.doc.pagesLabel', { number: index + 1 })}
+              >
+                {order.slice(doc.start, doc.start + doc.count).map((entry, offset) => {
+                  const position = doc.start + offset;
+                  return (
+                    <EditorThumb
+                      key={entry.key}
+                      sessionId={sessionId}
+                      pageKey={entry.key}
+                      side={entry.side}
+                      sheet={entry.sheet}
+                      angle={entry.angle}
+                      lost={entry.lost}
+                      position={position + 1}
+                      unpaired={entry.unpaired}
+                      current={entry.key === selection.current}
+                      selected={selectedKeys.has(entry.key)}
+                      multi={multi && selectedKeys.has(entry.key)}
+                      draggable={editable}
+                      dragging={draggedKeys.has(entry.key)}
+                      drop={drop?.key === entry.key ? drop.side : null}
+                      split={splitKind(position)}
+                      onPick={onPick}
+                      onSplit={split}
+                      drag={drag}
+                    />
+                  );
+                })}
+              </ul>
+            </section>
+          ))
+        )}
+      </div>
+      {footer}
+    </aside>
+  );
+}

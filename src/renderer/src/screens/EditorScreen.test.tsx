@@ -1,109 +1,20 @@
-import {
-  fail,
-  ok,
-  type Api,
-  type PassSnapshot,
-  type SessionSnapshot,
-  type Snapshot,
-} from '@shared';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { EMPTY_EDITS, fail } from '@shared';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../i18n';
-import { assemblyOf } from '../state/assembly-fixture';
-import { EditorScreen } from './EditorScreen';
+import { makePass, makeSnapshot, pages, renderEditor, stubApi, twoPass } from './editor-fixture';
 
-function pages(
-  count: number,
-  from = 1,
-  prefix = 'p01-s01',
-): { key: string; number: number; lost: boolean }[] {
-  return Array.from({ length: count }, (_, index) => ({
-    key: `${prefix}-${String(from + index).padStart(4, '0')}`,
-    number: from + index,
-    lost: false,
-  }));
-}
+// Экран `editor`: поведение M1–M2 (лента, превью, тумблер, точка несохранённого, плашка прохода).
+// Правки, выделение, документы и инспектор M3 — в EditorScreen.edits.test.tsx; сохранение и
+// новое сканирование — в EditorScreen.save.test.tsx; хелперы — editor-fixture.
 
-function makePass(overrides: Partial<PassSnapshot>): PassSnapshot {
-  return {
-    number: 1,
-    state: 'completed',
-    paramsKnown: true,
-    scanner: null,
-    rotate180: false,
-    pages: pages(3),
-    ...overrides,
-  };
-}
-
-function makeSnapshot(
-  passes: PassSnapshot[],
-  overrides: Partial<Snapshot> = {},
-  sessionOverrides: Partial<SessionSnapshot> = {},
-): Snapshot {
-  const session: SessionSnapshot = {
-    id: 'session.x',
-    backsDeclined: false,
-    saved: false,
-    passes,
-    ...sessionOverrides,
-  };
-  return {
-    seq: 1,
-    scanner: { kind: 'none' },
-    pass: null,
-    canResume: false,
-    canAccept: false,
-    storage: { incompatible: false, unsaved: false },
-    notices: [],
-    ...overrides,
-    session,
-    assembly: overrides.assembly === undefined ? assemblyOf(session) : overrides.assembly,
-  };
-}
-
-function stubApi(overrides: Partial<Record<keyof Api, unknown>> = {}) {
-  const api = {
-    acceptPass: vi.fn(() => Promise.resolve(ok(undefined))),
-    closeSession: vi.fn(() => Promise.resolve(ok(undefined))),
-    setRotateBacks: vi.fn(() => Promise.resolve(ok(undefined))),
-    savePdf: vi.fn(() =>
-      Promise.resolve(ok({ canceled: false, fileName: 'Скан.pdf', directory: 'Документы' })),
-    ),
-    ...overrides,
-  } as unknown as Api;
-  vi.stubGlobal('api', api);
-  return api;
-}
-
-function renderEditor(
-  snapshot: Snapshot,
-  overrides: Partial<Parameters<typeof EditorScreen>[0]> = {},
-) {
-  if (snapshot.session === null) {
-    throw new Error('в фикстуре нет сессии');
+/** Клавиша на текущей миниатюре — точке входа клавиатуры в ленту (роуминг tabindex). */
+function pressOnCurrent(key: string): void {
+  const current = document.querySelector('[role="option"][tabindex="0"]');
+  if (current === null) {
+    throw new Error('нет текущей миниатюры');
   }
-  const onToast = vi.fn();
-  const view = render(
-    <EditorScreen
-      snapshot={snapshot}
-      session={snapshot.session}
-      resumeFailure={null}
-      onResume={vi.fn()}
-      onOpenDevice={vi.fn()}
-      onToast={onToast}
-      {...overrides}
-    />,
-  );
-  return { view, onToast };
-}
-
-/** Двусторонняя фикстура: 3 лица + обороты обратным порядком (AE1). */
-function twoPass(backCount = 3, backsState: PassSnapshot['state'] = 'completed') {
-  return makeSnapshot([
-    makePass({ pages: pages(3) }),
-    makePass({ number: 2, state: backsState, pages: pages(backCount, 1, 'p02-s01') }),
-  ]);
+  fireEvent.keyDown(current, { key });
 }
 
 afterEach(() => {
@@ -117,7 +28,7 @@ describe('экран editor', () => {
     renderEditor(makeSnapshot([makePass({ pages: pages(4) })]));
 
     expect(screen.getAllByRole('option').length).toBe(4);
-    expect(screen.getByText('4 страницы')).toBeDefined();
+    expect(screen.getByText('стр. 1 из 4')).toBeDefined();
     expect(screen.getByText('1 из 4')).toBeDefined();
 
     fireEvent.click(screen.getAllByRole('option')[2] as Element);
@@ -157,16 +68,16 @@ describe('экран editor', () => {
     expect(screen.getAllByTitle('У этого листа нет оборота').length).toBe(1);
   });
 
-  it('S7: тумблер поворота виден при проходе оборотов и шлёт setRotateBacks', () => {
+  it('S7: тумблер поворота виден при проходе оборотов и шлёт правку с текущими правками (M3)', () => {
     const api = stubApi();
     renderEditor(twoPass());
 
     const toggle = screen.getByRole('checkbox', { name: 'Повернуть обороты на 180°' });
     fireEvent.click(toggle);
-    expect(api.setRotateBacks).toHaveBeenCalledExactlyOnceWith({ rotate: true });
+    expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({ edits: EMPTY_EDITS, rotate180: true });
   });
 
-  it('S7: включённый поворот разворачивает только обороты; выключение шлёт rotate: false', () => {
+  it('S7: включённый поворот разворачивает только обороты; выключение шлёт rotate180: false', () => {
     const api = stubApi();
     const snapshot = makeSnapshot([
       makePass({ pages: pages(2) }),
@@ -175,13 +86,13 @@ describe('экран editor', () => {
     renderEditor(snapshot);
 
     const options = screen.getAllByRole('option');
-    expect((options[1] as Element).className).toContain('thumb--rotated');
-    expect((options[0] as Element).className).not.toContain('thumb--rotated');
+    expect((options[1] as Element).className).toContain('thumb--angle-180');
+    expect((options[0] as Element).className).not.toContain('thumb--angle-');
 
     const toggle = screen.getByRole('checkbox', { name: 'Повернуть обороты на 180°' });
     expect((toggle as HTMLInputElement).checked).toBe(true);
     fireEvent.click(toggle);
-    expect(api.setRotateBacks).toHaveBeenCalledExactlyOnceWith({ rotate: false });
+    expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({ edits: EMPTY_EDITS, rotate180: false });
   });
 
   it('без прохода оборотов тумблера нет', () => {
@@ -189,58 +100,6 @@ describe('экран editor', () => {
     renderEditor(makeSnapshot([makePass({})]));
 
     expect(screen.queryByRole('checkbox')).toBeNull();
-  });
-
-  it('S8: «Сохранить документ» шлёт savePdf, блокируется на время записи, тост с именем файла', async () => {
-    let resolveSave: (value: unknown) => void = () => undefined;
-    const savePdf = vi.fn(
-      () =>
-        new Promise((resolve) => {
-          resolveSave = resolve;
-        }),
-    );
-    stubApi({ savePdf });
-    const { onToast } = renderEditor(makeSnapshot([makePass({})]));
-
-    fireEvent.click(screen.getByRole('button', { name: 'Сохранить документ' }));
-    expect(savePdf).toHaveBeenCalledTimes(1);
-    const saving = screen.getByRole('button', { name: 'Сохраняем…' });
-    expect(saving.hasAttribute('disabled')).toBe(true);
-    // Повторный клик не шлёт вторую команду.
-    fireEvent.click(saving);
-    expect(savePdf).toHaveBeenCalledTimes(1);
-
-    resolveSave(ok({ canceled: false, fileName: 'Скан 2026-10-04.pdf', directory: 'Документы' }));
-    expect(
-      (await screen.findByRole('button', { name: 'Сохранить документ' })).hasAttribute('disabled'),
-    ).toBe(false);
-    expect(onToast).toHaveBeenCalledExactlyOnceWith(
-      'Сохранено: Скан 2026-10-04.pdf → Документы',
-      6000,
-    );
-  });
-
-  it('S8: отказ записи — тост ошибки; отказ в диалоге — тишина', async () => {
-    const api = stubApi({
-      savePdf: vi
-        .fn()
-        .mockImplementationOnce(() => Promise.resolve(fail('saveWriteFailed')))
-        .mockImplementation(() => Promise.resolve(ok({ canceled: true }))),
-    });
-    const { onToast } = renderEditor(makeSnapshot([makePass({})]));
-
-    fireEvent.click(screen.getByRole('button', { name: 'Сохранить документ' }));
-    await screen.findByRole('button', { name: 'Сохранить документ' });
-    expect(onToast).toHaveBeenCalledExactlyOnceWith(
-      expect.stringContaining('Не удалось сохранить'),
-      6000,
-    );
-
-    onToast.mockClear();
-    fireEvent.click(screen.getByRole('button', { name: 'Сохранить документ' }));
-    await screen.findByRole('button', { name: 'Сохранить документ' });
-    expect(api.savePdf).toHaveBeenCalledTimes(2);
-    expect(onToast).not.toHaveBeenCalled();
   });
 
   it('S9: точка несохранённого видна при saved: false и исчезает при saved: true', () => {
@@ -262,14 +121,13 @@ describe('экран editor', () => {
       ]),
     );
 
-    const rail = screen.getByLabelText('Отсканированные страницы');
-    fireEvent.keyDown(rail, { key: 'ArrowRight' });
+    pressOnCurrent('ArrowRight');
     expect(screen.getByText('2 из 4')).toBeDefined();
-    fireEvent.keyDown(rail, { key: 'ArrowRight' });
+    pressOnCurrent('ArrowRight');
     expect(screen.getByText('3 из 4')).toBeDefined();
-    fireEvent.keyDown(rail, { key: 'Home' });
+    pressOnCurrent('Home');
     expect(screen.getByText('1 из 4')).toBeDefined();
-    fireEvent.keyDown(rail, { key: 'End' });
+    pressOnCurrent('End');
     expect(screen.getByText('4 из 4')).toBeDefined();
   });
 
@@ -441,27 +299,26 @@ describe('экран editor', () => {
 
     fireEvent.click(screen.getAllByRole('option')[1] as Element);
     expect(screen.getByText('СТРАНИЦА 2')).toBeDefined();
-    expect(screen.getByText(/Файл этой страницы потерян/)).toBeDefined();
+    expect(screen.getByText(/Запись о ней есть, а файла на диске нет/)).toBeDefined();
   });
 
   it('стрелки двигают фокус вместе с выбором (роуминг tabindex)', () => {
     stubApi();
     renderEditor(makeSnapshot([makePass({ pages: pages(3) })]));
 
-    const rail = screen.getByLabelText('Отсканированные страницы');
     const options = screen.getAllByRole('option');
     expect(options[0]?.getAttribute('tabindex')).toBe('0');
     expect(options[1]?.getAttribute('tabindex')).toBe('-1');
 
-    fireEvent.keyDown(rail, { key: 'ArrowRight' });
+    pressOnCurrent('ArrowRight');
     expect(document.activeElement).toBe(options[1]);
     expect(options[1]?.getAttribute('tabindex')).toBe('0');
     expect(options[0]?.getAttribute('tabindex')).toBe('-1');
 
     // ↑/↓ — синонимы ←/→.
-    fireEvent.keyDown(rail, { key: 'ArrowDown' });
+    pressOnCurrent('ArrowDown');
     expect(document.activeElement).toBe(options[2]);
-    fireEvent.keyDown(rail, { key: 'ArrowUp' });
+    pressOnCurrent('ArrowUp');
     expect(document.activeElement).toBe(options[1]);
   });
 
@@ -522,26 +379,11 @@ describe('экран editor', () => {
     expect(screen.getByText('СТРАНИЦА 1')).toBeDefined();
   });
 
-  it('«Новое сканирование» открывает модалку; отмена ничего не шлёт', () => {
-    const api = stubApi();
-    renderEditor(makeSnapshot([makePass({ pages: pages(24) })]));
-
-    fireEvent.click(screen.getByRole('button', { name: /Новое сканирование/ }));
-    expect(screen.getByRole('dialog')).toBeDefined();
-    expect(screen.getByText(/24 отсканированные страницы будут удалены/)).toBeDefined();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Отмена' }));
-    expect(screen.queryByRole('dialog')).toBeNull();
-    expect(api.closeSession).not.toHaveBeenCalled();
-  });
-
-  it('скрытых элементов макета M3+ нет в разметке', () => {
+  it('элементов вех после M3 нет в разметке: «Добавить», «Пересканировать», пустые обороты', () => {
     stubApi();
     renderEditor(makeSnapshot([makePass({})]));
 
     expect(screen.queryByText(/Добавить/)).toBeNull();
-    expect(screen.queryByText('↻')).toBeNull();
-    expect(screen.queryByText(/Удалить страницу/)).toBeNull();
     expect(screen.queryByText(/Пересканировать/)).toBeNull();
     expect(screen.queryByText(/пустые/)).toBeNull();
   });

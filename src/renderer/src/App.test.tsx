@@ -1,4 +1,5 @@
 ﻿import {
+  EMPTY_EDITS,
   fail,
   ok,
   type Api,
@@ -11,7 +12,8 @@ import { StrictMode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import './i18n';
 import { App } from './App';
-import { assemblyOf } from './state/assembly-fixture';
+import { MERGE_PAUSE_DECLINED_MS } from './screens/MergeScreen';
+import { assemblyOf, NO_EDITS_ASSEMBLY } from './state/assembly-fixture';
 
 function makeSnapshot(overrides: Partial<Snapshot>): Snapshot {
   const snapshot: Snapshot = {
@@ -103,6 +105,7 @@ describe('каркас приложения', () => {
           id: 'session.x',
           backsDeclined: false,
           saved: false,
+          edits: EMPTY_EDITS,
           passes: [
             {
               number: 1,
@@ -130,6 +133,7 @@ describe('каркас приложения', () => {
           id: 'session.x',
           backsDeclined: false,
           saved: false,
+          edits: EMPTY_EDITS,
           passes: [
             {
               number: 1,
@@ -142,7 +146,7 @@ describe('каркас приложения', () => {
           ],
         },
         assembly: {
-          order: [],
+          ...NO_EDITS_ASSEMBLY,
           report: {
             fronts: 12,
             backs: 0,
@@ -166,13 +170,14 @@ describe('каркас приложения', () => {
     expect(startPass).toHaveBeenCalledTimes(1);
   });
 
-  it('сессия со страницами без прохода — editor со счётчиком страниц', async () => {
+  it('сессия со страницами без прохода — editor с позицией в наборе', async () => {
     stubApi(
       makeSnapshot({
         session: {
           id: 'session.x',
           backsDeclined: false,
           saved: false,
+          edits: EMPTY_EDITS,
           passes: [
             {
               number: 1,
@@ -188,7 +193,45 @@ describe('каркас приложения', () => {
     );
     render(<App />);
 
-    expect(await screen.findByText('5 страниц')).toBeDefined();
+    expect(await screen.findByText('стр. 1 из 5')).toBeDefined();
+  });
+
+  it('M3: правка в StrictMode — одна подписка на сочетания, Delete шлёт один setEdits', async () => {
+    const setEdits = vi.fn(() => Promise.resolve(ok({ seq: 2 })));
+    stubApi(
+      makeSnapshot({
+        session: {
+          id: 'session.x',
+          backsDeclined: true,
+          saved: false,
+          edits: EMPTY_EDITS,
+          passes: [
+            {
+              number: 1,
+              state: 'completed',
+              paramsKnown: true,
+              scanner: null,
+              rotate180: false,
+              pages: pages(3),
+            },
+          ],
+        },
+        // Односторонний набор после «Обороты не нужны» — сразу editor.
+      }),
+      { setEdits },
+    );
+    render(
+      <StrictMode>
+        <App />
+      </StrictMode>,
+    );
+    await screen.findByText('стр. 1 из 3');
+
+    fireEvent.keyDown(document.body, { key: 'Delete' });
+    expect(setEdits).toHaveBeenCalledExactlyOnceWith({
+      edits: { ...EMPTY_EDITS, deleted: ['p01-s01-0001'] },
+      rotate180: false,
+    });
   });
 
   it('несовместимые данные — свой экран вместо любого другого', async () => {
@@ -274,6 +317,7 @@ describe('каркас приложения', () => {
           id: 'session.x',
           backsDeclined: false,
           saved: false,
+          edits: EMPTY_EDITS,
           passes: [
             {
               number: 1,
@@ -304,6 +348,7 @@ describe('каркас приложения', () => {
           id: 'session.x',
           backsDeclined: false,
           saved: false,
+          edits: EMPTY_EDITS,
           passes: [
             {
               number: 1,
@@ -339,6 +384,7 @@ describe('каркас приложения', () => {
           id: 'session.x',
           backsDeclined: false,
           saved: false,
+          edits: EMPTY_EDITS,
           passes: [
             {
               number: 1,
@@ -369,6 +415,7 @@ describe('каркас приложения', () => {
         id: 'session.x',
         backsDeclined: false,
         saved: false,
+        edits: EMPTY_EDITS,
         passes: [
           {
             number: 1,
@@ -399,7 +446,9 @@ describe('каркас приложения', () => {
 
     const banner = screen.getByRole('region', { name: /Проход прервался/ });
     fireEvent.click(within(banner).getByRole('button', { name: 'Новое сканирование' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Удалить и начать заново' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Закрыть текущий и начать новое сканирование/ }),
+    );
 
     // Сессия закрыта — приходит снимок без неё, экран уходит на `setup`.
     current = makeSnapshot({ seq: 2, scanner: READY });
@@ -454,6 +503,7 @@ describe('каркас приложения', () => {
           id: 'session.x',
           backsDeclined: false,
           saved: false,
+          edits: EMPTY_EDITS,
           passes: [
             {
               number: 1,
@@ -486,6 +536,7 @@ describe('каркас приложения', () => {
         id: 'session.x',
         backsDeclined: false,
         saved: false,
+        edits: EMPTY_EDITS,
         passes: [
           {
             number: 1,
@@ -512,6 +563,7 @@ describe('каркас приложения', () => {
         id: 'session.x',
         backsDeclined: false,
         saved: false,
+        edits: EMPTY_EDITS,
         passes: [
           {
             number: 1,
@@ -568,7 +620,7 @@ describe('каркас приложения', () => {
         vi.advanceTimersByTime(2);
       });
       expect(screen.queryByText('Сопоставляем проходы')).toBeNull();
-      expect(screen.getByText('6 страниц')).toBeDefined();
+      expect(screen.getByText('стр. 1 из 6')).toBeDefined();
     } finally {
       vi.useRealTimers();
     }
@@ -580,6 +632,7 @@ describe('каркас приложения', () => {
         id: 'session.x',
         backsDeclined: false,
         saved: false,
+        edits: EMPTY_EDITS,
         passes: [
           {
             number: 1,
@@ -598,6 +651,7 @@ describe('каркас приложения', () => {
         id: 'session.x',
         backsDeclined: true,
         saved: false,
+        edits: EMPTY_EDITS,
         passes: flip.session?.passes ?? [],
       },
     });
@@ -629,7 +683,7 @@ describe('каркас приложения', () => {
         vi.advanceTimersByTime(1201);
       });
       expect(screen.queryByText('Сопоставляем проходы')).toBeNull();
-      expect(screen.getByText('3 страницы')).toBeDefined();
+      expect(screen.getByText('стр. 1 из 3')).toBeDefined();
     } finally {
       vi.useRealTimers();
     }
@@ -641,6 +695,7 @@ describe('каркас приложения', () => {
         id: 'session.x',
         backsDeclined: false,
         saved: false,
+        edits: EMPTY_EDITS,
         passes: [
           {
             number: 1,
@@ -659,6 +714,7 @@ describe('каркас приложения', () => {
         id: 'session.x',
         backsDeclined: false,
         saved: false,
+        edits: EMPTY_EDITS,
         passes: [
           ...(flip.session?.passes ?? []),
           {
@@ -698,7 +754,7 @@ describe('каркас приложения', () => {
         vi.advanceTimersByTime(1601);
       });
       expect(screen.queryByText('Сопоставляем проходы')).toBeNull();
-      expect(screen.getByText('6 страниц')).toBeDefined();
+      expect(screen.getByText('стр. 1 из 6')).toBeDefined();
     } finally {
       vi.useRealTimers();
     }
@@ -712,6 +768,7 @@ describe('каркас приложения', () => {
           id: 'session.x',
           backsDeclined: false,
           saved: false,
+          edits: EMPTY_EDITS,
           passes: [
             {
               number: 1,
@@ -753,6 +810,7 @@ describe('каркас приложения', () => {
           id: 'session.x',
           backsDeclined: false,
           saved: false,
+          edits: EMPTY_EDITS,
           passes: [
             {
               number: 1,
@@ -797,5 +855,141 @@ describe('каркас приложения', () => {
       'Сканер подключён: ScanPro 200',
     );
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});
+
+describe('AE9: досканирование при ручном порядке', () => {
+  /** Сессия с лицевым проходом из `count` страниц; обороты не нужны — экран сразу `editor`. */
+  function fronts(count: number, seq: number, orderEdited: boolean): Snapshot {
+    const snapshot = makeSnapshot({
+      seq,
+      session: {
+        id: 'session.x',
+        backsDeclined: true,
+        saved: false,
+        edits: orderEdited
+          ? {
+              ...EMPTY_EDITS,
+              order: pages(3)
+                .map((page) => page.key)
+                .reverse(),
+            }
+          : EMPTY_EDITS,
+        passes: [
+          {
+            number: 1,
+            state: count === 3 ? 'interrupted' : 'completed',
+            paramsKnown: true,
+            scanner: null,
+            rotate180: false,
+            pages: pages(count),
+          },
+        ],
+      },
+    });
+    const assembly = snapshot.assembly;
+    if (assembly === null) {
+      throw new Error('нет сборки');
+    }
+    return { ...snapshot, assembly: { ...assembly, orderEdited, hasEdits: orderEdited } };
+  }
+
+  /** Мост со снимком, который подменяет тест: `push` — новый снимок и событие о нём. */
+  function liveApi(first: Snapshot): (next: Snapshot) => Promise<void> {
+    let current = first;
+    let notify: (payload: { seq: number }) => void = () => undefined;
+    stubApi(current, {
+      getSnapshot: vi.fn(() => Promise.resolve(ok(current))),
+      onSnapshotChanged: vi.fn((listener: (payload: { seq: number }) => void) => {
+        notify = listener;
+        return () => undefined;
+      }),
+    });
+    return async (next) => {
+      current = next;
+      await act(async () => {
+        notify({ seq: next.seq });
+        await Promise.resolve();
+      });
+    };
+  }
+
+  async function resumed(
+    orderEdited: boolean,
+    before = fronts(3, 1, orderEdited),
+    after = fronts(5, 2, orderEdited),
+  ): Promise<void> {
+    const push = liveApi(before);
+    render(
+      <StrictMode>
+        <App />
+      </StrictMode>,
+    );
+    expect(await screen.findByText(/Проход прервался/)).toBeDefined();
+
+    // Проход досканирован: две новые страницы в том же проходе.
+    await push(after);
+    const total = after.assembly?.order.length ?? 0;
+    expect(await screen.findByText(`стр. 1 из ${String(total)}`)).toBeDefined();
+  }
+
+  it('ручной порядок — тост «Новые страницы (N) — в конце ленты»', async () => {
+    await resumed(true);
+    expect(
+      screen.getByText('Новые страницы (2) — в конце ленты: порядок правили вручную').parentElement
+        ?.className,
+    ).toBe('toast');
+  });
+
+  it('путь через scan: редактор → идущий проход → выросшая лента при ручном порядке — тост', async () => {
+    const push = liveApi(fronts(3, 1, true));
+    render(<App />);
+    expect(await screen.findByText('стр. 1 из 3')).toBeDefined();
+
+    // Досканирование идёт — экран уходит на scan, редактор размонтирован.
+    const grown = fronts(4, 2, true);
+    const passes = grown.session?.passes.map((pass) => ({ ...pass, state: 'running' as const }));
+    await push({
+      ...grown,
+      pass: { phase: 'scanning', resumed: true, expected: null, params: PARAMS, pages: 1 },
+      session: grown.session && { ...grown.session, passes: passes ?? [] },
+    });
+    expect(await screen.findByText('Отсканировано 4')).toBeDefined();
+
+    vi.useFakeTimers();
+    try {
+      await push(fronts(5, 3, true));
+      // Пауза merge после прохода — затем снова редактор.
+      act(() => {
+        vi.advanceTimersByTime(MERGE_PAUSE_DECLINED_MS + 1);
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(screen.getByText('стр. 1 из 5')).toBeDefined();
+    expect(
+      screen.getByText('Новые страницы (2) — в конце ленты: порядок правили вручную').parentElement
+        ?.className,
+    ).toBe('toast');
+  });
+
+  it('автопорядок — страницы встают по схеме, тоста нет', async () => {
+    await resumed(false);
+    expect(screen.queryByText(/в конце ленты/)).toBeNull();
+  });
+
+  it('лента выросла правкой (удалённая вернулась) — тоста нет', async () => {
+    const full = fronts(3, 2, true);
+    const trimmed = fronts(3, 1, true);
+    const assembly = trimmed.assembly;
+    if (assembly === null) {
+      throw new Error('нет сборки');
+    }
+    await resumed(
+      true,
+      { ...trimmed, assembly: { ...assembly, order: assembly.order.slice(1) } },
+      full,
+    );
+    expect(screen.queryByText(/в конце ленты/)).toBeNull();
   });
 });

@@ -1,16 +1,21 @@
-import { basename, dirname } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import {
   fail,
   ok,
+  type AssembledPage,
   type DomainError,
   sessionConflict,
   type PassProgress,
   type PassReport,
   type Result,
-  type SavePdfReport,
   type ScanParams,
+  type SaveDocumentsReport,
+  type SaveDocumentsRequest,
+  type SavedFile,
+  type SaveMode,
   type SessionConflictReason,
+  type SessionEdits,
+  type SetEditsReport,
   type ScannerState,
   type Snapshot,
   type StartupNotice,
@@ -29,7 +34,7 @@ import { buildScanSettings, DEFAULT_SCAN_PARAMS, resolveScanParams } from '../es
 import { parseStatus } from '../escl/status';
 import { createTransport, type ScannerTransport } from '../escl/transport';
 import { assemblePdf, type PdfPageInput } from '../pdf/assemble';
-import { writeFileAtomic } from '../storage/atomic-file';
+import { writeBatch } from '../pdf/save-batch';
 import type { PassOrigin } from '../storage/journal';
 import { openSessionStore } from '../storage/reconcile';
 import type { PageInfo, SessionStore, SessionStoreOptions } from '../storage/session-store';
@@ -44,7 +49,7 @@ import {
   storedScannerOf,
   type StoredScanner,
 } from '../storage/stored-scanner';
-import { fsErrorCode, ioOf, storageFailure } from '../storage/storage-fs';
+import { ioOf, storageFailure } from '../storage/storage-fs';
 import { pagePixelLimit } from '../storage/thumbnails';
 import { openUnclosedJobs, type UnclosedJobs } from '../storage/unclosed-jobs';
 import { assembleSession, survivingOf } from './assembly';
@@ -80,6 +85,8 @@ export interface PassServiceOptions extends SessionStoreOptions {
 
 export interface PassService {
   snapshot(): Snapshot;
+  /** Id текущей сессии без сборки снимка: его спрашивает каждый запрос изображения. */
+  sessionId(): string | null;
   /** Проверка запомненного сканера при запуске; исход — в снимке. */
   checkRememberedScanner(signal?: AbortSignal): Promise<void>;
   /** Сканер подключён явным действием пользователя: запоминается, параметры сверяются (KTD-13). */
@@ -96,16 +103,27 @@ export interface PassService {
   acceptPass(): Promise<Result<void>>;
   /** «Обороты не нужны» (M2, KTD-6): durable-отметка, идемпотентно. */
   declineBacks(): Promise<Result<void>>;
-  /** Тумблер «повернуть обороты на 180°» (M2, KTD-2): флаг прохода в роли оборотов. */
-  setRotateBacks(rotate: boolean): Promise<Result<void>>;
   /**
-   * «Сохранить документ» (M2, U6): путь спрашивает `askPath` (диалог main, `null` — отказ),
-   * ядро читает страницы в собранном порядке, собирает PDF и пишет атомарно рядом с целью;
-   * после успешного переименования — отметка о сохранении в журнале.
+   * Правки редактора и тумблер 180° (M3, KTD-3). Отклоняется, пока пишется PDF (`saving`) и
+   * пока идёт проход (`passRunning`) — KTD-9. Принятая команда всегда шлёт снимок; успех
+   * возвращает его номер — по нему редактор узнаёт снимок со своим результатом.
    */
-  savePdf(askPath: () => Promise<string | null>): Promise<Result<SavePdfReport>>;
+  setEdits(edits: SessionEdits, rotate180: boolean): Promise<Result<SetEditsReport>>;
+  /**
+   * Пакетное сохранение в папку (M3, U4): документы ленты (или вся лента одним файлом) в PDF по
+   * одному, best-effort. «Сохранено» — только когда записаны все файлы пакета и журнал не
+   * менялся с первой попытки. `retry` пишет только неудавшиеся прошлого пакета — в его папку.
+   */
+  saveDocuments(
+    folder: string,
+    request: SaveDocumentsRequest,
+  ): Promise<Result<SaveDocumentsReport>>;
   /** «Новая пачка». */
   closeSession(): Promise<Result<void>>;
+  /** Папка сохранения, выбранная в прошлый раз (M3); `null` — не выбирали. */
+  rememberedSaveFolder(): string | null;
+  /** Запоминает выбранную папку сохранения; отказ записи оставляет её в памяти. */
+  rememberSaveFolder(folder: string): Promise<Result<void>>;
   /**
    * Закрытие окна во время прохода (KTD-26): задание обрывается, проход помечается прерванным,
    * `DELETE` уходит в пределах срока. Возвращается не позже срока.
@@ -114,6 +132,21 @@ export interface PassService {
   /** Страницы текущей сессии — для схемы изображений и миниатюр. */
   pageInfo(key: string): PageInfo | null;
   readPage(key: string): Promise<Result<Uint8Array>>;
+}
+
+/** Незавершённый пакет сохранения (M3, U4). */
+interface PendingBatch {
+  /** Пакет принадлежит сессии: после «Нового сканирования» повторять нечего. */
+  readonly sessionId: string;
+  readonly mode: SaveMode;
+  readonly folder: string;
+  readonly documents: number;
+  /** Ревизия журнала первой попытки. */
+  readonly revision: number;
+  /** Записанные — накопительно. */
+  readonly written: readonly SavedFile[];
+  /** Номера документов, которые ещё предстоит записать. */
+  readonly failed: readonly number[];
 }
 
 interface Dependencies {
@@ -189,6 +222,12 @@ export function createPassService(
   let run: Run | null = null;
   /** Сохранение PDF идёт: второй вызов — конфликт, а не два диалога и две записи в один путь. */
   let saving = false;
+  /**
+   * Незавершённый пакет (M3, U4): записанное накапливается, повтор пишет только неудавшиеся.
+   * Ревизия — первой попытки: правка между попытками делает уже записанные файлы устаревшими,
+   * и «сохранено» не ставится.
+   */
+  let pendingBatch: PendingBatch | null = null;
   let seq = 0;
 
   const notify = (): void => {
@@ -242,6 +281,117 @@ export function createPassService(
     return sameScanner(target.value.scanner, storedScannerOf(scanner.connected))
       ? target
       : conflict('otherScanner');
+  }
+
+  // Почему сохранять нельзя. Функция, а не выражение: `run` мутирует конкурентно, и после
+  // `await` проверку нужно повторить — прямое сравнение TS сузил бы до «всегда null».
+  function refusedSave(): Result<never> | null {
+    if (run !== null) {
+      return conflict('passRunning');
+    }
+    if (store.incompatible) {
+      return fail('storageIncompatible');
+    }
+    return store.snapshot() === null ? conflict('noSession') : null;
+  }
+
+  /** Страницы ленты → PDF; потерянная страница — отказ, а не молча короче (M2, R11). */
+  async function buildPdf(pages: readonly AssembledPage[]): Promise<Result<Uint8Array>> {
+    const inputs: PdfPageInput[] = [];
+    for (const page of pages) {
+      const info = store.pageInfo(page.key);
+      const bytes = await store.readPage(page.key);
+      if (!bytes.ok) {
+        return bytes;
+      }
+      inputs.push({
+        bytes: bytes.value,
+        angle: page.angle,
+        dpi: info?.dpi ?? null,
+        pixelLimit: info?.pixelLimit ?? null,
+      });
+    }
+    return assemblePdf(inputs);
+  }
+
+  async function writeDocuments(
+    folder: string,
+    request: SaveDocumentsRequest,
+  ): Promise<Result<SaveDocumentsReport>> {
+    const refused = refusedSave();
+    if (refused !== null) {
+      return refused;
+    }
+    const session = store.snapshot();
+    if (session === null) {
+      return conflict('noSession');
+    }
+    const { order, documents } = assembleSession(session);
+    if (order.length === 0) {
+      return conflict('nothingToSave');
+    }
+    // «Один файл» не смотрит на границы (R15): разрезы и имена в журнале остаются.
+    const spans =
+      request.mode === 'single'
+        ? [order]
+        : documents.map((doc) => order.slice(doc.start, doc.start + doc.count));
+    if (request.names.length !== spans.length) {
+      return fail('invalidInput', { field: 'names', problem: 'count' });
+    }
+
+    // Новый пакет забывает прежний незавершённый: повтор относится только к последнему.
+    const previous = request.retry ? pendingBatch : null;
+    pendingBatch = previous;
+    if (
+      request.retry &&
+      (previous?.sessionId !== session.id ||
+        previous.mode !== request.mode ||
+        previous.documents !== spans.length)
+    ) {
+      return conflict('noFailedFiles');
+    }
+    // Лента менялась после первой попытки: записанные файлы собраны со старой, и дописать к
+    // ним неудавшиеся по новой — значит молча получить пакет, где страница в двух файлах или
+    // ни в одном. Пакет пишется заново целиком.
+    if (previous !== null && previous.revision !== store.revision()) {
+      pendingBatch = null;
+      return conflict('batchStale');
+    }
+    const batch: PendingBatch = previous ?? {
+      sessionId: session.id,
+      mode: request.mode,
+      folder,
+      documents: spans.length,
+      revision: store.revision(),
+      written: [],
+      failed: spans.map((_pages, index) => index),
+    };
+
+    const outcome = await writeBatch(
+      batch.folder,
+      batch.failed.map((index) => ({
+        index,
+        name: request.names[index] ?? '',
+        build: () => buildPdf(spans[index] ?? []),
+      })),
+      ioOf(options),
+    );
+    if (!outcome.ok) {
+      return outcome;
+    }
+    const written = [...batch.written, ...outcome.value.written].sort(
+      (left, right) => left.index - right.index,
+    );
+    const { failed } = outcome.value;
+    if (failed.length === 0) {
+      pendingBatch = null;
+      // Отметка — на набор первой попытки: правка между попытками её не получит (R13).
+      await store.markSaved(batch.revision);
+      notify();
+    } else {
+      pendingBatch = { ...batch, written, failed: failed.map((file) => file.index) };
+    }
+    return ok({ folder: batch.folder, written, failed });
   }
 
   function snapshot(): Snapshot {
@@ -444,6 +594,10 @@ export function createPassService(
     if (run !== null) {
       return conflict('passRunning');
     }
+    // Запись PDF читает страницы сессии по ходу: новый проход поменял бы ленту под ней.
+    if (saving) {
+      return conflict('saving');
+    }
     if (store.incompatible) {
       return fail('storageIncompatible');
     }
@@ -468,7 +622,7 @@ export function createPassService(
     if (session === null) {
       origin = freshOrigin;
     } else {
-      const surviving = survivingOf(session);
+      const surviving = survivingOf(session.passes);
       const target = resumeTarget();
       if (target.ok) {
         origin = target.value;
@@ -524,6 +678,8 @@ export function createPassService(
 
   return {
     snapshot,
+
+    sessionId: () => store.snapshot()?.id ?? null,
 
     async checkRememberedScanner(signal) {
       // Повторная проверка не трогает ни идущий проход, ни рабочее подключение (ревью
@@ -629,90 +785,29 @@ export function createPassService(
       return declined;
     },
 
-    async setRotateBacks(rotate) {
-      const set = await store.setRotateBacks(rotate);
+    async setEdits(edits, rotate180) {
+      // Запись PDF читает ленту по снимку: правка посреди неё сделала бы файл и отметку
+      // «сохранено» неправдой, а повтор неудавшихся — гонкой с лентой (KTD-9).
+      if (saving) {
+        return conflict('saving');
+      }
+      if (run !== null) {
+        return conflict('passRunning');
+      }
+      const set = await store.setEdits(edits, rotate180);
       notify();
-      return set;
+      return set.ok ? ok({ seq }) : set;
     },
 
-    async savePdf(askPath) {
-      // Одно сохранение за раз: двойной клик не должен открыть два диалога и две записи в
-      // один путь — защита живёт в ядре, а не только в блокировке кнопки (U9).
+    async saveDocuments(folder, request) {
+      // Одна запись за раз: двойной клик не должен запустить две записи в одну папку — защита
+      // живёт в ядре, а не только в блокировке кнопки; правки в это время отклоняются (KTD-9).
       if (saving) {
         return conflict('saving');
       }
       saving = true;
       try {
-        // Проверка вынесена в функцию: `run` мутирует конкурентно, и после `await` её нужно
-        // повторить — прямое сравнение TS сузил бы до «всегда null».
-        const refused = (): Result<never> | null => {
-          if (run !== null) {
-            return conflict('passRunning');
-          }
-          if (store.incompatible) {
-            return fail('storageIncompatible');
-          }
-          return store.snapshot() === null ? conflict('noSession') : null;
-        };
-        const early = refused();
-        if (early !== null) {
-          return early;
-        }
-
-        // Путь — первым (KTD-3): отказ в диалоге не тратит сборку и ничего не пишет.
-        const path = await askPath();
-        if (path === null) {
-          return ok({ canceled: true } as const);
-        }
-        // Диалог мог висеть сколько угодно: состояние проверяется заново, иначе PDF собрался бы
-        // по устаревшему снимку, а отметка о сохранении пометила бы уже изменившийся набор.
-        const stale = refused();
-        if (stale !== null) {
-          return stale;
-        }
-        const session = store.snapshot();
-        if (session === null) {
-          return conflict('noSession');
-        }
-        // Ревизия журнала на момент снимка: правка во время сборки и записи (новая страница,
-        // тумблер поворота) снимает отметку, и ставить поверх неё «сохранено» нельзя.
-        const revision = store.revision();
-
-        // Страницы — в собранном порядке; потерянная страница — отказ, а не молча короче (R11).
-        const inputs: PdfPageInput[] = [];
-        for (const page of assembleSession(session).order) {
-          const info = store.pageInfo(page.key);
-          const bytes = await store.readPage(page.key);
-          if (!bytes.ok) {
-            return bytes;
-          }
-          inputs.push({
-            bytes: bytes.value,
-            rotate180: page.rotate180,
-            dpi: info?.dpi ?? null,
-            pixelLimit: info?.pixelLimit ?? null,
-          });
-        }
-        const pdf = await assemblePdf(inputs);
-        if (!pdf.ok) {
-          return pdf;
-        }
-
-        // Атомарно рядом с целью: сбой на любом шаге не трогает прежний файл (R11).
-        try {
-          await writeFileAtomic(path, pdf.value, ioOf(options));
-        } catch (error) {
-          // Перевод кодов — существующим помощником: он различает и ENOSPC, и EDQUOT.
-          const failure = storageFailure(error);
-          return failure.code === 'storageFull'
-            ? fail('storageFull')
-            : fail('saveWriteFailed', { reason: fsErrorCode(error) });
-        }
-        // Отметка — только после успешного переименования и только на неизменившийся набор;
-        // сессия не удаляется (R12). Файл при пропущенной отметке всё равно записан — успех.
-        await store.markSaved(revision);
-        notify();
-        return ok({ canceled: false, fileName: basename(path), directory: dirname(path) });
+        return await writeDocuments(folder, request);
       } finally {
         saving = false;
       }
@@ -722,10 +817,21 @@ export function createPassService(
       if (run !== null) {
         return conflict('passRunning');
       }
+      // Закрытие посреди записи унесло бы страницы недописанных документов (KTD-9).
+      if (saving) {
+        return conflict('saving');
+      }
       const closed = await store.closeSession();
+      if (closed.ok) {
+        // Незавершённый пакет принадлежал закрытой сессии: повтор не допишет новую в её папку.
+        pendingBatch = null;
+      }
       notify();
       return closed;
     },
+
+    rememberedSaveFolder: () => settings.get().saveFolder,
+    rememberSaveFolder: (folder) => settings.rememberSaveFolder(folder),
 
     async interrupt(deadlineMs) {
       const current = run;

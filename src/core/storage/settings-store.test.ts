@@ -88,7 +88,7 @@ describe('настройки', () => {
 
     const store = await openSettingsStore(root);
 
-    expect(store.get()).toEqual({ scanner: null, params: null });
+    expect(store.get()).toEqual({ scanner: null, params: null, saveFolder: null });
     expect(store.notice).toBeNull();
     expect(await readdir(root)).toEqual([]);
   });
@@ -98,7 +98,7 @@ describe('настройки', () => {
 
     const reopened = await openSettingsStore(root);
 
-    expect(reopened.get()).toEqual({ scanner, params: PARAMS });
+    expect(reopened.get()).toEqual({ scanner, params: PARAMS, saveFolder: null });
     expect(scanner).toMatchObject({
       scheme: 'https',
       host: '192.0.2.10',
@@ -106,18 +106,66 @@ describe('настройки', () => {
       basePath: '/eSCL',
       fingerprint: FINGERPRINT,
     });
-    expect(JSON.parse(await readFile(file, 'utf8'))).toMatchObject({ version: 1 });
+    expect(JSON.parse(await readFile(file, 'utf8'))).toMatchObject({ version: 2 });
+  });
+
+  it('папка сохранения переживает повторное открытие хранилища (M3)', async () => {
+    const { root, scanner } = await remembered();
+
+    expect(await (await openSettingsStore(root)).rememberSaveFolder('E:\\Архив')).toEqual(
+      ok(undefined),
+    );
+
+    expect((await openSettingsStore(root)).get()).toEqual({
+      scanner,
+      params: PARAMS,
+      saveFolder: 'E:\\Архив',
+    });
+  });
+
+  it('файл версии 1 читается без потерь и переписывается версией 2 только при записи (M3)', async () => {
+    const root = await makeTempDataRoot();
+    const file = layoutOf(root).settingsFile;
+    const v1 = JSON.stringify({ version: 1, scanner: null, params: PARAMS });
+    await writeFile(file, v1);
+
+    const store = await openSettingsStore(root);
+
+    expect(store.notice).toBeNull();
+    expect(store.get()).toEqual({ scanner: null, params: PARAMS, saveFolder: null });
+    expect(await readFile(file, 'utf8')).toBe(v1);
+
+    await store.rememberSaveFolder('E:\\Архив');
+    expect(JSON.parse(await readFile(file, 'utf8'))).toEqual({
+      version: 2,
+      scanner: null,
+      params: PARAMS,
+      saveFolder: 'E:\\Архив',
+    });
+  });
+
+  it('неизвестное поле в файле версии 1 — несовместимость: файл не переписывается', async () => {
+    const root = await makeTempDataRoot();
+    const file = layoutOf(root).settingsFile;
+    const content = JSON.stringify({ version: 1, scanner: null, params: null, theme: 'dark' });
+    await writeFile(file, content);
+
+    const store = await openSettingsStore(root);
+    await store.rememberSaveFolder('E:\\Архив');
+
+    expect(store.notice).toBe('settingsIncompatible');
+    expect(await readFile(file, 'utf8')).toBe(content);
   });
 
   it('файл настроек с маркером новее понятного не переписывается; приложение работает с дефолтами в памяти', async () => {
     const root = await makeTempDataRoot();
     const file = layoutOf(root).settingsFile;
-    const newer = JSON.stringify({ version: 2, profiles: [{ name: 'будущее' }] });
+    const newer = JSON.stringify({ version: 3, profiles: [{ name: 'будущее' }] });
     await writeFile(file, newer);
 
     const store = await openSettingsStore(root);
     expect(store.notice).toBe('settingsIncompatible');
-    expect(store.get()).toEqual({ scanner: null, params: null });
+    expect(store.get()).toEqual({ scanner: null, params: null, saveFolder: null });
 
     expect(await store.setParams(PARAMS)).toEqual(ok(undefined));
     expect(await store.rememberScanner(await connect(ET))).toEqual(ok(undefined));
@@ -131,7 +179,13 @@ describe('настройки', () => {
   it('неизвестное поле при текущей версии — тоже несовместимость: файл не переписывается', async () => {
     const root = await makeTempDataRoot();
     const file = layoutOf(root).settingsFile;
-    const content = JSON.stringify({ version: 1, scanner: null, params: null, theme: 'dark' });
+    const content = JSON.stringify({
+      version: 2,
+      scanner: null,
+      params: null,
+      saveFolder: null,
+      theme: 'dark',
+    });
     await writeFile(file, content);
 
     const store = await openSettingsStore(root);
@@ -148,7 +202,7 @@ describe('настройки', () => {
     const store = await openSettingsStore(root);
 
     expect(store.notice).toBe('settingsUnreadable');
-    expect(store.get()).toEqual({ scanner: null, params: null });
+    expect(store.get()).toEqual({ scanner: null, params: null, saveFolder: null });
     const names = await readdir(root);
     expect(names).toHaveLength(1);
     expect(names[0]).toMatch(/^settings\.json\.unreadable-[0-9a-f]{12}$/);
@@ -196,7 +250,10 @@ describe('запомненный сканер при запуске', () => {
     const { createTransport, profiles } = deviceAt(() => ET);
 
     expect(
-      await checkRememberedScanner({ scanner: null, params: null }, { createTransport }),
+      await checkRememberedScanner(
+        { scanner: null, params: null, saveFolder: null },
+        { createTransport },
+      ),
     ).toEqual({ state: 'none' });
     expect(profiles).toEqual([]);
   });

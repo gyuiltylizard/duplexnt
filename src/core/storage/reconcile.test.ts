@@ -1,6 +1,7 @@
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { EMPTY_EDITS, type SessionEdits } from '@shared';
 import { dirSnapshot } from '../../../test/support/dir-snapshot';
 import { fsError, interceptFs } from '../../../test/support/intercept-fs';
 import { makeTempDataRoot } from '../../../test/support/temp-data-root';
@@ -47,13 +48,14 @@ const pass = (number: number, segments: ReturnType<typeof segment>[], extra: obj
   ...extra,
 });
 const journalOf = (passes: ReturnType<typeof pass>[], extra: object = {}) => ({
-  version: 2,
+  version: 3,
   sessionId: SESSION,
   nextPass: passes.length + 1,
   passes,
   deletions: [] as string[],
   backsDeclined: false,
   saved: false,
+  edits: EMPTY_EDITS,
   ...extra,
 });
 function omit<T extends object, K extends keyof T>(value: T, ...keys: K[]): Omit<T, K> {
@@ -63,9 +65,15 @@ function omit<T extends object, K extends keyof T>(value: T, ...keys: K[]): Omit
   ) as Omit<T, K>;
 }
 
-/** Журнал версии 1 (M1): тот же состав без полей v2. */
+/** Журнал версии 2 (M2): тот же состав без правок редактора. */
+const journalV2Of = (passes: ReturnType<typeof pass>[], extra: object = {}) => ({
+  ...omit(journalOf(passes, extra), 'edits'),
+  version: 2,
+});
+
+/** Журнал версии 1 (M1): тот же состав без полей v2 и v3. */
 const journalV1Of = (passes: ReturnType<typeof pass>[], extra: object = {}) => ({
-  ...omit(journalOf(passes, extra), 'backsDeclined', 'saved'),
+  ...omit(journalOf(passes, extra), 'backsDeclined', 'saved', 'edits'),
   version: 1,
   passes: passes.map((one) => omit(one, 'rotate180')),
 });
@@ -128,7 +136,7 @@ describe('сверка при запуске: таблица плана', () => 
 
   it('маркер версии новее понятного → ничего не трогается; режим отказа (AE9)', async () => {
     const { root } = await seed(
-      { ...journalOf([pass(1, [segment(1, 'running', 2)])]), version: 3 },
+      { ...journalOf([pass(1, [segment(1, 'running', 2)])]), version: 4 },
       [...pagesOfFirstSegment(3)],
     );
     const before = await dirSnapshot(root);
@@ -158,11 +166,28 @@ describe('сверка при запуске: таблица плана', () => 
     expect(session).toMatchObject({ backsDeclined: false, saved: false });
     expect(session?.passes[0]).toMatchObject({ rotate180: false });
     const journal = await journalOnDisk(layout);
-    expect(journal.version).toBe(2);
-    expect(journal).toMatchObject({ backsDeclined: false, saved: false });
+    expect(journal.version).toBe(3);
+    expect(journal).toMatchObject({ backsDeclined: false, saved: false, edits: EMPTY_EDITS });
     expect(journal.passes[0]).toMatchObject({ rotate180: false });
 
     // Повторный прогон уже ничего не меняет: сверка идемпотентна.
+    const before = await dirSnapshot(root);
+    await reconciled(root);
+    expect(await dirSnapshot(root)).toEqual(before);
+  });
+
+  it('журнал версии 2 переписывается текущей версией: правок нет, флаги целы (M3, R2)', async () => {
+    const { root, layout } = await seed(
+      journalV2Of([pass(1, [segment(1, 'completed', 2)])], { saved: true }),
+      pagesOfFirstSegment(2),
+    );
+
+    const { session } = await reconciled(root);
+
+    expect(session).toMatchObject({ saved: true, edits: EMPTY_EDITS });
+    const journal = await journalOnDisk(layout);
+    expect(journal).toMatchObject({ version: 3, saved: true, edits: EMPTY_EDITS });
+
     const before = await dirSnapshot(root);
     await reconciled(root);
     expect(await dirSnapshot(root)).toEqual(before);
@@ -188,11 +213,19 @@ describe('сверка при запуске: таблица плана', () => 
     expect(await dirSnapshot(root)).toEqual(before);
   });
 
-  it('флаги v2 переживают перезапуск-сверку, журнал не переписывается (M2, R13)', async () => {
+  it('флаги и правки переживают перезапуск-сверку, журнал не переписывается (M2, R13; M3, AE1)', async () => {
+    const edits: SessionEdits = {
+      order: ['p02-s01-0001', 'p01-s01-0001'],
+      rotations: { 'p01-s01-0001': 90 },
+      deleted: [],
+      cuts: [1],
+      names: ['', 'Оборот'],
+    };
     const { root } = await seed(
       journalOf([pass(1, [segment(1, 'completed', 1)]), pass(2, [segment(1, 'completed', 1)])], {
         nextPass: 3,
         saved: true,
+        edits,
         passes: [
           pass(1, [segment(1, 'completed', 1)]),
           pass(2, [segment(1, 'completed', 1)], { rotate180: true }),
@@ -204,16 +237,63 @@ describe('сверка при запуске: таблица плана', () => 
 
     const { session } = await reconciled(root);
 
-    expect(session).toMatchObject({ saved: true, backsDeclined: false });
+    expect(session).toMatchObject({ saved: true, backsDeclined: false, edits });
     expect(session?.passes.map((it) => it.rotate180)).toEqual([false, true]);
     expect(await dirSnapshot(root)).toEqual(before);
+  });
+
+  it('правки с ключами без страниц вычищаются и журнал переписывается; повтор ничего не меняет (M3, R5)', async () => {
+    const { root, layout } = await seed(
+      journalOf([pass(1, [segment(1, 'completed', 2)])], {
+        edits: {
+          order: ['p01-s01-0002', 'p07-s01-0001'],
+          rotations: { 'p07-s01-0001': 90, 'p01-s01-0001': 270 },
+          deleted: ['p07-s01-0002'],
+          cuts: [],
+          names: ['Договор'],
+        },
+      }),
+      pagesOfFirstSegment(2),
+    );
+
+    const { session } = await reconciled(root);
+
+    const expected: SessionEdits = {
+      order: ['p01-s01-0002'],
+      rotations: { 'p01-s01-0001': 270 },
+      deleted: [],
+      cuts: [],
+      names: ['Договор'],
+    };
+    expect(session?.edits).toEqual(expected);
+    expect((await journalOnDisk(layout)).edits).toEqual(expected);
+
+    const before = await dirSnapshot(root);
+    await reconciled(root);
+    expect(await dirSnapshot(root)).toEqual(before);
+  });
+
+  it('усыновлённый оборот лёг в середину ленты — разрез переехал вслед за страницей (KTD-10)', async () => {
+    // Лицевые 3, обороты: в журнале 1 (оборот листа 3), на диске 2 — сбой до записи журнала.
+    const { root } = await seed(
+      journalOf([pass(1, [segment(1, 'completed', 3)]), pass(2, [segment(1, 'interrupted', 1)])], {
+        nextPass: 3,
+        edits: { ...EMPTY_EDITS, cuts: [2], names: ['', 'Третий'] },
+      }),
+      [...pagesOfFirstSegment(3), pageName(2, 1, 1), pageName(2, 1, 2)],
+    );
+
+    const { session } = await reconciled(root);
+
+    // Лента f1 f2 b2 f3 b1: разрез по-прежнему перед f3.
+    expect(session?.edits).toMatchObject({ cuts: [3], names: ['', 'Третий'] });
   });
 
   it('маркер новее понятного вместе с временными файлами, пометкой и закрываемым каталогом — всё побайтово на месте', async () => {
     const { root, layout } = await seed(
       {
         ...journalOf([pass(1, [segment(1, 'running', 1)])], { deletions: ['p01-s02-'] }),
-        version: 3,
+        version: 4,
       },
       [pageName(1, 1, 1), pageName(1, 2, 1)],
     );

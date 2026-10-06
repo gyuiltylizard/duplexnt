@@ -1,7 +1,7 @@
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PDFDocument } from '@cantoo/pdf-lib';
-import { fail } from '@shared';
+import { EMPTY_EDITS, fail, type SessionEdits, type Snapshot } from '@shared';
 import { describe, expect, it } from 'vitest';
 import { ET_3850, readFixture } from '../../../test/support/fixtures';
 import { fsError, interceptFs } from '../../../test/support/intercept-fs';
@@ -351,7 +351,7 @@ describe('служба прохода: команды оборотов (M2, U3)'
     expect(again.snapshot().session?.backsDeclined).toBe(true);
   });
 
-  it('setRotateBacks ставит флаг на проход в роли оборотов — №3 после остановки, не №1', async () => {
+  it('тумблер 180° через setEdits ставит флаг на проход в роли оборотов — №3 после остановки, не №1', async () => {
     const root = await makeTempDataRoot();
     await seedSession(root, [
       { number: 1, pages: 2 },
@@ -359,7 +359,10 @@ describe('служба прохода: команды оборотов (M2, U3)'
     ]);
     const service = await openPassService(root);
 
-    expect(await service.setRotateBacks(true)).toEqual({ ok: true, value: undefined });
+    expect(await service.setEdits(EMPTY_EDITS, true)).toEqual({
+      ok: true,
+      value: { seq: service.snapshot().seq },
+    });
 
     const session = service.snapshot().session;
     expect(session?.passes.map((pass) => [pass.number, pass.rotate180])).toEqual([
@@ -367,15 +370,17 @@ describe('служба прохода: команды оборотов (M2, U3)'
       [3, true],
     ]);
     const order = service.snapshot().assembly?.order ?? [];
-    expect(order.filter((page) => page.side === 'back').every((page) => page.rotate180)).toBe(true);
+    expect(order.filter((page) => page.side === 'back').every((page) => page.angle === 180)).toBe(
+      true,
+    );
   });
 
-  it('setRotateBacks без прохода оборотов — noBacksPass', async () => {
+  it('тумблер 180° без прохода оборотов — noBacksPass', async () => {
     const root = await makeTempDataRoot();
     await seedSession(root, [{ number: 1, pages: 2 }]);
     const service = await openPassService(root);
 
-    expect(await service.setRotateBacks(true)).toEqual({
+    expect(await service.setEdits(EMPTY_EDITS, true)).toEqual({
       ok: false,
       error: { code: 'sessionConflict', details: { reason: 'noBacksPass' } },
     });
@@ -399,34 +404,163 @@ describe('служба прохода: команды оборотов (M2, U3)'
   });
 });
 
-describe('служба прохода: сохранение PDF (M2, U6)', () => {
+describe('служба прохода: папка сохранения (M3, приёмка)', () => {
+  it('выбранная папка переживает перезапуск службы', async () => {
+    const root = await makeTempDataRoot();
+    const service = await openPassService(root);
+    expect(service.rememberedSaveFolder()).toBeNull();
+
+    expect(await service.rememberSaveFolder('E:\\Архив')).toEqual({ ok: true, value: undefined });
+
+    expect((await openPassService(root)).rememberedSaveFolder()).toBe('E:\\Архив');
+  });
+});
+
+describe('служба прохода: правки редактора (M3, U3)', () => {
+  const EDITS: SessionEdits = {
+    order: ['p02-s01-0001', 'p01-s01-0001'],
+    rotations: { 'p01-s01-0002': 90 },
+    deleted: ['p02-s01-0002'],
+    cuts: [1],
+    names: ['', 'Договор'],
+  };
+
+  it('правка видна в снимке и сборке, снимает «сохранено» и переживает перезапуск службы (AE1)', async () => {
+    const root = await makeTempDataRoot();
+    await seedSession(
+      root,
+      [
+        { number: 1, pages: 2 },
+        { number: 2, pages: 2 },
+      ],
+      { saved: true },
+    );
+    const service = await openPassService(root);
+
+    expect(await service.setEdits(EDITS, true)).toEqual({
+      ok: true,
+      value: { seq: service.snapshot().seq },
+    });
+
+    const check = (snapshot: Snapshot): void => {
+      expect(snapshot.session).toMatchObject({ saved: false, edits: EDITS });
+      expect(snapshot.assembly?.order.map((page) => [page.key, page.angle])).toEqual([
+        ['p02-s01-0001', 180],
+        ['p01-s01-0001', 0],
+        ['p01-s01-0002', 90],
+      ]);
+      expect(snapshot.assembly?.documents.map((doc) => [doc.name, doc.count])).toEqual([
+        ['', 1],
+        ['Договор', 2],
+      ]);
+      expect(snapshot.assembly).toMatchObject({ orderEdited: true, hasEdits: true, deleted: 1 });
+    };
+    check(service.snapshot());
+    check((await openPassService(root)).snapshot());
+  });
+
+  it('снимок отдаёт правки нормализованными: разрез перед первой позицией снят', async () => {
+    const root = await makeTempDataRoot();
+    await seedSession(root, [{ number: 1, pages: 3 }]);
+    const service = await openPassService(root);
+
+    await service.setEdits({ ...EMPTY_EDITS, cuts: [0, 2], names: ['Пусто', 'А', 'Б'] }, false);
+
+    expect(service.snapshot().session?.edits).toEqual({
+      ...EMPTY_EDITS,
+      cuts: [2],
+      names: ['А', 'Б'],
+    });
+  });
+
+  it('ответ несёт номер снимка с результатом — снимок уходит и когда правки совпали с журналом', async () => {
+    const root = await makeTempDataRoot();
+    await seedSession(root, [{ number: 1, pages: 3 }]);
+    const seen: number[] = [];
+    const service = await openPassService(root, { onChange: (seq) => seen.push(seq) });
+    const split: SessionEdits = { ...EMPTY_EDITS, cuts: [1], names: ['', ''] };
+
+    expect(await service.setEdits(split, false)).toEqual({ ok: true, value: { seq: seen.at(-1) } });
+    const first = service.snapshot().seq;
+    expect(first).toBe(seen.at(-1));
+
+    // Те же правки ещё раз: журнал не меняется, а снимок с новым номером всё равно уходит.
+    expect(await service.setEdits(split, false)).toEqual({ ok: true, value: { seq: first + 1 } });
+    expect(seen.at(-1)).toBe(first + 1);
+  });
+
+  it('пока идёт проход, правка отклоняется конфликтом passRunning (KTD-9)', async () => {
+    const root = await makeTempDataRoot();
+    await seedSession(root, [{ number: 1, pages: 2 }]);
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const connector: ConnectorOptions = {
+      createTransport: () => ({
+        request: async () => {
+          await gate;
+          return fail('scannerUnreachable', { reason: 'refused' });
+        },
+        stream: () => Promise.resolve(fail('scannerUnreachable', { reason: 'refused' })),
+        close: () => undefined,
+      }),
+    };
+    const service = await serviceOver(root, connector);
+
+    const pass = service.startPass();
+    expect(service.snapshot().pass).not.toBeNull();
+    expect(await service.setEdits(EDITS, false)).toEqual(
+      fail('sessionConflict', { reason: 'passRunning' }),
+    );
+    release();
+    await pass;
+
+    expect(service.snapshot().session?.edits).toEqual(EMPTY_EDITS);
+  });
+});
+
+describe('служба прохода: пакетное сохранение (M3, U4)', () => {
+  /** Пять страниц — пять документов по разрезам; настоящие JPEG устройства. */
+  async function fiveDocuments(root: string, extra: Record<string, unknown> = {}) {
+    await seedSession(root, [{ number: 1, pages: 5, fixtures: [1, 2, 3, 4, 5] }], extra);
+    const service = await openPassService(root);
+    await service.setEdits(
+      { ...EMPTY_EDITS, cuts: [1, 2, 3, 4], names: ['', '', '', '', ''] },
+      false,
+    );
+    return service;
+  }
+
+  async function folderIn(root: string): Promise<string> {
+    const folder = join(root, 'выход');
+    await mkdir(folder, { recursive: true });
+    return folder;
+  }
+
+  const NAMES = ['Счёт', 'Акт', 'Договор', 'Накладная', 'Опись'];
+
   /** Двусторонняя сессия 2+2 с настоящими JPEG устройства; обороты с флагом поворота. */
-  async function savable(root: string) {
+  async function duplex(root: string) {
     await seedSession(root, [
       { number: 1, pages: 2, fixtures: [1, 2] },
       { number: 2, pages: 2, rotate180: true, fixtures: [6, 5] },
     ]);
   }
 
-  async function saveTarget(root: string): Promise<string> {
-    const out = join(root, 'выход');
-    await mkdir(out, { recursive: true });
-    return join(out, 'скан.pdf');
-  }
-
-  it('сохранение: PDF в собранном порядке, /Rotate на оборотах, отметка в журнале', async () => {
+  it('PDF в собранном порядке, /Rotate на оборотах, отметка в журнале durable, сессия цела', async () => {
     const root = await makeTempDataRoot();
-    await savable(root);
-    const target = await saveTarget(root);
+    const folder = await folderIn(root);
+    await duplex(root);
     const service = await openPassService(root);
 
-    const report = await service.savePdf(() => Promise.resolve(target));
-
-    expect(report).toEqual({
+    expect(
+      await service.saveDocuments(folder, { mode: 'single', names: ['скан'], retry: false }),
+    ).toEqual({
       ok: true,
-      value: { canceled: false, fileName: 'скан.pdf', directory: join(root, 'выход') },
+      value: { folder, written: [{ index: 0, fileName: 'скан.pdf' }], failed: [] },
     });
-    const document = await PDFDocument.load(await readFile(target));
+    const document = await PDFDocument.load(await readFile(join(folder, 'скан.pdf')));
     // Порядок: 1л, 1о, 2л, 2о; обороты повёрнуты.
     expect(document.getPageCount()).toBe(4);
     expect(document.getPages().map((page) => page.getRotation().angle)).toEqual([0, 180, 0, 180]);
@@ -438,136 +572,333 @@ describe('служба прохода: сохранение PDF (M2, U6)', () =>
     expect(again.snapshot().session?.passes).toHaveLength(2);
 
     // Правка после сохранения снимает отметку (KTD-7, AE12).
-    expect(await again.setRotateBacks(false)).toMatchObject({ ok: true });
+    expect(await again.setEdits(EMPTY_EDITS, false)).toMatchObject({ ok: true });
     expect(again.snapshot().session?.saved).toBe(false);
   });
 
-  it('отказ в диалоге: ничего не записано, без ошибки, отметки нет', async () => {
+  it('потерянная страница — сбой файла кодом, а не PDF без неё; отметки нет', async () => {
     const root = await makeTempDataRoot();
-    await savable(root);
-    const target = await saveTarget(root);
-    const service = await openPassService(root);
-
-    expect(await service.savePdf(() => Promise.resolve(null))).toEqual({
-      ok: true,
-      value: { canceled: true },
-    });
-    await expect(readFile(target)).rejects.toMatchObject({ code: 'ENOENT' });
-    expect(service.snapshot().session?.saved).toBe(false);
-  });
-
-  it('потерянная страница — отказ кодом, а не PDF без неё', async () => {
-    const root = await makeTempDataRoot();
-    await savable(root);
-    const target = await saveTarget(root);
+    const folder = await folderIn(root);
+    await duplex(root);
     await rm(join(layoutOf(root).pagesDir, 'p01-s01-0002.jpg'));
     const service = await openPassService(root);
 
-    expect(await service.savePdf(() => Promise.resolve(target))).toMatchObject({
-      ok: false,
-      error: { code: 'pageUnavailable', details: { reason: 'lost' } },
+    expect(
+      await service.saveDocuments(folder, { mode: 'single', names: ['скан'], retry: false }),
+    ).toMatchObject({
+      ok: true,
+      value: {
+        written: [],
+        failed: [
+          {
+            index: 0,
+            fileName: 'скан.pdf',
+            error: { code: 'pageUnavailable', details: { reason: 'lost' } },
+          },
+        ],
+      },
     });
-    await expect(readFile(target)).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(await readdir(folder)).toEqual([]);
+    expect(service.snapshot().session?.saved).toBe(false);
   });
 
-  it('AE10: сбой на переименовании — старый файл цел, сессия цела, повтор проходит', async () => {
+  it('без сессии — noSession; в папку ничего не пишется', async () => {
     const root = await makeTempDataRoot();
-    await savable(root);
-    const target = await saveTarget(root);
-    await writeFile(target, 'прежний документ');
-    let failRename = true;
+    const folder = await folderIn(root);
+    const service = await openPassService(root);
+
+    expect(
+      await service.saveDocuments(folder, { mode: 'single', names: ['скан'], retry: false }),
+    ).toEqual(fail('sessionConflict', { reason: 'noSession' }));
+    expect(await readdir(folder)).toEqual([]);
+  });
+
+  it('AE7: занятое имя — суффикс, сбой четвёртого — итог «4 из 5», повтор дописывает и ставит «сохранено»', async () => {
+    const root = await makeTempDataRoot();
+    const folder = await folderIn(root);
+    await writeFile(join(folder, 'акт.pdf'), 'чужой документ');
+    await seedSession(root, [{ number: 1, pages: 5, fixtures: [1, 2, 3, 4, 5] }]);
+    let failFourth = true;
     const { fs } = interceptFs(realStorageFs, (call) => {
-      if (failRename && call.op === 'rename' && call.to === target) {
-        throw fsError('EACCES');
+      if (failFourth && call.op === 'rename' && call.to?.endsWith('Накладная.pdf') === true) {
+        throw fsError('EIO');
       }
     });
     const service = await openPassService(root, { fs, retry: { ceilingMs: 0 } });
-
-    expect(await service.savePdf(() => Promise.resolve(target))).toEqual(
-      fail('saveWriteFailed', { reason: 'EACCES' }),
+    await service.setEdits(
+      { ...EMPTY_EDITS, cuts: [1, 2, 3, 4], names: ['', '', '', '', ''] },
+      false,
     );
-    expect(await readFile(target, 'utf8')).toBe('прежний документ');
-    expect(service.snapshot().session?.saved).toBe(false);
-    expect(service.snapshot().session?.passes).toHaveLength(2);
 
-    // Повторное сохранение перезаписывает атомарно.
-    failRename = false;
-    expect(await service.savePdf(() => Promise.resolve(target))).toMatchObject({ ok: true });
-    const document = await PDFDocument.load(await readFile(target));
-    expect(document.getPageCount()).toBe(4);
+    const first = await service.saveDocuments(folder, {
+      mode: 'separate',
+      names: NAMES,
+      retry: false,
+    });
+
+    expect(first).toEqual({
+      ok: true,
+      value: {
+        folder,
+        written: [
+          { index: 0, fileName: 'Счёт.pdf' },
+          { index: 1, fileName: 'Акт (2).pdf' },
+          { index: 2, fileName: 'Договор.pdf' },
+          { index: 4, fileName: 'Опись.pdf' },
+        ],
+        failed: [
+          {
+            index: 3,
+            fileName: 'Накладная.pdf',
+            error: { code: 'saveWriteFailed', details: { reason: 'EIO' } },
+          },
+        ],
+      },
+    });
+    expect(await readFile(join(folder, 'акт.pdf'), 'utf8')).toBe('чужой документ');
+    expect(service.snapshot().session?.saved).toBe(false);
+
+    failFourth = false;
+    const retry = await service.saveDocuments(join(root, 'другая папка'), {
+      mode: 'separate',
+      names: NAMES,
+      retry: true,
+    });
+
+    // Повтор пишет только неудавшийся — и в папку пакета, не в новую.
+    expect(retry).toMatchObject({ ok: true, value: { folder, failed: [] } });
+    expect(retry.ok && retry.value.written.map((file) => file.fileName)).toEqual([
+      'Счёт.pdf',
+      'Акт (2).pdf',
+      'Договор.pdf',
+      'Накладная.pdf',
+      'Опись.pdf',
+    ]);
+    expect((await readdir(folder)).sort()).toHaveLength(6);
+    const document = await PDFDocument.load(await readFile(join(folder, 'Накладная.pdf')));
+    expect(document.getPageCount()).toBe(1);
     expect(service.snapshot().session?.saved).toBe(true);
   });
 
-  it('нет места на диске — storageFull', async () => {
+  it('документы — отрезки ленты с правками: порядок, углы, без удалённых', async () => {
     const root = await makeTempDataRoot();
-    await savable(root);
-    const target = await saveTarget(root);
+    const folder = await folderIn(root);
+    await seedSession(root, [{ number: 1, pages: 3, fixtures: [1, 2, 3] }]);
+    const service = await openPassService(root);
+    await service.setEdits(
+      {
+        order: ['p01-s01-0003', 'p01-s01-0001', 'p01-s01-0002'],
+        rotations: { 'p01-s01-0001': 90 },
+        deleted: ['p01-s01-0002'],
+        cuts: [1],
+        names: ['', ''],
+      },
+      false,
+    );
+
+    const saved = await service.saveDocuments(folder, {
+      mode: 'separate',
+      names: ['Первый', 'Второй'],
+      retry: false,
+    });
+
+    expect(saved).toMatchObject({ ok: true, value: { failed: [] } });
+    const second = await PDFDocument.load(await readFile(join(folder, 'Второй.pdf')));
+    expect(second.getPages().map((page) => page.getRotation().angle)).toEqual([90]);
+    const first = await PDFDocument.load(await readFile(join(folder, 'Первый.pdf')));
+    expect(first.getPageCount()).toBe(1);
+  });
+
+  it('AE12: «один файл» при границах — один PDF со всеми страницами; разрезы и имена в журнале целы', async () => {
+    const root = await makeTempDataRoot();
+    const folder = await folderIn(root);
+    const service = await fiveDocuments(root);
+    const edits = service.snapshot().session?.edits;
+
+    const saved = await service.saveDocuments(folder, {
+      mode: 'single',
+      names: ['Всё'],
+      retry: false,
+    });
+
+    expect(saved).toEqual({
+      ok: true,
+      value: { folder, written: [{ index: 0, fileName: 'Всё.pdf' }], failed: [] },
+    });
+    const document = await PDFDocument.load(await readFile(join(folder, 'Всё.pdf')));
+    expect(document.getPageCount()).toBe(5);
+    expect(service.snapshot().session).toMatchObject({ saved: true, edits });
+  });
+
+  it('число имён не равно числу документов — invalidInput; ничего не записано', async () => {
+    const root = await makeTempDataRoot();
+    const folder = await folderIn(root);
+    const service = await fiveDocuments(root);
+
+    expect(
+      await service.saveDocuments(folder, { mode: 'separate', names: ['Один'], retry: false }),
+    ).toEqual(fail('invalidInput', { field: 'names', problem: 'count' }));
+    expect(await readdir(folder)).toEqual([]);
+  });
+
+  it('все страницы удалены — nothingToSave (AE10)', async () => {
+    const root = await makeTempDataRoot();
+    await seedSession(root, [{ number: 1, pages: 2 }]);
+    const service = await openPassService(root);
+    await service.setEdits({ ...EMPTY_EDITS, deleted: ['p01-s01-0001', 'p01-s01-0002'] }, false);
+
+    expect(
+      await service.saveDocuments(await folderIn(root), {
+        mode: 'single',
+        names: ['А'],
+        retry: false,
+      }),
+    ).toEqual(fail('sessionConflict', { reason: 'nothingToSave' }));
+  });
+
+  it('повторять нечего — noFailedFiles', async () => {
+    const root = await makeTempDataRoot();
+    const folder = await folderIn(root);
+    const service = await fiveDocuments(root);
+    const request = { mode: 'separate', names: NAMES, retry: true } as const;
+
+    expect(await service.saveDocuments(folder, request)).toEqual(
+      fail('sessionConflict', { reason: 'noFailedFiles' }),
+    );
+    await service.saveDocuments(folder, { ...request, retry: false });
+    expect(await service.saveDocuments(folder, request)).toEqual(
+      fail('sessionConflict', { reason: 'noFailedFiles' }),
+    );
+  });
+
+  it('правка между попыткой и повтором — повтор отклонён batchStale: пакет пишется заново (R13)', async () => {
+    const root = await makeTempDataRoot();
+    const folder = await folderIn(root);
+    await seedSession(root, [{ number: 1, pages: 2, fixtures: [1, 2] }]);
+    let failWrite = true;
     const { fs } = interceptFs(realStorageFs, (call) => {
-      if (call.op === 'open' && call.path.startsWith(target)) {
-        throw fsError('ENOSPC');
+      if (failWrite && call.op === 'rename' && call.to?.endsWith('Б.pdf') === true) {
+        throw fsError('EIO');
       }
     });
     const service = await openPassService(root, { fs, retry: { ceilingMs: 0 } });
-
-    expect(await service.savePdf(() => Promise.resolve(target))).toEqual(fail('storageFull'));
-  });
-
-  it('второе сохранение поверх идущего — конфликт, второй диалог не открывается', async () => {
-    const root = await makeTempDataRoot();
-    await savable(root);
-    const target = await saveTarget(root);
-    const service = await openPassService(root);
-
-    let release: (path: string | null) => void = () => undefined;
-    let dialogs = 0;
-    const hangingDialog = (): Promise<string | null> => {
-      dialogs += 1;
-      return new Promise((resolve) => {
-        release = resolve;
-      });
-    };
-
-    const first = service.savePdf(hangingDialog);
-    const second = await service.savePdf(hangingDialog);
-    expect(second).toEqual(fail('sessionConflict', { reason: 'saving' }));
-    expect(dialogs).toBe(1);
-
-    release(target);
-    expect(await first).toMatchObject({ ok: true, value: { canceled: false } });
-
-    // Сохранение кончилось — следующее снова допускается.
-    expect(await service.savePdf(() => Promise.resolve(null))).toEqual({
+    await service.setEdits({ ...EMPTY_EDITS, cuts: [1], names: ['', ''] }, false);
+    const request = { mode: 'separate', names: ['А', 'Б'], retry: false } as const;
+    expect(await service.saveDocuments(folder, request)).toMatchObject({
       ok: true,
-      value: { canceled: true },
+      value: { failed: [{ index: 1 }] },
     });
+
+    // Между попытками — правка: поворот первого документа.
+    await service.setEdits(
+      { ...EMPTY_EDITS, rotations: { 'p01-s01-0001': 180 }, cuts: [1], names: ['', ''] },
+      false,
+    );
+    failWrite = false;
+    expect(await service.saveDocuments(folder, { ...request, retry: true })).toEqual(
+      fail('sessionConflict', { reason: 'batchStale' }),
+    );
+    // Дописано ничего не было: смешанного пакета на диске нет; отметки «сохранено» нет.
+    expect((await readdir(folder)).sort()).toEqual(['А.pdf']);
+    expect(service.snapshot().session?.saved).toBe(false);
+    // Пакет забыт: следующий повтор — нечего повторять, новый пакет — по текущей ленте.
+    expect(await service.saveDocuments(folder, { ...request, retry: true })).toEqual(
+      fail('sessionConflict', { reason: 'noFailedFiles' }),
+    );
+    expect(await service.saveDocuments(folder, request)).toMatchObject({
+      ok: true,
+      value: { failed: [], written: [{ fileName: 'А (2).pdf' }, { fileName: 'Б.pdf' }] },
+    });
+    expect(service.snapshot().session?.saved).toBe(true);
   });
 
-  it('состояние перепроверяется после диалога: сессия закрыта, пока он висел, — отказ', async () => {
+  it('новый пакет забывает прежний незавершённый, даже если сам упал на папке', async () => {
     const root = await makeTempDataRoot();
-    await savable(root);
-    const target = await saveTarget(root);
-    const service = await openPassService(root);
-
-    const result = await service.savePdf(async () => {
-      // «Пока диалог висел»: пользователь успел закрыть сессию «Новым сканированием».
-      await service.closeSession();
-      return target;
+    const folder = await folderIn(root);
+    await seedSession(root, [{ number: 1, pages: 1, fixtures: [1] }]);
+    let failWrite = true;
+    const { fs } = interceptFs(realStorageFs, (call) => {
+      if (failWrite && call.op === 'rename' && call.to?.endsWith('А.pdf') === true) {
+        throw fsError('EIO');
+      }
+    });
+    const service = await openPassService(root, { fs, retry: { ceilingMs: 0 } });
+    const request = { mode: 'single', names: ['А'], retry: false } as const;
+    expect(await service.saveDocuments(folder, request)).toMatchObject({
+      ok: true,
+      value: { failed: [{ index: 0 }] },
     });
 
-    expect(result).toEqual(fail('sessionConflict', { reason: 'noSession' }));
-    await expect(readFile(target)).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(await service.saveDocuments(join(root, 'нет такой'), request)).toMatchObject({
+      ok: false,
+      error: { code: 'saveWriteFailed' },
+    });
+    failWrite = false;
+    expect(await service.saveDocuments(folder, { ...request, retry: true })).toEqual(
+      fail('sessionConflict', { reason: 'noFailedFiles' }),
+    );
+    expect(await readdir(folder)).toEqual([]);
   });
 
-  it('без сессии — noSession; сохранение не зовёт диалог', async () => {
-    const service = await openPassService(await makeTempDataRoot());
-    let asked = false;
-
-    const result = await service.savePdf(() => {
-      asked = true;
-      return Promise.resolve(null);
+  it('пока пишется пакет, правка отклоняется конфликтом saving (KTD-9)', async () => {
+    const root = await makeTempDataRoot();
+    const folder = await folderIn(root);
+    await seedSession(root, [{ number: 1, pages: 1, fixtures: [1] }]);
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
     });
+    // Задержка — только на папке пакета: сверка при открытии тоже читает каталоги.
+    const slowFs = {
+      ...realStorageFs,
+      readdir: async (path: string) => {
+        if (path === folder) {
+          await gate;
+        }
+        return realStorageFs.readdir(path);
+      },
+    };
+    const service = await openPassService(root, { fs: slowFs });
 
-    expect(result).toEqual(fail('sessionConflict', { reason: 'noSession' }));
-    expect(asked).toBe(false);
+    const request = { mode: 'single', names: ['А'], retry: false } as const;
+    const saving = service.saveDocuments(folder, request);
+    const busy = fail('sessionConflict', { reason: 'saving' });
+    expect(await service.setEdits({ ...EMPTY_EDITS, deleted: ['p01-s01-0001'] }, false)).toEqual(
+      busy,
+    );
+    // Второй пакет (двойной клик), закрытие сессии и новый проход — тоже ждут конца записи.
+    expect(await service.saveDocuments(folder, request)).toEqual(busy);
+    expect(await service.closeSession()).toEqual(busy);
+    expect(await service.startPass()).toEqual(busy);
+    release();
+    expect(await saving).toMatchObject({ ok: true, value: { failed: [] } });
+    expect(await readdir(folder)).toEqual(['А.pdf']);
+    // Запись кончилась — флаг снят.
+    expect(await service.saveDocuments(folder, request)).toMatchObject({ ok: true });
+  });
+
+  it('id сессии без снимка; после «Нового сканирования» повтор пакета закрытой сессии не идёт', async () => {
+    const root = await makeTempDataRoot();
+    const folder = await folderIn(root);
+    await seedSession(root, [{ number: 1, pages: 1, fixtures: [1] }]);
+    const { fs } = interceptFs(realStorageFs, (call) => {
+      if (call.op === 'rename' && call.to?.endsWith('А.pdf') === true) {
+        throw fsError('EIO');
+      }
+    });
+    const service = await openPassService(root, { fs, retry: { ceilingMs: 0 } });
+    const request = { mode: 'single', names: ['А'], retry: false } as const;
+    expect(await service.saveDocuments(folder, request)).toMatchObject({
+      ok: true,
+      value: { failed: [{ index: 0 }] },
+    });
+    const closedId = service.sessionId();
+    expect(closedId).toBe(service.snapshot().session?.id);
+
+    expect(await service.closeSession()).toMatchObject({ ok: true });
+    expect(await service.saveDocuments(folder, { ...request, retry: true })).toEqual(
+      fail('sessionConflict', { reason: 'noSession' }),
+    );
+    expect(service.sessionId()).toBeNull();
   });
 });

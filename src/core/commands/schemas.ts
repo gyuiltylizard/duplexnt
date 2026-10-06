@@ -1,15 +1,19 @@
 import { z } from 'zod';
 import {
   fail,
+  MAX_DOCUMENT_NAME_LENGTH,
   ok,
   PROBE_TOKEN_MAX_LENGTH,
+  SAVE_MODES,
   type ConnectScannerRequest,
   type ProbeRequest,
   type Result,
-  type SetRotateBacksRequest,
+  type SaveDocumentsRequest,
+  type SetEditsRequest,
 } from '@shared';
 import { DEVICE_PATH_MAX_LENGTH } from '../escl/device-path';
 import { scanParamsSchema } from '../escl/scan-settings';
+import { editsSchemaOf } from '../storage/edits-schema';
 
 // Схемы входа команд моста (ADR 0005; план M1, KTD-39). Строгие и без приведения типов: лишнее
 // поле и «почти подходящий» тип — отказ, а не молчаливая починка. Типы запросов объявлены в
@@ -42,9 +46,26 @@ export const connectScannerRequestSchema = z.discriminatedUnion('kind', [
   }),
 ]) satisfies z.ZodType<ConnectScannerRequest>;
 
-export const setRotateBacksRequestSchema = z.strictObject({
-  rotate: z.boolean(),
-}) satisfies z.ZodType<SetRotateBacksRequest>;
+/**
+ * Потолок коллекций правок на входе: на порядки больше реальной сессии (сотни страниц), но
+ * мусорный массив на миллионы элементов до ядра не доходит.
+ */
+export const MAX_EDIT_ITEMS = 10_000;
+
+export const setEditsRequestSchema = z.strictObject({
+  edits: editsSchemaOf(MAX_EDIT_ITEMS),
+  rotate180: z.boolean(),
+}) satisfies z.ZodType<SetEditsRequest>;
+
+/**
+ * Пакетное сохранение: имена файлов по документам. Имя проверяется только на длину — правила
+ * NTFS применяет ядро при записи (KTD-11), чтобы не отказывать человеку из-за «:» в имени.
+ */
+export const saveDocumentsRequestSchema = z.strictObject({
+  mode: z.enum(SAVE_MODES),
+  names: z.array(z.string().max(MAX_DOCUMENT_NAME_LENGTH)).min(1).max(MAX_EDIT_ITEMS).readonly(),
+  retry: z.boolean(),
+}) satisfies z.ZodType<SaveDocumentsRequest>;
 
 export { scanParamsSchema };
 
