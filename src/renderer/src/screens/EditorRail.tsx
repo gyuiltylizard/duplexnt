@@ -25,6 +25,9 @@ import { EditorThumb, type PickMode, type SplitKind, type ThumbDrag } from './Ed
  */
 const DRAG_TYPE = 'application/x-duplexnt-pages';
 
+/** id поля имени документа `docIndex` (с нуля): подпись группы и фокус после границы. */
+export const docNameId = (docIndex: number): string => `doc-name-${String(docIndex)}`;
+
 interface Drop {
   readonly key: string;
   readonly side: DropSide;
@@ -33,8 +36,9 @@ interface Drop {
 /**
  * Поле имени документа (S3): ввод локален, фиксация — по Enter или уходу фокуса одним
  * `setEdits`; Esc возвращает сохранённое значение. Отправленное имя показывается до снимка с
- * ним — без мелькания прежнего; команда завершилась (снимок, отказ, срок) — поле снова
- * показывает снимок.
+ * ним — без мелькания прежнего; команда завершилась (снимок, отказ) — поле снова показывает
+ * снимок. Команда не ушла (другая в полёте, запись) — черновик остаётся в поле и уйдёт
+ * следующим Enter или уходом фокуса.
  */
 function DocName({
   index,
@@ -49,7 +53,7 @@ function DocName({
   readonly placeholder: string;
   readonly disabled: boolean;
   readonly busy: boolean;
-  readonly onCommit: (document: number, name: string) => boolean;
+  readonly onCommit: (docIndex: number, name: string) => boolean;
 }): ReactNode {
   const { t } = useTranslation();
   const [draft, setDraft] = useState<{ readonly text: string; readonly sent: boolean } | null>(
@@ -67,7 +71,9 @@ function DocName({
       setDraft(null);
       return;
     }
-    setDraft(onCommit(index, draft.text) ? { text: draft.text, sent: true } : null);
+    if (onCommit(index, draft.text)) {
+      setDraft({ text: draft.text, sent: true });
+    }
   };
 
   const keyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
@@ -85,7 +91,7 @@ function DocName({
 
   return (
     <input
-      id={`doc-name-${String(index)}`}
+      id={docNameId(index)}
       className="doc-group__name"
       type="text"
       value={draft?.text ?? value}
@@ -123,9 +129,9 @@ export interface EditorRailProps {
   /** Граница перед позицией ленты (с нуля). */
   readonly onSplit: (position: number) => void;
   /** Снять границу перед документом (с нуля); `fromDivider` — «✕» разделителя, не split-бар. */
-  readonly onUnsplit: (document: number, fromDivider: boolean) => void;
+  readonly onUnsplit: (docIndex: number, fromDivider: boolean) => void;
   /** Имя документа (с нуля); `false` — команда не ушла. */
-  readonly onRename: (document: number, name: string) => boolean;
+  readonly onRename: (docIndex: number, name: string) => boolean;
   readonly onMove: (keys: readonly string[], target: string, side: DropSide) => void;
   /** Низ ленты — тумблер 180° (S15). */
   readonly footer: ReactNode;
@@ -160,7 +166,7 @@ export function EditorRail({
 
   // Позиция, перед которой стоит граница, → номер документа, который с неё начинается.
   const starts = useMemo(
-    () => new Map(documents.slice(1).map((document, index) => [document.start, index + 1])),
+    () => new Map(documents.slice(1).map((doc, index) => [doc.start, index + 1])),
     [documents],
   );
 
@@ -185,11 +191,11 @@ export function EditorRail({
     latest.current = {
       split: (key) => {
         const position = order.findIndex((entry) => entry.key === key);
-        const document = starts.get(position);
-        if (document === undefined) {
+        const docIndex = starts.get(position);
+        if (docIndex === undefined) {
           onSplit(position);
         } else {
-          onUnsplit(document, false);
+          onUnsplit(docIndex, false);
         }
       },
       start: (key, event) => {
@@ -307,12 +313,13 @@ export function EditorRail({
         {total === 0 ? (
           <p className="rail__empty">{t('editor.empty.rail')}</p>
         ) : (
-          // S2: группа на документ, в каждой свой listbox; номер миниатюры — сквозной.
-          documents.map((document, index) => (
+          // S2: группа на документ, в каждой свой listbox; номер миниатюры — сквозной. Ключ —
+          // первая страница документа: черновик имени едет с документом, а не с номером.
+          documents.map((doc, index) => (
             <section
-              key={index}
+              key={order[doc.start]?.key ?? index}
               className={`doc-group ${toneOf(index)}`}
-              aria-labelledby={`doc-name-${String(index)}`}
+              aria-labelledby={docNameId(index)}
             >
               {index > 0 && (
                 <div className="doc-group__divider">
@@ -337,15 +344,16 @@ export function EditorRail({
                   {index + 1}
                 </span>
                 <DocName
+                  key={order[doc.start]?.key ?? index}
                   index={index}
-                  value={document.name}
+                  value={doc.name}
                   placeholder={defaultNames[index] ?? ''}
                   disabled={locked}
                   busy={busy}
                   onCommit={onRename}
                 />
                 <span className="doc-group__count">
-                  {t('editor.doc.count', { count: document.count })}
+                  {t('editor.doc.count', { count: doc.count })}
                 </span>
               </div>
               <ul
@@ -355,34 +363,32 @@ export function EditorRail({
                 aria-orientation="horizontal"
                 aria-label={t('editor.doc.pagesLabel', { number: index + 1 })}
               >
-                {order
-                  .slice(document.start, document.start + document.count)
-                  .map((entry, offset) => {
-                    const position = document.start + offset;
-                    return (
-                      <EditorThumb
-                        key={entry.key}
-                        sessionId={sessionId}
-                        pageKey={entry.key}
-                        side={entry.side}
-                        sheet={entry.sheet}
-                        angle={entry.angle}
-                        lost={entry.lost}
-                        position={position + 1}
-                        unpaired={entry.unpaired}
-                        current={entry.key === selection.current}
-                        selected={selectedKeys.has(entry.key)}
-                        multi={multi && selectedKeys.has(entry.key)}
-                        draggable={editable}
-                        dragging={draggedKeys.has(entry.key)}
-                        drop={drop?.key === entry.key ? drop.side : null}
-                        split={splitKind(position)}
-                        onPick={onPick}
-                        onSplit={split}
-                        drag={drag}
-                      />
-                    );
-                  })}
+                {order.slice(doc.start, doc.start + doc.count).map((entry, offset) => {
+                  const position = doc.start + offset;
+                  return (
+                    <EditorThumb
+                      key={entry.key}
+                      sessionId={sessionId}
+                      pageKey={entry.key}
+                      side={entry.side}
+                      sheet={entry.sheet}
+                      angle={entry.angle}
+                      lost={entry.lost}
+                      position={position + 1}
+                      unpaired={entry.unpaired}
+                      current={entry.key === selection.current}
+                      selected={selectedKeys.has(entry.key)}
+                      multi={multi && selectedKeys.has(entry.key)}
+                      draggable={editable}
+                      dragging={draggedKeys.has(entry.key)}
+                      drop={drop?.key === entry.key ? drop.side : null}
+                      split={splitKind(position)}
+                      onPick={onPick}
+                      onSplit={split}
+                      drag={drag}
+                    />
+                  );
+                })}
               </ul>
             </section>
           ))

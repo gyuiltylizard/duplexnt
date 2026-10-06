@@ -359,7 +359,10 @@ describe('служба прохода: команды оборотов (M2, U3)'
     ]);
     const service = await openPassService(root);
 
-    expect(await service.setEdits(EMPTY_EDITS, true)).toEqual({ ok: true, value: undefined });
+    expect(await service.setEdits(EMPTY_EDITS, true)).toEqual({
+      ok: true,
+      value: { seq: service.snapshot().seq },
+    });
 
     const session = service.snapshot().session;
     expect(session?.passes.map((pass) => [pass.number, pass.rotate180])).toEqual([
@@ -422,7 +425,10 @@ describe('служба прохода: правки редактора (M3, U3)'
     );
     const service = await openPassService(root);
 
-    expect(await service.setEdits(EDITS, true)).toEqual({ ok: true, value: undefined });
+    expect(await service.setEdits(EDITS, true)).toEqual({
+      ok: true,
+      value: { seq: service.snapshot().seq },
+    });
 
     const check = (snapshot: Snapshot): void => {
       expect(snapshot.session).toMatchObject({ saved: false, edits: EDITS });
@@ -474,7 +480,23 @@ describe('служба прохода: правки редактора (M3, U3)'
     await saving;
 
     expect(service.snapshot().session?.edits).toEqual(EMPTY_EDITS);
-    expect(await service.setEdits(EMPTY_EDITS, false)).toEqual({ ok: true, value: undefined });
+    expect(await service.setEdits(EMPTY_EDITS, false)).toMatchObject({ ok: true });
+  });
+
+  it('ответ несёт номер снимка с результатом — снимок уходит и когда правки совпали с журналом', async () => {
+    const root = await makeTempDataRoot();
+    await seedSession(root, [{ number: 1, pages: 3 }]);
+    const seen: number[] = [];
+    const service = await openPassService(root, { onChange: (seq) => seen.push(seq) });
+    const split: SessionEdits = { ...EMPTY_EDITS, cuts: [1], names: ['', ''] };
+
+    expect(await service.setEdits(split, false)).toEqual({ ok: true, value: { seq: seen.at(-1) } });
+    const first = service.snapshot().seq;
+    expect(first).toBe(seen.at(-1));
+
+    // Те же правки ещё раз: журнал не меняется, а снимок с новым номером всё равно уходит.
+    expect(await service.setEdits(split, false)).toEqual({ ok: true, value: { seq: first + 1 } });
+    expect(seen.at(-1)).toBe(first + 1);
   });
 
   it('пока идёт проход, правка отклоняется конфликтом passRunning (KTD-9)', async () => {

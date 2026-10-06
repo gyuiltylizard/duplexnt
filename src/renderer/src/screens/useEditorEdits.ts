@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import type { SessionSnapshot } from '@shared';
+import { useMemo, useState } from 'react';
+import type { DomainError, SessionSnapshot } from '@shared';
 import {
   editStateOf,
   emptyHistory,
   recordEdit,
   redoEdit,
-  sameState,
   syncHistory,
   tapeOf,
   undoEdit,
@@ -17,27 +16,26 @@ import { NO_SELECTION, pruned, selectionOf, type Selection } from '../state/sele
 
 // Проводка правок редактора (план M3, U7; KTD-3, KTD-3a; журнал M3, сессия 3): undo-стек и
 // выделение поверх снимка. Настоящее — правки последнего снимка; жест строится от него, уходит
-// одним `setEdits`, и только успех ставит новую историю. Пока команда в полёте — до прихода
-// снимка с её результатом — новые жесты и Ctrl+Z игнорируются: жест от устаревшего снимка молча
-// откатил бы предыдущую правку.
-
-/**
- * Сколько ждать снимка после успешного ответа. Правку, совпавшую с журналом после нормализации,
- * ядро не коммитит и снимка не шлёт: без срока редактор остался бы занятым навсегда (U8).
- */
-export const SNAPSHOT_WAIT_MS = 1000;
+// одним `setEdits`, и только успех ставит новую историю. Пока команда в полёте — до снимка с
+// номером из её ответа — новые жесты и Ctrl+Z игнорируются: жест от устаревшего снимка молча
+// откатил бы предыдущую правку. Ядро шлёт снимок после каждой принятой команды, даже если
+// правки совпали с журналом, и возвращает его номер (ревью сессий 3–4).
 
 /** Выделение после правки — по ленте пришедшего снимка; `null` — выделение не трогать. */
 export type SelectAfter = (visible: readonly string[]) => Selection | null;
 
+/**
+ * Отказы-гонки: интерфейс эти состояния исключает (запись PDF блокирует правки, проход уводит с
+ * экрана) — человеку о них не сообщается, только в консоль.
+ */
+const RACE_REASONS: readonly unknown[] = ['saving', 'passRunning'];
+
 interface Pending {
-  /** Метка команды: ответ и срок ожидания снимают только свою команду. */
+  /** Метка команды: ответ снимает только свою команду. */
   readonly id: symbol;
-  /** Состояние снимка, от которого построен жест: снимок с другим — уже результат команды. */
-  readonly base: EditState;
   readonly select: SelectAfter | null;
-  /** Номер последнего снимка на момент успеха; `null` — ответа ещё нет. */
-  readonly committedSeq: number | null;
+  /** Номер снимка с результатом — из ответа; `null` — ответа ещё нет. */
+  readonly seq: number | null;
 }
 
 export interface EditOptions {
@@ -58,8 +56,9 @@ export interface EditorEdits {
    * команда не ушла: занято, заблокировано или жест ничего не меняет.
    */
   readonly edit: (next: EditState, keys: readonly string[], options?: EditOptions) => boolean;
-  readonly undo: () => void;
-  readonly redo: () => void;
+  /** Ctrl+Z; `false` — команда не ушла: занято, заблокировано или откатывать нечего. */
+  readonly undo: () => boolean;
+  readonly redo: () => boolean;
 }
 
 export function useEditorEdits({
@@ -67,14 +66,17 @@ export function useEditorEdits({
   session,
   visible,
   locked,
+  onFailed,
 }: {
-  /** Номер снимка: снимок после успеха команды несёт её результат. */
+  /** Номер снимка: снимок с номером из ответа команды несёт её результат. */
   readonly seq: number;
   readonly session: SessionSnapshot;
   /** Видимая лента — ключи в порядке снимка. */
   readonly visible: readonly string[];
   /** Правки недоступны (идёт запись, KTD-9): жесты игнорируются. */
   readonly locked: boolean;
+  /** Правка не записалась: доменный отказ или `null` — мост не ответил. Гонки сюда не идут. */
+  readonly onFailed: (error: DomainError | null) => void;
 }): EditorEdits {
   const current = useMemo(() => editStateOf(session), [session]);
 
@@ -89,14 +91,11 @@ export function useEditorEdits({
   const [storedSelection, setSelection] = useState<Selection>(NO_SELECTION);
   const [pending, setPending] = useState<Pending | null>(null);
 
-  // Пришёл снимок с результатом команды: выделение — по новой ленте (после удаления — сосед,
-  // после Ctrl+Z — затронутые страницы). Корректировка при рендере, а не эффект: экран не
-  // мелькает выделением, обрезанным по новой ленте.
-  if (
-    pending !== null &&
-    pending.committedSeq !== null &&
-    (seq > pending.committedSeq || !sameState(current, pending.base))
-  ) {
+  // Показан снимок с результатом команды (его номер — из ответа; снимок мог прийти и раньше
+  // ответа): выделение — по новой ленте (после удаления — сосед, после Ctrl+Z — затронутые
+  // страницы). Корректировка при рендере, а не эффект: экран не мелькает выделением, обрезанным
+  // по новой ленте.
+  if (pending !== null && pending.seq !== null && seq >= pending.seq) {
     setPending(null);
     const chosen = pending.select?.(visible) ?? null;
     if (chosen !== null) {
@@ -106,65 +105,46 @@ export function useEditorEdits({
 
   const selection = useMemo(() => pruned(storedSelection, visible), [storedSelection, visible]);
 
-  // Номер последнего показанного снимка — для ответа команды, который приходит вне рендера.
-  const seqRef = useRef(seq);
-  useEffect(() => {
-    seqRef.current = seq;
-  });
-
-  // Сроки ожидания снимка снимаются вместе с экраном.
-  const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
-  useEffect(() => {
-    const active = timers.current;
-    return () => {
-      for (const timer of active) {
-        clearTimeout(timer);
-      }
-      active.clear();
-    };
-  }, []);
-
   const send = (target: EditState, next: EditHistory, options: EditOptions = {}): void => {
     const id = Symbol('правка');
-    setPending({ id, base: current, select: options.select ?? null, committedSeq: null });
+    setPending({ id, select: options.select ?? null, seq: null });
     const settle = (): void => {
       setPending((previous) => (previous?.id === id ? null : previous));
     };
     window.api.setEdits({ edits: target.edits, rotate180: target.rotate180 }).then(
       (result) => {
         if (!result.ok) {
-          // Отказ (`saving`, `passRunning`) — гонка: интерфейс эти состояния исключает. Шаг в
-          // историю не попадает, снимок не меняется (handoff M3, гейтинг).
+          // Шаг в историю не попадает, снимок не меняется (handoff M3, гейтинг).
           console.error('[renderer] правка не принята', result.error);
           settle();
+          const { code, details } = result.error;
+          if (code !== 'sessionConflict' || !RACE_REASONS.includes(details?.reason)) {
+            onFailed(result.error);
+          }
           return;
         }
         setHistory(next);
-        setPending((previous) =>
-          previous?.id === id ? { ...previous, committedSeq: seqRef.current } : previous,
-        );
-        // Снимок с результатом может не прийти вовсе — правка совпала с журналом после
-        // нормализации, и ядро её не записало. Тогда «в полёте» снимается по сроку.
-        const timer = setTimeout(() => {
-          timers.current.delete(timer);
-          settle();
-        }, SNAPSHOT_WAIT_MS);
-        timers.current.add(timer);
+        // Ждём снимка с этим номером; если он уже показан — рендер снимет ожидание сразу.
+        const awaited = result.value.seq;
+        setPending((previous) => (previous?.id === id ? { ...previous, seq: awaited } : previous));
         options.onSuccess?.();
       },
       (error: unknown) => {
         console.error('[renderer] правка не отправлена', error);
         settle();
+        onFailed(null);
       },
     );
   };
 
   const idle = pending === null && !locked;
 
-  const travel = (move: HistoryMove | null): void => {
-    if (move !== null) {
-      send(move.target, move.history, { select: (after) => selectionOf(move.keys, after) });
+  const travel = (move: HistoryMove | null): boolean => {
+    if (move === null) {
+      return false;
     }
+    send(move.target, move.history, { select: (after) => selectionOf(move.keys, after) });
+    return true;
   };
 
   return {
@@ -180,11 +160,7 @@ export function useEditorEdits({
       send(next, recorded, options);
       return true;
     },
-    undo: () => {
-      travel(idle ? undoEdit(history, current) : null);
-    },
-    redo: () => {
-      travel(idle ? redoEdit(history, current) : null);
-    },
+    undo: () => travel(idle ? undoEdit(history, current) : null),
+    redo: () => travel(idle ? redoEdit(history, current) : null),
   };
 }

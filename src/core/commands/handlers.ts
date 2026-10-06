@@ -214,7 +214,7 @@ export function createCommands(context: CommandContext): Commands {
       setEdits: async (rawRequest) => {
         const request = parseInput(setEditsRequestSchema, rawRequest);
         return request.ok
-          ? done(() => service.setEdits(request.value.edits, request.value.rotate180))
+          ? service.setEdits(request.value.edits, request.value.rotate180)
           : request;
       },
       savePdf: withoutRequest(() => service.savePdf(context.askSavePdfPath)),

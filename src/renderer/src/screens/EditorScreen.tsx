@@ -48,7 +48,7 @@ import {
 import { EditorInspector, toneOf } from './EditorInspector';
 import { EditorPassBanner } from './EditorPassBanner';
 import { EditorPreview } from './EditorPreview';
-import { EditorRail } from './EditorRail';
+import { docNameId, EditorRail } from './EditorRail';
 import type { PickMode } from './EditorThumb';
 import { useEditorEdits } from './useEditorEdits';
 import './editor-screen.css';
@@ -131,7 +131,22 @@ export function EditorScreen({
   const [saving, setSaving] = useState(false);
 
   // Правки недоступны на время записи (KTD-9): ядро их всё равно отклонило бы.
-  const edits = useEditorEdits({ seq: snapshot.seq, session, visible, locked: saving });
+  const edits = useEditorEdits({
+    seq: snapshot.seq,
+    session,
+    visible,
+    locked: saving,
+    // Правка не записалась — человек должен знать, что лента осталась прежней. Текст ошибки
+    // длинный — показывается столько же, сколько ошибка сохранения.
+    onFailed: (error) => {
+      onToast(
+        error === null
+          ? t('toast.editNoResponse')
+          : t('toast.editFailed', { error: errorTextInline(t, error) }),
+        SAVE_TOAST_MS,
+      );
+    },
+  });
   const { selection, setSelection } = edits;
   const currentIndex = selection.current === null ? -1 : (positions.get(selection.current) ?? -1);
   const currentEntry = order[currentIndex];
@@ -147,8 +162,7 @@ export function EditorScreen({
     currentIndex < 0
       ? null
       : documents.findIndex(
-          (document) =>
-            currentIndex >= document.start && currentIndex < document.start + document.count,
+          (doc) => currentIndex >= doc.start && currentIndex < doc.start + doc.count,
         );
   const currentDoc = currentDocument === null ? undefined : documents[currentDocument];
 
@@ -164,10 +178,7 @@ export function EditorScreen({
     [documents.length, today, t],
   );
   const names = useMemo(
-    () =>
-      documents.map((document, index) =>
-        document.name !== '' ? document.name : (defaultNames[index] ?? ''),
-      ),
+    () => documents.map((doc, index) => (doc.name !== '' ? doc.name : (defaultNames[index] ?? ''))),
     [documents, defaultNames],
   );
 
@@ -181,7 +192,7 @@ export function EditorScreen({
   useEffect(() => {
     if (focusName.current !== null && !edits.busy) {
       const field = railRef.current?.querySelector<HTMLInputElement>(
-        `#doc-name-${String(focusName.current)}`,
+        `#${docNameId(focusName.current)}`,
       );
       focusName.current = null;
       field?.focus();
@@ -322,7 +333,8 @@ export function EditorScreen({
       return;
     }
     const current = selection.current;
-    edits.edit(withEdits(next), keys, {
+    const fromRail = focusInRail();
+    const sent = edits.edit(withEdits(next), keys, {
       select: (after) => {
         const chosen = selectionOf(keys, after);
         return chosen !== null && current !== null && chosen.keys.includes(current)
@@ -330,13 +342,17 @@ export function EditorScreen({
           : chosen;
       },
     });
+    // Миниатюра, сменившая группу, перемонтируется — фокус вернётся на текущую после снимка.
+    if (sent && fromRail) {
+      focusAfterEdit.current = true;
+    }
   };
 
   /** После постановки границы — фокус в поле имени нового документа (номер с нуля). */
-  const editBoundary = (next: SessionEdits, document: number, onSuccess?: () => void): void => {
+  const editBoundary = (next: SessionEdits, docIndex: number, onSuccess?: () => void): void => {
     edits.edit(withEdits(next), [], {
       onSuccess: () => {
-        focusName.current = document;
+        focusName.current = docIndex;
         onSuccess?.();
       },
     });
@@ -353,16 +369,16 @@ export function EditorScreen({
 
   // Снять границу: «✕» разделителя или split-бар (S2, S7); имя уходит вместе с ней (R12).
   // «✕» исчезает вместе с разделителем — фокус клавиатуры переходит на текущую страницу.
-  const unsplit = (document: number, fromDivider: boolean): void => {
-    const sent = edits.edit(withEdits(withoutCut(edits.current.edits, document)), []);
+  const unsplit = (docIndex: number, fromDivider: boolean): void => {
+    const sent = edits.edit(withEdits(withoutCut(edits.current.edits, docIndex)), []);
     if (sent && fromDivider) {
       focusAfterEdit.current = true;
     }
   };
 
   // Имя документа (S3): фиксация по Enter или уходу фокуса, один шаг; без изменений — ничего.
-  const rename = (document: number, name: string): boolean => {
-    const next = renamed(edits.current.edits, document, name);
+  const rename = (docIndex: number, name: string): boolean => {
+    const next = renamed(edits.current.edits, docIndex, name);
     return next !== edits.current.edits && edits.edit(withEdits(next), []);
   };
 
@@ -419,18 +435,14 @@ export function EditorScreen({
     ) {
       return;
     }
-    if (letter === 'z') {
+    if (letter === 'z' || letter === 'y') {
       event.preventDefault();
-      if (event.shiftKey) {
-        edits.redo();
-      } else {
-        edits.undo();
+      // Откат может перегруппировать ленту — фокус из ленты вернётся на текущую после снимка.
+      const fromRail = focusInRail();
+      const sent = letter === 'z' && !event.shiftKey ? edits.undo() : edits.redo();
+      if (sent && fromRail) {
+        focusAfterEdit.current = true;
       }
-      return;
-    }
-    if (letter === 'y') {
-      event.preventDefault();
-      edits.redo();
       return;
     }
     event.preventDefault();

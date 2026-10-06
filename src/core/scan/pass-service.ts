@@ -17,6 +17,7 @@ import {
   type SaveMode,
   type SessionConflictReason,
   type SessionEdits,
+  type SetEditsReport,
   type ScannerState,
   type Snapshot,
   type StartupNotice,
@@ -107,9 +108,10 @@ export interface PassService {
   declineBacks(): Promise<Result<void>>;
   /**
    * Правки редактора и тумблер 180° (M3, KTD-3). Отклоняется, пока пишется PDF (`saving`) и
-   * пока идёт проход (`passRunning`) — KTD-9.
+   * пока идёт проход (`passRunning`) — KTD-9. Принятая команда всегда шлёт снимок; успех
+   * возвращает его номер — по нему редактор узнаёт снимок со своим результатом.
    */
-  setEdits(edits: SessionEdits, rotate180: boolean): Promise<Result<void>>;
+  setEdits(edits: SessionEdits, rotate180: boolean): Promise<Result<SetEditsReport>>;
   /**
    * «Сохранить документ» (M2, U6): путь спрашивает `askPath` (диалог main, `null` — отказ),
    * ядро читает страницы в собранном порядке, собирает PDF и пишет атомарно рядом с целью;
@@ -799,7 +801,7 @@ export function createPassService(
       }
       const set = await store.setEdits(edits, rotate180);
       notify();
-      return set;
+      return set.ok ? ok({ seq }) : set;
     },
 
     async savePdf(askPath) {

@@ -110,6 +110,7 @@ export const EditorThumb = memo(function EditorThumb({
         <img
           className="thumb__img"
           alt=""
+          draggable={false}
           loading="lazy"
           decoding="async"
           src={pageImageUrl(sessionId, 'thumb', pageKey)}

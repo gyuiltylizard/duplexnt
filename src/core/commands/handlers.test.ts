@@ -53,7 +53,9 @@ function setup(snapshot: Snapshot = EMPTY_SNAPSHOT) {
     stopPass: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
     acceptPass: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
     declineBacks: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
-    setEdits: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
+    setEdits: vi.fn((): Promise<Result<{ readonly seq: number }>> =>
+      Promise.resolve(ok({ seq: 7 })),
+    ),
     savePdf: vi.fn((): Promise<Result<SavePdfReport>> =>
       Promise.resolve(ok({ canceled: false, fileName: 'скан.pdf', directory: 'D:\\Сканы' })),
     ),
@@ -234,10 +236,10 @@ describe('снимок и проход', () => {
       names: ['', 'Договор'],
     };
 
-    expect(await handlers.setEdits({ edits, rotate180: true })).toEqual(ok(undefined));
+    expect(await handlers.setEdits({ edits, rotate180: true })).toEqual(ok({ seq: 7 }));
     expect(service.setEdits).toHaveBeenCalledExactlyOnceWith(edits, true);
     expect(await handlers.setEdits({ edits: EMPTY_EDITS, rotate180: false })).toEqual(
-      ok(undefined),
+      ok({ seq: 7 }),
     );
     expect(service.setEdits).toHaveBeenLastCalledWith(EMPTY_EDITS, false);
 

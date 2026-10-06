@@ -113,33 +113,39 @@ export function withCut(
   };
 }
 
-/** Снять границу перед документом `document` (с единицы): его имя уходит вместе с ней (R12). */
-export function withoutCut(edits: SessionEdits, document: number): SessionEdits {
-  if (document <= 0 || document > edits.cuts.length) {
+/**
+ * Снять границу перед документом `docIndex` (с нуля; у первого документа границы нет — без
+ * изменений): его имя уходит вместе с ней (R12).
+ */
+export function withoutCut(edits: SessionEdits, docIndex: number): SessionEdits {
+  if (docIndex <= 0 || docIndex > edits.cuts.length) {
     return edits;
   }
   return {
     ...edits,
-    cuts: edits.cuts.filter((_, index) => index !== document - 1),
-    names: edits.names.filter((_, index) => index !== document),
+    cuts: edits.cuts.filter((_, index) => index !== docIndex - 1),
+    names: edits.names.filter((_, index) => index !== docIndex),
   };
 }
 
-/** Имя документа `document` (с нуля); пустая строка — имя по умолчанию. */
-export function renamed(edits: SessionEdits, document: number, name: string): SessionEdits {
-  if (document < 0 || document >= edits.names.length || edits.names[document] === name) {
+/** Имя документа `docIndex` (с нуля); пустая строка — имя по умолчанию. */
+export function renamed(edits: SessionEdits, docIndex: number, name: string): SessionEdits {
+  if (docIndex < 0 || docIndex >= edits.names.length || edits.names[docIndex] === name) {
     return edits;
   }
   return {
     ...edits,
-    names: edits.names.map((current, index) => (index === document ? name : current)),
+    names: edits.names.map((current, index) => (index === docIndex ? name : current)),
   };
 }
 
 /**
  * «Выделить в документ»: подряд идущие позиции `from…to` становятся отдельным документом —
  * границы до и после куска одним шагом; в начале и в конце ленты лишних нет (UI_SPEC §6.5).
- * Возвращает правки и номер нового документа (с нуля) — туда уходит фокус имени.
+ * Границы внутри куска снимаются вместе с именами документов, которые они начинали, — иначе
+ * вместо одного документа вышло бы несколько. Хвост за куском, чей документ начинался внутри
+ * куска, сохраняет его имя. Возвращает правки и номер нового документа (с нуля) — туда уходит
+ * фокус имени.
  */
 export function separated(
   edits: SessionEdits,
@@ -147,9 +153,31 @@ export function separated(
   to: number,
   length: number,
 ): { readonly edits: SessionEdits; readonly document: number } {
-  let next = edits;
+  const inside = (cut: number): boolean => cut > from && cut <= to;
+  // Документ страницы за куском — до жеста; его имя переезжает на хвост, если граница,
+  // с которой он начинался, снимается.
+  const tail = edits.cuts.filter((cut) => cut <= to + 1).length;
+  const tailStart = edits.cuts[tail - 1];
+  const tailName =
+    to + 1 < length && tailStart !== undefined && inside(tailStart) ? edits.names[tail] : undefined;
+
+  let next: SessionEdits = edits.cuts.some(inside)
+    ? {
+        ...edits,
+        cuts: edits.cuts.filter((cut) => !inside(cut)),
+        // Имя документа с номером `index` начинается с разреза `index - 1`; у первого его нет.
+        names: edits.names.filter((_, index) => {
+          const start = edits.cuts[index - 1];
+          return start === undefined || !inside(start);
+        }),
+      }
+    : edits;
   for (const position of [from, to + 1]) {
     next = withCut(next, position, length) ?? next;
   }
-  return { edits: next, document: next.cuts.filter((cut) => cut <= from).length };
+  const docIndex = next.cuts.filter((cut) => cut <= from).length;
+  if (tailName !== undefined) {
+    next = renamed(next, docIndex + 1, tailName);
+  }
+  return { edits: next, document: docIndex };
 }

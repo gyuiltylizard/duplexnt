@@ -1,19 +1,23 @@
 import {
   EMPTY_EDITS,
   fail,
+  ok,
   type AssembledPage,
   type SessionAssembly,
   type Snapshot,
 } from '@shared';
-import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../i18n';
 import { documentsOf } from '../state/assembly-fixture';
 import {
+  applied,
   B2,
   B3,
   ctrlZ,
+  deferredSetEdits,
   edits,
+  lastSent,
   F1,
   F2,
   F3,
@@ -29,7 +33,6 @@ import {
   stubApi,
   twoPass,
 } from './editor-fixture';
-import { SNAPSHOT_WAIT_MS } from './useEditorEdits';
 
 // Экран `editor`, M3 (план U7; handoff M3, S1–S15): документы, выделение, поворот и удаление,
 // undo/redo, пустой редактор, инспектор. Ленту с правками тест задаёт снимком — renderer её
@@ -67,7 +70,6 @@ const angled =
   });
 
 afterEach(() => {
-  vi.useRealTimers();
   cleanup();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
@@ -355,26 +357,55 @@ describe('editor M3: правки', () => {
     });
   });
 
-  it('снимок не пришёл (ядро не записало совпавшую правку) — по сроку жесты снова уходят', async () => {
-    vi.useFakeTimers();
-    const api = stubApi();
-    renderEditor(twoPass());
+  it('снимок с результатом пришёл раньше ответа — следующий жест уходит сразу после ответа', async () => {
+    const { answer, setEdits } = deferredSetEdits();
+    stubApi({ setEdits });
+    const snapshot = twoPass();
+    const { rerender } = renderEditor(snapshot);
     const rotate = screen.getByRole('button', { name: 'Повернуть на 90° по часовой' });
 
     fireEvent.click(rotate);
-    await settle();
-    // Ответ «успех», снимка нет: до срока редактор занят.
-    act(() => {
-      vi.advanceTimersByTime(SNAPSHOT_WAIT_MS - 1);
-    });
+    // Ядро нормализовало правку к прежней ленте — снимок №2 с теми же правками, ответ позже.
+    const result = nextSnapshot(snapshot, {});
+    rerender(result);
     fireEvent.click(rotate);
-    expect(api.setEdits).toHaveBeenCalledTimes(1);
+    expect(setEdits).toHaveBeenCalledTimes(1);
 
-    act(() => {
-      vi.advanceTimersByTime(1);
-    });
+    answer(ok({ seq: result.seq }));
+    await settle();
     fireEvent.click(rotate);
-    expect(api.setEdits).toHaveBeenCalledTimes(2);
+    expect(setEdits).toHaveBeenCalledTimes(2);
+  });
+
+  it('снимок с меньшим номером, чем в ответе, — посторонний: блокировку снимает только ответный', async () => {
+    const { answer, setEdits } = deferredSetEdits();
+    stubApi({ setEdits });
+    const snapshot = twoPass();
+    const { rerender } = renderEditor(snapshot);
+    const rotate = screen.getByRole('button', { name: 'Повернуть на 90° по часовой' });
+
+    fireEvent.click(rotate);
+    answer(ok({ seq: snapshot.seq + 2 }));
+    await settle();
+    // Снимок №2 — посторонний (например, миниатюра дописалась): правки в нём старые.
+    const foreign = nextSnapshot(snapshot, {});
+    rerender(foreign);
+    fireEvent.click(rotate);
+    ctrlZ();
+    expect(setEdits).toHaveBeenCalledTimes(1);
+
+    rerender(
+      nextSnapshot(foreign, {
+        session: { edits: edits({ rotations: { [F1]: 90 } }) },
+        assembly: angled({ [F1]: 90 }),
+      }),
+    );
+    fireEvent.click(rotate);
+    expect(setEdits).toHaveBeenCalledTimes(2);
+    expect(setEdits).toHaveBeenLastCalledWith({
+      edits: edits({ rotations: { [F1]: 180 } }),
+      rotate180: false,
+    });
   });
 
   it('отказ setEdits не меняет историю: Ctrl+Z после него ничего не шлёт', async () => {
@@ -382,15 +413,50 @@ describe('editor M3: правки', () => {
     const api = stubApi({
       setEdits: vi.fn(() => Promise.resolve(fail('sessionConflict', { reason: 'saving' }))),
     });
-    renderEditor(twoPass());
+    const { onToast } = renderEditor(twoPass());
 
     fireEvent.click(screen.getByRole('button', { name: 'Повернуть на 90° по часовой' }));
     await settle();
     expect(error).toHaveBeenCalledWith('[renderer] правка не принята', expect.anything());
+    // `saving` и `passRunning` — гонки, которые интерфейс исключает: без тоста.
+    expect(onToast).not.toHaveBeenCalled();
 
     ctrlZ();
     expect(api.setEdits).toHaveBeenCalledTimes(1);
     // Отказ снял «в полёте»: следующий жест уходит.
+    fireEvent.click(screen.getByRole('button', { name: 'Повернуть на 90° по часовой' }));
+    expect(api.setEdits).toHaveBeenCalledTimes(2);
+  });
+
+  it('правка не записалась на диск — тост с причиной, история не меняется', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const api = stubApi({ setEdits: vi.fn(() => Promise.resolve(fail('storageFailed'))) });
+    const { onToast } = renderEditor(twoPass());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Удалить страницу' }));
+    await settle();
+    expect(onToast).toHaveBeenCalledExactlyOnceWith(
+      'Не удалось записать правку: не удалось записать данные на диск. Проверьте, не блокирует ли папку приложения антивирус или другая программа.',
+      6000,
+    );
+
+    ctrlZ();
+    expect(api.setEdits).toHaveBeenCalledTimes(1);
+  });
+
+  it('мост не ответил — тост «не получило ответа», жесты снова уходят', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const api = stubApi({ setEdits: vi.fn(() => Promise.reject(new Error('IPC'))) });
+    const { onToast } = renderEditor(twoPass());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Повернуть на 90° по часовой' }));
+    await settle();
+    expect(onToast).toHaveBeenCalledExactlyOnceWith(
+      'Не удалось записать правку: приложение не получило ответа. Проверьте ленту и повторите.',
+      6000,
+    );
+    ctrlZ();
+    expect(api.setEdits).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole('button', { name: 'Повернуть на 90° по часовой' }));
     expect(api.setEdits).toHaveBeenCalledTimes(2);
   });
@@ -436,6 +502,90 @@ describe('editor M3: правки', () => {
     ctrlZ(screen.getByRole('dialog'));
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Delete' });
     expect(api.setEdits).toHaveBeenCalledTimes(1);
+  });
+
+  it('модалка уровня App (aria-modal в DOM) — Delete и Ctrl+Z не шлют setEdits', async () => {
+    const api = stubApi();
+    const snapshot = twoPass();
+    const { rerender } = renderEditor(snapshot);
+    fireEvent.click(screen.getByRole('button', { name: 'Повернуть на 90° по часовой' }));
+    await settle();
+    rerender(
+      nextSnapshot(snapshot, {
+        session: { edits: edits({ rotations: { [F1]: 90 } }) },
+        assembly: angled({ [F1]: 90 }),
+      }),
+    );
+
+    // Модалка не экрана — например, MismatchModal из App: фокус может остаться на body.
+    const modal = document.createElement('div');
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    document.body.append(modal);
+    ctrlZ();
+    fireEvent.keyDown(document.body, { key: 'Delete' });
+    modal.remove();
+    expect(api.setEdits).toHaveBeenCalledTimes(1);
+
+    // Модалка закрылась — сочетания снова работают.
+    ctrlZ();
+    expect(api.setEdits).toHaveBeenCalledTimes(2);
+  });
+
+  it('Ctrl+Shift+Z — вперёд, как Ctrl+Y', async () => {
+    const api = stubApi();
+    const snapshot = twoPass();
+    const { rerender } = renderEditor(snapshot);
+    fireEvent.click(screen.getByRole('button', { name: 'Повернуть на 90° по часовой' }));
+    await settle();
+    const rotatedSnapshot = nextSnapshot(snapshot, {
+      session: { edits: edits({ rotations: { [F1]: 90 } }) },
+      assembly: angled({ [F1]: 90 }),
+    });
+    rerender(rotatedSnapshot);
+    ctrlZ();
+    await settle();
+    rerender({ ...snapshot, seq: rotatedSnapshot.seq + 1 });
+
+    fireEvent.keyDown(document.body, { key: 'Z', code: 'KeyZ', ctrlKey: true, shiftKey: true });
+    expect(api.setEdits).toHaveBeenCalledTimes(3);
+    expect(api.setEdits).toHaveBeenLastCalledWith({
+      edits: edits({ rotations: { [F1]: 90 } }),
+      rotate180: false,
+    });
+  });
+
+  it('KTD-3a: Ctrl+Y после Ctrl+Z шлёт нормализованное ядром состояние, а не сырой жест', async () => {
+    const api = stubApi();
+    const k3 = 'p01-s01-0003';
+    const k4 = 'p01-s01-0004';
+    const base = applied(makeSnapshot([makePass({ pages: pages(4) })]), {
+      edits: edits({ cuts: [2, 3], names: ['', '', ''] }),
+      rotate180: false,
+    });
+    const { rerender } = renderEditor(base);
+
+    // Удалены оба хвостовых документа: жест сдвигает разрезы в [2, 2].
+    fireEvent.click(option(2));
+    fireEvent.click(option(3), { shiftKey: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Удалить 2 стр.' }));
+    expect(lastSent(api).edits).toEqual(
+      edits({ deleted: [k3, k4], cuts: [2, 2], names: ['', '', ''] }),
+    );
+    await settle();
+    // Ядро нормализовало: разрезы у края ленты сняты вместе с пустыми документами.
+    const normalized = { edits: edits({ deleted: [k3, k4] }), rotate180: false };
+    const removed = applied(base, normalized);
+    rerender(removed);
+
+    ctrlZ();
+    expect(lastSent(api)).toEqual({ edits: base.session?.edits, rotate180: false });
+    await settle();
+    rerender({ ...base, seq: removed.seq + 1 });
+
+    fireEvent.keyDown(document.body, { key: 'y', code: 'KeyY', ctrlKey: true });
+    expect(api.setEdits).toHaveBeenCalledTimes(3);
+    expect(lastSent(api)).toEqual(normalized);
   });
 
   it('S15: тумблер 180° — шаг undo: Ctrl+Z возвращает выключенный', async () => {

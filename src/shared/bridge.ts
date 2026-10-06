@@ -59,6 +59,14 @@ export interface SetEditsRequest {
   readonly rotate180: boolean;
 }
 
+/**
+ * Исход правки: номер снимка, который несёт её результат. Снимок уходит после каждой принятой
+ * команды — и когда правки совпали с журналом после нормализации (M3, ревью сессий 3–4).
+ */
+export interface SetEditsReport {
+  readonly seq: number;
+}
+
 /** Итог «Сохранить документ» (M2, KTD-3): отказ в диалоге — не ошибка, ничего не записано. */
 export type SavePdfReport =
   | { readonly canceled: true }
@@ -155,10 +163,10 @@ export interface BridgeCommands {
   /** «Обороты не нужны» (M2, KTD-6): durable-отметка, `flip` больше не показывается. */
   readonly declineBacks: { readonly request: NoRequest; readonly value: undefined };
   /**
-   * Правки редактора и тумблер 180° (M3, KTD-3); исход — в снимке. Во время записи PDF и идущего
-   * прохода отклоняется конфликтом (KTD-9).
+   * Правки редактора и тумблер 180° (M3, KTD-3); исход — в снимке с номером из ответа. Во время
+   * записи PDF и идущего прохода отклоняется конфликтом (KTD-9).
    */
-  readonly setEdits: { readonly request: SetEditsRequest; readonly value: undefined };
+  readonly setEdits: { readonly request: SetEditsRequest; readonly value: SetEditsReport };
   /**
    * «Сохранить документ» (M2, KTD-3): путь спрашивает main системным диалогом, ядро собирает
    * PDF и пишет атомарно; отметка о сохранении — в журнале.

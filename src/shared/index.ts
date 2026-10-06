@@ -32,6 +32,7 @@ export {
   type SaveFolderChoice,
   type SaveMode,
   type SavePdfReport,
+  type SetEditsReport,
   type SetEditsRequest,
   type Unsubscribe,
 } from './bridge';

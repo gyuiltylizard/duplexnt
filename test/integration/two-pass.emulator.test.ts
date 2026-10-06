@@ -268,7 +268,10 @@ describe('два прохода через эмулятор (M2)', () => {
     ).toBe(true);
 
     expect(service.snapshot().session?.passes.map((pass) => pass.number)).toEqual([1, 3]);
-    expect(await service.setEdits(EMPTY_EDITS, true)).toEqual({ ok: true, value: undefined });
+    expect(await service.setEdits(EMPTY_EDITS, true)).toEqual({
+      ok: true,
+      value: { seq: service.snapshot().seq },
+    });
     expect(service.snapshot().session?.passes.map((pass) => [pass.number, pass.rotate180])).toEqual(
       [
         [1, false],

@@ -1,5 +1,5 @@
 import { EMPTY_EDITS } from '@shared';
-import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { cleanup, createEvent, fireEvent, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../i18n';
 import {
@@ -44,6 +44,13 @@ const splitBar = (index: number): HTMLElement => {
   return bar;
 };
 
+/** `dragleave` с ленты в сторону `next`. */
+const leave = (scroll: Element, next: Element, transfer: DataTransfer): void => {
+  const event = createEvent.dragLeave(scroll, { dataTransfer: transfer });
+  Object.defineProperty(event, 'relatedTarget', { value: next });
+  fireEvent(scroll, event);
+};
+
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
@@ -57,6 +64,8 @@ describe('editor M3: перетаскивание (S6)', () => {
     const { rerender } = renderEditor(snapshot);
 
     expect(option(0).getAttribute('draggable')).toBe('true');
+    // Источник перетаскивания — карточка, а не картинка внутри неё.
+    expect(option(0).querySelector('img')?.getAttribute('draggable')).toBe('false');
     const transfer = dataTransfer();
     fireEvent.dragStart(option(0), { dataTransfer: transfer });
     expect(option(0).className).toContain('thumb--dragging');
@@ -154,7 +163,11 @@ describe('editor M3: перетаскивание (S6)', () => {
     if (scroll === null) {
       throw new Error('нет ленты');
     }
-    fireEvent.dragLeave(scroll, { dataTransfer: transfer, relatedTarget: document.body });
+    // Переход на соседнюю миниатюру — ещё лента: маркер остаётся. `relatedTarget` jsdom
+    // из инициализатора теряет — задаётся на событии.
+    leave(scroll, option(4), transfer);
+    expect(document.querySelector('.thumb__drop')).not.toBeNull();
+    leave(scroll, document.body, transfer);
     expect(document.querySelector('.thumb__drop')).toBeNull();
     fireEvent.dragEnd(option(0), { dataTransfer: transfer });
 
@@ -217,6 +230,26 @@ describe('editor M3: перетаскивание (S6)', () => {
     expect(lastSent(api).edits.order).toEqual([]);
   });
 
+  it('KTD-9: пока пишется PDF — ни переноса, ни границ, ни имён, ни «Вернуть», ни клавиш', async () => {
+    const api = stubApi({ savePdf: vi.fn(() => new Promise(() => undefined)) });
+    const snapshot = twoPass();
+    const { rerender } = renderEditor(snapshot);
+    fireEvent.click(button('Повернуть на 90° по часовой'));
+    await settle();
+    rerender(applied(snapshot, lastSent(api)));
+
+    fireEvent.click(button('Сохранить документ'));
+    expect(option(0).getAttribute('draggable')).toBe('false');
+    expect(document.querySelector('.thumb__split')).toBeNull();
+    expect(nameField(1).disabled).toBe(true);
+    for (const name of ['Повернуть на 90° по часовой', 'Удалить страницу', 'Вернуть']) {
+      expect(button(name).hasAttribute('disabled'), name).toBe(true);
+    }
+    ctrlZ();
+    fireEvent.keyDown(document.body, { key: 'Delete' });
+    expect(api.setEdits).toHaveBeenCalledTimes(1);
+  });
+
   it('пока команда в полёте, миниатюры не тянутся и split-баров нет', () => {
     stubApi();
     renderEditor(twoPass());
@@ -276,6 +309,49 @@ describe('editor M3: границы документов (S1, S2, S5, S7)', () =
 
     ctrlZ();
     expect(lastSent(api).edits).toEqual(edits({ cuts: [2], names: ['Акт', 'Опись'] }));
+  });
+
+  it('Ctrl+Z границы с фокусом в ленте — после снимка фокус на текущей миниатюре, а не на body', async () => {
+    const api = stubApi();
+    const snapshot = twoPass();
+    const { rerender } = renderEditor(snapshot);
+
+    fireEvent.click(splitBar(2));
+    await settle();
+    const cut = applied(snapshot, lastSent(api));
+    rerender(cut);
+    // Страница второго документа в фокусе: Ctrl+Z перенесёт её в первую группу.
+    fireEvent.click(option(2));
+    option(2).focus();
+    ctrlZ(option(2));
+    expect(lastSent(api).edits).toEqual(EMPTY_EDITS);
+
+    await settle();
+    rerender(applied(cut, lastSent(api)));
+    expect(screen.getAllByRole('listbox').length).toBe(1);
+    expect(document.activeElement?.getAttribute('data-key')).toBe(F2);
+  });
+
+  it('перенос с фокусом в ленте — после снимка фокус на текущей миниатюре', async () => {
+    const api = stubApi();
+    const cut = applied(twoPass(), {
+      edits: edits({ cuts: [2], names: ['', ''] }),
+      rotate180: false,
+    });
+    const { rerender } = renderEditor(cut);
+
+    fireEvent.click(option(0));
+    option(0).focus();
+    // F1 уезжает во второй документ — миниатюра перемонтируется в другой группе.
+    dragAndDrop(option(0), option(3), 'after');
+    await settle();
+    rerender(applied(cut, lastSent(api)));
+    expect(
+      within(screen.getByRole('listbox', { name: 'Страницы документа 2' }))
+        .getAllByRole('option')
+        .map((element) => element.getAttribute('data-key')),
+    ).toContain(F1);
+    expect(document.activeElement?.getAttribute('data-key')).toBe(F1);
   });
 
   it('S1: кнопка тулбара — для текущей не первой страницы без границы перед ней', async () => {
@@ -410,6 +486,48 @@ describe('editor M3: имя документа (S3)', () => {
       edits: edits({ names: ['Опись'] }),
       rotate180: false,
     });
+  });
+
+  it('команда в полёте — черновик имени не теряется: остаётся в поле и уходит следующим blur', async () => {
+    const api = stubApi();
+    const snapshot = twoPass();
+    const { rerender } = renderEditor(snapshot);
+    const field = nameField(1);
+
+    fireEvent.click(button('Повернуть на 90° по часовой'));
+    field.focus();
+    fireEvent.change(field, { target: { value: 'Акт' } });
+    fireEvent.blur(field);
+    expect(api.setEdits).toHaveBeenCalledTimes(1);
+    expect(field.value).toBe('Акт');
+
+    await settle();
+    const rotatedSnapshot = applied(snapshot, lastSent(api));
+    rerender(rotatedSnapshot);
+    expect(nameField(1).value).toBe('Акт');
+    nameField(1).focus();
+    fireEvent.blur(nameField(1));
+    expect(api.setEdits).toHaveBeenCalledTimes(2);
+    expect(lastSent(api).edits).toEqual(edits({ rotations: { [F1]: 90 }, names: ['Акт'] }));
+  });
+
+  it('черновик имени едет с документом: граница перед ним снята — поле ниже не наследует чужой текст', async () => {
+    const api = stubApi();
+    const cut = applied(twoPass(), {
+      edits: edits({ cuts: [2, 4], names: ['', '', ''] }),
+      rotate180: false,
+    });
+    const { rerender } = renderEditor(cut);
+
+    // Черновик в третьем документе, пока команда снятия первой границы в полёте.
+    fireEvent.click(button('Убрать границу перед документом 2'));
+    fireEvent.change(nameField(3), { target: { value: 'Опись' } });
+    await settle();
+    rerender(applied(cut, lastSent(api)));
+    // Третий документ стал вторым — черновик вместе с ним.
+    expect(screen.getAllByRole('listbox').length).toBe(2);
+    expect(nameField(2).value).toBe('Опись');
+    expect(nameField(1).value).toBe('');
   });
 
   it('Esc — прежнее значение, фокус в поле, выделение ленты не сжимается', () => {

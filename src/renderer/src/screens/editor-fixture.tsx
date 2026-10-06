@@ -3,6 +3,7 @@ import {
   ok,
   sameEdits,
   type Api,
+  type CommandResult,
   type PassSnapshot,
   type SessionAssembly,
   type SessionEdits,
@@ -109,11 +110,15 @@ export const B2 = 'p02-s01-0002';
 export const F3 = 'p01-s01-0003';
 export const B1 = 'p02-s01-0001';
 
+/** Номер последнего показанного снимка: ответ `setEdits` по умолчанию — следующий за ним. */
+let shownSeq = 0;
+
 export function stubApi(overrides: Partial<Record<keyof Api, unknown>> = {}) {
   const api = {
     acceptPass: vi.fn(() => Promise.resolve(ok(undefined))),
     closeSession: vi.fn(() => Promise.resolve(ok(undefined))),
-    setEdits: vi.fn(() => Promise.resolve(ok(undefined))),
+    // Как ядро: результат команды несёт снимок, следующий за показанным (M3, ревью сессий 3–4).
+    setEdits: vi.fn(() => Promise.resolve(ok({ seq: shownSeq + 1 }))),
     savePdf: vi.fn(() =>
       Promise.resolve(ok({ canceled: false, fileName: 'Скан.pdf', directory: 'Документы' })),
     ),
@@ -132,6 +137,7 @@ export function renderEditor(
     if (next.session === null) {
       throw new Error('в фикстуре нет сессии');
     }
+    shownSeq = next.seq;
     return (
       <EditorScreen
         snapshot={next}
@@ -197,6 +203,23 @@ export function applied(snapshot: Snapshot, state: EditState): Snapshot {
       orderEdited: state.edits.order.length > 0,
       hasEdits: state.rotate180 || !sameEdits(state.edits, EMPTY_EDITS),
       deleted: auto.order.length - order.length,
+    },
+  };
+}
+
+/** `setEdits`, чей ответ тест отдаёт сам — до или после снимка с результатом. */
+export function deferredSetEdits() {
+  let answer: (result: CommandResult<'setEdits'>) => void = () => undefined;
+  const setEdits = vi.fn(
+    () =>
+      new Promise<CommandResult<'setEdits'>>((resolve) => {
+        answer = resolve;
+      }),
+  );
+  return {
+    setEdits,
+    answer: (result: CommandResult<'setEdits'>): void => {
+      answer(result);
     },
   };
 }
