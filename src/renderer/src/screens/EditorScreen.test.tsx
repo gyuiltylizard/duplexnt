@@ -1,11 +1,12 @@
-import { EMPTY_EDITS, fail, ok } from '@shared';
+import { EMPTY_EDITS, fail } from '@shared';
 import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../i18n';
 import { makePass, makeSnapshot, pages, renderEditor, stubApi, twoPass } from './editor-fixture';
 
-// Экран `editor`: поведение M1–M2 (лента, превью, тумблер, сохранение, плашка прохода). Правки,
-// выделение, документы и инспектор M3 — в EditorScreen.edits.test.tsx; хелперы — editor-fixture.
+// Экран `editor`: поведение M1–M2 (лента, превью, тумблер, точка несохранённого, плашка прохода).
+// Правки, выделение, документы и инспектор M3 — в EditorScreen.edits.test.tsx; сохранение и
+// новое сканирование — в EditorScreen.save.test.tsx; хелперы — editor-fixture.
 
 /** Клавиша на текущей миниатюре — точке входа клавиатуры в ленту (роуминг tabindex). */
 function pressOnCurrent(key: string): void {
@@ -99,58 +100,6 @@ describe('экран editor', () => {
     renderEditor(makeSnapshot([makePass({})]));
 
     expect(screen.queryByRole('checkbox')).toBeNull();
-  });
-
-  it('S8: «Сохранить документ» шлёт savePdf, блокируется на время записи, тост с именем файла', async () => {
-    let resolveSave: (value: unknown) => void = () => undefined;
-    const savePdf = vi.fn(
-      () =>
-        new Promise((resolve) => {
-          resolveSave = resolve;
-        }),
-    );
-    stubApi({ savePdf });
-    const { onToast } = renderEditor(makeSnapshot([makePass({})]));
-
-    fireEvent.click(screen.getByRole('button', { name: 'Сохранить документ' }));
-    expect(savePdf).toHaveBeenCalledTimes(1);
-    const saving = screen.getByRole('button', { name: 'Сохраняем…' });
-    expect(saving.hasAttribute('disabled')).toBe(true);
-    // Повторный клик не шлёт вторую команду.
-    fireEvent.click(saving);
-    expect(savePdf).toHaveBeenCalledTimes(1);
-
-    resolveSave(ok({ canceled: false, fileName: 'Скан 2026-10-04.pdf', directory: 'Документы' }));
-    expect(
-      (await screen.findByRole('button', { name: 'Сохранить документ' })).hasAttribute('disabled'),
-    ).toBe(false);
-    expect(onToast).toHaveBeenCalledExactlyOnceWith(
-      'Сохранено: Скан 2026-10-04.pdf → Документы',
-      6000,
-    );
-  });
-
-  it('S8: отказ записи — тост ошибки; отказ в диалоге — тишина', async () => {
-    const api = stubApi({
-      savePdf: vi
-        .fn()
-        .mockImplementationOnce(() => Promise.resolve(fail('saveWriteFailed')))
-        .mockImplementation(() => Promise.resolve(ok({ canceled: true }))),
-    });
-    const { onToast } = renderEditor(makeSnapshot([makePass({})]));
-
-    fireEvent.click(screen.getByRole('button', { name: 'Сохранить документ' }));
-    await screen.findByRole('button', { name: 'Сохранить документ' });
-    expect(onToast).toHaveBeenCalledExactlyOnceWith(
-      expect.stringContaining('Не удалось сохранить'),
-      6000,
-    );
-
-    onToast.mockClear();
-    fireEvent.click(screen.getByRole('button', { name: 'Сохранить документ' }));
-    await screen.findByRole('button', { name: 'Сохранить документ' });
-    expect(api.savePdf).toHaveBeenCalledTimes(2);
-    expect(onToast).not.toHaveBeenCalled();
   });
 
   it('S9: точка несохранённого видна при saved: false и исчезает при saved: true', () => {
@@ -428,19 +377,6 @@ describe('экран editor', () => {
     fireEvent.error(screen.getByAltText('Страница 1'));
     expect(screen.getByText(/Страницу не удалось показать/)).toBeDefined();
     expect(screen.getByText('СТРАНИЦА 1')).toBeDefined();
-  });
-
-  it('«Новое сканирование» открывает модалку; отмена ничего не шлёт', () => {
-    const api = stubApi();
-    renderEditor(makeSnapshot([makePass({ pages: pages(24) })]));
-
-    fireEvent.click(screen.getByRole('button', { name: /Новое сканирование/ }));
-    expect(screen.getByRole('dialog')).toBeDefined();
-    expect(screen.getByText(/24 отсканированные страницы будут удалены/)).toBeDefined();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Отмена' }));
-    expect(screen.queryByRole('dialog')).toBeNull();
-    expect(api.closeSession).not.toHaveBeenCalled();
   });
 
   it('элементов вех после M3 нет в разметке: «Добавить», «Пересканировать», пустые обороты', () => {

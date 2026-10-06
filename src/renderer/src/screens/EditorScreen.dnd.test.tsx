@@ -231,14 +231,18 @@ describe('editor M3: перетаскивание (S6)', () => {
   });
 
   it('KTD-9: пока пишется PDF — ни переноса, ни границ, ни имён, ни «Вернуть», ни клавиш', async () => {
-    const api = stubApi({ savePdf: vi.fn(() => new Promise(() => undefined)) });
+    const api = stubApi({ saveDocuments: vi.fn(() => new Promise(() => undefined)) });
     const snapshot = twoPass();
     const { rerender } = renderEditor(snapshot);
     fireEvent.click(button('Повернуть на 90° по часовой'));
     await settle();
     rerender(applied(snapshot, lastSent(api)));
 
+    // Модалка `save` пишет пакет: редактор под ней заблокирован (S16).
     fireEvent.click(button('Сохранить документ'));
+    fireEvent.click(button('Сохранить файл'));
+    await settle();
+    expect(api.saveDocuments).toHaveBeenCalledTimes(1);
     expect(option(0).getAttribute('draggable')).toBe('false');
     expect(document.querySelector('.thumb__split')).toBeNull();
     expect(nameField(1).disabled).toBe(true);

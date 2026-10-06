@@ -1,0 +1,472 @@
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
+import {
+  MAX_DOCUMENT_NAME_LENGTH,
+  type AssembledDocument,
+  type SaveDocumentsReport,
+  type SaveMode,
+} from '@shared';
+import { Modal } from '../components/Modal';
+import { errorText, errorTextInline } from '../state/error-text';
+import { asRequested, requestedNames, resultRows } from '../state/save-result';
+import { toneOf } from '../screens/EditorInspector';
+import './save-modal.css';
+
+// Модалка `save` (план M3, U9; handoff M3, S16; UI_SPEC §7.3): режим «Отдельные файлы / Один
+// файл», имена, папка, сводка → пакет `saveDocuments` (best-effort, KTD-6). Изменённые здесь
+// имена документов сначала записываются в правки — одним шагом undo, — чтобы редактор и файлы не
+// расходились; имя единого файла при нескольких документах в журнал не пишется (R15). Полный
+// успех под запрошенными именами закрывает модалку (тост S18 ставит экран); частичный сбой или
+// имя, изменённое ядром, держат ИТОГ: выбор, имена и папка недоступны — повтор пишет тот же
+// пакет. На время записи модалка занята и не закрывается: отменять пакет ядро не умеет.
+
+export interface SaveModalProps {
+  readonly documents: readonly AssembledDocument[];
+  /** Имена по умолчанию — плейсхолдеры строк документов. */
+  readonly defaultNames: readonly string[];
+  /** Имя единого файла по умолчанию при нескольких документах — «Скан ГГГГ-ММ-ДД». */
+  readonly singleDefault: string;
+  /** Страниц в ленте. */
+  readonly total: number;
+  /** Записать имена документов одной правкой; `false` — не записались (об этом уже сказано). */
+  readonly onRename: (names: readonly string[]) => Promise<boolean>;
+  /** Идёт запись пакета: правки заблокированы (KTD-9). */
+  readonly onWriting: (writing: boolean) => void;
+  /** Нажаты «Отдельные файлы» при одном документе — подсказка тостом (UI_SPEC §7.3). */
+  readonly onNeedCuts: () => void;
+  /** Пакет записан целиком: экран закрывает модалку и показывает тост. */
+  readonly onSaved: (report: SaveDocumentsReport) => void;
+  /** «Отмена» или «Закрыть» после сбоя: пакет забыт, ничего не удаляется. */
+  readonly onClose: () => void;
+}
+
+/** Больше десяти строк — список прокручивается (порог макета). */
+const SCROLL_ROWS = 10;
+
+/** Итог записи: отчёт и имена, с которыми пакет ушёл, — повтор шлёт их же. */
+interface Outcome {
+  readonly report: SaveDocumentsReport;
+  readonly requested: readonly string[];
+}
+
+interface Row {
+  readonly value: string;
+  readonly placeholder: string;
+  readonly pages: number;
+  readonly onChange: (value: string) => void;
+}
+
+/** Отказ повтора, после которого пакета у ядра больше нет: выбор снова доступен (S16). */
+const BATCH_GONE: readonly unknown[] = ['batchStale', 'noFailedFiles'];
+
+export function SaveModal({
+  documents,
+  defaultNames,
+  singleDefault,
+  total,
+  onRename,
+  onWriting,
+  onNeedCuts,
+  onSaved,
+  onClose,
+}: SaveModalProps): ReactNode {
+  const { t } = useTranslation();
+  const several = documents.length > 1;
+  const [mode, setMode] = useState<SaveMode>(several ? 'separate' : 'single');
+  const [docNames, setDocNames] = useState(() => documents.map((doc) => doc.name));
+  const [fileName, setFileName] = useState('');
+  const [folder, setFolder] = useState<string | null>(null);
+  const [choosing, setChoosing] = useState(false);
+  const [writing, setWriting] = useState(false);
+  const [outcome, setOutcome] = useState<Outcome | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+
+  const unmounted = useRef(false);
+  useEffect(() => {
+    unmounted.current = false;
+    return () => {
+      unmounted.current = true;
+    };
+  }, []);
+
+  // Папка — последняя выбранная в этом запуске, иначе «Документы» (KTD-5); её знает ядро.
+  useEffect(() => {
+    window.api.getSaveFolder().then(
+      (result) => {
+        if (!unmounted.current && result.ok) {
+          setFolder(result.value);
+        }
+      },
+      (error: unknown) => {
+        console.error('[renderer] папка сохранения не ответила', error);
+      },
+    );
+  }, []);
+
+  // После записи фокус — на основной кнопке: «Повторить неудавшиеся», «Готово» или снова
+  // «Сохранить…» после отказа. Начальный фокус — на первом режиме (`Modal`).
+  const primaryRef = useRef<HTMLButtonElement>(null);
+  const wrote = useRef(false);
+  useEffect(() => {
+    if (writing) {
+      wrote.current = true;
+    } else if (wrote.current) {
+      primaryRef.current?.focus();
+    }
+  }, [writing, outcome]);
+
+  // Выбор, имена и папка недоступны во время записи и в ИТОГЕ.
+  const locked = writing || outcome !== null;
+
+  const docRows: Row[] = documents.map((doc, index) => ({
+    value: docNames[index] ?? '',
+    placeholder: defaultNames[index] ?? '',
+    pages: doc.count,
+    onChange: (value) => {
+      setDocNames((previous) => previous.map((name, at) => (at === index ? value : name)));
+    },
+  }));
+  // «Один файл» при одном документе — это его имя; при нескольких — имя файла вне журнала.
+  const rows: Row[] =
+    mode === 'separate' || !several
+      ? docRows
+      : [{ value: fileName, placeholder: singleDefault, pages: total, onChange: setFileName }];
+  const writesDocNames = rows === docRows;
+
+  const write = (requested: readonly string[], retry: boolean): void => {
+    setWriting(true);
+    setFailure(null);
+    onWriting(true);
+    window.api.saveDocuments({ mode, names: requested, retry }).then(
+      (result) => {
+        onWriting(false);
+        if (unmounted.current) {
+          return;
+        }
+        setWriting(false);
+        if (!result.ok) {
+          setFailure(t('save.failed', { error: errorTextInline(t, result.error) }));
+          // Отказ целиком (папка недоступна, пакет устарел) — снова выбор; следующее «Сохранить»
+          // пишет пакет заново. Иной отказ повтора — ИТОГ остаётся, повтор возможен.
+          if (!retry || BATCH_GONE.includes(result.error.details?.reason)) {
+            setOutcome(null);
+          }
+          return;
+        }
+        if (asRequested(result.value, requested)) {
+          onSaved(result.value);
+          return;
+        }
+        setOutcome({ report: result.value, requested });
+      },
+      (error: unknown) => {
+        // Мост не ответил — человек не должен гадать, записались ли файлы: модалка остаётся.
+        console.error('[renderer] сохранение не ответило', error);
+        onWriting(false);
+        if (!unmounted.current) {
+          setWriting(false);
+          setFailure(t('toast.saveNoResponse'));
+        }
+      },
+    );
+  };
+
+  const submit = (): void => {
+    if (locked) {
+      return;
+    }
+    const requested = requestedNames(rows);
+    setWriting(true);
+    setFailure(null);
+    void (writesDocNames ? onRename(docNames) : Promise.resolve(true)).then((renamed) => {
+      if (unmounted.current) {
+        return;
+      }
+      if (renamed) {
+        write(requested, false);
+      } else {
+        setWriting(false);
+      }
+    });
+  };
+
+  const choose = (): void => {
+    if (locked || choosing) {
+      return;
+    }
+    setChoosing(true);
+    window.api.chooseSaveFolder().then(
+      (result) => {
+        if (unmounted.current) {
+          return;
+        }
+        setChoosing(false);
+        if (result.ok) {
+          // Отказ в диалоге оставляет прежнюю папку — она и приходит.
+          setFolder(result.value.folder);
+        } else {
+          setFailure(errorText(t, result.error));
+        }
+      },
+      (error: unknown) => {
+        console.error('[renderer] выбор папки не ответил', error);
+        if (!unmounted.current) {
+          setChoosing(false);
+        }
+      },
+    );
+  };
+
+  const fileCount = mode === 'separate' ? documents.length : 1;
+  const results = outcome === null ? null : resultRows(outcome.report, outcome.requested);
+  const failedCount = outcome?.report.failed.length ?? 0;
+
+  let status: ReactNode;
+  if (writing) {
+    status = (
+      <p className="modal__status" role="status" aria-live="polite">
+        {t('save.writing')}
+      </p>
+    );
+  } else if (failure !== null) {
+    status = (
+      <p className="modal__status modal__status--danger" role="alert">
+        {failure}
+      </p>
+    );
+  } else if (outcome !== null) {
+    status = (
+      <p className="modal__status" role="status" aria-live="polite">
+        {t('save.resultStatus', {
+          written: outcome.report.written.length,
+          total: outcome.requested.length,
+        })}
+      </p>
+    );
+  } else {
+    status = <p className="modal__status" />;
+  }
+
+  let actions: ReactNode;
+  if (outcome === null) {
+    actions = (
+      <>
+        <button type="button" className="btn btn--ghost" disabled={writing} onClick={onClose}>
+          {t('save.cancel')}
+        </button>
+        <button
+          ref={primaryRef}
+          type="button"
+          className="btn btn--primary btn--small"
+          disabled={writing}
+          aria-busy={writing ? true : undefined}
+          onClick={submit}
+        >
+          {writing
+            ? t('save.submitting')
+            : fileCount === 1
+              ? t('save.submitOne')
+              : t('save.submitMany', { count: fileCount })}
+        </button>
+      </>
+    );
+  } else if (failedCount > 0) {
+    actions = (
+      <>
+        <button type="button" className="btn btn--ghost" disabled={writing} onClick={onClose}>
+          {t('save.close')}
+        </button>
+        <button
+          ref={primaryRef}
+          type="button"
+          className="btn btn--primary btn--small"
+          disabled={writing}
+          aria-busy={writing ? true : undefined}
+          onClick={() => {
+            write(outcome.requested, true);
+          }}
+        >
+          {writing ? t('save.submitting') : t('save.retry')}
+        </button>
+      </>
+    );
+  } else {
+    actions = (
+      <button
+        ref={primaryRef}
+        type="button"
+        className="btn btn--primary btn--small"
+        onClick={() => {
+          onSaved(outcome.report);
+        }}
+      >
+        {t('save.done')}
+      </button>
+    );
+  }
+
+  return (
+    <Modal labelledBy="save-title" busy={writing} className="save-modal">
+      <header className="modal__header">
+        <h2 id="save-title" className="modal__title">
+          {fileCount === 1 ? t('save.titleOne') : t('save.titleMany', { count: fileCount })}
+        </h2>
+      </header>
+      <div className="modal__body">
+        <div className="modal__section">
+          <h3 className="kicker" id="save-mode-kicker">
+            {t('save.mode.label')}
+          </h3>
+          <div className="save-modal__modes" role="radiogroup" aria-labelledby="save-mode-kicker">
+            <button
+              type="button"
+              className="save-mode"
+              role="radio"
+              aria-checked={mode === 'separate'}
+              aria-disabled={locked || !several ? true : undefined}
+              onClick={() => {
+                if (locked) {
+                  return;
+                }
+                if (several) {
+                  setMode('separate');
+                } else {
+                  onNeedCuts();
+                }
+              }}
+            >
+              <span>{t('save.mode.separate')}</span>
+              <span className="save-mode__hint">
+                {several
+                  ? t('save.mode.separateHint', { count: documents.length })
+                  : t('save.mode.separateNone')}
+              </span>
+            </button>
+            <button
+              type="button"
+              className="save-mode"
+              role="radio"
+              aria-checked={mode === 'single'}
+              aria-disabled={locked ? true : undefined}
+              onClick={() => {
+                if (!locked) {
+                  setMode('single');
+                }
+              }}
+            >
+              <span>{t('save.mode.single')}</span>
+              <span className="save-mode__hint">{t('save.mode.singleHint', { count: total })}</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="modal__section">
+          <h3 className="kicker" id="save-files-kicker">
+            {t('save.files', { count: rows.length })}
+          </h3>
+          <ul
+            aria-labelledby="save-files-kicker"
+            className={rows.length > SCROLL_ROWS ? 'save-files save-files--scroll' : 'save-files'}
+          >
+            {rows.map((row, index) => (
+              <li key={index} className={`save-file ${toneOf(index)}`}>
+                <span className="doc-badge doc-badge--small" aria-hidden="true">
+                  {index + 1}
+                </span>
+                <input
+                  className="save-file__name"
+                  type="text"
+                  value={row.value}
+                  placeholder={row.placeholder}
+                  maxLength={MAX_DOCUMENT_NAME_LENGTH}
+                  aria-label={t('save.fileLabel', { number: index + 1 })}
+                  disabled={locked}
+                  onChange={(event) => {
+                    row.onChange(event.target.value);
+                  }}
+                />
+                <span className="save-file__ext">.pdf</span>
+                <span className="save-file__meta">{t('save.fileMeta', { count: row.pages })}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="modal__section">
+          <h3 className="kicker">{t('save.folder')}</h3>
+          <div className="save-folder">
+            <span className="save-folder__icon" aria-hidden="true" />
+            {/* Путь режется с начала (`direction: rtl`); метки LTR держат на месте края пути
+                вроде «\\сервер» и хвостового «\». */}
+            <p className="save-folder__path" title={folder ?? undefined}>
+              {folder === null ? '' : `‎${folder}‎`}
+            </p>
+            <button
+              type="button"
+              className="btn btn--tinted"
+              disabled={locked || choosing}
+              onClick={choose}
+            >
+              {t('save.chooseFolder')}
+            </button>
+          </div>
+        </div>
+
+        <dl className="facts">
+          <div className="facts__row">
+            <dt className="facts__key">{t('save.fact.files')}</dt>
+            <dd className="facts__value">{fileCount}</dd>
+          </div>
+          <div className="facts__row">
+            <dt className="facts__key">{t('save.fact.pages')}</dt>
+            <dd className="facts__value">{total}</dd>
+          </div>
+          <div className="facts__row">
+            <dt className="facts__key">{t('save.fact.format')}</dt>
+            <dd className="facts__value">{t('save.fact.formatValue')}</dd>
+          </div>
+        </dl>
+
+        {results !== null && (
+          <div className="modal__section">
+            <h3 className="kicker" id="save-result-kicker">
+              {t('save.result')}
+            </h3>
+            <ul className="save-result" aria-labelledby="save-result-kicker">
+              {results.map((row) => (
+                <li
+                  key={row.index}
+                  className={
+                    row.error === null
+                      ? 'save-result__row'
+                      : 'save-result__row save-result__row--failed'
+                  }
+                >
+                  <span className="save-result__icon" aria-hidden="true">
+                    {row.error === null ? '✓' : '✕'}
+                  </span>
+                  <span className="save-result__name">
+                    {row.fileName}
+                    {row.error !== null && (
+                      <span className="save-result__note">{errorText(t, row.error)}</span>
+                    )}
+                    {row.note === 'renamed' && (
+                      <span className="save-result__note">{t('save.resultRenamed')}</span>
+                    )}
+                    {row.note === 'changed' && (
+                      <span className="save-result__note">{t('save.resultChanged')}</span>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+      <footer className="modal__footer">
+        {status}
+        {actions}
+      </footer>
+    </Modal>
+  );
+}

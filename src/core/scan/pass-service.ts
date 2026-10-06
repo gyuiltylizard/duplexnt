@@ -1,4 +1,3 @@
-import { basename, dirname } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import {
   fail,
@@ -9,7 +8,6 @@ import {
   type PassProgress,
   type PassReport,
   type Result,
-  type SavePdfReport,
   type ScanParams,
   type SaveDocumentsReport,
   type SaveDocumentsRequest,
@@ -37,7 +35,6 @@ import { parseStatus } from '../escl/status';
 import { createTransport, type ScannerTransport } from '../escl/transport';
 import { assemblePdf, type PdfPageInput } from '../pdf/assemble';
 import { writeBatch } from '../pdf/save-batch';
-import { writeFileAtomic } from '../storage/atomic-file';
 import type { PassOrigin } from '../storage/journal';
 import { openSessionStore } from '../storage/reconcile';
 import type { PageInfo, SessionStore, SessionStoreOptions } from '../storage/session-store';
@@ -52,7 +49,7 @@ import {
   storedScannerOf,
   type StoredScanner,
 } from '../storage/stored-scanner';
-import { ioOf, saveFailure, storageFailure } from '../storage/storage-fs';
+import { ioOf, storageFailure } from '../storage/storage-fs';
 import { pagePixelLimit } from '../storage/thumbnails';
 import { openUnclosedJobs, type UnclosedJobs } from '../storage/unclosed-jobs';
 import { assembleSession, survivingOf } from './assembly';
@@ -112,12 +109,6 @@ export interface PassService {
    * возвращает его номер — по нему редактор узнаёт снимок со своим результатом.
    */
   setEdits(edits: SessionEdits, rotate180: boolean): Promise<Result<SetEditsReport>>;
-  /**
-   * «Сохранить документ» (M2, U6): путь спрашивает `askPath` (диалог main, `null` — отказ),
-   * ядро читает страницы в собранном порядке, собирает PDF и пишет атомарно рядом с целью;
-   * после успешного переименования — отметка о сохранении в журнале.
-   */
-  savePdf(askPath: () => Promise<string | null>): Promise<Result<SavePdfReport>>;
   /**
    * Пакетное сохранение в папку (M3, U4): документы ленты (или вся лента одним файлом) в PDF по
    * одному, best-effort. «Сохранено» — только когда записаны все файлы пакета и журнал не
@@ -804,63 +795,9 @@ export function createPassService(
       return set.ok ? ok({ seq }) : set;
     },
 
-    async savePdf(askPath) {
-      // Одно сохранение за раз: двойной клик не должен открыть два диалога и две записи в
-      // один путь — защита живёт в ядре, а не только в блокировке кнопки (U9).
-      if (saving) {
-        return conflict('saving');
-      }
-      saving = true;
-      try {
-        const early = refusedSave();
-        if (early !== null) {
-          return early;
-        }
-
-        // Путь — первым (KTD-3): отказ в диалоге не тратит сборку и ничего не пишет.
-        const path = await askPath();
-        if (path === null) {
-          return ok({ canceled: true } as const);
-        }
-        // Диалог мог висеть сколько угодно: состояние проверяется заново, иначе PDF собрался бы
-        // по устаревшему снимку, а отметка о сохранении пометила бы уже изменившийся набор.
-        const stale = refusedSave();
-        if (stale !== null) {
-          return stale;
-        }
-        const session = store.snapshot();
-        if (session === null) {
-          return conflict('noSession');
-        }
-        // Ревизия журнала на момент снимка: правка во время сборки и записи (новая страница,
-        // тумблер поворота) снимает отметку, и ставить поверх неё «сохранено» нельзя.
-        const revision = store.revision();
-
-        // Страницы — в собранном порядке ленты с правками.
-        const pdf = await buildPdf(assembleSession(session).order);
-        if (!pdf.ok) {
-          return pdf;
-        }
-
-        // Атомарно рядом с целью: сбой на любом шаге не трогает прежний файл (R11).
-        try {
-          await writeFileAtomic(path, pdf.value, ioOf(options));
-        } catch (error) {
-          // Перевод кодов — один на `savePdf` и пакет: он различает и ENOSPC, и EDQUOT.
-          return { ok: false, error: saveFailure(error) };
-        }
-        // Отметка — только после успешного переименования и только на неизменившийся набор;
-        // сессия не удаляется (R12). Файл при пропущенной отметке всё равно записан — успех.
-        await store.markSaved(revision);
-        notify();
-        return ok({ canceled: false, fileName: basename(path), directory: dirname(path) });
-      } finally {
-        saving = false;
-      }
-    },
-
     async saveDocuments(folder, request) {
-      // Одна запись за раз (как `savePdf`): правки в это время отклоняются (KTD-9).
+      // Одна запись за раз: двойной клик не должен запустить две записи в одну папку — защита
+      // живёт в ядре, а не только в блокировке кнопки; правки в это время отклоняются (KTD-9).
       if (saving) {
         return conflict('saving');
       }

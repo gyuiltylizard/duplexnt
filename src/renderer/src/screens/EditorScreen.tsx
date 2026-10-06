@@ -15,12 +15,15 @@ import {
   type AssembledDocument,
   type AssembledPage,
   type DomainError,
+  type SaveDocumentsReport,
   type SessionEdits,
   type SessionSnapshot,
   type Snapshot,
 } from '@shared';
+import type { ToastAction } from '../components/Toast';
 import { NewScanModal } from '../modals/NewScanModal';
 import { RevertModal } from '../modals/RevertModal';
+import { SaveModal } from '../modals/SaveModal';
 import {
   deleted,
   moved,
@@ -32,7 +35,7 @@ import {
   withoutCut,
   type DropSide,
 } from '../state/edits';
-import { errorTextInline } from '../state/error-text';
+import { errorText, errorTextInline } from '../state/error-text';
 import type { EditState } from '../state/history';
 import { survivingPasses } from '../state/screen';
 import {
@@ -59,7 +62,7 @@ import './editor-screen.css';
 // поворотом и удалением, инспектор с плашкой правок, тумблер 180° внизу ленты, плашка
 // прерванного прохода. Каждая правка — перенос, поворот, удаление, граница, имя, тумблер,
 // «Вернуть» — один `setEdits` и один шаг undo (KTD-3); ленту считает только ядро (KTD-2).
-// Модалка `save` — U9.
+// Модалки `save`, `newscan`, `revert` — одна за раз (M3, U9; handoff M3, S14, S16, S17).
 
 export interface EditorScreenProps {
   readonly snapshot: Snapshot;
@@ -70,12 +73,19 @@ export interface EditorScreenProps {
   readonly onResume: () => void;
   /** Ссылка «подключите заново» в отказе досканирования (S17). */
   readonly onOpenDevice: (initialAddress?: string) => void;
-  /** Тосты живут в App (новый гасит предыдущий); сохранение показывает их дольше обычного. */
-  readonly onToast: (text: string, durationMs?: number) => void;
+  /**
+   * Тосты живут в App (новый гасит предыдущий); сохранение показывает их дольше обычного, а
+   * тост полного успеха несёт кнопку «Новое сканирование» (S18).
+   */
+  readonly onToast: (text: string, durationMs?: number, action?: ToastAction) => void;
 }
 
 /** Тосты сохранения — 6 с (UI_SPEC раздел 8). */
 const SAVE_TOAST_MS = 6000;
+/** «Сохранено … — можно закладывать новые листы» после «Сначала сохранить текущий» (S17). */
+const THEN_NEW_TOAST_MS = 3600;
+
+type EditorModal = 'save' | 'newscan' | 'revert';
 
 /** Пустая лента без сборки: стабильные ссылки для мемоизации. */
 const NO_PAGES: readonly AssembledPage[] = [];
@@ -126,8 +136,10 @@ export function EditorScreen({
   const visible = useMemo(() => order.map((entry) => entry.key), [order]);
   const positions = useMemo(() => new Map(visible.map((key, index) => [key, index])), [visible]);
 
-  const [newScanOpen, setNewScanOpen] = useState(false);
-  const [revertOpen, setRevertOpen] = useState(false);
+  const [modal, setModal] = useState<EditorModal | null>(null);
+  /** `save` открыт из `newscan` («Сначала сохранить текущий»): после успеха — закрыть сессию. */
+  const [saveThenNew, setSaveThenNew] = useState(false);
+  /** Идёт запись пакета (модалка `save`): правки заблокированы (KTD-9). */
   const [saving, setSaving] = useState(false);
 
   // Правки недоступны на время записи (KTD-9): ядро их всё равно отклонило бы.
@@ -397,7 +409,7 @@ export function EditorScreen({
 
   // «Вернуть всё» (S14): пустые правки и выключенный тумблер одним шагом; Ctrl+Z вернёт всё.
   const revert = (): void => {
-    setRevertOpen(false);
+    setModal(null);
     const sent = edits.edit(REVERTED, [], {
       onSuccess: () => {
         onToast(t('toast.reverted'));
@@ -428,8 +440,7 @@ export function EditorScreen({
     if (
       event.defaultPrevented ||
       event.altKey ||
-      newScanOpen ||
-      revertOpen ||
+      modal !== null ||
       isTextField(event.target) ||
       document.querySelector('[aria-modal="true"]') !== null
     ) {
@@ -467,37 +478,85 @@ export function EditorScreen({
     edits.edit({ edits: edits.current.edits, rotate180: event.target.checked }, []);
   };
 
-  // Тосты сохранения живут дольше обычных (UI_SPEC раздел 8).
-  const saveToast = (text: string): void => {
-    onToast(text, SAVE_TOAST_MS);
-  };
-
-  const save = (): void => {
-    if (saving) {
-      return;
-    }
-    setSaving(true);
-    window.api.savePdf().then(
+  // Закрытие сессии без модалки: пустая сессия и «Сначала сохранить текущий» после успеха.
+  // Отказ — тостом: сессия цела (S17).
+  const closeSession = (closedToast?: string): void => {
+    window.api.closeSession().then(
       (result) => {
-        setSaving(false);
-        if (!result.ok) {
-          saveToast(t('toast.saveFailed', { error: errorTextInline(t, result.error) }));
+        if (result.ok) {
+          if (closedToast !== undefined) {
+            onToast(closedToast, THEN_NEW_TOAST_MS);
+          }
           return;
         }
-        // Отказ в диалоге приходит успехом с `canceled` — не ошибка, тостов нет (KTD-3).
-        if (!result.value.canceled) {
-          saveToast(
-            t('toast.saved', { file: result.value.fileName, folder: result.value.directory }),
-          );
-        }
+        onToast(errorText(t, result.error), SAVE_TOAST_MS);
       },
       (error: unknown) => {
-        // Мост не ответил — пользователь не должен гадать, записался ли файл.
-        setSaving(false);
-        console.error('[renderer] сохранение не ответило', error);
-        saveToast(t('toast.saveNoResponse'));
+        console.error('[renderer] закрытие сессии не ответило', error);
       },
     );
+  };
+
+  // «Новое сканирование»: сессия без страниц — ни ленты, ни удалённых — закрывается без
+  // вопросов, иначе модалка `newscan` (S17).
+  const deletedCount = snapshot.assembly?.deleted ?? 0;
+  const newScan = (): void => {
+    if (total === 0 && deletedCount === 0) {
+      closeSession();
+      return;
+    }
+    setModal('newscan');
+  };
+
+  const openSave = (thenNew: boolean): void => {
+    setSaveThenNew(thenNew);
+    setModal('save');
+  };
+
+  // Имена из модалки `save` — в документы одним шагом undo, до записи пакета (S16).
+  const renameDocuments = (next: readonly string[]): Promise<boolean> => {
+    const target = next.reduce(
+      (state, name, index) => renamed(state, index, name),
+      edits.current.edits,
+    );
+    if (target === edits.current.edits) {
+      return Promise.resolve(true);
+    }
+    return new Promise((resolve) => {
+      const sent = edits.edit(withEdits(target), [], {
+        onSuccess: () => {
+          resolve(true);
+        },
+        onFailure: () => {
+          resolve(false);
+        },
+      });
+      if (!sent) {
+        resolve(false);
+      }
+    });
+  };
+
+  // Пакет записан целиком: тост 6 с с кнопкой «Новое сканирование» — она открывает `newscan`,
+  // а не закрывает сессию молча (S18). После «Сначала сохранить текущий» — сразу закрытие.
+  const saved = (report: SaveDocumentsReport): void => {
+    setModal(null);
+    const [only] = report.written;
+    const text =
+      report.written.length === 1 && only !== undefined
+        ? t('toast.saved', { file: only.fileName, folder: report.folder })
+        : t('toast.savedMany', { count: report.written.length, folder: report.folder });
+    if (saveThenNew) {
+      setSaveThenNew(false);
+      closeSession(t('toast.savedThenNew', { saved: text }));
+      return;
+    }
+    onToast(text, SAVE_TOAST_MS, {
+      label: t('toast.newScanAction'),
+      onClick: () => {
+        setModal('newscan');
+      },
+    });
   };
 
   const rotateLabel =
@@ -509,13 +568,7 @@ export function EditorScreen({
     <main className="editor-screen">
       <header className="editor-screen__toolbar">
         <div className="editor-screen__toolbar-left">
-          <button
-            type="button"
-            className="btn btn--secondary"
-            onClick={() => {
-              setNewScanOpen(true);
-            }}
-          >
+          <button type="button" className="btn btn--secondary" onClick={newScan}>
             <span aria-hidden="true">↺</span> {t('editor.newScan')}
           </button>
         </div>
@@ -569,15 +622,19 @@ export function EditorScreen({
               <span className="visually-hidden">{t('editor.unsaved')}</span>
             </span>
           )}
-          {/* S8 M2: блокировка на время сборки и записи — защита от повторного нажатия. */}
+          {/* S1: «Сохранить документ» при одном документе, «Сохранить N файлов» при нескольких;
+              пустая лента — сохранять нечего. */}
           <button
             type="button"
             className="btn btn--primary btn--small"
-            disabled={saving || total === 0}
-            aria-busy={saving ? true : undefined}
-            onClick={save}
+            disabled={total === 0}
+            onClick={() => {
+              openSave(false);
+            }}
           >
-            {saving ? t('editor.saving') : t('editor.save')}
+            {documents.length > 1
+              ? t('editor.saveFiles', { count: documents.length })
+              : t('editor.save')}
           </button>
         </div>
       </header>
@@ -633,9 +690,7 @@ export function EditorScreen({
             resumeFailure={resumeFailure}
             onResume={onResume}
             onOpenDevice={onOpenDevice}
-            onNewScan={() => {
-              setNewScanOpen(true);
-            }}
+            onNewScan={newScan}
           />
           {currentEntry === undefined ? (
             // S10: все страницы удалены — подсказка, как вернуть.
@@ -747,24 +802,47 @@ export function EditorScreen({
               }
             }}
             onRevert={() => {
-              setRevertOpen(true);
+              setModal('revert');
             }}
           />
         )}
       </div>
 
-      {newScanOpen && (
-        <NewScanModal
-          pageCount={total}
+      {modal === 'save' && (
+        <SaveModal
+          documents={documents}
+          defaultNames={defaultNames}
+          singleDefault={t('editor.doc.defaultSingleName', { date: today })}
+          total={total}
+          onRename={renameDocuments}
+          onWriting={setSaving}
+          onNeedCuts={() => {
+            onToast(t('toast.needCuts'));
+          }}
+          onSaved={saved}
           onClose={() => {
-            setNewScanOpen(false);
+            setModal(null);
+            setSaveThenNew(false);
           }}
         />
       )}
-      {revertOpen && (
+      {modal === 'newscan' && (
+        <NewScanModal
+          total={total}
+          deleted={deletedCount}
+          saved={session.saved}
+          onSaveFirst={() => {
+            openSave(true);
+          }}
+          onClose={() => {
+            setModal(null);
+          }}
+        />
+      )}
+      {modal === 'revert' && (
         <RevertModal
           onCancel={() => {
-            setRevertOpen(false);
+            setModal(null);
           }}
           onConfirm={revert}
         />

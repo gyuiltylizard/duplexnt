@@ -31,7 +31,6 @@ export {
   type SaveDocumentsRequest,
   type SaveFolderChoice,
   type SaveMode,
-  type SavePdfReport,
   type SetEditsReport,
   type SetEditsRequest,
   type Unsubscribe,

@@ -7,7 +7,6 @@ import {
   type DiscoveryState,
   type Result,
   type SaveDocumentsReport,
-  type SavePdfReport,
   type SessionEdits,
   type Snapshot,
 } from '@shared';
@@ -56,9 +55,6 @@ function setup(snapshot: Snapshot = EMPTY_SNAPSHOT) {
     setEdits: vi.fn((): Promise<Result<{ readonly seq: number }>> =>
       Promise.resolve(ok({ seq: 7 })),
     ),
-    savePdf: vi.fn((): Promise<Result<SavePdfReport>> =>
-      Promise.resolve(ok({ canceled: false, fileName: 'скан.pdf', directory: 'D:\\Сканы' })),
-    ),
     saveDocuments: vi.fn((): Promise<Result<SaveDocumentsReport>> =>
       Promise.resolve(ok({ folder: 'D:\\Сканы', written: [], failed: [] })),
     ),
@@ -95,15 +91,11 @@ function setup(snapshot: Snapshot = EMPTY_SNAPSHOT) {
   const connector: Connector = { connect, cancel };
 
   const openDataFolder = vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined)));
-  const askSavePdfPath = vi.fn((): Promise<string | null> =>
-    Promise.resolve('D:\\Сканы\\скан.pdf'),
-  );
   const askSaveFolder = vi.fn((): Promise<string | null> => Promise.resolve('E:\\Архив'));
   const discoveryEvents: number[] = [];
   const commands = createCommands({
     service,
     openDataFolder,
-    askSavePdfPath,
     defaultSaveFolder: 'C:\\Users\\Документы',
     askSaveFolder,
     onDiscoveryChanged: (seq) => discoveryEvents.push(seq),
@@ -120,7 +112,6 @@ function setup(snapshot: Snapshot = EMPTY_SNAPSHOT) {
     connector,
     cancel,
     openDataFolder,
-    askSavePdfPath,
     askSaveFolder,
     discoveryEvents,
   };
@@ -141,7 +132,8 @@ describe('команды без входа', () => {
     'stopPass',
     'acceptPass',
     'declineBacks',
-    'savePdf',
+    'getSaveFolder',
+    'chooseSaveFolder',
     'closeSession',
     'openDataFolder',
   ];
@@ -212,20 +204,6 @@ describe('снимок и проход', () => {
     );
   });
 
-  it('savePdf отдаёт отчёт сохранения; диалог пути — функция из контекста main (M2, U6)', async () => {
-    const { handlers, service, askSavePdfPath } = setup();
-
-    expect(await handlers.savePdf(undefined)).toEqual(
-      ok({ canceled: false, fileName: 'скан.pdf', directory: 'D:\\Сканы' }),
-    );
-    expect(service.savePdf).toHaveBeenCalledExactlyOnceWith(askSavePdfPath);
-
-    service.savePdf.mockResolvedValueOnce(fail('saveWriteFailed', { reason: 'EACCES' }));
-    expect(await handlers.savePdf(undefined)).toEqual(
-      fail('saveWriteFailed', { reason: 'EACCES' }),
-    );
-  });
-
   it('setEdits: строгая схема, затем служба — правки и тумблер одним вызовом (M3, U3)', async () => {
     const { handlers, service } = setup();
     const edits: SessionEdits = {
@@ -293,6 +271,12 @@ describe('снимок и проход', () => {
     );
     expect(service.saveDocuments).toHaveBeenCalledExactlyOnceWith('E:\\Архив', request);
 
+    // Доменный отказ службы доходит кодом, а не исключением.
+    service.saveDocuments.mockResolvedValueOnce(fail('sessionConflict', { reason: 'saving' }));
+    expect(await handlers.saveDocuments(request)).toEqual(
+      fail('sessionConflict', { reason: 'saving' }),
+    );
+
     const garbage = [
       undefined,
       { mode: 'all', names: ['А'], retry: false },
@@ -304,7 +288,7 @@ describe('снимок и проход', () => {
     for (const [index, input] of garbage.entries()) {
       expect(invalid(await handlers.saveDocuments(input)), `мусор №${index}`).toBe(true);
     }
-    expect(service.saveDocuments).toHaveBeenCalledTimes(1);
+    expect(service.saveDocuments).toHaveBeenCalledTimes(2);
   });
 
   it('setScanParams: строгая схема, затем служба', async () => {
@@ -393,7 +377,6 @@ describe('поиск устройств', () => {
     const commands = createCommands({
       service,
       openDataFolder: () => Promise.resolve(ok(undefined)),
-      askSavePdfPath: () => Promise.resolve(null),
       defaultSaveFolder: 'C:\\Users\\Документы',
       askSaveFolder: () => Promise.resolve(null),
       onDiscoveryChanged: () => {

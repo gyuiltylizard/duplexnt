@@ -5,6 +5,7 @@ import {
   type Api,
   type CommandResult,
   type PassSnapshot,
+  type SaveDocumentsRequest,
   type SessionAssembly,
   type SessionEdits,
   type SessionSnapshot,
@@ -119,8 +120,17 @@ export function stubApi(overrides: Partial<Record<keyof Api, unknown>> = {}) {
     closeSession: vi.fn(() => Promise.resolve(ok(undefined))),
     // Как ядро: результат команды несёт снимок, следующий за показанным (M3, ревью сессий 3–4).
     setEdits: vi.fn(() => Promise.resolve(ok({ seq: shownSeq + 1 }))),
-    savePdf: vi.fn(() =>
-      Promise.resolve(ok({ canceled: false, fileName: 'Скан.pdf', directory: 'Документы' })),
+    getSaveFolder: vi.fn(() => Promise.resolve(ok('C:\\Документы'))),
+    chooseSaveFolder: vi.fn(() => Promise.resolve(ok({ canceled: true, folder: 'C:\\Документы' }))),
+    // Пакет записан целиком под запрошенными именами.
+    saveDocuments: vi.fn((request: SaveDocumentsRequest) =>
+      Promise.resolve(
+        ok({
+          folder: 'C:\\Документы',
+          written: request.names.map((name, index) => ({ index, fileName: `${name}.pdf` })),
+          failed: [],
+        }),
+      ),
     ),
     ...overrides,
   } as unknown as Api;

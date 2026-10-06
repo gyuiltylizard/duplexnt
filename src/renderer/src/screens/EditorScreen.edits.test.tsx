@@ -118,8 +118,8 @@ describe('editor M3: документы', () => {
     expect(
       toolbar.querySelector('.editor-screen__toolbar-center')?.classList.contains('doc-tone--2'),
     ).toBe(true);
-    // Сохранение — как в M2 до модалки `save` (U9).
-    expect(within(toolbar).getByRole('button', { name: 'Сохранить документ' })).toBeDefined();
+    // Три документа — три файла (S1).
+    expect(within(toolbar).getByRole('button', { name: 'Сохранить 3 файла' })).toBeDefined();
   });
 
   it('S1/S3: один документ — имя по умолчанию «Скан ГГГГ-ММ-ДД», позиция без документа', () => {

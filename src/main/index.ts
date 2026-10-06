@@ -107,18 +107,8 @@ async function start(): Promise<void> {
       console.error('[main] каталог данных не открылся', problem);
       return fail('storageFailed', { reason: 'openPath' });
     },
-    // «Сохранить как» (M2, KTD-3): файловые диалоги — обязанность main (ADR 0003); имя, папку
-    // и подтверждение перезаписи даёт диалог ОС.
-    askSavePdfPath: async () => {
-      // Локальная дата, не UTC: ночью до смещения пояса toISOString() предлагал бы «вчера».
-      const today = new Intl.DateTimeFormat('sv-SE').format(new Date());
-      const picked = await dialog.showSaveDialog(window, {
-        defaultPath: join(app.getPath('documents'), `Скан ${today}.pdf`),
-        filters: [{ name: 'PDF', extensions: ['pdf'] }],
-      });
-      return picked.canceled || picked.filePath === '' ? null : picked.filePath;
-    },
-    // Папка пакета (M3, KTD-5): имена файлов задаёт модалка, папку — системный диалог.
+    // Папка пакета (M3, KTD-5): файловые диалоги — обязанность main (ADR 0003); имена файлов
+    // задаёт модалка, папку — системный диалог.
     defaultSaveFolder: app.getPath('documents'),
     askSaveFolder: async (current) => {
       const picked = await dialog.showOpenDialog(window, {

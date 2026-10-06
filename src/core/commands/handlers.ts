@@ -38,11 +38,6 @@ export interface CommandContext {
   readonly service: PassService;
   /** Открывает каталог данных в проводнике; какой — знает main (KTD-39). */
   readonly openDataFolder: () => Promise<Result<void>>;
-  /**
-   * Диалог «Сохранить как» (M2, KTD-3): путь выбранного файла, `null` — пользователь отказался.
-   * Имя по умолчанию и подтверждение перезаписи — обязанность main и диалога ОС.
-   */
-  readonly askSavePdfPath: () => Promise<string | null>;
   /** Папка сохранения пакета по умолчанию (M3, KTD-5): «Документы» пользователя. */
   readonly defaultSaveFolder: string;
   /** Диалог выбора папки (M3, KTD-5), открытый на текущей; `null` — пользователь отказался. */
@@ -217,7 +212,6 @@ export function createCommands(context: CommandContext): Commands {
           ? service.setEdits(request.value.edits, request.value.rotate180)
           : request;
       },
-      savePdf: withoutRequest(() => service.savePdf(context.askSavePdfPath)),
 
       // Папка пакета живёт здесь, как поиск устройств: её выбирает main, пишет служба. В снимок
       // она не идёт — там нет абсолютных путей (KTD-39); модалка берёт её командой.

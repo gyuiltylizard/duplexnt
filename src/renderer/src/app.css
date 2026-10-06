@@ -137,6 +137,9 @@
 .doc-group__unsplit:focus-visible,
 .doc-list__item:focus-visible,
 .details-toggle:focus-visible,
+.save-mode:focus-visible,
+.choice:focus-visible,
+.toast__action:focus-visible,
 .toggle__input:focus-visible + .toggle__track {
   outline: var(--space-1) solid var(--color-border-focus);
   outline-offset: var(--space-1);
@@ -157,6 +160,10 @@
   color: var(--color-warning);
 }
 
+.kicker--accent {
+  color: var(--color-accent);
+}
+
 .dot {
   flex: none;
   width: var(--size-dot);
@@ -174,6 +181,10 @@
 
 .dot--warning {
   background: var(--color-warning);
+}
+
+.dot--accent {
+  background: var(--color-accent);
 }
 
 .dot--checking {
@@ -537,6 +548,81 @@
   font-size: var(--font-size-m);
   color: var(--color-text-on-inverse);
   white-space: nowrap;
+}
+
+/* Тост с действием (handoff M3, S18): текст режется, кнопка остаётся целой. */
+.toast__text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.toast__action {
+  flex: none;
+  padding: var(--space-4) var(--space-6);
+  border: 0;
+  border-radius: var(--radius-m);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  font: var(--font-weight-semibold) var(--font-size-m) / var(--leading-none) var(--font-family-sans);
+  cursor: pointer;
+}
+
+/* — карточки выбора `newscan` (handoff M3, S17) — */
+.choices {
+  gap: var(--space-4);
+  padding: var(--space-9) var(--space-12);
+}
+.choice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  width: 100%;
+  padding: var(--space-6);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-l);
+  background: var(--color-bg-surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.choice:hover:not(:disabled) {
+  border-color: var(--color-accent);
+}
+.choice:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: default;
+}
+.choice__sheet {
+  flex: none;
+  width: 30px;
+  height: 42px;
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-xs);
+  background: var(--color-bg-paper);
+}
+.choice__sheet--accent {
+  border-color: var(--color-accent);
+}
+.choice__text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.choice__title {
+  font: var(--font-weight-medium) var(--font-size-base) / var(--leading-snug)
+    var(--font-family-sans);
+}
+.choice__note {
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-relaxed)
+    var(--font-family-sans);
+  color: var(--color-text-muted);
+}
+.choice__arrow {
+  font: var(--font-weight-regular) var(--font-size-l) / var(--leading-none) var(--font-family-sans);
+  color: var(--color-text-faint);
 }
 
 /* — экран setup: колонка настройки + «Как это работает» (S1; M2 U8 вернул правую колонку) — */

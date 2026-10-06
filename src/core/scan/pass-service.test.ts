@@ -461,28 +461,6 @@ describe('служба прохода: правки редактора (M3, U3)'
     });
   });
 
-  it('пока пишется PDF, правка отклоняется конфликтом saving (KTD-9)', async () => {
-    const root = await makeTempDataRoot();
-    await seedSession(root, [{ number: 1, pages: 1, fixtures: [1] }]);
-    const service = await openPassService(root);
-    let release: (path: string | null) => void = () => undefined;
-
-    const saving = service.savePdf(
-      () =>
-        new Promise((resolve) => {
-          release = resolve;
-        }),
-    );
-    expect(await service.setEdits(EDITS, false)).toEqual(
-      fail('sessionConflict', { reason: 'saving' }),
-    );
-    release(null);
-    await saving;
-
-    expect(service.snapshot().session?.edits).toEqual(EMPTY_EDITS);
-    expect(await service.setEdits(EMPTY_EDITS, false)).toMatchObject({ ok: true });
-  });
-
   it('ответ несёт номер снимка с результатом — снимок уходит и когда правки совпали с журналом', async () => {
     const root = await makeTempDataRoot();
     await seedSession(root, [{ number: 1, pages: 3 }]);
@@ -530,181 +508,6 @@ describe('служба прохода: правки редактора (M3, U3)'
   });
 });
 
-describe('служба прохода: сохранение PDF (M2, U6)', () => {
-  /** Двусторонняя сессия 2+2 с настоящими JPEG устройства; обороты с флагом поворота. */
-  async function savable(root: string) {
-    await seedSession(root, [
-      { number: 1, pages: 2, fixtures: [1, 2] },
-      { number: 2, pages: 2, rotate180: true, fixtures: [6, 5] },
-    ]);
-  }
-
-  async function saveTarget(root: string): Promise<string> {
-    const out = join(root, 'выход');
-    await mkdir(out, { recursive: true });
-    return join(out, 'скан.pdf');
-  }
-
-  it('сохранение: PDF в собранном порядке, /Rotate на оборотах, отметка в журнале', async () => {
-    const root = await makeTempDataRoot();
-    await savable(root);
-    const target = await saveTarget(root);
-    const service = await openPassService(root);
-
-    const report = await service.savePdf(() => Promise.resolve(target));
-
-    expect(report).toEqual({
-      ok: true,
-      value: { canceled: false, fileName: 'скан.pdf', directory: join(root, 'выход') },
-    });
-    const document = await PDFDocument.load(await readFile(target));
-    // Порядок: 1л, 1о, 2л, 2о; обороты повёрнуты.
-    expect(document.getPageCount()).toBe(4);
-    expect(document.getPages().map((page) => page.getRotation().angle)).toEqual([0, 180, 0, 180]);
-
-    // Отметка о сохранении — durable; сессия не удалена (R12).
-    expect(service.snapshot().session?.saved).toBe(true);
-    const again = await openPassService(root);
-    expect(again.snapshot().session?.saved).toBe(true);
-    expect(again.snapshot().session?.passes).toHaveLength(2);
-
-    // Правка после сохранения снимает отметку (KTD-7, AE12).
-    expect(await again.setEdits(EMPTY_EDITS, false)).toMatchObject({ ok: true });
-    expect(again.snapshot().session?.saved).toBe(false);
-  });
-
-  it('отказ в диалоге: ничего не записано, без ошибки, отметки нет', async () => {
-    const root = await makeTempDataRoot();
-    await savable(root);
-    const target = await saveTarget(root);
-    const service = await openPassService(root);
-
-    expect(await service.savePdf(() => Promise.resolve(null))).toEqual({
-      ok: true,
-      value: { canceled: true },
-    });
-    await expect(readFile(target)).rejects.toMatchObject({ code: 'ENOENT' });
-    expect(service.snapshot().session?.saved).toBe(false);
-  });
-
-  it('потерянная страница — отказ кодом, а не PDF без неё', async () => {
-    const root = await makeTempDataRoot();
-    await savable(root);
-    const target = await saveTarget(root);
-    await rm(join(layoutOf(root).pagesDir, 'p01-s01-0002.jpg'));
-    const service = await openPassService(root);
-
-    expect(await service.savePdf(() => Promise.resolve(target))).toMatchObject({
-      ok: false,
-      error: { code: 'pageUnavailable', details: { reason: 'lost' } },
-    });
-    await expect(readFile(target)).rejects.toMatchObject({ code: 'ENOENT' });
-  });
-
-  it('AE10: сбой на переименовании — старый файл цел, сессия цела, повтор проходит', async () => {
-    const root = await makeTempDataRoot();
-    await savable(root);
-    const target = await saveTarget(root);
-    await writeFile(target, 'прежний документ');
-    let failRename = true;
-    const { fs } = interceptFs(realStorageFs, (call) => {
-      if (failRename && call.op === 'rename' && call.to === target) {
-        throw fsError('EACCES');
-      }
-    });
-    const service = await openPassService(root, { fs, retry: { ceilingMs: 0 } });
-
-    expect(await service.savePdf(() => Promise.resolve(target))).toEqual(
-      fail('saveWriteFailed', { reason: 'EACCES' }),
-    );
-    expect(await readFile(target, 'utf8')).toBe('прежний документ');
-    expect(service.snapshot().session?.saved).toBe(false);
-    expect(service.snapshot().session?.passes).toHaveLength(2);
-
-    // Повторное сохранение перезаписывает атомарно.
-    failRename = false;
-    expect(await service.savePdf(() => Promise.resolve(target))).toMatchObject({ ok: true });
-    const document = await PDFDocument.load(await readFile(target));
-    expect(document.getPageCount()).toBe(4);
-    expect(service.snapshot().session?.saved).toBe(true);
-  });
-
-  it('нет места на диске — storageFull', async () => {
-    const root = await makeTempDataRoot();
-    await savable(root);
-    const target = await saveTarget(root);
-    const { fs } = interceptFs(realStorageFs, (call) => {
-      if (call.op === 'open' && call.path.startsWith(target)) {
-        throw fsError('ENOSPC');
-      }
-    });
-    const service = await openPassService(root, { fs, retry: { ceilingMs: 0 } });
-
-    expect(await service.savePdf(() => Promise.resolve(target))).toEqual(fail('storageFull'));
-  });
-
-  it('второе сохранение поверх идущего — конфликт, второй диалог не открывается', async () => {
-    const root = await makeTempDataRoot();
-    await savable(root);
-    const target = await saveTarget(root);
-    const service = await openPassService(root);
-
-    let release: (path: string | null) => void = () => undefined;
-    let dialogs = 0;
-    const hangingDialog = (): Promise<string | null> => {
-      dialogs += 1;
-      return new Promise((resolve) => {
-        release = resolve;
-      });
-    };
-
-    const first = service.savePdf(hangingDialog);
-    const second = await service.savePdf(hangingDialog);
-    expect(second).toEqual(fail('sessionConflict', { reason: 'saving' }));
-    expect(dialogs).toBe(1);
-
-    release(target);
-    expect(await first).toMatchObject({ ok: true, value: { canceled: false } });
-
-    // Сохранение кончилось — следующее снова допускается.
-    expect(await service.savePdf(() => Promise.resolve(null))).toEqual({
-      ok: true,
-      value: { canceled: true },
-    });
-  });
-
-  it('пока висит диалог сохранения, закрыть сессию нельзя — страницы целы, файл записан (KTD-9)', async () => {
-    const root = await makeTempDataRoot();
-    await savable(root);
-    const target = await saveTarget(root);
-    const service = await openPassService(root);
-
-    const result = await service.savePdf(async () => {
-      // «Пока диалог висел»: попытка «Нового сканирования» отклоняется.
-      expect(await service.closeSession()).toEqual(fail('sessionConflict', { reason: 'saving' }));
-      expect(await service.startPass()).toEqual(fail('sessionConflict', { reason: 'saving' }));
-      return target;
-    });
-
-    expect(result).toMatchObject({ ok: true, value: { canceled: false } });
-    expect((await PDFDocument.load(await readFile(target))).getPageCount()).toBe(4);
-    expect(service.snapshot().session?.passes).toHaveLength(2);
-  });
-
-  it('без сессии — noSession; сохранение не зовёт диалог', async () => {
-    const service = await openPassService(await makeTempDataRoot());
-    let asked = false;
-
-    const result = await service.savePdf(() => {
-      asked = true;
-      return Promise.resolve(null);
-    });
-
-    expect(result).toEqual(fail('sessionConflict', { reason: 'noSession' }));
-    expect(asked).toBe(false);
-  });
-});
-
 describe('служба прохода: пакетное сохранение (M3, U4)', () => {
   /** Пять страниц — пять документов по разрезам; настоящие JPEG устройства. */
   async function fiveDocuments(root: string, extra: Record<string, unknown> = {}) {
@@ -724,6 +527,79 @@ describe('служба прохода: пакетное сохранение (M3
   }
 
   const NAMES = ['Счёт', 'Акт', 'Договор', 'Накладная', 'Опись'];
+
+  /** Двусторонняя сессия 2+2 с настоящими JPEG устройства; обороты с флагом поворота. */
+  async function duplex(root: string) {
+    await seedSession(root, [
+      { number: 1, pages: 2, fixtures: [1, 2] },
+      { number: 2, pages: 2, rotate180: true, fixtures: [6, 5] },
+    ]);
+  }
+
+  it('PDF в собранном порядке, /Rotate на оборотах, отметка в журнале durable, сессия цела', async () => {
+    const root = await makeTempDataRoot();
+    const folder = await folderIn(root);
+    await duplex(root);
+    const service = await openPassService(root);
+
+    expect(
+      await service.saveDocuments(folder, { mode: 'single', names: ['скан'], retry: false }),
+    ).toEqual({
+      ok: true,
+      value: { folder, written: [{ index: 0, fileName: 'скан.pdf' }], failed: [] },
+    });
+    const document = await PDFDocument.load(await readFile(join(folder, 'скан.pdf')));
+    // Порядок: 1л, 1о, 2л, 2о; обороты повёрнуты.
+    expect(document.getPageCount()).toBe(4);
+    expect(document.getPages().map((page) => page.getRotation().angle)).toEqual([0, 180, 0, 180]);
+
+    // Отметка о сохранении — durable; сессия не удалена (R12).
+    expect(service.snapshot().session?.saved).toBe(true);
+    const again = await openPassService(root);
+    expect(again.snapshot().session?.saved).toBe(true);
+    expect(again.snapshot().session?.passes).toHaveLength(2);
+
+    // Правка после сохранения снимает отметку (KTD-7, AE12).
+    expect(await again.setEdits(EMPTY_EDITS, false)).toMatchObject({ ok: true });
+    expect(again.snapshot().session?.saved).toBe(false);
+  });
+
+  it('потерянная страница — сбой файла кодом, а не PDF без неё; отметки нет', async () => {
+    const root = await makeTempDataRoot();
+    const folder = await folderIn(root);
+    await duplex(root);
+    await rm(join(layoutOf(root).pagesDir, 'p01-s01-0002.jpg'));
+    const service = await openPassService(root);
+
+    expect(
+      await service.saveDocuments(folder, { mode: 'single', names: ['скан'], retry: false }),
+    ).toMatchObject({
+      ok: true,
+      value: {
+        written: [],
+        failed: [
+          {
+            index: 0,
+            fileName: 'скан.pdf',
+            error: { code: 'pageUnavailable', details: { reason: 'lost' } },
+          },
+        ],
+      },
+    });
+    expect(await readdir(folder)).toEqual([]);
+    expect(service.snapshot().session?.saved).toBe(false);
+  });
+
+  it('без сессии — noSession; в папку ничего не пишется', async () => {
+    const root = await makeTempDataRoot();
+    const folder = await folderIn(root);
+    const service = await openPassService(root);
+
+    expect(
+      await service.saveDocuments(folder, { mode: 'single', names: ['скан'], retry: false }),
+    ).toEqual(fail('sessionConflict', { reason: 'noSession' }));
+    expect(await readdir(folder)).toEqual([]);
+  });
 
   it('AE7: занятое имя — суффикс, сбой четвёртого — итог «4 из 5», повтор дописывает и ставит «сохранено»', async () => {
     const root = await makeTempDataRoot();
@@ -978,9 +854,8 @@ describe('служба прохода: пакетное сохранение (M3
     expect(await service.setEdits({ ...EMPTY_EDITS, deleted: ['p01-s01-0001'] }, false)).toEqual(
       busy,
     );
-    // Второй пакет, сохранение M2, закрытие сессии и новый проход — тоже ждут конца записи.
+    // Второй пакет (двойной клик), закрытие сессии и новый проход — тоже ждут конца записи.
     expect(await service.saveDocuments(folder, request)).toEqual(busy);
-    expect(await service.savePdf(() => Promise.resolve(join(folder, 'x.pdf')))).toEqual(busy);
     expect(await service.closeSession()).toEqual(busy);
     expect(await service.startPass()).toEqual(busy);
     release();

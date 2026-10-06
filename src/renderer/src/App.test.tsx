@@ -446,7 +446,9 @@ describe('каркас приложения', () => {
 
     const banner = screen.getByRole('region', { name: /Проход прервался/ });
     fireEvent.click(within(banner).getByRole('button', { name: 'Новое сканирование' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Удалить и начать заново' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Закрыть текущий и начать новое сканирование/ }),
+    );
 
     // Сессия закрыта — приходит снимок без неё, экран уходит на `setup`.
     current = makeSnapshot({ seq: 2, scanner: READY });
@@ -934,7 +936,8 @@ describe('AE9: досканирование при ручном порядке',
   it('ручной порядок — тост «Новые страницы (N) — в конце ленты»', async () => {
     await resumed(true);
     expect(
-      screen.getByText('Новые страницы (2) — в конце ленты: порядок правили вручную').className,
+      screen.getByText('Новые страницы (2) — в конце ленты: порядок правили вручную').parentElement
+        ?.className,
     ).toBe('toast');
   });
 
@@ -965,7 +968,8 @@ describe('AE9: досканирование при ручном порядке',
     }
     expect(screen.getByText('стр. 1 из 5')).toBeDefined();
     expect(
-      screen.getByText('Новые страницы (2) — в конце ленты: порядок правили вручную').className,
+      screen.getByText('Новые страницы (2) — в конце ленты: порядок правили вручную').parentElement
+        ?.className,
     ).toBe('toast');
   });
 

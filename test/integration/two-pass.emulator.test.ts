@@ -120,15 +120,14 @@ describe('два прохода через эмулятор (M2)', () => {
 
     const outDir = join(root, 'выход');
     await mkdir(outDir, { recursive: true });
-    const target = join(outDir, 'скан.pdf');
-    expect(unwrap(await service.savePdf(() => Promise.resolve(target)))).toEqual({
-      canceled: false,
-      fileName: 'скан.pdf',
-      directory: outDir,
-    });
+    expect(
+      unwrap(
+        await service.saveDocuments(outDir, { mode: 'single', names: ['скан'], retry: false }),
+      ),
+    ).toEqual({ folder: outDir, written: [{ index: 0, fileName: 'скан.pdf' }], failed: [] });
 
     // PDF несёт собранный порядок; /Rotate 180 — только на оборотах (AE8).
-    const document = await PDFDocument.load(await readFile(target));
+    const document = await PDFDocument.load(await readFile(join(outDir, 'скан.pdf')));
     expect(document.getPageCount()).toBe(6);
     expect(document.getPages().map((page) => page.getRotation().angle)).toEqual([
       0, 180, 0, 180, 0, 180,

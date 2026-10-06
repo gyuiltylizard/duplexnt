@@ -42,6 +42,8 @@ export interface EditOptions {
   readonly select?: SelectAfter;
   /** После успеха команды — например, тост удаления. */
   readonly onSuccess?: () => void;
+  /** Команда отклонена или мост не ответил — например, модалка `save` не пишет пакет. */
+  readonly onFailure?: () => void;
 }
 
 export interface EditorEdits {
@@ -121,6 +123,7 @@ export function useEditorEdits({
           if (code !== 'sessionConflict' || !RACE_REASONS.includes(details?.reason)) {
             onFailed(result.error);
           }
+          options.onFailure?.();
           return;
         }
         setHistory(next);
@@ -133,6 +136,7 @@ export function useEditorEdits({
         console.error('[renderer] правка не отправлена', error);
         settle();
         onFailed(null);
+        options.onFailure?.();
       },
     );
   };

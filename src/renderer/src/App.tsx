@@ -9,7 +9,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import type { DomainError, StartupNotice } from '@shared';
 import { NoticesBar } from './components/NoticesBar';
-import { Toast } from './components/Toast';
+import { Toast, type ToastAction } from './components/Toast';
 import { DeviceModal } from './modals/DeviceModal';
 import { MismatchModal } from './modals/MismatchModal';
 import { EditorScreen } from './screens/EditorScreen';
@@ -35,6 +35,7 @@ interface ToastState {
   readonly id: number;
   readonly text: string;
   readonly durationMs: number | undefined;
+  readonly action: ToastAction | undefined;
 }
 
 /**
@@ -65,8 +66,8 @@ export function App(): ReactNode {
     setToast(null);
   }, []);
   // Номер растёт от предыдущего: новый тост со сменой `key` перезапускает срок показа.
-  const showToast = useCallback((text: string, durationMs?: number) => {
-    setToast((previous) => ({ id: (previous?.id ?? 0) + 1, text, durationMs }));
+  const showToast = useCallback((text: string, durationMs?: number, action?: ToastAction) => {
+    setToast((previous) => ({ id: (previous?.id ?? 0) + 1, text, durationMs, action }));
   }, []);
 
   // Пауза `merge` (KTD-5): эфемерное состояние поверх `screenOf`, живёт только в renderer и
@@ -294,6 +295,7 @@ export function App(): ReactNode {
           key={toast.id}
           text={toast.text}
           durationMs={toast.durationMs}
+          action={toast.action}
           onExpire={expireToast}
         />
       )}

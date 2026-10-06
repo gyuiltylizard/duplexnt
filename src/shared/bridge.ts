@@ -67,12 +67,6 @@ export interface SetEditsReport {
   readonly seq: number;
 }
 
-/** Итог «Сохранить документ» (M2, KTD-3): отказ в диалоге — не ошибка, ничего не записано. */
-export type SavePdfReport =
-  | { readonly canceled: true }
-  /** Имя файла и папка — для тоста «Сохранено: …». */
-  | { readonly canceled: false; readonly fileName: string; readonly directory: string };
-
 /** Режим сохранения (M3, R11): по документам или всё одним файлом (R15 — границы не в счёт). */
 export const SAVE_MODES = ['separate', 'single'] as const;
 export type SaveMode = (typeof SAVE_MODES)[number];
@@ -167,11 +161,6 @@ export interface BridgeCommands {
    * записи PDF и идущего прохода отклоняется конфликтом (KTD-9).
    */
   readonly setEdits: { readonly request: SetEditsRequest; readonly value: SetEditsReport };
-  /**
-   * «Сохранить документ» (M2, KTD-3): путь спрашивает main системным диалогом, ядро собирает
-   * PDF и пишет атомарно; отметка о сохранении — в журнале.
-   */
-  readonly savePdf: { readonly request: NoRequest; readonly value: SavePdfReport };
   /** Папка сохранения пакета (M3, KTD-5): по умолчанию «Документы», помнится до выхода. */
   readonly getSaveFolder: { readonly request: NoRequest; readonly value: string };
   /** «Выбрать…» в модалке `save`: системный диалог папки в main. */
@@ -206,7 +195,6 @@ export const BRIDGE_CHANNELS = {
   acceptPass: 'duplexnt:accept-pass',
   declineBacks: 'duplexnt:decline-backs',
   setEdits: 'duplexnt:set-edits',
-  savePdf: 'duplexnt:save-pdf',
   getSaveFolder: 'duplexnt:get-save-folder',
   chooseSaveFolder: 'duplexnt:choose-save-folder',
   saveDocuments: 'duplexnt:save-documents',
