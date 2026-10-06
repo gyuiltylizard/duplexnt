@@ -5,11 +5,14 @@ import {
   ok,
   sessionConflict,
   type DomainError,
+  type PassSnapshot,
   type Result,
   type SessionConflictReason,
   type SessionEdits,
   type SessionSnapshot,
 } from '@shared';
+import { autoKeysOf } from '../scan/assembly';
+import { rebaseEdits } from '../scan/edits';
 import { isTempName, removeByPrefix, renameWithRetry, writeStreamAtomic } from './atomic-file';
 import {
   backsPassOf,
@@ -214,6 +217,35 @@ const runningSegment = (number: number): JournalSegment => ({
 const isVacant = (journal: Journal): boolean =>
   pageCountOf(journal) === 0 && runningSegmentOf(journal) === null;
 
+/** Проходы журнала, как их видит снимок; `lost` — ключи страниц без файлов. */
+function passSnapshotsOf(journal: Journal, lost: ReadonlySet<string>): PassSnapshot[] {
+  return journal.passes.map((pass) => ({
+    number: pass.number,
+    state: passStateOf(pass),
+    paramsKnown: pass.origin !== null,
+    scanner: pass.origin === null ? null : scannerInfoOf(pass.origin.scanner),
+    rotate180: pass.rotate180,
+    pages: pagesOf(pass).map(({ key, number }) => ({ key, number, lost: lost.has(key) })),
+  }));
+}
+
+const NOTHING_LOST: ReadonlySet<string> = new Set();
+
+/**
+ * Журнал с правками в каноническом виде против своих страниц (M3, KTD-3a, KTD-10). Если
+ * состав страниц изменился относительно `previous` не через правку (досканирование, отброс
+ * сегмента, сверка), разрезы переезжают вслед за страницами; правки исчезнувших ключей
+ * вычищаются. Пустые правки не трогаются: им нечего нормализовать.
+ */
+export function withRebasedEdits(previous: Journal | null, next: Journal): Journal {
+  if (next.edits === EMPTY_EDITS) {
+    return next;
+  }
+  const before = previous === null ? null : autoKeysOf(passSnapshotsOf(previous, NOTHING_LOST));
+  const after = autoKeysOf(passSnapshotsOf(next, NOTHING_LOST));
+  return { ...next, edits: rebaseEdits(before, after, next.edits) };
+}
+
 const isJournalFile = (name: string): boolean =>
   name === JOURNAL_FILE_NAME ||
   (name.startsWith(`${JOURNAL_FILE_NAME}.`) &&
@@ -273,7 +305,10 @@ export function createSessionStore(
   let closing = false;
   const settleReads = (): Promise<unknown> => Promise.allSettled([...reads]);
 
-  async function commit(next: Journal, mode: 'must' | 'soft'): Promise<Result<void>> {
+  async function commit(proposed: Journal, mode: 'must' | 'soft'): Promise<Result<void>> {
+    // Нормализация правок — в одном месте: ни одна операция не запишет правки, расходящиеся со
+    // страницами (KTD-3a, KTD-10).
+    const next = withRebasedEdits(journal, proposed);
     try {
       if (unpreserved) {
         await setAside(layout.journalFile, io);
@@ -414,14 +449,7 @@ export function createSessionStore(
         id: journal.sessionId,
         backsDeclined: journal.backsDeclined,
         saved: journal.saved,
-        passes: journal.passes.map((pass) => ({
-          number: pass.number,
-          state: passStateOf(pass),
-          paramsKnown: pass.origin !== null,
-          scanner: pass.origin === null ? null : scannerInfoOf(pass.origin.scanner),
-          rotate180: pass.rotate180,
-          pages: pagesOf(pass).map(({ key, number }) => ({ key, number, lost: lost.has(key) })),
-        })),
+        passes: passSnapshotsOf(journal, lost),
         edits: journal.edits,
       };
     },
@@ -690,9 +718,12 @@ export function createSessionStore(
         if (backs === null && rotate180) {
           return conflict('noBacksPass');
         }
+        // Сравнение — после нормализации: состояние, которое приводится к записанному, правкой
+        // не считается и отметку о сохранении не снимает.
+        const normalized = withRebasedEdits(journal, { ...journal, edits }).edits;
         if (
           (backs?.rotate180 ?? false) === rotate180 &&
-          JSON.stringify(journal.edits) === JSON.stringify(edits)
+          JSON.stringify(journal.edits) === JSON.stringify(normalized)
         ) {
           return ok(undefined);
         }
@@ -700,7 +731,7 @@ export function createSessionStore(
           pass === backs ? { ...pass, rotate180 } : pass,
         );
         // Правка меняет вывод: сохранённый PDF устарел (M3, R8).
-        return commit({ ...journal, passes, edits, saved: false }, 'must');
+        return commit({ ...journal, passes, edits: normalized, saved: false }, 'must');
       }),
 
     declineBacks: () =>

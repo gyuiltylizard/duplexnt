@@ -40,7 +40,7 @@ describe('сборка PDF: худший объём (KTD-12)', () => {
       // объём живёт в памяти целиком, пока документ не собран.
       const pages: PdfPageInput[] = Array.from({ length: pageCount }, (_unused, index) => ({
         bytes: Uint8Array.from(jpeg),
-        rotate180: index % 2 === 1,
+        angle: index % 2 === 1 ? 180 : 0,
         dpi: 600,
         pixelLimit: null,
       }));

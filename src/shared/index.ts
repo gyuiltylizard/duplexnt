@@ -51,8 +51,10 @@ export {
 } from './scan-params';
 
 export type {
+  AssembledDocument,
   AssembledPage,
   AssemblyReport,
+  PageAngle,
   PageSnapshot,
   PassProgress,
   PassReport,

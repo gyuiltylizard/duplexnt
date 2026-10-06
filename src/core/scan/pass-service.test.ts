@@ -367,7 +367,9 @@ describe('служба прохода: команды оборотов (M2, U3)'
       [3, true],
     ]);
     const order = service.snapshot().assembly?.order ?? [];
-    expect(order.filter((page) => page.side === 'back').every((page) => page.rotate180)).toBe(true);
+    expect(order.filter((page) => page.side === 'back').every((page) => page.angle === 180)).toBe(
+      true,
+    );
   });
 
   it('setRotateBacks без прохода оборотов — noBacksPass', async () => {

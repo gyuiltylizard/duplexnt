@@ -468,7 +468,7 @@ export function createPassService(
     if (session === null) {
       origin = freshOrigin;
     } else {
-      const surviving = survivingOf(session);
+      const surviving = survivingOf(session.passes);
       const target = resumeTarget();
       if (target.ok) {
         origin = target.value;
@@ -688,7 +688,7 @@ export function createPassService(
           }
           inputs.push({
             bytes: bytes.value,
-            rotate180: page.rotate180,
+            angle: page.angle,
             dpi: info?.dpi ?? null,
             pixelLimit: info?.pixelLimit ?? null,
           });

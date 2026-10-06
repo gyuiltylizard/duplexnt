@@ -55,19 +55,32 @@ export interface SessionSnapshot {
   readonly edits: SessionEdits;
 }
 
+/** Угол страницы при показе и в PDF по часовой стрелке (M3, KTD-4). */
+export type PageAngle = 0 | 90 | 180 | 270;
+
 /**
- * Страница в собранном порядке (M2, KTD-4). Роли «лицо/оборот» выводятся из позиции прохода
- * среди уцелевших, не из чётности номера.
+ * Страница видимой ленты (M2, KTD-4; M3, KTD-2). Роли «лицо/оборот» выводятся из позиции прохода
+ * среди уцелевших, не из чётности номера; угол и непарность считает ядро.
  */
 export interface AssembledPage {
   readonly key: string;
   readonly side: 'front' | 'back';
   /** Номер листа — позиция в лицевом проходе; у лишнего оборота листа нет (`null`). */
   readonly sheet: number | null;
-  /** Повернуть на 180° при показе и в PDF — флаг прохода оборотов (KTD-2). */
-  readonly rotate180: boolean;
+  /** Ручной поворот плюс 180° прохода оборотов, по модулю 360; исходник не меняется. */
+  readonly angle: PageAngle;
   /** Запись есть, файла нет: место в порядке сохраняется. */
   readonly lost: boolean;
+  /** Лист без оборота по отчёту пар (KTD-7): пометка в ленте. */
+  readonly unpaired: boolean;
+}
+
+/** Документ ленты: отрезок `order` от `start` длиной `count` (M3, R10). */
+export interface AssembledDocument {
+  /** Имя из правок; пустое — имя по умолчанию, его подставляет интерфейс. */
+  readonly name: string;
+  readonly start: number;
+  readonly count: number;
 }
 
 /** Отчёт сборки — кормит статусную строку `merge`, модалку `mismatch` и пометки в ленте. */
@@ -91,11 +104,21 @@ export interface AssemblyReport {
 }
 
 /**
- * Сборка сессии: порядок по умолчанию и отчёт. Производное от снимка сессии — в журнал не
- * пишется (ADR 0004).
+ * Сборка сессии: видимая лента с правками, документы и отчёт пар. Производное от снимка
+ * сессии — в журнал не пишется (ADR 0004).
  */
 export interface SessionAssembly {
+  /** Видимая лента: порядок с правками, без удалённых. */
   readonly order: readonly AssembledPage[];
+  /** Документы по разрезам; их всегда хотя бы один, пустых нет (кроме пустой ленты). */
+  readonly documents: readonly AssembledDocument[];
+  /** Порядок задан вручную: автосортировка выключена (M3, R8). */
+  readonly orderEdited: boolean;
+  /** Есть что откатывать «Вернуть»: любая правка или поворот оборотов (M3, R8, R9). */
+  readonly hasEdits: boolean;
+  /** Удалённых страниц, которые вернёт Ctrl+Z или «Вернуть». */
+  readonly deleted: number;
+  /** Отчёт о сканировании — по проходам, правки на него не влияют (M3, KTD-7). */
   readonly report: AssemblyReport;
 }
 

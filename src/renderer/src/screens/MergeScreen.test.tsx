@@ -24,7 +24,7 @@ function assemblyFor(assemblyReport: AssemblyReport): SessionAssembly {
   let key = 0;
   const push = (side: AssembledPage['side'], sheet: number | null): void => {
     key += 1;
-    order.push({ key: `k${key}`, side, sheet, rotate180: false, lost: false });
+    order.push({ key: `k${key}`, side, sheet, angle: 0, lost: false, unpaired: false });
   };
   for (const sheet of assemblyReport.unpairedSheets) {
     push('front', sheet);
@@ -41,7 +41,14 @@ function assemblyFor(assemblyReport: AssemblyReport): SessionAssembly {
       push('front', sheet);
     }
   }
-  return { order, report: assemblyReport };
+  return {
+    order,
+    documents: [{ name: '', start: 0, count: order.length }],
+    orderEdited: false,
+    hasEdits: false,
+    deleted: 0,
+    report: assemblyReport,
+  };
 }
 
 function renderMerge(overrides: Partial<AssemblyReport>) {

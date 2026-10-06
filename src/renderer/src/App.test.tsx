@@ -12,7 +12,7 @@ import { StrictMode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import './i18n';
 import { App } from './App';
-import { assemblyOf } from './state/assembly-fixture';
+import { assemblyOf, NO_EDITS_ASSEMBLY } from './state/assembly-fixture';
 
 function makeSnapshot(overrides: Partial<Snapshot>): Snapshot {
   const snapshot: Snapshot = {
@@ -145,7 +145,7 @@ describe('каркас приложения', () => {
           ],
         },
         assembly: {
-          order: [],
+          ...NO_EDITS_ASSEMBLY,
           report: {
             fronts: 12,
             backs: 0,

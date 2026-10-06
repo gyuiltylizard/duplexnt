@@ -10,6 +10,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../i18n';
+import { NO_EDITS_ASSEMBLY } from '../state/assembly-fixture';
 import { FlipScreen } from './FlipScreen';
 
 const PARAMS = { colorMode: 'Grayscale8', resolution: 300, paperSize: 'A4' } as const;
@@ -51,7 +52,7 @@ function makeSnapshot(fronts: number): Snapshot {
         },
       ],
     },
-    assembly: { order: [], report: report(fronts) },
+    assembly: { ...NO_EDITS_ASSEMBLY, report: report(fronts) },
     pass: null,
     canResume: false,
     canAccept: false,

@@ -1229,4 +1229,63 @@ describe('хранилище сессии: правки редактора (M3, 
 
     expect(store.snapshot()?.edits).toEqual(EMPTY_EDITS);
   });
+
+  it('досканирование вставило оборот в середину — разрез переехал вслед; «Остановить» вернул его (KTD-10)', async () => {
+    const { store, accept, journalOnDisk } = await setup();
+    ok(await store.beginPass(ORIGIN));
+    await accept(1, 3);
+    ok(await store.endSegment('completed'));
+    // Обороты прерваны на первом: пришёл оборот листа 3. Лента f1 f2 f3 b1, разрез перед f3.
+    ok(await store.beginPass(ORIGIN));
+    await accept(4, 4);
+    ok(await store.endSegment('interrupted'));
+    ok(await store.setEdits({ ...EMPTY_EDITS, cuts: [2], names: ['', 'Третий'] }, false));
+
+    ok(await store.resumePass());
+    await accept(5, 5);
+
+    // Оборот листа 2 лёг между f2 и f3: разрез остался перед f3.
+    expect(store.snapshot()?.edits).toMatchObject({ cuts: [3], names: ['', 'Третий'] });
+    expect((await journalOnDisk()).edits.cuts).toEqual([3]);
+
+    ok(await store.discardSegment());
+    expect(store.snapshot()?.edits).toMatchObject({ cuts: [2], names: ['', 'Третий'] });
+  });
+
+  it('правка нормализуется перед записью: разрез перед первой позицией снят, мёртвый ключ вычищен', async () => {
+    const { store, journalOnDisk } = await twoPasses();
+
+    ok(
+      await store.setEdits(
+        {
+          order: [],
+          rotations: { 'p09-s01-0001': 90, 'p01-s01-0001': 180 },
+          deleted: [],
+          cuts: [0, 2],
+          names: ['Пусто', 'Начало', 'Конец'],
+        },
+        false,
+      ),
+    );
+
+    const expected: SessionEdits = {
+      order: [],
+      rotations: { 'p01-s01-0001': 180 },
+      deleted: [],
+      cuts: [2],
+      names: ['Начало', 'Конец'],
+    };
+    expect(store.snapshot()?.edits).toEqual(expected);
+    expect((await journalOnDisk()).edits).toEqual(expected);
+  });
+
+  it('состояние, которое нормализуется к записанному, — не правка: «сохранено» не снимается', async () => {
+    const { store } = await twoPasses();
+    ok(await store.setEdits({ ...EMPTY_EDITS, cuts: [2], names: ['', 'Б'] }, false));
+    ok(await store.markSaved());
+
+    ok(await store.setEdits({ ...EMPTY_EDITS, cuts: [0, 2], names: ['', '', 'Б'] }, false));
+
+    expect(store.snapshot()?.saved).toBe(true);
+  });
 });

@@ -1,7 +1,6 @@
 import {
   memo,
   useEffect,
-  useMemo,
   useRef,
   useState,
   type ChangeEvent,
@@ -13,6 +12,7 @@ import {
   pageImageUrl,
   type AssembledPage,
   type DomainError,
+  type PageAngle,
   type ScannerInfo,
   type SessionSnapshot,
   type Snapshot,
@@ -68,7 +68,7 @@ const Thumb = memo(function Thumb({
   pageKey,
   side,
   sheet,
-  rotate180,
+  angle,
   lost,
   position,
   unpaired,
@@ -79,7 +79,8 @@ const Thumb = memo(function Thumb({
   readonly pageKey: string;
   readonly side: AssembledPage['side'];
   readonly sheet: number | null;
-  readonly rotate180: boolean;
+  /** Угол страницы из ядра (KTD-4); повороты 90/270 на миниатюре — U7 M3. */
+  readonly angle: PageAngle;
   readonly lost: boolean;
   /** Номер по порядку в наборе, с единицы. */
   readonly position: number;
@@ -130,8 +131,8 @@ const Thumb = memo(function Thumb({
   if (selected) {
     classes.push('thumb--selected');
   }
-  // Поворот оборотов — только отображение: файлы не меняются (KTD-2).
-  if (side === 'back' && rotate180) {
+  // Поворот — только отображение: файлы не меняются (KTD-2, KTD-4).
+  if (angle === 180) {
     classes.push('thumb--rotated');
   }
 
@@ -199,7 +200,7 @@ function Preview({
   if (image.state === 'loading') {
     classes.push('preview__paper--loading');
   }
-  if (entry.side === 'back' && entry.rotate180) {
+  if (entry.angle === 180) {
     classes.push('preview__paper--rotated');
   }
   return (
@@ -228,10 +229,7 @@ export function EditorScreen({
 
   // Лента — порядок сборки (KTD-4, derived); до приёмки прерванных оборотов — фактические пары.
   const order = snapshot.assembly?.order ?? [];
-  const report = snapshot.assembly?.report;
   const total = order.length;
-  // Set вместо поиска по массиву на каждой миниатюре; пересобирается только с новым отчётом.
-  const unpairedSheets = useMemo(() => new Set(report?.unpairedSheets ?? []), [report]);
 
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const selectedIndex = Math.max(
@@ -516,14 +514,10 @@ export function EditorScreen({
                   pageKey={entry.key}
                   side={entry.side}
                   sheet={entry.sheet}
-                  rotate180={entry.rotate180}
+                  angle={entry.angle}
                   lost={entry.lost}
                   position={index + 1}
-                  unpaired={
-                    entry.side === 'front' &&
-                    entry.sheet !== null &&
-                    unpairedSheets.has(entry.sheet)
-                  }
+                  unpaired={entry.unpaired}
                   selected={selected?.key === entry.key}
                   onSelect={setSelectedKey}
                 />

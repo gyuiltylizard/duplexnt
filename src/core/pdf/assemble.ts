@@ -1,11 +1,12 @@
 import { setImmediate as nextTick } from 'node:timers/promises';
 import { degrees, PDFDocument, type PDFImage } from '@cantoo/pdf-lib';
-import { fail, ok, type Result } from '@shared';
+import { fail, ok, type PageAngle, type Result } from '@shared';
 import { decodePixelLimit } from '../storage/thumbnails';
 
 // Сборка PDF (план M2, U5; ADR 0007): упорядоченный список JPEG-страниц → байты документа.
 // JPEG вкладывается как есть (`embedJpg` → `DCTDecode`, без перекодирования); поворот — только
-// свойством страницы `/Rotate 180` (KTD-2), байты изображения не меняются ни в одном сценарии.
+// свойством страницы `/Rotate` (M2, KTD-2; M3, KTD-4 — 90/180/270), байты изображения не
+// меняются ни в одном сценарии.
 //
 // Размер страницы — из размеров JPEG и DPI прохода (KTD-9): пункты = пиксели / DPI × 72;
 // формата-константы нет. DPI неизвестен (журнал пересобран, `origin = null`) — берётся
@@ -18,8 +19,8 @@ import { decodePixelLimit } from '../storage/thumbnails';
 export interface PdfPageInput {
   /** Байты JPEG — исходник страницы с устройства, как лежит на диске. */
   readonly bytes: Uint8Array;
-  /** Повернуть страницу на 180° (`/Rotate`): флаг прохода оборотов (KTD-2). */
-  readonly rotate180: boolean;
+  /** Угол страницы ленты (`/Rotate`): ручной поворот плюс 180° прохода оборотов (KTD-4). */
+  readonly angle: PageAngle;
   /** DPI прохода (`origin.params.resolution`); `null` — параметры прохода неизвестны. */
   readonly dpi: number | null;
   /** Предел пикселей страницы (`origin.pixelLimit`); `null` — встроенный потолок (KTD-37). */
@@ -95,8 +96,8 @@ export async function assemblePdf(pages: readonly PdfPageInput[]): Promise<Resul
     const height = (image.height / dpi) * POINTS_PER_INCH;
     const sheet = document.addPage([width, height]);
     sheet.drawImage(image, { x: 0, y: 0, width, height });
-    if (page.rotate180) {
-      sheet.setRotation(degrees(180));
+    if (page.angle !== 0) {
+      sheet.setRotation(degrees(page.angle));
     }
     // Воздух циклу событий между страницами (KTD-12): сборка не держит процесс.
     await nextTick();

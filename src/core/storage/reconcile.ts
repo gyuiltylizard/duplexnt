@@ -25,6 +25,7 @@ import {
   createSessionStore,
   NO_SESSION,
   sweepClosedSession,
+  withRebasedEdits,
   type SessionState,
   type SessionStore,
   type SessionStoreOptions,
@@ -46,6 +47,7 @@ import { readVersionMarker, setAside, setAsidePathOf, writeVersioned } from './v
 // | временный файл страницы или журнала                 | удаляется                               |
 // | страница без записи                                 | возвращается в свой сегмент по ключу    |
 // | страница, у прохода или сегмента которой нет записи | проход и сегмент создаются прерванными  |
+// | правка с ключом без страницы; разрез вне ленты      | правка вычищается, разрез переезжает    |
 // | запись без файла или файл нулевой длины             | страница потеряна, место сохраняется    |
 // | сегмент «идёт»                                      | прерван                                 |
 // | ни файлов страниц, ни записей о страницах           | каталог убирается                       |
@@ -248,7 +250,12 @@ export async function reconcileSession(
       }
     }
     const cleaned = { ...journal, deletions };
-    const adopted = adopt(cleaned, [...groups.values()], journal.deletions);
+    // Правки — против страниц после усыновления: разрезы переезжают вслед за вернувшимися
+    // страницами, правки исчезнувших ключей вычищаются (M3, KTD-10, R5).
+    const adopted = withRebasedEdits(
+      cleaned,
+      adopt(cleaned, [...groups.values()], journal.deletions),
+    );
     // Усыновление изменило проходы (файлы сверх записей — после сбоя записи журнала): набор
     // больше не соответствует сохранённому PDF, отметка о сохранении снимается (R12).
     journal =

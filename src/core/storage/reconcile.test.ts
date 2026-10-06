@@ -242,6 +242,53 @@ describe('сверка при запуске: таблица плана', () => 
     expect(await dirSnapshot(root)).toEqual(before);
   });
 
+  it('правки с ключами без страниц вычищаются и журнал переписывается; повтор ничего не меняет (M3, R5)', async () => {
+    const { root, layout } = await seed(
+      journalOf([pass(1, [segment(1, 'completed', 2)])], {
+        edits: {
+          order: ['p01-s01-0002', 'p07-s01-0001'],
+          rotations: { 'p07-s01-0001': 90, 'p01-s01-0001': 270 },
+          deleted: ['p07-s01-0002'],
+          cuts: [],
+          names: ['Договор'],
+        },
+      }),
+      pagesOfFirstSegment(2),
+    );
+
+    const { session } = await reconciled(root);
+
+    const expected: SessionEdits = {
+      order: ['p01-s01-0002'],
+      rotations: { 'p01-s01-0001': 270 },
+      deleted: [],
+      cuts: [],
+      names: ['Договор'],
+    };
+    expect(session?.edits).toEqual(expected);
+    expect((await journalOnDisk(layout)).edits).toEqual(expected);
+
+    const before = await dirSnapshot(root);
+    await reconciled(root);
+    expect(await dirSnapshot(root)).toEqual(before);
+  });
+
+  it('усыновлённый оборот лёг в середину ленты — разрез переехал вслед за страницей (KTD-10)', async () => {
+    // Лицевые 3, обороты: в журнале 1 (оборот листа 3), на диске 2 — сбой до записи журнала.
+    const { root } = await seed(
+      journalOf([pass(1, [segment(1, 'completed', 3)]), pass(2, [segment(1, 'interrupted', 1)])], {
+        nextPass: 3,
+        edits: { ...EMPTY_EDITS, cuts: [2], names: ['', 'Третий'] },
+      }),
+      [...pagesOfFirstSegment(3), pageName(2, 1, 1), pageName(2, 1, 2)],
+    );
+
+    const { session } = await reconciled(root);
+
+    // Лента f1 f2 b2 f3 b1: разрез по-прежнему перед f3.
+    expect(session?.edits).toMatchObject({ cuts: [3], names: ['', 'Третий'] });
+  });
+
   it('маркер новее понятного вместе с временными файлами, пометкой и закрываемым каталогом — всё побайтово на месте', async () => {
     const { root, layout } = await seed(
       {
