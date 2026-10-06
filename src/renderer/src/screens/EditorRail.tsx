@@ -109,8 +109,6 @@ export interface EditorRailProps {
   /** Имена по умолчанию — плейсхолдеры полей имени (S3). */
   readonly defaultNames: readonly string[];
   readonly selection: Selection;
-  /** Правки доступны сейчас: нет записи и команды в полёте — можно тянуть, split-бар виден. */
-  readonly editable: boolean;
   /** Идёт запись (KTD-9): поля имени и «✕» недоступны. */
   readonly locked: boolean;
   /** Команда в полёте: отправленное имя ждёт снимка. */
@@ -139,7 +137,6 @@ export function EditorRail({
   documents,
   defaultNames,
   selection,
-  editable,
   locked,
   busy,
   railRef,
@@ -158,6 +155,8 @@ export function EditorRail({
   const total = order.length;
   const selectedKeys = useMemo(() => new Set(selection.keys), [selection.keys]);
   const multi = selection.keys.length > 1;
+  // Правки доступны сейчас: нет записи и команды в полёте — можно тянуть, split-бар виден.
+  const editable = !locked && !busy;
 
   // Позиция, перед которой стоит граница, → номер документа, который с неё начинается.
   const starts = useMemo(

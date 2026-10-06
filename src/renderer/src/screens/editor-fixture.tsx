@@ -12,6 +12,7 @@ import {
 import { act, createEvent, fireEvent, render, screen } from '@testing-library/react';
 import { vi } from 'vitest';
 import { assemblyOf, documentsOf } from '../state/assembly-fixture';
+import type { DropSide } from '../state/edits';
 import type { EditState } from '../state/history';
 import { EditorScreen } from './EditorScreen';
 
@@ -99,6 +100,14 @@ export function twoPass(backCount = 3, backsState: PassSnapshot['state'] = 'comp
     makePass({ number: 2, state: backsState, pages: pages(backCount, 1, 'p02-s01') }),
   ]);
 }
+
+// Лента двусторонней фикстуры (AE1): 1л, 1о, 2л, 2о, 3л, 3о.
+export const F1 = 'p01-s01-0001';
+export const B3 = 'p02-s01-0003';
+export const F2 = 'p01-s01-0002';
+export const B2 = 'p02-s01-0002';
+export const F3 = 'p01-s01-0003';
+export const B1 = 'p02-s01-0001';
 
 export function stubApi(overrides: Partial<Record<keyof Api, unknown>> = {}) {
   const api = {
@@ -251,7 +260,7 @@ export function dataTransfer(): DataTransfer {
  * `dragover` над миниатюрой в её левой (`before`) или правой (`after`) половине. jsdom не
  * знает `DragEvent` и не раскладывает страницу: координату события и рамку задаёт тест.
  */
-export function dragOver(target: HTMLElement, side: 'before' | 'after', transfer: DataTransfer) {
+export function dragOver(target: HTMLElement, side: DropSide, transfer: DataTransfer) {
   vi.spyOn(target, 'getBoundingClientRect').mockReturnValue({
     left: 100,
     right: 180,
@@ -269,7 +278,7 @@ export function dragOver(target: HTMLElement, side: 'before' | 'after', transfer
 }
 
 /** Перетаскивание целиком: взять, провести над целью, бросить, отпустить. */
-export function dragAndDrop(source: HTMLElement, target: HTMLElement, side: 'before' | 'after') {
+export function dragAndDrop(source: HTMLElement, target: HTMLElement, side: DropSide) {
   const transfer = dataTransfer();
   fireEvent.dragStart(source, { dataTransfer: transfer });
   dragOver(target, side, transfer);

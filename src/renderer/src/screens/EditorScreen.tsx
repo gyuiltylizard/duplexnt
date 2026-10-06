@@ -154,13 +154,21 @@ export function EditorScreen({
 
   // Имя по умолчанию: одиночный документ — «Скан ГГГГ-ММ-ДД», иначе «Документ N» (S3).
   const [today] = useState(todayStamp);
-  const defaultNames = documents.map((_, index) =>
-    documents.length === 1
-      ? t('editor.doc.defaultSingleName', { date: today })
-      : t('editor.doc.defaultName', { number: index + 1 }),
+  const defaultNames = useMemo(
+    () =>
+      Array.from({ length: documents.length }, (_, index) =>
+        documents.length === 1
+          ? t('editor.doc.defaultSingleName', { date: today })
+          : t('editor.doc.defaultName', { number: index + 1 }),
+      ),
+    [documents.length, today, t],
   );
-  const names = documents.map((document, index) =>
-    document.name !== '' ? document.name : (defaultNames[index] ?? ''),
+  const names = useMemo(
+    () =>
+      documents.map((document, index) =>
+        document.name !== '' ? document.name : (defaultNames[index] ?? ''),
+      ),
+    [documents, defaultNames],
   );
 
   // Стрелки двигают текущую по всей ленте — фокус следует за ней (роуминг tabindex). После
@@ -193,8 +201,12 @@ export function EditorScreen({
 
   const focusInRail = (): boolean => railRef.current?.contains(document.activeElement) ?? false;
 
+  /** Ключ ленты по позиции, прижатой к краям. */
+  const keyAt = (index: number): string | undefined =>
+    visible[Math.min(Math.max(index, 0), total - 1)];
+
   const selectAt = (index: number, focus: boolean): void => {
-    const key = visible[Math.min(Math.max(index, 0), total - 1)];
+    const key = keyAt(index);
     if (key !== undefined) {
       setSelection(single(key));
       if (focus) {
@@ -263,7 +275,7 @@ export function EditorScreen({
         return;
     }
     event.preventDefault();
-    const key = visible[Math.min(Math.max(target, 0), total - 1)];
+    const key = keyAt(target);
     if (key === undefined) {
       return;
     }
@@ -383,12 +395,20 @@ export function EditorScreen({
 
   // Тулбар (S1): «+ Новый документ с этой страницы» — если текущая не первая и границы перед
   // ней ещё нет.
-  const canSplitHere =
-    currentIndex > 0 && !documents.some((document) => document.start === currentIndex);
+  const atDocStart = currentDoc?.start === currentIndex;
+  const canSplitHere = currentIndex > 0 && !atDocStart;
 
   // Ctrl+Z, Ctrl+Y / Ctrl+Shift+Z, Delete — на всём экране, кроме текстовых полей и модалок
   // (handoff M3, Undo/Redo). Подписка — одна на монтирование: StrictMode её переживает.
   const shortcut = useEffectEvent((event: globalThis.KeyboardEvent) => {
+    const ctrl = event.ctrlKey || event.metaKey;
+    const letter = ctrl ? shortcutLetter(event) : '';
+    // Зажатая Delete не удаляет страницу за страницей — одно нажатие, одно удаление.
+    const deleteKey = event.key === 'Delete' && !ctrl && !event.shiftKey && !event.repeat;
+    // Чужие клавиши отсеиваются до поиска модалки в DOM.
+    if (letter !== 'z' && letter !== 'y' && !deleteKey) {
+      return;
+    }
     if (
       event.defaultPrevented ||
       event.altKey ||
@@ -399,8 +419,6 @@ export function EditorScreen({
     ) {
       return;
     }
-    const ctrl = event.ctrlKey || event.metaKey;
-    const letter = ctrl ? shortcutLetter(event) : '';
     if (letter === 'z') {
       event.preventDefault();
       if (event.shiftKey) {
@@ -415,11 +433,8 @@ export function EditorScreen({
       edits.redo();
       return;
     }
-    // Зажатая Delete не удаляет страницу за страницей — одно нажатие, одно удаление.
-    if (event.key === 'Delete' && !ctrl && !event.shiftKey && !event.repeat) {
-      event.preventDefault();
-      remove(focusInRail());
-    }
+    event.preventDefault();
+    remove(focusInRail());
   });
   useEffect(() => {
     const listener = (event: globalThis.KeyboardEvent): void => {
@@ -562,7 +577,6 @@ export function EditorScreen({
           documents={documents}
           defaultNames={defaultNames}
           selection={selection}
-          editable={!saving && !edits.busy}
           locked={saving}
           busy={edits.busy}
           railRef={railRef}
@@ -627,9 +641,7 @@ export function EditorScreen({
                 entry={currentEntry}
                 position={currentIndex + 1}
                 docStart={
-                  currentDocument !== null &&
-                  currentDocument > 0 &&
-                  currentDoc?.start === currentIndex
+                  currentDocument !== null && currentDocument > 0 && atDocStart
                     ? currentDocument + 1
                     : null
                 }

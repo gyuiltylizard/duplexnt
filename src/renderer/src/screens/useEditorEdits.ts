@@ -11,6 +11,7 @@ import {
   undoEdit,
   type EditHistory,
   type EditState,
+  type HistoryMove,
 } from '../state/history';
 import { NO_SELECTION, pruned, selectionOf, type Selection } from '../state/selection';
 
@@ -78,7 +79,7 @@ export function useEditorEdits({
   const current = useMemo(() => editStateOf(session), [session]);
 
   // Лента изменилась не через правку — история очищается (решение автора, журнал M3).
-  const tape = tapeOf(session);
+  const tape = useMemo(() => tapeOf(session), [session]);
   const [storedHistory, setHistory] = useState<EditHistory>(() => emptyHistory(tape));
   const history = syncHistory(storedHistory, tape);
   if (history !== storedHistory) {
@@ -160,6 +161,12 @@ export function useEditorEdits({
 
   const idle = pending === null && !locked;
 
+  const travel = (move: HistoryMove | null): void => {
+    if (move !== null) {
+      send(move.target, move.history, { select: (after) => selectionOf(move.keys, after) });
+    }
+  };
+
   return {
     current,
     selection,
@@ -174,16 +181,10 @@ export function useEditorEdits({
       return true;
     },
     undo: () => {
-      const move = idle ? undoEdit(history, current) : null;
-      if (move !== null) {
-        send(move.target, move.history, { select: (after) => selectionOf(move.keys, after) });
-      }
+      travel(idle ? undoEdit(history, current) : null);
     },
     redo: () => {
-      const move = idle ? redoEdit(history, current) : null;
-      if (move !== null) {
-        send(move.target, move.history, { select: (after) => selectionOf(move.keys, after) });
-      }
+      travel(idle ? redoEdit(history, current) : null);
     },
   };
 }

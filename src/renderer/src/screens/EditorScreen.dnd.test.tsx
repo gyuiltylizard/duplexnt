@@ -4,11 +4,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../i18n';
 import {
   applied,
+  B1,
+  B2,
+  B3,
   ctrlZ,
   dataTransfer,
   dragAndDrop,
   dragOver,
   edits,
+  F1,
+  F2,
+  F3,
   lastSent,
   makePass,
   makeSnapshot,
@@ -26,14 +32,6 @@ import {
 // документов, имена, плашка правок и полный откат. DnD — самодельный `dataTransfer` и
 // `fireEvent`; решающая логика — жесты `state/edits.ts` под табличными тестами. Снимок с
 // результатом команды тест подаёт сам (`applied`) — ленту считает ядро (KTD-2).
-
-// Лента двусторонней фикстуры (AE1): 1л, 1о, 2л, 2о, 3л, 3о.
-const F1 = 'p01-s01-0001';
-const B3 = 'p02-s01-0003';
-const F2 = 'p01-s01-0002';
-const B2 = 'p02-s01-0002';
-const F3 = 'p01-s01-0003';
-const B1 = 'p02-s01-0001';
 
 const button = (name: string): HTMLElement => screen.getByRole('button', { name });
 

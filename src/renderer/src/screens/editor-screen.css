@@ -163,12 +163,6 @@
   cursor: pointer;
 }
 
-.rail__selection-group:focus-visible,
-.rail__selection-clear:focus-visible {
-  outline: var(--space-1) solid var(--color-border-focus);
-  outline-offset: var(--space-1);
-}
-
 /* — S2 M3: группа документа — */
 
 .doc-group {
@@ -894,13 +888,6 @@
   color: var(--color-text-hint);
 }
 
-.doc-group__unsplit:focus-visible,
-.doc-list__item:focus-visible,
-.details-toggle:focus-visible {
-  outline: var(--space-1) solid var(--color-border-focus);
-  outline-offset: var(--space-1);
-}
-
 .checks {
   display: flex;
   flex-direction: column;
@@ -1015,11 +1002,6 @@
 
 .toggle__input:checked + .toggle__track::after {
   left: calc(var(--size-toggle-w) - var(--size-toggle-knob) - var(--space-1));
-}
-
-.toggle__input:focus-visible + .toggle__track {
-  outline: var(--space-1) solid var(--color-border-focus);
-  outline-offset: var(--space-1);
 }
 
 @media (prefers-reduced-motion: reduce) {

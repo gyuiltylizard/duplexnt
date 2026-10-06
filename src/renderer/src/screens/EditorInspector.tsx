@@ -1,6 +1,7 @@
 import { useId, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AssembledPage, SessionAssembly } from '@shared';
+import type { TFunction } from 'i18next';
 
 // Инспектор редактора (handoff M3, S11–S13): ДЕТАЛИ текущей страницы, ДОКУМЕНТЫ В НАБОРЕ и
 // ПРОВЕРКА, внизу — плашка правок S14 с «Вернуть». Только показ снимка: пары, порядок и наличие
@@ -8,6 +9,60 @@ import type { AssembledPage, SessionAssembly } from '@shared';
 
 /** Тон документа по номеру с нуля: четыре цвета по кругу (handoff M3, Anatomy). */
 export const toneOf = (document: number): string => `doc-tone--${String((document % 4) + 1)}`;
+
+/** Лишний оборот: оборот без листа. */
+const isExtraBack = (entry: AssembledPage): boolean =>
+  entry.side === 'back' && entry.sheet === null;
+
+function titleOf(t: TFunction, entry: AssembledPage, position: number): string {
+  const sheet = entry.sheet ?? 0;
+  if (isExtraBack(entry)) {
+    return t('inspector.titleExtraBack', { page: position });
+  }
+  if (entry.side === 'back') {
+    return t('inspector.titleBack', { page: position, sheet });
+  }
+  return t('inspector.titleFront', { page: position, sheet });
+}
+
+/** Пояснение — по самому важному: потеря, лишний оборот, непарность, односторонний набор. */
+function noteOf(t: TFunction, entry: AssembledPage, frontsOnly: boolean): string {
+  const sheet = entry.sheet ?? 0;
+  if (entry.lost) {
+    return t('inspector.note.lost');
+  }
+  if (isExtraBack(entry)) {
+    return t('inspector.note.extraBack');
+  }
+  if (entry.unpaired) {
+    return t('inspector.note.unpaired');
+  }
+  if (entry.side === 'back') {
+    return t('inspector.note.back', { sheet });
+  }
+  if (frontsOnly) {
+    return t('inspector.note.frontsOnly');
+  }
+  return t('inspector.note.front', { sheet });
+}
+
+/** Строка ПРОВЕРКИ: ✓ — всё хорошо, • — стоит взглянуть. */
+function Check({
+  warning,
+  children,
+}: {
+  readonly warning: boolean;
+  readonly children: ReactNode;
+}): ReactNode {
+  return (
+    <li className={warning ? 'check check--warning' : 'check'}>
+      <span className="check__icon" aria-hidden="true">
+        {warning ? '•' : '✓'}
+      </span>
+      <span className="check__text">{children}</span>
+    </li>
+  );
+}
 
 function Details({
   entry,
@@ -25,25 +80,8 @@ function Details({
   const { t } = useTranslation();
   const bodyId = useId();
 
-  const extraBack = entry.side === 'back' && entry.sheet === null;
-  const sheet = entry.sheet ?? 0;
-  const title = extraBack
-    ? t('inspector.titleExtraBack', { page: position })
-    : entry.side === 'back'
-      ? t('inspector.titleBack', { page: position, sheet })
-      : t('inspector.titleFront', { page: position, sheet });
-  // Пояснение — по самому важному: потеря, лишний оборот, непарность, односторонний набор.
-  const note = entry.lost
-    ? t('inspector.note.lost')
-    : extraBack
-      ? t('inspector.note.extraBack')
-      : entry.unpaired
-        ? t('inspector.note.unpaired')
-        : entry.side === 'back'
-          ? t('inspector.note.back', { sheet })
-          : frontsOnly
-            ? t('inspector.note.frontsOnly')
-            : t('inspector.note.front', { sheet });
+  const title = titleOf(t, entry, position);
+  const note = noteOf(t, entry, frontsOnly);
 
   return (
     <section className="inspector__section inspector__section--details">
@@ -203,32 +241,17 @@ export function EditorInspector({
         </h2>
         <ul className="checks">
           {report.backsState === null ? (
-            <li className="check">
-              <span className="check__icon" aria-hidden="true">
-                ✓
-              </span>
-              <span className="check__text">{t('inspector.check.frontsOnly')}</span>
-            </li>
+            <Check warning={false}>{t('inspector.check.frontsOnly')}</Check>
           ) : (
-            <li className={pairsWarning ? 'check check--warning' : 'check'}>
-              <span className="check__icon" aria-hidden="true">
-                {pairsWarning ? '•' : '✓'}
-              </span>
-              <span className="check__text">
-                {t('inspector.check.pairs', { pairs: report.pairs, fronts: report.fronts })}
-              </span>
-            </li>
+            <Check warning={pairsWarning}>
+              {t('inspector.check.pairs', { pairs: report.pairs, fronts: report.fronts })}
+            </Check>
           )}
-          <li className={assembly.orderEdited ? 'check check--warning' : 'check'}>
-            <span className="check__icon" aria-hidden="true">
-              {assembly.orderEdited ? '•' : '✓'}
-            </span>
-            <span className="check__text">
-              {assembly.orderEdited
-                ? t('inspector.check.orderEdited')
-                : t('inspector.check.orderAuto')}
-            </span>
-          </li>
+          <Check warning={assembly.orderEdited}>
+            {assembly.orderEdited
+              ? t('inspector.check.orderEdited')
+              : t('inspector.check.orderAuto')}
+          </Check>
         </ul>
       </section>
 

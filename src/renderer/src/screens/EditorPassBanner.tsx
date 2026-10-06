@@ -1,19 +1,18 @@
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { DomainError, ScannerInfo, SessionSnapshot, Snapshot } from '@shared';
+import type { DomainError, ErrorCode, ScannerInfo, SessionSnapshot, Snapshot } from '@shared';
 import { errorText, errorTextInline } from '../state/error-text';
 import { addressOf, reconnectAddress } from '../state/scanner-address';
 
 // Плашка прерванного прохода в `editor` (план M1, U24; handoff U19, S17): досканировать остаток,
-// оставить как есть или начать новое сканирование; отказы — строкой под кнопками. Вынесена из
-// `EditorScreen` (M3, U8): экран рос правками.
+// оставить как есть или начать новое сканирование; отказы — строкой под кнопками.
 
 /**
  * Коды отказа досканирования, которые лечатся повторным подключением (S17). Список шире, чем
  * у плашки `flip`: досканировать можно только на сканере прохода (KTD-27), поэтому и
  * «не отвечает» ведёт к переподключению.
  */
-const RESUME_RECONNECT_CODES: readonly string[] = [
+const RESUME_RECONNECT_CODES: readonly ErrorCode[] = [
   'scannerUnreachable',
   'scannerCertificateChanged',
 ];
@@ -77,26 +76,29 @@ export function EditorPassBanner({
   // Текст без кнопки досканирования объясняет почему; при «подключён не тот (или никакой)»
   // ссылка ведёт в `device` с адресом сканера прохода — иначе из `editor` в модалку не
   // попасть и проход не досканировать (тупик, ревью сессии 9; текст ссылки — Copy).
-  const text: ReactNode = snapshot.canResume ? (
-    t('editor.interrupted.text', { next: lastNumber + 1 })
-  ) : last.paramsKnown ? (
-    <>
-      {t('editor.interrupted.textOtherScanner', {
-        name: last.scanner?.name ?? last.scanner?.host ?? '',
-      })}{' '}
-      <button
-        type="button"
-        className="btn btn--link"
-        onClick={() => {
-          reconnectPassScanner(last.scanner);
-        }}
-      >
-        {t('editor.interrupted.reconnect')}
-      </button>
-    </>
-  ) : (
-    t('editor.interrupted.textParamsUnknown')
-  );
+  let text: ReactNode;
+  if (snapshot.canResume) {
+    text = t('editor.interrupted.text', { next: lastNumber + 1 });
+  } else if (last.paramsKnown) {
+    text = (
+      <>
+        {t('editor.interrupted.textOtherScanner', {
+          name: last.scanner?.name ?? last.scanner?.host ?? '',
+        })}{' '}
+        <button
+          type="button"
+          className="btn btn--link"
+          onClick={() => {
+            reconnectPassScanner(last.scanner);
+          }}
+        >
+          {t('editor.interrupted.reconnect')}
+        </button>
+      </>
+    );
+  } else {
+    text = t('editor.interrupted.textParamsUnknown');
+  }
   // Свежий отказ «Оставить как есть» виден и под висящим отказом досканирования:
   // показывается последнее действие, а не первое.
   let failureLine: ReactNode = null;

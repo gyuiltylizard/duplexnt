@@ -131,7 +131,13 @@
 .segment:focus-visible,
 .thumb:focus-visible,
 .device-item:focus-visible,
-.device-advanced__toggle:focus-visible {
+.device-advanced__toggle:focus-visible,
+.rail__selection-group:focus-visible,
+.rail__selection-clear:focus-visible,
+.doc-group__unsplit:focus-visible,
+.doc-list__item:focus-visible,
+.details-toggle:focus-visible,
+.toggle__input:focus-visible + .toggle__track {
   outline: var(--space-1) solid var(--color-border-focus);
   outline-offset: var(--space-1);
 }

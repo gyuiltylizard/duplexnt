@@ -10,8 +10,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../i18n';
 import { documentsOf } from '../state/assembly-fixture';
 import {
+  B2,
+  B3,
   ctrlZ,
   edits,
+  F1,
+  F2,
+  F3,
   makePass,
   makeSnapshot,
   nameField,
@@ -29,13 +34,6 @@ import { SNAPSHOT_WAIT_MS } from './useEditorEdits';
 // Экран `editor`, M3 (план U7; handoff M3, S1–S15): документы, выделение, поворот и удаление,
 // undo/redo, пустой редактор, инспектор. Ленту с правками тест задаёт снимком — renderer её
 // не считает (KTD-2).
-
-// Лента двусторонней фикстуры (AE1): 1л, 1о, 2л, 2о, 3л, 3о.
-const F1 = 'p01-s01-0001';
-const B3 = 'p02-s01-0003';
-const F2 = 'p01-s01-0002';
-const B2 = 'p02-s01-0002';
-const F3 = 'p01-s01-0003';
 
 /** Сборка с документами по разрезам — как её отдало бы ядро. */
 const withCuts =

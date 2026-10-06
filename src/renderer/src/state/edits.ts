@@ -18,6 +18,10 @@ function cutsWithout(cuts: readonly number[], removed: readonly number[]): numbe
   return cuts.map((cut) => cut - removed.filter((index) => index < cut).length);
 }
 
+/** Позиции ленты, занятые страницами из `keys`, по возрастанию. */
+const positionsOf = (visible: readonly string[], keys: ReadonlySet<string>): number[] =>
+  visible.flatMap((key, index) => (keys.has(key) ? [index] : []));
+
 /** Поворот на 90° по часовой каждой из страниц; полный оборот снимает запись. */
 export function rotated(edits: SessionEdits, keys: readonly string[]): SessionEdits {
   const rotations = new Map(Object.entries(edits.rotations));
@@ -42,7 +46,7 @@ export function deleted(
   keys: readonly string[],
 ): SessionEdits {
   const removing = new Set(keys);
-  const removed = visible.flatMap((key, index) => (removing.has(key) ? [index] : []));
+  const removed = positionsOf(visible, removing);
   if (removed.length === 0) {
     return edits;
   }
@@ -76,7 +80,7 @@ export function moved(
   if (group.length === 0) {
     return null;
   }
-  const removed = visible.flatMap((key, index) => (moving.has(key) ? [index] : []));
+  const removed = positionsOf(visible, moving);
   const rest = visible.filter((key) => !moving.has(key));
   const at = rest.indexOf(target) + (side === 'after' ? 1 : 0);
   const cuts = cutsWithout(edits.cuts, removed).map((cut) =>
