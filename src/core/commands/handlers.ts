@@ -21,6 +21,7 @@ import {
   connectScannerRequestSchema,
   noRequestSchema,
   parseInput,
+  saveDocumentsRequestSchema,
   scanParamsSchema,
   setEditsRequestSchema,
 } from './schemas';
@@ -42,6 +43,10 @@ export interface CommandContext {
    * Имя по умолчанию и подтверждение перезаписи — обязанность main и диалога ОС.
    */
   readonly askSavePdfPath: () => Promise<string | null>;
+  /** Папка сохранения пакета по умолчанию (M3, KTD-5): «Документы» пользователя. */
+  readonly defaultSaveFolder: string;
+  /** Диалог выбора папки (M3, KTD-5), открытый на текущей; `null` — пользователь отказался. */
+  readonly askSaveFolder: (current: string) => Promise<string | null>;
   /** Список найденных устройств изменился; `seq` — номер изменения. */
   readonly onDiscoveryChanged: (seq: number) => void;
   /** Подмена для тестов. */
@@ -91,6 +96,8 @@ export function createCommands(context: CommandContext): Commands {
 
   let discovery: Discovery | null = null;
   let discoverySeq = 0;
+  /** Папка пакетного сохранения (M3, KTD-5): помнится до выхода. */
+  let saveFolder = context.defaultSaveFolder;
   let announced = false;
 
   // `onChange` поиска вызывается из обработчика сокета: исключение в нём стало бы необработанным.
@@ -211,6 +218,21 @@ export function createCommands(context: CommandContext): Commands {
           : request;
       },
       savePdf: withoutRequest(() => service.savePdf(context.askSavePdfPath)),
+
+      // Папка пакета живёт здесь, как поиск устройств: её выбирает main, пишет служба. В снимок
+      // она не идёт — там нет абсолютных путей (KTD-39); модалка берёт её командой.
+      getSaveFolder: withoutRequest(() => Promise.resolve(ok(saveFolder))),
+      chooseSaveFolder: withoutRequest(async () => {
+        const picked = await context.askSaveFolder(saveFolder);
+        if (picked !== null) {
+          saveFolder = picked;
+        }
+        return ok({ canceled: picked === null, folder: saveFolder });
+      }),
+      saveDocuments: async (rawRequest) => {
+        const request = parseInput(saveDocumentsRequestSchema, rawRequest);
+        return request.ok ? service.saveDocuments(saveFolder, request.value) : request;
+      },
       closeSession: withoutRequest(() => done(() => service.closeSession())),
 
       openDataFolder: withoutRequest(() => done(() => context.openDataFolder())),

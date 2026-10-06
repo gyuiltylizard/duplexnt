@@ -6,6 +6,7 @@ import {
   type BridgeCommand,
   type DiscoveryState,
   type Result,
+  type SaveDocumentsReport,
   type SavePdfReport,
   type SessionEdits,
   type Snapshot,
@@ -55,6 +56,9 @@ function setup(snapshot: Snapshot = EMPTY_SNAPSHOT) {
     savePdf: vi.fn((): Promise<Result<SavePdfReport>> =>
       Promise.resolve(ok({ canceled: false, fileName: 'скан.pdf', directory: 'D:\\Сканы' })),
     ),
+    saveDocuments: vi.fn((): Promise<Result<SaveDocumentsReport>> =>
+      Promise.resolve(ok({ folder: 'D:\\Сканы', written: [], failed: [] })),
+    ),
     closeSession: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
     interrupt: vi.fn(() => Promise.resolve()),
     pageInfo: vi.fn(() => null),
@@ -91,11 +95,14 @@ function setup(snapshot: Snapshot = EMPTY_SNAPSHOT) {
   const askSavePdfPath = vi.fn((): Promise<string | null> =>
     Promise.resolve('D:\\Сканы\\скан.pdf'),
   );
+  const askSaveFolder = vi.fn((): Promise<string | null> => Promise.resolve('E:\\Архив'));
   const discoveryEvents: number[] = [];
   const commands = createCommands({
     service,
     openDataFolder,
     askSavePdfPath,
+    defaultSaveFolder: 'C:\\Users\\Документы',
+    askSaveFolder,
     onDiscoveryChanged: (seq) => discoveryEvents.push(seq),
     startDiscovery,
     connector,
@@ -111,6 +118,7 @@ function setup(snapshot: Snapshot = EMPTY_SNAPSHOT) {
     cancel,
     openDataFolder,
     askSavePdfPath,
+    askSaveFolder,
     discoveryEvents,
   };
 }
@@ -256,6 +264,46 @@ describe('снимок и проход', () => {
     expect(service.setEdits).toHaveBeenCalledTimes(2);
   });
 
+  it('папка пакета: по умолчанию «Документы», «Выбрать…» меняет, отказ в диалоге — нет (M3, U4)', async () => {
+    const { handlers, askSaveFolder } = setup();
+
+    expect(await handlers.getSaveFolder(undefined)).toEqual(ok('C:\\Users\\Документы'));
+    expect(await handlers.chooseSaveFolder(undefined)).toEqual(
+      ok({ canceled: false, folder: 'E:\\Архив' }),
+    );
+    expect(askSaveFolder).toHaveBeenLastCalledWith('C:\\Users\\Документы');
+
+    askSaveFolder.mockResolvedValueOnce(null);
+    expect(await handlers.chooseSaveFolder(undefined)).toEqual(
+      ok({ canceled: true, folder: 'E:\\Архив' }),
+    );
+    expect(await handlers.getSaveFolder(undefined)).toEqual(ok('E:\\Архив'));
+  });
+
+  it('saveDocuments: строгая схема, затем служба с текущей папкой (M3, U4)', async () => {
+    const { handlers, service } = setup();
+    await handlers.chooseSaveFolder(undefined);
+    const request = { mode: 'separate', names: ['Счёт', 'Акт'], retry: false } as const;
+
+    expect(await handlers.saveDocuments(request)).toEqual(
+      ok({ folder: 'D:\\Сканы', written: [], failed: [] }),
+    );
+    expect(service.saveDocuments).toHaveBeenCalledExactlyOnceWith('E:\\Архив', request);
+
+    const garbage = [
+      undefined,
+      { mode: 'all', names: ['А'], retry: false },
+      { mode: 'single', names: [], retry: false },
+      { mode: 'single', names: ['я'.repeat(201)], retry: false },
+      { mode: 'single', names: ['А'], retry: 'нет' },
+      { mode: 'single', names: ['А'], retry: false, folder: 'C:\\' },
+    ];
+    for (const [index, input] of garbage.entries()) {
+      expect(invalid(await handlers.saveDocuments(input)), `мусор №${index}`).toBe(true);
+    }
+    expect(service.saveDocuments).toHaveBeenCalledTimes(1);
+  });
+
   it('setScanParams: строгая схема, затем служба', async () => {
     const { handlers, service } = setup();
 
@@ -343,6 +391,8 @@ describe('поиск устройств', () => {
       service,
       openDataFolder: () => Promise.resolve(ok(undefined)),
       askSavePdfPath: () => Promise.resolve(null),
+      defaultSaveFolder: 'C:\\Users\\Документы',
+      askSaveFolder: () => Promise.resolve(null),
       onDiscoveryChanged: () => {
         throw new Error('окно закрыто');
       },

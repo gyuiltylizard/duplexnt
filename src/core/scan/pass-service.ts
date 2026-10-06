@@ -3,6 +3,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import {
   fail,
   ok,
+  type AssembledPage,
   type DomainError,
   sessionConflict,
   type PassProgress,
@@ -10,6 +11,10 @@ import {
   type Result,
   type SavePdfReport,
   type ScanParams,
+  type SaveDocumentsReport,
+  type SaveDocumentsRequest,
+  type SavedFile,
+  type SaveMode,
   type SessionConflictReason,
   type SessionEdits,
   type ScannerState,
@@ -30,6 +35,7 @@ import { buildScanSettings, DEFAULT_SCAN_PARAMS, resolveScanParams } from '../es
 import { parseStatus } from '../escl/status';
 import { createTransport, type ScannerTransport } from '../escl/transport';
 import { assemblePdf, type PdfPageInput } from '../pdf/assemble';
+import { writeBatch } from '../pdf/save-batch';
 import { writeFileAtomic } from '../storage/atomic-file';
 import type { PassOrigin } from '../storage/journal';
 import { openSessionStore } from '../storage/reconcile';
@@ -108,6 +114,15 @@ export interface PassService {
    * после успешного переименования — отметка о сохранении в журнале.
    */
   savePdf(askPath: () => Promise<string | null>): Promise<Result<SavePdfReport>>;
+  /**
+   * Пакетное сохранение в папку (M3, U4): документы ленты (или вся лента одним файлом) в PDF по
+   * одному, best-effort. «Сохранено» — только когда записаны все файлы пакета и журнал не
+   * менялся с первой попытки. `retry` пишет только неудавшиеся прошлого пакета — в его папку.
+   */
+  saveDocuments(
+    folder: string,
+    request: SaveDocumentsRequest,
+  ): Promise<Result<SaveDocumentsReport>>;
   /** «Новая пачка». */
   closeSession(): Promise<Result<void>>;
   /**
@@ -118,6 +133,19 @@ export interface PassService {
   /** Страницы текущей сессии — для схемы изображений и миниатюр. */
   pageInfo(key: string): PageInfo | null;
   readPage(key: string): Promise<Result<Uint8Array>>;
+}
+
+/** Незавершённый пакет сохранения (M3, U4). */
+interface PendingBatch {
+  readonly mode: SaveMode;
+  readonly folder: string;
+  readonly documents: number;
+  /** Ревизия журнала первой попытки. */
+  readonly revision: number;
+  /** Записанные — накопительно. */
+  readonly written: readonly SavedFile[];
+  /** Номера документов, которые ещё предстоит записать. */
+  readonly failed: readonly number[];
 }
 
 interface Dependencies {
@@ -193,6 +221,12 @@ export function createPassService(
   let run: Run | null = null;
   /** Сохранение PDF идёт: второй вызов — конфликт, а не два диалога и две записи в один путь. */
   let saving = false;
+  /**
+   * Незавершённый пакет (M3, U4): записанное накапливается, повтор пишет только неудавшиеся.
+   * Ревизия — первой попытки: правка между попытками делает уже записанные файлы устаревшими,
+   * и «сохранено» не ставится.
+   */
+  let pendingBatch: PendingBatch | null = null;
   let seq = 0;
 
   const notify = (): void => {
@@ -246,6 +280,102 @@ export function createPassService(
     return sameScanner(target.value.scanner, storedScannerOf(scanner.connected))
       ? target
       : conflict('otherScanner');
+  }
+
+  // Почему сохранять нельзя. Функция, а не выражение: `run` мутирует конкурентно, и после
+  // `await` проверку нужно повторить — прямое сравнение TS сузил бы до «всегда null».
+  function refusedSave(): Result<never> | null {
+    if (run !== null) {
+      return conflict('passRunning');
+    }
+    if (store.incompatible) {
+      return fail('storageIncompatible');
+    }
+    return store.snapshot() === null ? conflict('noSession') : null;
+  }
+
+  /** Страницы ленты → PDF; потерянная страница — отказ, а не молча короче (M2, R11). */
+  async function buildPdf(pages: readonly AssembledPage[]): Promise<Result<Uint8Array>> {
+    const inputs: PdfPageInput[] = [];
+    for (const page of pages) {
+      const info = store.pageInfo(page.key);
+      const bytes = await store.readPage(page.key);
+      if (!bytes.ok) {
+        return bytes;
+      }
+      inputs.push({
+        bytes: bytes.value,
+        angle: page.angle,
+        dpi: info?.dpi ?? null,
+        pixelLimit: info?.pixelLimit ?? null,
+      });
+    }
+    return assemblePdf(inputs);
+  }
+
+  async function writeDocuments(
+    folder: string,
+    request: SaveDocumentsRequest,
+  ): Promise<Result<SaveDocumentsReport>> {
+    const refused = refusedSave();
+    if (refused !== null) {
+      return refused;
+    }
+    const session = store.snapshot();
+    if (session === null) {
+      return conflict('noSession');
+    }
+    const { order, documents } = assembleSession(session);
+    if (order.length === 0) {
+      return conflict('nothingToSave');
+    }
+    // «Один файл» не смотрит на границы (R15): разрезы и имена в журнале остаются.
+    const spans =
+      request.mode === 'single'
+        ? [order]
+        : documents.map((doc) => order.slice(doc.start, doc.start + doc.count));
+    if (request.names.length !== spans.length) {
+      return fail('invalidInput', { field: 'names', problem: 'count' });
+    }
+
+    const previous = request.retry ? pendingBatch : null;
+    if (request.retry && (previous?.mode !== request.mode || previous.documents !== spans.length)) {
+      return conflict('noFailedFiles');
+    }
+    const batch: PendingBatch = previous ?? {
+      mode: request.mode,
+      folder,
+      documents: spans.length,
+      revision: store.revision(),
+      written: [],
+      failed: spans.map((_pages, index) => index),
+    };
+
+    const outcome = await writeBatch(
+      batch.folder,
+      batch.failed.map((index) => ({
+        index,
+        name: request.names[index] ?? '',
+        build: () => buildPdf(spans[index] ?? []),
+      })),
+      ioOf(options),
+    );
+    if (!outcome.ok) {
+      return outcome;
+    }
+    const written = [...batch.written, ...outcome.value.written].sort(
+      (left, right) => left.index - right.index,
+    );
+    const { failed } = outcome.value;
+    if (failed.length === 0) {
+      pendingBatch = null;
+      // Отметка — на набор первой попытки: правка между попытками её не получит (R13).
+      await store.markSaved(batch.revision);
+      notify();
+    } else {
+      pendingBatch = { ...batch, written, failed: failed.map((file) => file.index) };
+    }
+    return ok({ folder: batch.folder, written, failed });
   }
 
   function snapshot(): Snapshot {
@@ -655,18 +785,7 @@ export function createPassService(
       }
       saving = true;
       try {
-        // Проверка вынесена в функцию: `run` мутирует конкурентно, и после `await` её нужно
-        // повторить — прямое сравнение TS сузил бы до «всегда null».
-        const refused = (): Result<never> | null => {
-          if (run !== null) {
-            return conflict('passRunning');
-          }
-          if (store.incompatible) {
-            return fail('storageIncompatible');
-          }
-          return store.snapshot() === null ? conflict('noSession') : null;
-        };
-        const early = refused();
+        const early = refusedSave();
         if (early !== null) {
           return early;
         }
@@ -678,7 +797,7 @@ export function createPassService(
         }
         // Диалог мог висеть сколько угодно: состояние проверяется заново, иначе PDF собрался бы
         // по устаревшему снимку, а отметка о сохранении пометила бы уже изменившийся набор.
-        const stale = refused();
+        const stale = refusedSave();
         if (stale !== null) {
           return stale;
         }
@@ -690,22 +809,8 @@ export function createPassService(
         // тумблер поворота) снимает отметку, и ставить поверх неё «сохранено» нельзя.
         const revision = store.revision();
 
-        // Страницы — в собранном порядке; потерянная страница — отказ, а не молча короче (R11).
-        const inputs: PdfPageInput[] = [];
-        for (const page of assembleSession(session).order) {
-          const info = store.pageInfo(page.key);
-          const bytes = await store.readPage(page.key);
-          if (!bytes.ok) {
-            return bytes;
-          }
-          inputs.push({
-            bytes: bytes.value,
-            angle: page.angle,
-            dpi: info?.dpi ?? null,
-            pixelLimit: info?.pixelLimit ?? null,
-          });
-        }
-        const pdf = await assemblePdf(inputs);
+        // Страницы — в собранном порядке ленты с правками.
+        const pdf = await buildPdf(assembleSession(session).order);
         if (!pdf.ok) {
           return pdf;
         }
@@ -725,6 +830,19 @@ export function createPassService(
         await store.markSaved(revision);
         notify();
         return ok({ canceled: false, fileName: basename(path), directory: dirname(path) });
+      } finally {
+        saving = false;
+      }
+    },
+
+    async saveDocuments(folder, request) {
+      // Одна запись за раз (как `savePdf`): правки в это время отклоняются (KTD-9).
+      if (saving) {
+        return conflict('saving');
+      }
+      saving = true;
+      try {
+        return await writeDocuments(folder, request);
       } finally {
         saving = false;
       }

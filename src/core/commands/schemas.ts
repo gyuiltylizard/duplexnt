@@ -1,11 +1,13 @@
 import { z } from 'zod';
 import {
   fail,
+  MAX_DOCUMENT_NAME_LENGTH,
   ok,
   PROBE_TOKEN_MAX_LENGTH,
   type ConnectScannerRequest,
   type ProbeRequest,
   type Result,
+  type SaveDocumentsRequest,
   type SetEditsRequest,
 } from '@shared';
 import { DEVICE_PATH_MAX_LENGTH } from '../escl/device-path';
@@ -53,6 +55,16 @@ export const setEditsRequestSchema = z.strictObject({
   edits: editsSchemaOf(MAX_EDIT_ITEMS),
   rotate180: z.boolean(),
 }) satisfies z.ZodType<SetEditsRequest>;
+
+/**
+ * Пакетное сохранение: имена файлов по документам. Имя проверяется только на длину — правила
+ * NTFS применяет ядро при записи (KTD-11), чтобы не отказывать человеку из-за «:» в имени.
+ */
+export const saveDocumentsRequestSchema = z.strictObject({
+  mode: z.enum(['separate', 'single']),
+  names: z.array(z.string().max(MAX_DOCUMENT_NAME_LENGTH)).min(1).max(MAX_EDIT_ITEMS).readonly(),
+  retry: z.boolean(),
+}) satisfies z.ZodType<SaveDocumentsRequest>;
 
 export { scanParamsSchema };
 

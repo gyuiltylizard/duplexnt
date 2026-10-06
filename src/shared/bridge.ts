@@ -14,7 +14,7 @@
 
 import type { DiscoveryState } from './discovery';
 import type { SessionEdits } from './edits';
-import type { Result } from './errors';
+import type { DomainError, Result } from './errors';
 import type { ScanParams } from './scan-params';
 import type { PassReport, Snapshot } from './snapshot';
 
@@ -64,6 +64,47 @@ export type SavePdfReport =
   | { readonly canceled: true }
   /** Имя файла и папка — для тоста «Сохранено: …». */
   | { readonly canceled: false; readonly fileName: string; readonly directory: string };
+
+/** Режим сохранения (M3, R11): по документам или всё одним файлом (R15 — границы не в счёт). */
+export type SaveMode = 'separate' | 'single';
+
+/**
+ * «Сохранить» из модалки (M3, U4): имена файлов по документам (для «одного файла» — одно), папка —
+ * выбранная `chooseSaveFolder`. `retry` — повтор только неудавшихся файлов прошлого пакета.
+ */
+export interface SaveDocumentsRequest {
+  readonly mode: SaveMode;
+  readonly names: readonly string[];
+  readonly retry: boolean;
+}
+
+export interface SavedFile {
+  /** Номер документа в пакете, с нуля. */
+  readonly index: number;
+  /** Фактическое имя файла — с суффиксом « (2)», если исходное было занято. */
+  readonly fileName: string;
+}
+
+export interface FailedFile extends SavedFile {
+  readonly error: DomainError;
+}
+
+/**
+ * Итог пакета (M3, R12): записанные — накопительно с прошлых попыток, неудавшиеся — этой.
+ * «Сохранено» ставится только когда `failed` пуст.
+ */
+export interface SaveDocumentsReport {
+  /** Папка — для сводки и тоста. */
+  readonly folder: string;
+  readonly written: readonly SavedFile[];
+  readonly failed: readonly FailedFile[];
+}
+
+/** Выбор папки сохранения: отказ в диалоге оставляет прежнюю. */
+export interface SaveFolderChoice {
+  readonly canceled: boolean;
+  readonly folder: string;
+}
 
 export interface ProbeResult {
   /** Эхо входного токена — доказывает, что ответ пришёл на этот вызов. */
@@ -122,6 +163,18 @@ export interface BridgeCommands {
    * PDF и пишет атомарно; отметка о сохранении — в журнале.
    */
   readonly savePdf: { readonly request: NoRequest; readonly value: SavePdfReport };
+  /** Папка сохранения пакета (M3, KTD-5): по умолчанию «Документы», помнится до выхода. */
+  readonly getSaveFolder: { readonly request: NoRequest; readonly value: string };
+  /** «Выбрать…» в модалке `save`: системный диалог папки в main. */
+  readonly chooseSaveFolder: { readonly request: NoRequest; readonly value: SaveFolderChoice };
+  /**
+   * Пакетное сохранение (M3, U4): документы ленты в PDF в выбранную папку, best-effort. Во время
+   * записи правки отклоняются (KTD-9).
+   */
+  readonly saveDocuments: {
+    readonly request: SaveDocumentsRequest;
+    readonly value: SaveDocumentsReport;
+  };
   readonly closeSession: { readonly request: NoRequest; readonly value: undefined };
   /** Открывает каталог данных в проводнике — при несовместимых данных. Каталог знает main. */
   readonly openDataFolder: { readonly request: NoRequest; readonly value: undefined };
@@ -145,6 +198,9 @@ export const BRIDGE_CHANNELS = {
   declineBacks: 'duplexnt:decline-backs',
   setEdits: 'duplexnt:set-edits',
   savePdf: 'duplexnt:save-pdf',
+  getSaveFolder: 'duplexnt:get-save-folder',
+  chooseSaveFolder: 'duplexnt:choose-save-folder',
+  saveDocuments: 'duplexnt:save-documents',
   closeSession: 'duplexnt:close-session',
   openDataFolder: 'duplexnt:open-data-folder',
 } as const satisfies Record<BridgeCommand, string>;

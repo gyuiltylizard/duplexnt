@@ -83,6 +83,10 @@ export const SESSION_CONFLICT_REASONS = [
   'backsPresent',
   /** От оборотов отказались: набор закрыт односторонним, новый проход не начинается (M2). */
   'backsDeclined',
+  /** В ленте нет страниц — все удалены: сохранять нечего (M3, AE10). */
+  'nothingToSave',
+  /** Повторять нечего: прошлый пакет записан целиком или его не было (M3, U4). */
+  'noFailedFiles',
 ] as const;
 
 export type SessionConflictReason = (typeof SESSION_CONFLICT_REASONS)[number];

@@ -118,6 +118,15 @@ async function start(): Promise<void> {
       });
       return picked.canceled || picked.filePath === '' ? null : picked.filePath;
     },
+    // Папка пакета (M3, KTD-5): имена файлов задаёт модалка, папку — системный диалог.
+    defaultSaveFolder: app.getPath('documents'),
+    askSaveFolder: async (current) => {
+      const picked = await dialog.showOpenDialog(window, {
+        defaultPath: current,
+        properties: ['openDirectory', 'createDirectory'],
+      });
+      return picked.canceled ? null : (picked.filePaths[0] ?? null);
+    },
     onDiscoveryChanged: (seq) => {
       send('discoveryChanged', { seq });
     },
