@@ -1,4 +1,12 @@
-﻿import { fail, ok, type Api, type AssemblyReport, type PassProgress, type Snapshot } from '@shared';
+﻿import {
+  EMPTY_EDITS,
+  fail,
+  ok,
+  type Api,
+  type AssemblyReport,
+  type PassProgress,
+  type Snapshot,
+} from '@shared';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../i18n';
@@ -27,6 +35,7 @@ function makeSnapshot(fronts: number): Snapshot {
       id: 'session.x',
       backsDeclined: false,
       saved: false,
+      edits: EMPTY_EDITS,
       passes: [
         {
           number: 1,

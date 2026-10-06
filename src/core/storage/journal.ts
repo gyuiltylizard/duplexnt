@@ -1,7 +1,8 @@
 import { z } from 'zod';
-import type { PassState } from '@shared';
+import { EMPTY_EDITS, MAX_DOCUMENT_NAME_LENGTH, type PassState } from '@shared';
 import { scanParamsSchema } from '../escl/scan-settings';
 import {
+  isPageKey,
   MAX_PAGE_INDEX,
   MAX_PASS_NUMBER,
   MAX_SEGMENT_NUMBER,
@@ -20,7 +21,7 @@ import { parseVersioned, type VersionedParse } from './versioned-file';
 // - страницы сегмента — номера с 1 по `pageCount`; ключ и имя файла выводятся из номеров;
 // - «страница потеряна» — запись есть, файла нет: это видно по диску, а не по журналу.
 
-export const JOURNAL_VERSION = 2;
+export const JOURNAL_VERSION = 3;
 
 const segmentSchema = z.strictObject({
   number: z.number().int().min(1).max(MAX_SEGMENT_NUMBER),
@@ -99,23 +100,53 @@ const countersHold = (journal: {
   isOrdered(journal.passes, journal.nextPass) &&
   journal.passes.every((pass) => isOrdered(pass.segments, pass.nextSegment));
 
+const pageKeySchema = z.string().refine(isPageKey);
+
+const isNonDecreasing = (values: readonly number[]): boolean =>
+  values.every((value, index) => index === 0 || value >= (values[index - 1] ?? 0));
+
+/**
+ * Ручные правки (M3; ADR 0004, амендмент 2026-10-06) — итоговое состояние, не лог. Ключи без
+ * страниц схема пропускает: их отбрасывает нормализация, а не отказ читать журнал.
+ */
+const editsSchema = z
+  .strictObject({
+    order: z.array(pageKeySchema).readonly(),
+    rotations: z
+      .record(pageKeySchema, z.union([z.literal(90), z.literal(180), z.literal(270)]))
+      .readonly(),
+    deleted: z.array(pageKeySchema).readonly(),
+    cuts: z.array(z.number().int().min(0)).readonly(),
+    names: z.array(z.string().max(MAX_DOCUMENT_NAME_LENGTH)).readonly(),
+  })
+  .refine((edits) => edits.names.length === edits.cuts.length + 1 && isNonDecreasing(edits.cuts));
+
+// Журнал версии 2 (M2): без правок редактора. Чтение v2 обязательно, запись — всегда текущей.
+const journalV2Fields = {
+  ...journalFields,
+  passes: z.array(passSchema),
+  /** «Обороты не нужны»: односторонний набор, второй проход не предлагается (M2, KTD-6). */
+  backsDeclined: z.boolean(),
+  /**
+   * Набор сохранён в PDF и с тех пор не менялся (M2, R12): снимается любой правкой, влияющей
+   * на вывод, — новой страницей, удалением, сменой поворота, правкой редактора.
+   */
+  saved: z.boolean(),
+};
+
 export const journalSchema = z
   .strictObject({
     version: z.literal(JOURNAL_VERSION),
-    ...journalFields,
-    passes: z.array(passSchema),
-    /** «Обороты не нужны»: односторонний набор, второй проход не предлагается (M2, KTD-6). */
-    backsDeclined: z.boolean(),
-    /**
-     * Набор сохранён в PDF и с тех пор не менялся (M2, R12): снимается любой правкой, влияющей
-     * на вывод, — новой страницей, удалением, сменой флага поворота.
-     */
-    saved: z.boolean(),
+    ...journalV2Fields,
+    edits: editsSchema,
   })
   .refine(countersHold);
 
+const journalV2Schema = z
+  .strictObject({ version: z.literal(2), ...journalV2Fields })
+  .refine(countersHold);
+
 // Журнал версии 1 (M1): без флага поворота, отказа от оборотов и отметки о сохранении.
-// Чтение v1 обязательно (амендмент ADR 0004), запись — всегда v2.
 const journalV1Pass = z.strictObject(passFields);
 const journalV1Schema = z
   .strictObject({ version: z.literal(1), ...journalFields, passes: z.array(journalV1Pass) })
@@ -125,29 +156,40 @@ export type Journal = z.infer<typeof journalSchema>;
 export type JournalPass = Journal['passes'][number];
 export type JournalSegment = JournalPass['segments'][number];
 export type PassOrigin = NonNullable<JournalPass['origin']>;
+export type JournalEdits = Journal['edits'];
 
-function upgradeToV2(journal: z.infer<typeof journalV1Schema>): Journal {
-  return {
-    ...journal,
-    version: JOURNAL_VERSION,
-    passes: journal.passes.map((pass) => ({ ...pass, rotate180: false })),
-    backsDeclined: false,
-    saved: false,
-  };
-}
+type JournalV2 = z.infer<typeof journalV2Schema>;
+
+const upgradeToV3 = (journal: JournalV2): Journal => ({
+  ...journal,
+  version: JOURNAL_VERSION,
+  edits: EMPTY_EDITS,
+});
+
+const upgradeToV2 = (journal: z.infer<typeof journalV1Schema>): JournalV2 => ({
+  ...journal,
+  version: 2,
+  passes: journal.passes.map((pass) => ({ ...pass, rotate180: false })),
+  backsDeclined: false,
+  saved: false,
+});
 
 /**
- * Разбор журнала: текущая версия, затем v1 с дефолтами новых полей. Несовместимость (маркер
- * новее, неизвестное поле) решается по текущей схеме и чтение v1 не пробует: файл с неизвестным
- * полем несовместим при любой версии.
+ * Разбор журнала: текущая версия, затем прежние цепочкой дефолтов (v1 → v2 → v3).
+ * Несовместимость (маркер новее, неизвестное поле) решается по текущей схеме и прежние не
+ * пробует: файл с неизвестным полем несовместим при любой версии.
  */
 export function parseJournal(bytes: Uint8Array): VersionedParse<Journal> {
   const current = parseVersioned(bytes, journalSchema, JOURNAL_VERSION);
   if (current.kind !== 'unreadable') {
     return current;
   }
-  const legacy = parseVersioned(bytes, journalV1Schema, JOURNAL_VERSION);
-  return legacy.kind === 'ok' ? { kind: 'ok', value: upgradeToV2(legacy.value) } : current;
+  const v2 = parseVersioned(bytes, journalV2Schema, JOURNAL_VERSION);
+  if (v2.kind === 'ok') {
+    return { kind: 'ok', value: upgradeToV3(v2.value) };
+  }
+  const v1 = parseVersioned(bytes, journalV1Schema, JOURNAL_VERSION);
+  return v1.kind === 'ok' ? { kind: 'ok', value: upgradeToV3(upgradeToV2(v1.value)) } : current;
 }
 
 export function newJournal(sessionId: string): Journal {
@@ -159,6 +201,7 @@ export function newJournal(sessionId: string): Journal {
     deletions: [],
     backsDeclined: false,
     saved: false,
+    edits: EMPTY_EDITS,
   };
 }
 

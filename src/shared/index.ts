@@ -32,6 +32,14 @@ export {
 export type { DiscoveredScanner, DiscoveryState } from './discovery';
 
 export {
+  EDIT_ANGLES,
+  EMPTY_EDITS,
+  MAX_DOCUMENT_NAME_LENGTH,
+  type EditAngle,
+  type SessionEdits,
+} from './edits';
+
+export {
   COLOR_MODES,
   DEFAULT_SCAN_PARAMS,
   PAPER_SIZES,

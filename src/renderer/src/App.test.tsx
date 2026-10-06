@@ -1,4 +1,5 @@
 ﻿import {
+  EMPTY_EDITS,
   fail,
   ok,
   type Api,
@@ -103,6 +104,7 @@ describe('каркас приложения', () => {
           id: 'session.x',
           backsDeclined: false,
           saved: false,
+          edits: EMPTY_EDITS,
           passes: [
             {
               number: 1,
@@ -130,6 +132,7 @@ describe('каркас приложения', () => {
           id: 'session.x',
           backsDeclined: false,
           saved: false,
+          edits: EMPTY_EDITS,
           passes: [
             {
               number: 1,
@@ -173,6 +176,7 @@ describe('каркас приложения', () => {
           id: 'session.x',
           backsDeclined: false,
           saved: false,
+          edits: EMPTY_EDITS,
           passes: [
             {
               number: 1,
@@ -274,6 +278,7 @@ describe('каркас приложения', () => {
           id: 'session.x',
           backsDeclined: false,
           saved: false,
+          edits: EMPTY_EDITS,
           passes: [
             {
               number: 1,
@@ -304,6 +309,7 @@ describe('каркас приложения', () => {
           id: 'session.x',
           backsDeclined: false,
           saved: false,
+          edits: EMPTY_EDITS,
           passes: [
             {
               number: 1,
@@ -339,6 +345,7 @@ describe('каркас приложения', () => {
           id: 'session.x',
           backsDeclined: false,
           saved: false,
+          edits: EMPTY_EDITS,
           passes: [
             {
               number: 1,
@@ -369,6 +376,7 @@ describe('каркас приложения', () => {
         id: 'session.x',
         backsDeclined: false,
         saved: false,
+        edits: EMPTY_EDITS,
         passes: [
           {
             number: 1,
@@ -454,6 +462,7 @@ describe('каркас приложения', () => {
           id: 'session.x',
           backsDeclined: false,
           saved: false,
+          edits: EMPTY_EDITS,
           passes: [
             {
               number: 1,
@@ -486,6 +495,7 @@ describe('каркас приложения', () => {
         id: 'session.x',
         backsDeclined: false,
         saved: false,
+        edits: EMPTY_EDITS,
         passes: [
           {
             number: 1,
@@ -512,6 +522,7 @@ describe('каркас приложения', () => {
         id: 'session.x',
         backsDeclined: false,
         saved: false,
+        edits: EMPTY_EDITS,
         passes: [
           {
             number: 1,
@@ -580,6 +591,7 @@ describe('каркас приложения', () => {
         id: 'session.x',
         backsDeclined: false,
         saved: false,
+        edits: EMPTY_EDITS,
         passes: [
           {
             number: 1,
@@ -598,6 +610,7 @@ describe('каркас приложения', () => {
         id: 'session.x',
         backsDeclined: true,
         saved: false,
+        edits: EMPTY_EDITS,
         passes: flip.session?.passes ?? [],
       },
     });
@@ -641,6 +654,7 @@ describe('каркас приложения', () => {
         id: 'session.x',
         backsDeclined: false,
         saved: false,
+        edits: EMPTY_EDITS,
         passes: [
           {
             number: 1,
@@ -659,6 +673,7 @@ describe('каркас приложения', () => {
         id: 'session.x',
         backsDeclined: false,
         saved: false,
+        edits: EMPTY_EDITS,
         passes: [
           ...(flip.session?.passes ?? []),
           {
@@ -712,6 +727,7 @@ describe('каркас приложения', () => {
           id: 'session.x',
           backsDeclined: false,
           saved: false,
+          edits: EMPTY_EDITS,
           passes: [
             {
               number: 1,
@@ -753,6 +769,7 @@ describe('каркас приложения', () => {
           id: 'session.x',
           backsDeclined: false,
           saved: false,
+          edits: EMPTY_EDITS,
           passes: [
             {
               number: 1,

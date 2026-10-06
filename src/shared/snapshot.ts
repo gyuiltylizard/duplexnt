@@ -5,6 +5,7 @@
 //
 // В снимке нет абсолютных путей и адресов заданий (KTD-39): страница адресуется ключом.
 
+import type { SessionEdits } from './edits';
 import type { DomainError } from './errors';
 import type { ScanOptions, ScanParams } from './scan-params';
 
@@ -47,6 +48,11 @@ export interface SessionSnapshot {
   /** Набор сохранён в PDF и с тех пор не менялся (M2, R12): кормит индикацию несохранённого. */
   readonly saved: boolean;
   readonly passes: readonly PassSnapshot[];
+  /**
+   * Ручные правки — дословно, как записаны в журнал после нормализации ядром (M3, KTD-3):
+   * от них редактор строит следующий жест и перебазирует вершину undo-стека.
+   */
+  readonly edits: SessionEdits;
 }
 
 /**

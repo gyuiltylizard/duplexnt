@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { EMPTY_EDITS } from '@shared';
 import {
   backsPassOf,
   JOURNAL_VERSION,
@@ -44,6 +45,19 @@ const JOURNAL: Journal = {
   deletions: ['p01-s02-'],
   backsDeclined: false,
   saved: false,
+  edits: EMPTY_EDITS,
+};
+
+// Правки M3 во всех полях: перенос, поворот, удаление, разрез с именем второго документа.
+const EDITED: Journal = {
+  ...JOURNAL,
+  edits: {
+    order: ['p01-s03-0001', 'p01-s01-0001'],
+    rotations: { 'p01-s01-0002': 90, 'p01-s03-0002': 270 },
+    deleted: ['p01-s01-0003'],
+    cuts: [5],
+    names: ['', 'Договор'],
+  },
 };
 
 function omit<T extends object, K extends keyof T>(value: T, ...keys: K[]): Omit<T, K> {
@@ -53,9 +67,12 @@ function omit<T extends object, K extends keyof T>(value: T, ...keys: K[]): Omit
   ) as Omit<T, K>;
 }
 
-// Журнал версии 1 (M1): тот же состав без полей v2.
+// Журнал версии 2 (M2): тот же состав без правок редактора.
+const V2_JOURNAL = { ...omit(JOURNAL, 'edits'), version: 2 };
+
+// Журнал версии 1 (M1): тот же состав без полей v2 и v3.
 const V1_JOURNAL = {
-  ...omit(JOURNAL, 'backsDeclined', 'saved'),
+  ...omit(JOURNAL, 'backsDeclined', 'saved', 'edits'),
   version: 1,
   passes: [omit(PASS, 'rotate180')],
 };
@@ -68,6 +85,10 @@ describe('журнал: запись и чтение', () => {
     expect(parseJournal(serializeVersioned(JOURNAL))).toEqual({ kind: 'ok', value: JOURNAL });
   });
 
+  it('правки редактора записываются и читаются дословно (M3)', () => {
+    expect(parseJournal(serializeVersioned(EDITED))).toEqual({ kind: 'ok', value: EDITED });
+  });
+
   it('пересобранный проход без сканера и параметров читается', () => {
     const rebuilt = { ...JOURNAL, passes: [{ ...PASS, origin: null }] };
 
@@ -75,9 +96,27 @@ describe('журнал: запись и чтение', () => {
   });
 });
 
-describe('журнал: чтение версии 1 (M2, R13)', () => {
-  it('журнал v1 читается: новые поля получают дефолты, версия в памяти — текущая', () => {
+describe('журнал: чтение прежних версий (M2, R13; M3, R2)', () => {
+  it('журнал v2 читается: правок нет, версия в памяти — текущая', () => {
+    expect(parse(V2_JOURNAL)).toEqual({ kind: 'ok', value: JOURNAL });
+  });
+
+  it('журнал v1 читается цепочкой v1 → v2 → v3 с дефолтами всех новых полей', () => {
     expect(parse(V1_JOURNAL)).toEqual({ kind: 'ok', value: JOURNAL });
+  });
+
+  it('неизвестное поле в журнале v2 — несовместимость, не откат к v2-чтению', () => {
+    expect(parse({ ...V2_JOURNAL, rotation: {} })).toEqual({
+      kind: 'incompatible',
+      reason: 'unknownField',
+    });
+  });
+
+  it('журнал v2 с правками — ошибка схемы: правки есть только в v3', () => {
+    expect(parse({ ...V2_JOURNAL, edits: EMPTY_EDITS })).toEqual({
+      kind: 'unreadable',
+      reason: 'schema',
+    });
   });
 
   it('неизвестное поле в журнале v1 — несовместимость, не откат к v1-чтению', () => {
@@ -98,7 +137,7 @@ describe('журнал: чтение версии 1 (M2, R13)', () => {
 
 describe('журнал: версия (KTD-35)', () => {
   it('маркер версии новее понятного — несовместимость, что бы ни лежало рядом', () => {
-    expect(parse({ ...JOURNAL, version: 3 })).toEqual({
+    expect(parse({ ...JOURNAL, version: 4 })).toEqual({
       kind: 'incompatible',
       reason: 'newerVersion',
     });
@@ -133,6 +172,52 @@ describe('журнал: версия (KTD-35)', () => {
       kind: 'incompatible',
       reason: 'unknownField',
     });
+  });
+});
+
+describe('журнал: форма правок (M3)', () => {
+  const withEdits = (edits: Record<string, unknown>) =>
+    parse({ ...EDITED, edits: { ...EDITED.edits, ...edits } });
+  const schema = { kind: 'unreadable', reason: 'schema' };
+
+  it('имён ровно на одно больше, чем разрезов', () => {
+    expect(withEdits({ names: ['Договор'] })).toEqual(schema);
+    expect(withEdits({ cuts: [], names: [] })).toEqual(schema);
+    expect(withEdits({ cuts: [], names: [''] })).toMatchObject({ kind: 'ok' });
+  });
+
+  it('разрезы — целые неотрицательные по неубыванию', () => {
+    expect(withEdits({ cuts: [5, 2], names: ['', '', ''] })).toEqual(schema);
+    expect(withEdits({ cuts: [-1], names: ['', ''] })).toEqual(schema);
+    expect(withEdits({ cuts: [1.5], names: ['', ''] })).toEqual(schema);
+    // Совпадающие разрезы — пустой документ: его схлопывает нормализация, не отказ читать.
+    expect(withEdits({ cuts: [2, 2], names: ['', '', ''] })).toMatchObject({ kind: 'ok' });
+  });
+
+  it('угол — только 90, 180 или 270; ключ — только ключ страницы', () => {
+    expect(withEdits({ rotations: { 'p01-s01-0001': 0 } })).toEqual(schema);
+    expect(withEdits({ rotations: { 'p01-s01-0001': 45 } })).toEqual(schema);
+    expect(withEdits({ rotations: { 'p01-s01-0001.jpg': 90 } })).toEqual(schema);
+    expect(withEdits({ order: ['../p01-s01-0001'] })).toEqual(schema);
+    expect(withEdits({ deleted: ['p01-s01-'] })).toEqual(schema);
+  });
+
+  it('имя документа длиннее предела — ошибка схемы', () => {
+    expect(withEdits({ cuts: [5], names: ['', 'я'.repeat(201)] })).toEqual(schema);
+  });
+
+  it('неизвестное поле в правках — несовместимость', () => {
+    expect(withEdits({ history: [] })).toEqual({ kind: 'incompatible', reason: 'unknownField' });
+  });
+
+  it('ключ `__proto__` в углах ничего не подменяет: zod его отбрасывает', () => {
+    const text = JSON.stringify(EDITED).replace('"rotations":{', '"rotations":{"__proto__":90,');
+
+    const parsed = parseJournal(new TextEncoder().encode(text));
+    expect(parsed).toEqual({ kind: 'ok', value: EDITED });
+    expect(Object.getPrototypeOf(parsed.kind === 'ok' ? parsed.value.edits.rotations : {})).toBe(
+      Object.prototype,
+    );
   });
 });
 

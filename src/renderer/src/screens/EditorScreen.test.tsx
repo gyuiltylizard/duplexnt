@@ -1,4 +1,5 @@
 import {
+  EMPTY_EDITS,
   fail,
   ok,
   type Api,
@@ -45,6 +46,7 @@ function makeSnapshot(
     id: 'session.x',
     backsDeclined: false,
     saved: false,
+    edits: EMPTY_EDITS,
     passes,
     ...sessionOverrides,
   };

@@ -1,4 +1,4 @@
-import type { PageSnapshot, PassSnapshot, SessionSnapshot } from '@shared';
+import { EMPTY_EDITS, type PageSnapshot, type PassSnapshot, type SessionSnapshot } from '@shared';
 import { describe, expect, it } from 'vitest';
 import { assembleSession } from './assembly';
 
@@ -33,6 +33,7 @@ const sessionOf = (
   id: 'a1b2c3d4e5f60718',
   backsDeclined: false,
   saved: false,
+  edits: EMPTY_EDITS,
   passes,
   ...extra,
 });

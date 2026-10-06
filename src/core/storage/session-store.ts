@@ -1,11 +1,13 @@
 import { join } from 'node:path';
 import {
+  EMPTY_EDITS,
   fail,
   ok,
   sessionConflict,
   type DomainError,
   type Result,
   type SessionConflictReason,
+  type SessionEdits,
   type SessionSnapshot,
 } from '@shared';
 import { isTempName, removeByPrefix, renameWithRetry, writeStreamAtomic } from './atomic-file';
@@ -166,6 +168,12 @@ export interface SessionStore {
    * (KTD-4). Смена флага снимает отметку о сохранении: на диске лежит PDF без поворота.
    */
   setRotateBacks(rotate: boolean): Promise<Result<void>>;
+  /**
+   * Правки редактора (M3, KTD-3): итоговое состояние целиком и поворот оборотов — одной записью
+   * журнала, чтобы «Вернуть» был одним шагом. Правка снимает отметку о сохранении; во время
+   * прохода отклоняется. Нормализация — забота хранилища, не вызывающего.
+   */
+  setEdits(edits: SessionEdits, rotate180: boolean): Promise<Result<void>>;
   /** «Обороты не нужны» (M2, KTD-6): durable-отметка, `flip` больше не показывается. */
   declineBacks(): Promise<Result<void>>;
   /**
@@ -414,6 +422,7 @@ export function createSessionStore(
           rotate180: pass.rotate180,
           pages: pagesOf(pass).map(({ key, number }) => ({ key, number, lost: lost.has(key) })),
         })),
+        edits: journal.edits,
       };
     },
 
@@ -433,12 +442,12 @@ export function createSessionStore(
         // Пустой журнал — не сессия: проход начинается заново, пустые проходы в новую не идут.
         // Пометки об удалении и счётчики при этом остаются: без них неудалённые файлы
         // отброшенного сегмента вернулись бы страницами. Решения прежней сессии (отказ от
-        // оборотов, отметка о сохранении) с ней и уходят.
+        // оборотов, отметка о сохранении, правки) с ней и уходят.
         const base =
           journal === null || (isVacant(journal) && journal.deletions.length === 0)
             ? newJournal(newSessionId())
             : isVacant(journal)
-              ? { ...journal, passes: [], backsDeclined: false, saved: false }
+              ? { ...journal, passes: [], backsDeclined: false, saved: false, edits: EMPTY_EDITS }
               : journal;
         const number = base.nextPass;
         if (number > MAX_PASS_NUMBER) {
@@ -666,6 +675,32 @@ export function createSessionStore(
         );
         // Смена поворота меняет вывод: сохранённый PDF устарел (KTD-7).
         return commit({ ...journal, passes, saved: false }, 'must');
+      }),
+
+    setEdits: (edits, rotate180) =>
+      mutating(async () => {
+        if (journal === null || isVacant(journal)) {
+          return conflict('noSession');
+        }
+        // Лента во время прохода растёт: правка поверх неё легла бы на чужие позиции (KTD-9).
+        if (runningSegmentOf(journal) !== null) {
+          return conflict('passRunning');
+        }
+        const backs = backsPassOf(journal);
+        if (backs === null && rotate180) {
+          return conflict('noBacksPass');
+        }
+        if (
+          (backs?.rotate180 ?? false) === rotate180 &&
+          JSON.stringify(journal.edits) === JSON.stringify(edits)
+        ) {
+          return ok(undefined);
+        }
+        const passes = journal.passes.map((pass) =>
+          pass === backs ? { ...pass, rotate180 } : pass,
+        );
+        // Правка меняет вывод: сохранённый PDF устарел (M3, R8).
+        return commit({ ...journal, passes, edits, saved: false }, 'must');
       }),
 
     declineBacks: () =>
