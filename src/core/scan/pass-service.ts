@@ -120,6 +120,10 @@ export interface PassService {
   ): Promise<Result<SaveDocumentsReport>>;
   /** «Новая пачка». */
   closeSession(): Promise<Result<void>>;
+  /** Папка сохранения, выбранная в прошлый раз (M3); `null` — не выбирали. */
+  rememberedSaveFolder(): string | null;
+  /** Запоминает выбранную папку сохранения; отказ записи оставляет её в памяти. */
+  rememberSaveFolder(folder: string): Promise<Result<void>>;
   /**
    * Закрытие окна во время прохода (KTD-26): задание обрывается, проход помечается прерванным,
    * `DELETE` уходит в пределах срока. Возвращается не позже срока.
@@ -825,6 +829,9 @@ export function createPassService(
       notify();
       return closed;
     },
+
+    rememberedSaveFolder: () => settings.get().saveFolder,
+    rememberSaveFolder: (folder) => settings.rememberSaveFolder(folder),
 
     async interrupt(deadlineMs) {
       const current = run;

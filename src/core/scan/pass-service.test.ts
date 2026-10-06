@@ -404,6 +404,18 @@ describe('служба прохода: команды оборотов (M2, U3)'
   });
 });
 
+describe('служба прохода: папка сохранения (M3, приёмка)', () => {
+  it('выбранная папка переживает перезапуск службы', async () => {
+    const root = await makeTempDataRoot();
+    const service = await openPassService(root);
+    expect(service.rememberedSaveFolder()).toBeNull();
+
+    expect(await service.rememberSaveFolder('E:\\Архив')).toEqual({ ok: true, value: undefined });
+
+    expect((await openPassService(root)).rememberedSaveFolder()).toBe('E:\\Архив');
+  });
+});
+
 describe('служба прохода: правки редактора (M3, U3)', () => {
   const EDITS: SessionEdits = {
     order: ['p02-s01-0001', 'p01-s01-0001'],

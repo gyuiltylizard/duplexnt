@@ -39,7 +39,10 @@ const CONNECTED = {
   profile: { scheme: 'https', host: '127.0.0.1', port: 9443, basePath: '/eSCL', fingerprint: null },
 } as unknown as ConnectedScanner;
 
-function setup(snapshot: Snapshot = EMPTY_SNAPSHOT) {
+function setup(
+  snapshot: Snapshot = EMPTY_SNAPSHOT,
+  { remembered = null, exists = true }: { remembered?: string | null; exists?: boolean } = {},
+) {
   const service = {
     snapshot: vi.fn(() => snapshot),
     sessionId: vi.fn(() => null),
@@ -59,6 +62,8 @@ function setup(snapshot: Snapshot = EMPTY_SNAPSHOT) {
       Promise.resolve(ok({ folder: 'D:\\Сканы', written: [], failed: [] })),
     ),
     closeSession: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
+    rememberedSaveFolder: vi.fn((): string | null => remembered),
+    rememberSaveFolder: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
     interrupt: vi.fn(() => Promise.resolve()),
     pageInfo: vi.fn(() => null),
     readPage: vi.fn(() => Promise.resolve(fail('pageUnavailable'))),
@@ -92,12 +97,14 @@ function setup(snapshot: Snapshot = EMPTY_SNAPSHOT) {
 
   const openDataFolder = vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined)));
   const askSaveFolder = vi.fn((): Promise<string | null> => Promise.resolve('E:\\Архив'));
+  const folderExists = vi.fn((): Promise<boolean> => Promise.resolve(exists));
   const discoveryEvents: number[] = [];
   const commands = createCommands({
     service,
     openDataFolder,
     defaultSaveFolder: 'C:\\Users\\Документы',
     askSaveFolder,
+    folderExists,
     onDiscoveryChanged: (seq) => discoveryEvents.push(seq),
     startDiscovery,
     connector,
@@ -259,6 +266,32 @@ describe('снимок и проход', () => {
       ok({ canceled: true, folder: 'E:\\Архив' }),
     );
     expect(await handlers.getSaveFolder(undefined)).toEqual(ok('E:\\Архив'));
+  });
+
+  it('папка пакета помнится между запусками: выбранная запоминается, отказ — нет (M3, приёмка)', async () => {
+    const { handlers, service, askSaveFolder } = setup(EMPTY_SNAPSHOT, { remembered: 'F:\\Счета' });
+
+    expect(await handlers.getSaveFolder(undefined)).toEqual(ok('F:\\Счета'));
+    expect(askSaveFolder).not.toHaveBeenCalled();
+
+    await handlers.chooseSaveFolder(undefined);
+    expect(service.rememberSaveFolder).toHaveBeenCalledExactlyOnceWith('E:\\Архив');
+
+    askSaveFolder.mockResolvedValueOnce(null);
+    await handlers.chooseSaveFolder(undefined);
+    expect(service.rememberSaveFolder).toHaveBeenCalledTimes(1);
+  });
+
+  it('запомненной папки нет на диске — «Документы», и пакет пишется туда же (M3, приёмка)', async () => {
+    const { handlers, service } = setup(EMPTY_SNAPSHOT, { remembered: 'F:\\Счета', exists: false });
+
+    expect(await handlers.getSaveFolder(undefined)).toEqual(ok('C:\\Users\\Документы'));
+    const request = { mode: 'single', names: ['Скан'], retry: false } as const;
+    await handlers.saveDocuments(request);
+
+    expect(service.saveDocuments).toHaveBeenCalledExactlyOnceWith('C:\\Users\\Документы', request);
+    // Запомненное не забывается: флешку могут вставить обратно.
+    expect(service.rememberSaveFolder).not.toHaveBeenCalled();
   });
 
   it('saveDocuments: строгая схема, затем служба с текущей папкой (M3, U4)', async () => {

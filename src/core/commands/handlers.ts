@@ -1,3 +1,4 @@
+import { stat } from 'node:fs/promises';
 import {
   fail,
   ok,
@@ -42,6 +43,8 @@ export interface CommandContext {
   readonly defaultSaveFolder: string;
   /** Диалог выбора папки (M3, KTD-5), открытый на текущей; `null` — пользователь отказался. */
   readonly askSaveFolder: (current: string) => Promise<string | null>;
+  /** Есть ли папка на диске; подмена для тестов. */
+  readonly folderExists?: (path: string) => Promise<boolean>;
   /** Список найденных устройств изменился; `seq` — номер изменения. */
   readonly onDiscoveryChanged: (seq: number) => void;
   /** Подмена для тестов. */
@@ -56,6 +59,14 @@ export interface Commands {
 }
 
 const NO_DISCOVERY: DiscoveryState = { scanners: [], failure: null };
+
+const isDirectory = async (path: string): Promise<boolean> => {
+  try {
+    return (await stat(path)).isDirectory();
+  } catch {
+    return false;
+  }
+};
 
 /**
  * Адрес из полей модалки: хост — как ввёл пользователь (хост, хост с портом или URL), поля
@@ -91,8 +102,12 @@ export function createCommands(context: CommandContext): Commands {
 
   let discovery: Discovery | null = null;
   let discoverySeq = 0;
-  /** Папка пакетного сохранения (M3, KTD-5): помнится до выхода. */
-  let saveFolder = context.defaultSaveFolder;
+  const folderExists = context.folderExists ?? isDirectory;
+  /**
+   * Папка пакетного сохранения (M3, KTD-5): выбранная помнится в настройках между запусками.
+   * Пропавшая с диска (вынута флешка) уступает «Документам» — но не забывается.
+   */
+  let saveFolder = service.rememberedSaveFolder() ?? context.defaultSaveFolder;
   let announced = false;
 
   // `onChange` поиска вызывается из обработчика сокета: исключение в нём стало бы необработанным.
@@ -215,11 +230,18 @@ export function createCommands(context: CommandContext): Commands {
 
       // Папка пакета живёт здесь, как поиск устройств: её выбирает main, пишет служба. В снимок
       // она не идёт — там нет абсолютных путей (KTD-39); модалка берёт её командой.
-      getSaveFolder: withoutRequest(() => Promise.resolve(ok(saveFolder))),
+      getSaveFolder: withoutRequest(async () => {
+        if (saveFolder !== context.defaultSaveFolder && !(await folderExists(saveFolder))) {
+          saveFolder = context.defaultSaveFolder;
+        }
+        return ok(saveFolder);
+      }),
       chooseSaveFolder: withoutRequest(async () => {
         const picked = await context.askSaveFolder(saveFolder);
         if (picked !== null) {
           saveFolder = picked;
+          // Отказ записи настроек не мешает: папка остаётся в памяти до выхода.
+          await service.rememberSaveFolder(picked);
         }
         return ok({ canceled: picked === null, folder: saveFolder });
       }),

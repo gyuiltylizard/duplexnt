@@ -10,7 +10,7 @@ import {
 import { probeScanner, type ConnectedScanner, type ConnectorOptions } from '../escl/connect';
 import { resolveScanParams, scanParamsSchema } from '../escl/scan-settings';
 import { layoutOf } from './layout';
-import { ioOf, serialQueue, storageFailure, type StorageOptions } from './storage-fs';
+import { ioOf, isMissing, serialQueue, storageFailure, type StorageOptions } from './storage-fs';
 import {
   profileOf,
   sameScanner,
@@ -18,28 +18,60 @@ import {
   storedScannerSchema,
   type StoredScanner,
 } from './stored-scanner';
-import { fitsSchema, readVersioned, setAside, writeVersioned } from './versioned-file';
+import {
+  fitsSchema,
+  parseVersioned,
+  readVersionMarker,
+  setAside,
+  writeVersioned,
+  type VersionedRead,
+} from './versioned-file';
 
 // Настройки и запомненный сканер (план M1, U15, R5, R18). Живут отдельным файлом в корне данных:
 // закрытие сессии их не трогает (ADR 0004).
 //
 // Файл более новой версии не переписывается: приложение работает со значениями по умолчанию в
 // памяти и сообщает об этом (KTD-35). Нечитаемый файл отодвигается, а не удаляется.
+//
+// Версия 2 (M3, решение автора на приёмке): папка сохранения помнится между запусками. Файл
+// версии 1 читается и поднимается до 2; переписывается только при следующей записи.
 
-export const SETTINGS_VERSION = 1;
+export const SETTINGS_VERSION = 2;
 
-const settingsSchema = z.strictObject({
-  version: z.literal(SETTINGS_VERSION),
+const settingsV1Schema = z.strictObject({
+  version: z.literal(1),
   /** Последний подключённый сканер: адрес, имя, идентичность, отпечаток сертификата (KTD-40). */
   scanner: storedScannerSchema.nullable(),
   /** Параметры сканирования, выбранные последними; с устройством сверяются по KTD-13. */
   params: scanParamsSchema.nullable(),
 });
 
+const settingsSchema = settingsV1Schema.extend({
+  version: z.literal(SETTINGS_VERSION),
+  /** Папка, выбранная последней в модалке `save`; `null` — не выбирали, «Документы». */
+  saveFolder: z.string().min(1).nullable(),
+});
+
 export interface Settings {
   readonly scanner: StoredScanner | null;
   readonly params: ScanParams | null;
+  readonly saveFolder: string | null;
 }
+
+/** Разбор файла настроек: версия 1 поднимается до 2 без папки. */
+function parseSettings(bytes: Uint8Array): VersionedRead<Settings> {
+  if (readVersionMarker(bytes) === 1) {
+    const v1 = parseVersioned(bytes, settingsV1Schema, 1);
+    return v1.kind === 'ok' ? { kind: 'ok', value: { ...v1.value, saveFolder: null } } : v1;
+  }
+  return parseVersioned(bytes, settingsSchema, SETTINGS_VERSION);
+}
+
+const settingsOf = ({ scanner, params, saveFolder }: Settings): Settings => ({
+  scanner,
+  params,
+  saveFolder,
+});
 
 export interface SettingsStore {
   /** Почему работают значения по умолчанию; `null` — файл прочитан или его ещё не было. */
@@ -51,6 +83,8 @@ export interface SettingsStore {
    */
   rememberScanner(scanner: StoredScanner): Promise<Result<void>>;
   setParams(params: ScanParams): Promise<Result<void>>;
+  /** Папка, выбранная в модалке `save` (M3): предлагается при следующем запуске. */
+  rememberSaveFolder(folder: string): Promise<Result<void>>;
 }
 
 export async function openSettingsStore(
@@ -61,14 +95,24 @@ export async function openSettingsStore(
   const io = ioOf(options);
   const { fs } = io;
 
-  let settings: Settings = { scanner: null, params: null };
+  let settings: Settings = { scanner: null, params: null, saveFolder: null };
   let notice: SettingsStore['notice'] = null;
+  const readSettings = async (): Promise<VersionedRead<Settings>> => {
+    try {
+      return parseSettings(await fs.readFile(settingsFile));
+    } catch (error) {
+      if (isMissing(error)) {
+        return { kind: 'missing' };
+      }
+      throw error;
+    }
+  };
   // Файл, который не переписывается до конца работы: более новой версии или не прочитанный вовсе.
   let frozen = false;
   try {
-    const read = await readVersioned(fs, settingsFile, settingsSchema, SETTINGS_VERSION);
+    const read = await readSettings();
     if (read.kind === 'ok') {
-      settings = { scanner: read.value.scanner, params: read.value.params };
+      settings = settingsOf(read.value);
     } else if (read.kind === 'incompatible') {
       notice = 'settingsIncompatible';
       frozen = true;
@@ -90,7 +134,7 @@ export async function openSettingsStore(
       if (!fitsSchema(settingsSchema, document)) {
         return fail('storageFailed', { reason: 'schema' });
       }
-      settings = { scanner: document.scanner, params: document.params };
+      settings = settingsOf(document);
       if (frozen) {
         return ok(undefined);
       }
@@ -108,6 +152,7 @@ export async function openSettingsStore(
     get: () => settings,
     rememberScanner: (scanner) => update({ scanner }),
     setParams: (params) => update({ params }),
+    rememberSaveFolder: (saveFolder) => update({ saveFolder }),
   };
 }
 
