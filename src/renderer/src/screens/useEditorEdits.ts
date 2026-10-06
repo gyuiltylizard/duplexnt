@@ -20,10 +20,18 @@ import { NO_SELECTION, pruned, selectionOf, type Selection } from '../state/sele
 // снимка с её результатом — новые жесты и Ctrl+Z игнорируются: жест от устаревшего снимка молча
 // откатил бы предыдущую правку.
 
+/**
+ * Сколько ждать снимка после успешного ответа. Правку, совпавшую с журналом после нормализации,
+ * ядро не коммитит и снимка не шлёт: без срока редактор остался бы занятым навсегда (U8).
+ */
+export const SNAPSHOT_WAIT_MS = 1000;
+
 /** Выделение после правки — по ленте пришедшего снимка; `null` — выделение не трогать. */
 export type SelectAfter = (visible: readonly string[]) => Selection | null;
 
 interface Pending {
+  /** Метка команды: ответ и срок ожидания снимают только свою команду. */
+  readonly id: symbol;
   /** Состояние снимка, от которого построен жест: снимок с другим — уже результат команды. */
   readonly base: EditState;
   readonly select: SelectAfter | null;
@@ -103,11 +111,23 @@ export function useEditorEdits({
     seqRef.current = seq;
   });
 
+  // Сроки ожидания снимка снимаются вместе с экраном.
+  const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
+  useEffect(() => {
+    const active = timers.current;
+    return () => {
+      for (const timer of active) {
+        clearTimeout(timer);
+      }
+      active.clear();
+    };
+  }, []);
+
   const send = (target: EditState, next: EditHistory, options: EditOptions = {}): void => {
-    const token: Pending = { base: current, select: options.select ?? null, committedSeq: null };
-    setPending(token);
+    const id = Symbol('правка');
+    setPending({ id, base: current, select: options.select ?? null, committedSeq: null });
     const settle = (): void => {
-      setPending((previous) => (previous === token ? null : previous));
+      setPending((previous) => (previous?.id === id ? null : previous));
     };
     window.api.setEdits({ edits: target.edits, rotate180: target.rotate180 }).then(
       (result) => {
@@ -120,8 +140,15 @@ export function useEditorEdits({
         }
         setHistory(next);
         setPending((previous) =>
-          previous === token ? { ...token, committedSeq: seqRef.current } : previous,
+          previous?.id === id ? { ...previous, committedSeq: seqRef.current } : previous,
         );
+        // Снимок с результатом может не прийти вовсе — правка совпала с журналом после
+        // нормализации, и ядро её не записало. Тогда «в полёте» снимается по сроку.
+        const timer = setTimeout(() => {
+          timers.current.delete(timer);
+          settle();
+        }, SNAPSHOT_WAIT_MS);
+        timers.current.add(timer);
         options.onSuccess?.();
       },
       (error: unknown) => {

@@ -854,3 +854,98 @@ describe('каркас приложения', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 });
+
+describe('AE9: досканирование при ручном порядке', () => {
+  /** Сессия с лицевым проходом из `count` страниц; обороты не нужны — экран сразу `editor`. */
+  function fronts(count: number, seq: number, orderEdited: boolean): Snapshot {
+    const snapshot = makeSnapshot({
+      seq,
+      session: {
+        id: 'session.x',
+        backsDeclined: true,
+        saved: false,
+        edits: orderEdited
+          ? {
+              ...EMPTY_EDITS,
+              order: pages(3)
+                .map((page) => page.key)
+                .reverse(),
+            }
+          : EMPTY_EDITS,
+        passes: [
+          {
+            number: 1,
+            state: count === 3 ? 'interrupted' : 'completed',
+            paramsKnown: true,
+            scanner: null,
+            rotate180: false,
+            pages: pages(count),
+          },
+        ],
+      },
+    });
+    const assembly = snapshot.assembly;
+    if (assembly === null) {
+      throw new Error('нет сборки');
+    }
+    return { ...snapshot, assembly: { ...assembly, orderEdited, hasEdits: orderEdited } };
+  }
+
+  async function resumed(
+    orderEdited: boolean,
+    before = fronts(3, 1, orderEdited),
+    after = fronts(5, 2, orderEdited),
+  ): Promise<void> {
+    let current = before;
+    let notify: (payload: { seq: number }) => void = () => undefined;
+    stubApi(current, {
+      getSnapshot: vi.fn(() => Promise.resolve(ok(current))),
+      onSnapshotChanged: vi.fn((listener: (payload: { seq: number }) => void) => {
+        notify = listener;
+        return () => undefined;
+      }),
+    });
+    render(
+      <StrictMode>
+        <App />
+      </StrictMode>,
+    );
+    expect(await screen.findByText(/Проход прервался/)).toBeDefined();
+
+    // Проход досканирован: две новые страницы в том же проходе.
+    current = after;
+    await act(async () => {
+      notify({ seq: 2 });
+      await Promise.resolve();
+    });
+    const total = after.assembly?.order.length ?? 0;
+    expect(await screen.findByText(`стр. 1 из ${String(total)}`)).toBeDefined();
+  }
+
+  it('ручной порядок — тост «Новые страницы (N) — в конце ленты»', async () => {
+    await resumed(true);
+    expect(
+      screen.getByText('Новые страницы (2) — в конце ленты: порядок правили вручную').className,
+    ).toBe('toast');
+  });
+
+  it('автопорядок — страницы встают по схеме, тоста нет', async () => {
+    await resumed(false);
+    expect(screen.queryByText(/в конце ленты/)).toBeNull();
+  });
+
+  it('лента выросла правкой (удалённая вернулась) — тоста нет', async () => {
+    const full = fronts(3, 2, true);
+    const trimmed = fronts(3, 1, true);
+    const assembly = trimmed.assembly;
+    if (assembly === null) {
+      throw new Error('нет сборки');
+    }
+    await resumed(
+      true,
+      { ...trimmed, assembly: { ...assembly, order: assembly.order.slice(1) } },
+      full,
+    );
+    expect(screen.queryByText(/в конце ленты/)).toBeNull();
+  });
+});

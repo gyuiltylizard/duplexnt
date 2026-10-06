@@ -3,8 +3,8 @@ import { useTranslation } from 'react-i18next';
 import type { AssembledPage, SessionAssembly } from '@shared';
 
 // Инспектор редактора (handoff M3, S11–S13): ДЕТАЛИ текущей страницы, ДОКУМЕНТЫ В НАБОРЕ и
-// ПРОВЕРКА. Только показ снимка: пары и порядок — из отчёта и флагов сборки ядра (KTD-2, KTD-7).
-// Плашка правок S14 — U8.
+// ПРОВЕРКА, внизу — плашка правок S14 с «Вернуть». Только показ снимка: пары, порядок и наличие
+// правок — из отчёта и флагов сборки ядра (KTD-2, KTD-7).
 
 /** Тон документа по номеру с нуля: четыре цвета по кругу (handoff M3, Anatomy). */
 export const toneOf = (document: number): string => `doc-tone--${String((document % 4) + 1)}`;
@@ -100,7 +100,9 @@ export function EditorInspector({
   currentDocument,
   names,
   frontsOnly,
+  locked,
   onPickDocument,
+  onRevert,
 }: {
   readonly assembly: SessionAssembly;
   /** Текущая страница; `undefined` — лента пуста (S10: ДЕТАЛИ скрыты). */
@@ -113,7 +115,11 @@ export function EditorInspector({
   readonly names: readonly string[];
   /** Прохода оборотов нет — набор односторонний. */
   readonly frontsOnly: boolean;
+  /** Идёт запись (KTD-9): «Вернуть» недоступна. */
+  readonly locked: boolean;
   readonly onPickDocument: (document: number) => void;
+  /** «Вернуть» — открыть подтверждение `revert`. */
+  readonly onRevert: () => void;
 }): ReactNode {
   const { t } = useTranslation();
   // ДЕТАЛИ свёрнуты по умолчанию; состояние живёт до размонтирования экрана (S11), в том числе
@@ -225,6 +231,22 @@ export function EditorInspector({
           </li>
         </ul>
       </section>
+
+      {/* S14: при любой правке, включая тумблер 180° — флаг ядра учитывает и его. */}
+      {assembly.hasEdits && (
+        <div className="edits-bar" role="status">
+          <p className="edits-bar__text">{t('editor.edits.text')}</p>
+          <button
+            type="button"
+            className="btn btn--tinted"
+            title={t('editor.edits.revertTitle')}
+            disabled={locked}
+            onClick={onRevert}
+          >
+            {t('editor.edits.revert')}
+          </button>
+        </div>
+      )}
     </aside>
   );
 }

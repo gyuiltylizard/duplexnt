@@ -1,17 +1,28 @@
-import { memo, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
+import { memo, type DragEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { pageImageUrl, type AssembledPage, type PageAngle } from '@shared';
 import { useImageLoad } from '../components/useImageLoad';
+import type { DropSide } from '../state/edits';
 
 /** Как выбрали миниатюру: клик, Shift — диапазон, Ctrl — по одной (handoff M3, S4). */
 export type PickMode = 'single' | 'range' | 'toggle';
+
+/** Split-бар миниатюры (S7): поставить границу перед ней или снять стоящую; `null` — нет. */
+export type SplitKind = 'add' | 'remove' | null;
+
+/** Перетаскивание (S6): обработчики ленты, стабильные — `memo` миниатюр их переживает. */
+export interface ThumbDrag {
+  readonly start: (key: string, event: DragEvent<HTMLElement>) => void;
+  readonly over: (key: string, event: DragEvent<HTMLElement>) => void;
+}
 
 const modeOf = (event: MouseEvent | KeyboardEvent): PickMode =>
   event.shiftKey ? 'range' : event.ctrlKey || event.metaKey ? 'toggle' : 'single';
 
 /**
  * Миниатюра в ленте: обычная, потерянная (S18 M1), строится или не построилась (S19 M1),
- * оборот с тегом «об», непарный лист с янтарной точкой (S6 M2), угол из ядра (S4 M3).
+ * оборот с тегом «об», непарный лист с янтарной точкой (S6 M2), угол из ядра (S4 M3),
+ * перетаскивание с маркером вставки (S6 M3) и split-бар границы (S7 M3).
  * Пропсы — примитивы, чтобы `memo` переживал новый снимок (объекты порядка пересоздаются
  * десериализацией IPC): тумблер и отметка сохранения не перерисовывают всю ленту, смена
  * выделения — только затронутые карточки.
@@ -28,7 +39,13 @@ export const EditorThumb = memo(function EditorThumb({
   current,
   selected,
   multi,
+  draggable,
+  dragging,
+  drop,
+  split,
   onPick,
+  onSplit,
+  drag,
 }: {
   readonly sessionId: string;
   readonly pageKey: string;
@@ -46,13 +63,27 @@ export const EditorThumb = memo(function EditorThumb({
   readonly selected: boolean;
   /** В выделении из нескольких страниц — тёмная рамка и кольцо. */
   readonly multi: boolean;
+  /** Правки доступны — миниатюру можно тянуть (S6). */
+  readonly draggable: boolean;
+  /** Её тянут — сама или в составе выделения. */
+  readonly dragging: boolean;
+  /** Маркер вставки над ней: перед или после; `null` — маркера нет. */
+  readonly drop: DropSide | null;
+  readonly split: SplitKind;
   readonly onPick: (key: string, mode: PickMode) => void;
+  readonly onSplit: (key: string) => void;
+  readonly drag: ThumbDrag;
 }): ReactNode {
   const { t } = useTranslation();
   const image = useImageLoad();
 
   const click = (event: MouseEvent<HTMLElement>): void => {
     onPick(pageKey, modeOf(event));
+  };
+  const splitClick = (event: MouseEvent<HTMLElement>): void => {
+    // Split-бар внутри карточки: клик по нему — граница, а не выбор страницы.
+    event.stopPropagation();
+    onSplit(pageKey);
   };
   const keyDown = (event: KeyboardEvent<HTMLElement>): void => {
     // Ctrl+Space — переключение текущей в выделении: его ведёт лента (handoff M3, клавиатура).
@@ -98,6 +129,9 @@ export const EditorThumb = memo(function EditorThumb({
   if (angle !== 0) {
     classes.push(`thumb--angle-${String(angle)}`);
   }
+  if (dragging) {
+    classes.push('thumb--dragging');
+  }
 
   const base = lost
     ? t('thumb.lostLabel', { number: position })
@@ -116,9 +150,31 @@ export const EditorThumb = memo(function EditorThumb({
       tabIndex={current ? 0 : -1}
       data-key={pageKey}
       className={classes.join(' ')}
+      draggable={draggable}
       onClick={click}
       onKeyDown={keyDown}
+      onDragStart={(event) => {
+        drag.start(pageKey, event);
+      }}
+      onDragOver={(event) => {
+        drag.over(pageKey, event);
+      }}
     >
+      {/* S7: только мышь — вне обхода и дерева доступности; с клавиатуры граница ставится
+          кнопкой тулбара и снимается «✕» разделителя. */}
+      {split !== null && (
+        <button
+          type="button"
+          className={split === 'remove' ? 'thumb__split thumb__split--remove' : 'thumb__split'}
+          tabIndex={-1}
+          aria-hidden="true"
+          title={split === 'remove' ? t('editor.doc.unsplit') : t('thumb.splitTitle')}
+          onClick={splitClick}
+        >
+          {split === 'remove' ? t('thumb.unsplit') : t('thumb.split')}
+        </button>
+      )}
+      {drop !== null && <span className={`thumb__drop thumb__drop--${drop}`} aria-hidden="true" />}
       <div className="thumb__paper">{paper}</div>
       <div className="thumb__foot">
         <span className="thumb__num">{position}</span>

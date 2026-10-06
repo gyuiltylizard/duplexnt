@@ -1,6 +1,6 @@
-/* Экран `editor` (U24; M2 U9; M3 U7): тулбар с документом и правой зоной сохранения, лента
+/* Экран `editor` (U24; M2 U9; M3 U7–U8): тулбар с документом и правой зоной сохранения, лента
    группами по документам, превью, статус-бар с поворотом и удалением, инспектор, плашка S17,
-   тумблер 180° внизу ленты — CSS handoff'ов U19 (S16–S19), M2 (S6–S9) и M3 (S1–S13). Сетка из
+   тумблер 180° внизу ленты — CSS handoff'ов U19 (S16–S19), M2 (S6–S9) и M3 (S1–S14). Сетка из
    трёх колонок. Геометрия мок-листов — литералы макета (осознанное исключение DS). */
 
 .editor-screen {
@@ -83,6 +83,16 @@
   color: var(--color-text-subtle);
 }
 
+.editor-screen__split {
+  margin-left: auto;
+  background: var(--color-bg-surface);
+  color: var(--color-accent);
+}
+
+.editor-screen__split:hover {
+  border-color: var(--color-accent);
+}
+
 .editor-screen__body {
   flex: 1;
   min-height: 0;
@@ -133,6 +143,17 @@
   gap: var(--space-3);
 }
 
+.rail__selection-group {
+  flex: 1;
+  padding: var(--space-4);
+  border: 0;
+  border-radius: var(--radius-m);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-primary);
+  font: var(--font-weight-semibold) var(--font-size-s) / var(--leading-snug) var(--font-family-sans);
+  cursor: pointer;
+}
+
 .rail__selection-clear {
   padding: var(--space-4) var(--space-3);
   border: 0;
@@ -142,6 +163,7 @@
   cursor: pointer;
 }
 
+.rail__selection-group:focus-visible,
 .rail__selection-clear:focus-visible {
   outline: var(--space-1) solid var(--color-border-focus);
   outline-offset: var(--space-1);
@@ -181,25 +203,62 @@
   border-top: var(--border-width-dashed) dashed var(--color-accent);
 }
 
+.doc-group__unsplit {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--size-badge);
+  height: var(--size-badge);
+  padding: 0;
+  border: var(--border-width) solid var(--color-border-accent-soft);
+  border-radius: var(--radius-m);
+  background: none;
+  color: var(--color-accent);
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-none) var(--font-family-sans);
+  cursor: pointer;
+}
+
+.doc-group__unsplit:hover {
+  background: var(--color-bg-accent-hover);
+}
+
 .doc-group__header {
   display: flex;
   align-items: center;
   gap: var(--space-4);
 }
 
-/* Имя документа: геометрия поля S3 — U8 заменит текст полем ввода без сдвига заголовка.
-   Пока это текст, длинное имя режется многоточием. */
+/* S3: имя документа — поле без рамки, рамка на hover и фокусе. */
 .doc-group__name {
   flex: 1;
   min-width: 0;
   padding: var(--space-2) var(--space-3);
   border: var(--border-width) solid transparent;
   border-radius: var(--radius-m);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  background: none;
   color: var(--color-text-primary);
   font: var(--font-weight-semibold) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
+  outline: none;
+}
+
+.doc-group__name::placeholder {
+  color: var(--color-text-hint);
+}
+
+.doc-group__name:hover {
+  border-color: var(--color-border-strong);
+  background: var(--color-bg-surface);
+}
+
+.doc-group__name:focus {
+  border-color: var(--color-border-focus);
+  background: var(--color-bg-paper);
+}
+
+.doc-group__name:disabled {
+  border-color: transparent;
+  background: none;
 }
 
 .doc-group__count {
@@ -226,7 +285,7 @@
   list-style: none;
 }
 
-/* — миниатюра; перетаскивание и split-бар — U8 — */
+/* — миниатюра: выделение (S4), перетаскивание (S6), split-бар (S7) — */
 
 .thumb {
   position: relative;
@@ -238,6 +297,10 @@
   border: var(--border-width) solid var(--color-border-default);
   background: var(--color-bg-surface);
   cursor: pointer;
+}
+
+.thumb[draggable='true'] {
+  cursor: grab;
 }
 
 .thumb--selected {
@@ -341,6 +404,66 @@
 
 .thumb--angle-270 .thumb__img {
   transform: rotate(270deg) scale(0.7071);
+}
+
+/* S6 M3: перетаскивание — полупрозрачная карточка и маркер вставки. */
+.thumb--dragging {
+  opacity: var(--opacity-dragging);
+}
+
+.thumb__drop {
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  width: var(--border-width-thick);
+  border-radius: var(--radius-xs);
+  background: var(--color-accent);
+  pointer-events: none;
+}
+
+/* Посередине зазора сетки (`gap: --space-6`). */
+.thumb__drop--before {
+  left: calc((var(--space-6) + var(--border-width-thick)) / -2);
+}
+
+.thumb__drop--after {
+  right: calc((var(--space-6) + var(--border-width-thick)) / -2);
+}
+
+/* S7 M3: split-бар — виден, пока указатель над ним. */
+.thumb__split {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-3);
+  right: var(--space-3);
+  z-index: var(--z-raised);
+  height: var(--space-13);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-m) var(--radius-m) var(--radius-s) var(--radius-s);
+  background: var(--color-accent);
+  color: var(--color-text-on-accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font: var(--font-weight-semibold) var(--font-size-xxs) / var(--leading-tight)
+    var(--font-family-mono);
+  letter-spacing: var(--tracking-wide);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+.thumb__split:hover {
+  opacity: 1;
+}
+
+.thumb__split--remove {
+  background: var(--color-bg-inverse);
 }
 
 /* S18: потерянная страница — пунктир; S19: не построилась — сплошная рамка */
@@ -771,6 +894,7 @@
   color: var(--color-text-hint);
 }
 
+.doc-group__unsplit:focus-visible,
 .doc-list__item:focus-visible,
 .details-toggle:focus-visible {
   outline: var(--space-1) solid var(--color-border-focus);
@@ -808,6 +932,27 @@
     var(--font-family-sans);
   color: var(--color-text-secondary);
   text-wrap: pretty;
+}
+
+/* S14 M3: плашка правок — прижата к низу колонки. */
+.edits-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin: auto var(--space-8) var(--space-8);
+  padding: var(--space-4) var(--space-4) var(--space-4) var(--space-6);
+  border: var(--border-width) solid var(--color-border-default);
+  border-radius: var(--radius-l);
+  background: var(--color-bg-surface);
+}
+
+.edits-bar__text {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font: var(--font-weight-medium) var(--font-size-s) / var(--leading-snug) var(--font-family-sans);
+  color: var(--color-warning);
 }
 
 /* — тумблер «повернуть обороты на 180°» (S7) — рецепт «Переключатель» дизайн-системы — */
@@ -878,6 +1023,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .thumb__split,
   .toggle__track,
   .toggle__track::after {
     transition: none;

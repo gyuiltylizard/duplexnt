@@ -3,7 +3,6 @@ import {
   fail,
   type AssembledPage,
   type SessionAssembly,
-  type SessionEdits,
   type Snapshot,
 } from '@shared';
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
@@ -11,14 +10,21 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../i18n';
 import { documentsOf } from '../state/assembly-fixture';
 import {
+  ctrlZ,
+  edits,
   makePass,
   makeSnapshot,
+  nameField,
   nextSnapshot,
+  option,
   pages,
   renderEditor,
+  selectedKeys,
+  settle,
   stubApi,
   twoPass,
 } from './editor-fixture';
+import { SNAPSHOT_WAIT_MS } from './useEditorEdits';
 
 // Экран `editor`, M3 (план U7; handoff M3, S1–S15): документы, выделение, поворот и удаление,
 // undo/redo, пустой редактор, инспектор. Ленту с правками тест задаёт снимком — renderer её
@@ -62,34 +68,8 @@ const angled =
     hasEdits: true,
   });
 
-const edits = (change: Partial<SessionEdits>): SessionEdits => ({ ...EMPTY_EDITS, ...change });
-
-const option = (index: number): HTMLElement => {
-  const element = screen.getAllByRole('option')[index];
-  if (element === undefined) {
-    throw new Error(`нет миниатюры ${String(index)}`);
-  }
-  return element;
-};
-
-const selectedKeys = (): (string | null)[] =>
-  screen
-    .getAllByRole('option')
-    .filter((element) => element.getAttribute('aria-selected') === 'true')
-    .map((element) => element.getAttribute('data-key'));
-
-const ctrlZ = (target: Element = document.body): void => {
-  fireEvent.keyDown(target, { key: 'z', code: 'KeyZ', ctrlKey: true });
-};
-
-/** Ответ моста приходит микротаском — дождаться его до следующего снимка. */
-const settle = async (): Promise<void> => {
-  await act(async () => {
-    await Promise.resolve();
-  });
-};
-
 afterEach(() => {
+  vi.useRealTimers();
   cleanup();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
@@ -112,9 +92,14 @@ describe('editor M3: документы', () => {
     // Номер первой страницы второго документа — 3, а не 1.
     expect(second.getAllByRole('option')[0]?.textContent).toContain('3');
 
-    // Заголовки: введённое имя, иначе «Документ N»; счётчик; разделитель — кроме первой группы.
-    expect(screen.getByRole('region', { name: 'Акт' })).toBeDefined();
-    expect(screen.getByRole('region', { name: 'Документ 2' })).toBeDefined();
+    // Заголовки: поле имени — введённое имя, иначе плейсхолдер «Документ N»; группа подписана
+    // полем; счётчик; разделитель — кроме первой группы.
+    const first = nameField(1);
+    expect(first.value).toBe('Акт');
+    expect(nameField(2).value).toBe('');
+    expect(nameField(2).placeholder).toBe('Документ 2');
+    expect(first.maxLength).toBe(200);
+    expect(screen.getByRole('region', { name: 'Название документа 2' })).toBeDefined();
     expect(screen.getAllByText('2 стр.').length).toBe(3);
     expect(screen.getAllByText('НОВЫЙ ДОКУМЕНТ').length).toBe(2);
   });
@@ -370,6 +355,28 @@ describe('editor M3: правки', () => {
       edits: edits({ rotations: { [F1]: 180 } }),
       rotate180: false,
     });
+  });
+
+  it('снимок не пришёл (ядро не записало совпавшую правку) — по сроку жесты снова уходят', async () => {
+    vi.useFakeTimers();
+    const api = stubApi();
+    renderEditor(twoPass());
+    const rotate = screen.getByRole('button', { name: 'Повернуть на 90° по часовой' });
+
+    fireEvent.click(rotate);
+    await settle();
+    // Ответ «успех», снимка нет: до срока редактор занят.
+    act(() => {
+      vi.advanceTimersByTime(SNAPSHOT_WAIT_MS - 1);
+    });
+    fireEvent.click(rotate);
+    expect(api.setEdits).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    fireEvent.click(rotate);
+    expect(api.setEdits).toHaveBeenCalledTimes(2);
   });
 
   it('отказ setEdits не меняет историю: Ctrl+Z после него ничего не шлёт', async () => {

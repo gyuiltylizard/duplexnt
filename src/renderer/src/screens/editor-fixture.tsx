@@ -1,15 +1,18 @@
 import {
   EMPTY_EDITS,
   ok,
+  sameEdits,
   type Api,
   type PassSnapshot,
   type SessionAssembly,
+  type SessionEdits,
   type SessionSnapshot,
   type Snapshot,
 } from '@shared';
-import { render } from '@testing-library/react';
+import { act, createEvent, fireEvent, render, screen } from '@testing-library/react';
 import { vi } from 'vitest';
-import { assemblyOf } from '../state/assembly-fixture';
+import { assemblyOf, documentsOf } from '../state/assembly-fixture';
+import type { EditState } from '../state/history';
 import { EditorScreen } from './EditorScreen';
 
 // ТОЛЬКО ДЛЯ ТЕСТОВ: общие хелперы тестов экрана `editor` — снимки, заглушка моста, рендер.
@@ -138,4 +141,138 @@ export function renderEditor(
     view.rerender(element(next));
   };
   return { view, onToast, rerender };
+}
+
+/** Правки поверх пустых — короткая запись в ожиданиях тестов. */
+export const edits = (change: Partial<SessionEdits>): SessionEdits => ({
+  ...EMPTY_EDITS,
+  ...change,
+});
+
+/**
+ * Снимок после того, как ядро приняло правки `state`: сессия несёт их, сборка — лента в явном
+ * порядке без удалённых, углы, документы по разрезам, флаги. Упрощённое зеркало ядра (как
+ * `assemblyOf`): нормализации нет — тест подаёт ровно то, что ушло в `setEdits`.
+ */
+export function applied(snapshot: Snapshot, state: EditState): Snapshot {
+  const session = snapshot.session;
+  if (session === null) {
+    throw new Error('в фикстуре нет сессии');
+  }
+  const next: SessionSnapshot = {
+    ...session,
+    edits: state.edits,
+    passes: session.passes.map((pass, index) =>
+      index === 1 ? { ...pass, rotate180: state.rotate180 } : pass,
+    ),
+  };
+  const auto = assemblyOf(next);
+  const byKey = new Map(auto.order.map((entry) => [entry.key, entry]));
+  const explicit = state.edits.order.flatMap((key) => byKey.get(key) ?? []);
+  const rest = auto.order.filter((entry) => !state.edits.order.includes(entry.key));
+  const removed = new Set(state.edits.deleted);
+  const order = [...explicit, ...rest]
+    .filter((entry) => !removed.has(entry.key))
+    .map((entry) => {
+      const extra = state.edits.rotations[entry.key] ?? 0;
+      return { ...entry, angle: ((entry.angle + extra) % 360) as typeof entry.angle };
+    });
+  return {
+    ...snapshot,
+    seq: snapshot.seq + 1,
+    session: next,
+    assembly: {
+      ...auto,
+      order,
+      documents: documentsOf(order.length, state.edits.cuts, state.edits.names),
+      orderEdited: state.edits.order.length > 0,
+      hasEdits: state.rotate180 || !sameEdits(state.edits, EMPTY_EDITS),
+      deleted: auto.order.length - order.length,
+    },
+  };
+}
+
+/** Последнее, что ушло в `setEdits`. */
+export function lastSent(api: Api): EditState {
+  const calls = vi.mocked(api.setEdits).mock.calls;
+  const state = calls[calls.length - 1]?.[0];
+  if (state === undefined) {
+    throw new Error('setEdits не вызывался');
+  }
+  return state;
+}
+
+export const option = (index: number): HTMLElement => {
+  const element = screen.getAllByRole('option')[index];
+  if (element === undefined) {
+    throw new Error(`нет миниатюры ${String(index)}`);
+  }
+  return element;
+};
+
+export const selectedKeys = (): (string | null)[] =>
+  screen
+    .getAllByRole('option')
+    .filter((element) => element.getAttribute('aria-selected') === 'true')
+    .map((element) => element.getAttribute('data-key'));
+
+/** Поле имени документа `number` (с единицы). */
+export const nameField = (number: number): HTMLInputElement =>
+  screen.getByRole<HTMLInputElement>('textbox', { name: `Название документа ${String(number)}` });
+
+export const ctrlZ = (target: Element = document.body): void => {
+  fireEvent.keyDown(target, { key: 'z', code: 'KeyZ', ctrlKey: true });
+};
+
+/** Ответ моста приходит микротаском — дождаться его до следующего снимка. */
+export const settle = async (): Promise<void> => {
+  await act(async () => {
+    await Promise.resolve();
+  });
+};
+
+/**
+ * Самодельный `dataTransfer`: в jsdom его нет (KTD-8). Лента пишет в него только тип данных
+ * и эффект — этого достаточно.
+ */
+export function dataTransfer(): DataTransfer {
+  const data = new Map<string, string>();
+  return {
+    dropEffect: 'none',
+    effectAllowed: 'all',
+    setData: (type: string, value: string) => {
+      data.set(type, value);
+    },
+    getData: (type: string) => data.get(type) ?? '',
+  } as unknown as DataTransfer;
+}
+
+/**
+ * `dragover` над миниатюрой в её левой (`before`) или правой (`after`) половине. jsdom не
+ * знает `DragEvent` и не раскладывает страницу: координату события и рамку задаёт тест.
+ */
+export function dragOver(target: HTMLElement, side: 'before' | 'after', transfer: DataTransfer) {
+  vi.spyOn(target, 'getBoundingClientRect').mockReturnValue({
+    left: 100,
+    right: 180,
+    top: 0,
+    bottom: 120,
+    width: 80,
+    height: 120,
+    x: 100,
+    y: 0,
+    toJSON: () => ({}),
+  });
+  const event = createEvent.dragOver(target, { dataTransfer: transfer });
+  Object.defineProperty(event, 'clientX', { value: side === 'before' ? 110 : 170 });
+  fireEvent(target, event);
+}
+
+/** Перетаскивание целиком: взять, провести над целью, бросить, отпустить. */
+export function dragAndDrop(source: HTMLElement, target: HTMLElement, side: 'before' | 'after') {
+  const transfer = dataTransfer();
+  fireEvent.dragStart(source, { dataTransfer: transfer });
+  dragOver(target, side, transfer);
+  fireEvent.drop(target, { dataTransfer: transfer });
+  fireEvent.dragEnd(source, { dataTransfer: transfer });
 }
