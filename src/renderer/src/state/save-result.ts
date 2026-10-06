@@ -28,11 +28,14 @@ export function fileNoteOf(requested: string, actual: string): FileNote | null {
   return base.replace(SUFFIX, '') === requested ? 'renamed' : 'changed';
 }
 
-/** Имя строки модалки: пустое (или из пробелов) — по умолчанию, края обрезаются. */
+/** Набранное расширение: ядро его снимает (KTD-11), здесь — чтобы имя не считалось изменённым. */
+const TYPED_PDF = /\.pdf$/iu;
+
+/** Имя строки модалки: края обрезаются, набранное «.pdf» снимается; пустое — по умолчанию. */
 export function requestedNames(
   rows: readonly { readonly value: string; readonly placeholder: string }[],
 ): string[] {
-  return rows.map((row) => row.value.trim() || row.placeholder);
+  return rows.map((row) => row.value.trim().replace(TYPED_PDF, '').trimEnd() || row.placeholder);
 }
 
 /** Всё записано под запрошенными именами — модалка закрывается сразу (handoff M3, S16). */

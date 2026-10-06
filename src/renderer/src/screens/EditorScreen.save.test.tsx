@@ -5,10 +5,12 @@ import '../i18n';
 import {
   applied,
   ctrlZ,
+  deferredSetEdits,
   edits,
   lastSent,
   makePass,
   makeSnapshot,
+  nameField,
   pages,
   renderEditor,
   settle,
@@ -166,6 +168,56 @@ describe('сохранение из редактора', () => {
     expect(onToast).toHaveBeenCalledExactlyOnceWith('Сначала отметьте границы между документами');
   });
 
+  it('S18: кнопка тоста при открытой модалке ничего не подменяет', async () => {
+    const api = stubApi();
+    const { onToast } = renderEditor(twoDocuments());
+    fireEvent.click(button('Сохранить 2 файла'));
+    fireEvent.click(inDialog('Сохранить 2 файла'));
+    await settle();
+    await settle();
+    const action = onToast.mock.calls[0]?.[2] as { onClick: () => void };
+
+    // Снова открыли сохранение — и нажали кнопку тоста, пока он ещё висит.
+    fireEvent.click(button('Сохранить 2 файла'));
+    action.onClick();
+    await settle();
+
+    expect(screen.getByRole('dialog', { name: 'Сохранить 2 файла' })).toBeDefined();
+    expect(screen.queryByRole('dialog', { name: 'Начать новое сканирование?' })).toBeNull();
+    expect(api.closeSession).not.toHaveBeenCalled();
+  });
+
+  it('имя из ленты ещё пишется — «Сохранить» ждёт, потом строка с новым именем без отката', async () => {
+    const { setEdits, answer } = deferredSetEdits();
+    const api = stubApi({ setEdits });
+    const snapshot = twoDocuments();
+    const { rerender } = renderEditor(snapshot);
+
+    // Фиксация имени по уходу фокуса — нажатием на кнопку тулбара.
+    fireEvent.change(nameField(1), { target: { value: 'Акт' } });
+    fireEvent.blur(nameField(1));
+    fireEvent.click(button('Сохранить 2 файла'));
+    expect(inDialog('Сохранить 2 файла').hasAttribute('disabled')).toBe(true);
+
+    const sent = lastSent(api);
+    answer(ok({ seq: snapshot.seq + 1 }));
+    await settle();
+    rerender(applied(snapshot, sent));
+    const row = screen.getByRole<HTMLInputElement>('textbox', { name: 'Имя файла 1' });
+    expect(row.value).toBe('Акт');
+
+    fireEvent.click(inDialog('Сохранить 2 файла'));
+    await settle();
+    await settle();
+
+    expect(setEdits).toHaveBeenCalledTimes(1);
+    expect(api.saveDocuments).toHaveBeenCalledWith({
+      mode: 'separate',
+      names: ['Акт', 'Документ 2'],
+      retry: false,
+    });
+  });
+
   it('пока модалка открыта, Ctrl+Z правки не откатывает', async () => {
     const api = stubApi();
     const snapshot = twoPass();
@@ -215,6 +267,33 @@ describe('новое сканирование из редактора', () => {
       3600,
     );
   });
+
+  it.each([
+    ['отказ', () => Promise.resolve(fail('sessionCloseFailed')), /не удалось удалить страницы/u],
+    ['мост не ответил', () => Promise.reject(new Error('нет ответа')), /не получило ответа/u],
+  ])(
+    'AE11: закрытие не удалось (%s) — тост говорит и что сохранено, и почему не закрыто',
+    async (_name, closeSession, reason) => {
+      stubApi({ closeSession: vi.fn(closeSession) });
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const { onToast } = renderEditor(twoPass());
+
+      fireEvent.click(button(/Новое сканирование/));
+      fireEvent.click(button(/Сначала сохранить текущий/));
+      fireEvent.click(button('Сохранить файл'));
+      await settle();
+      await settle();
+      await settle();
+
+      const last: unknown[] = onToast.mock.calls.at(-1) ?? [];
+      const [text, duration] = last;
+      expect(text).toMatch(
+        /^Сохранено: .+\.pdf → C:\\Документы, но начать новое сканирование не удалось: /u,
+      );
+      expect(text).toMatch(reason);
+      expect(duration).toBe(6000);
+    },
+  );
 
   it('«Закрыть» модалки save после «Сначала сохранить» — сессия не закрывается', async () => {
     const api = stubApi({

@@ -29,6 +29,16 @@ describe('имена, которые уходят в пакет', () => {
       ]),
     ).toEqual(['Документ 1', 'Документ 2', 'Опись']);
   });
+
+  it('набранное «.pdf» снимается — ядро сняло бы его само, и имя не считалось бы изменённым', () => {
+    expect(
+      requestedNames([
+        { value: 'Отчёт.pdf', placeholder: 'Документ 1' },
+        { value: 'Акт.PDF ', placeholder: 'Документ 2' },
+        { value: '.pdf', placeholder: 'Документ 3' },
+      ]),
+    ).toEqual(['Отчёт', 'Акт', 'Документ 3']);
+  });
 });
 
 const report = (change: Partial<SaveDocumentsReport>): SaveDocumentsReport => ({

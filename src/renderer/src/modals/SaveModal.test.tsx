@@ -54,17 +54,23 @@ function renderModal(props: Partial<SaveModalProps> = {}) {
     onSaved: vi.fn(),
     onClose: vi.fn(),
   };
-  render(
+  const element = (next: Partial<SaveModalProps>) => (
     <SaveModal
       documents={THREE}
       defaultNames={THREE_DEFAULTS}
       singleDefault="Скан 2026-10-06"
       total={24}
+      editsBusy={false}
       {...handlers}
-      {...props}
-    />,
+      {...next}
+    />
   );
-  return handlers;
+  const view = render(element(props));
+  /** Новые пропсы в ту же модалку — как их доставил бы следующий снимок. */
+  const rerender = (next: Partial<SaveModalProps>): void => {
+    view.rerender(element({ ...props, ...next }));
+  };
+  return { ...handlers, rerender };
 }
 
 const mode = (name: RegExp): HTMLElement => screen.getByRole('radio', { name });
@@ -160,6 +166,45 @@ describe('модалка save: выбор', () => {
   });
 });
 
+describe('модалка save: свежие данные', () => {
+  it('выбор папки после отказа снимает прежнюю ошибку', async () => {
+    stubApi({ saveDocuments: vi.fn(() => Promise.resolve(fail('saveWriteFailed'))) });
+    renderModal();
+    fireEvent.click(button('Сохранить 3 файла'));
+    await settle();
+    expect(screen.getByRole('alert')).toBeDefined();
+
+    fireEvent.click(button('Выбрать…'));
+    await settle();
+
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('имя документа, пришедшее в снимке после открытия, видно в строке и не откатывается', async () => {
+    const api = stubApi();
+    const handlers = renderModal({ documents: [doc(0, 9), doc(9, 15)] });
+    expect(file(1).value).toBe('');
+
+    // Имя из ленты (фиксация по уходу фокуса) дописалось уже после открытия модалки.
+    handlers.rerender({ documents: [doc(0, 9, 'Акт'), doc(9, 15)] });
+    expect(file(1).value).toBe('Акт');
+    fireEvent.change(file(2), { target: { value: 'Опись' } });
+    fireEvent.click(button('Сохранить 2 файла'));
+    await settle();
+
+    // В правки уходят только имена, тронутые в модалке.
+    expect(handlers.onRename).toHaveBeenCalledExactlyOnceWith(new Map([[1, 'Опись']]));
+    expect(vi.mocked(api.saveDocuments).mock.calls[0]?.[0].names).toEqual(['Акт', 'Опись']);
+  });
+
+  it('пока правка в полёте — «Сохранить» недоступно', () => {
+    stubApi();
+    renderModal({ editsBusy: true });
+
+    expect(button('Сохранить 3 файла').hasAttribute('disabled')).toBe(true);
+  });
+});
+
 describe('модалка save: запись', () => {
   it('«Отдельные файлы»: имена — сначала в документы, потом пакет; пустое — по умолчанию', async () => {
     const api = stubApi();
@@ -169,11 +214,8 @@ describe('модалка save: запись', () => {
     fireEvent.click(button('Сохранить 3 файла'));
     await settle();
 
-    expect(onRename).toHaveBeenCalledExactlyOnceWith([
-      'Акт приёма-передачи',
-      '  Опись вложений ',
-      '',
-    ]);
+    // В документы — только тронутое в модалке и как введено (обрезка — у имени файла).
+    expect(onRename).toHaveBeenCalledExactlyOnceWith(new Map([[1, '  Опись вложений ']]));
     expect(api.saveDocuments).toHaveBeenCalledExactlyOnceWith({
       mode: 'separate',
       names: ['Акт приёма-передачи', 'Опись вложений', 'Документ 3'],

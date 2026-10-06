@@ -127,6 +127,17 @@ describe('модалка newscan: действия', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  it('мост не ответил — статус говорит об этом, карточки снова доступны', async () => {
+    stubApi({ closeSession: vi.fn(() => Promise.reject(new Error('нет ответа'))) });
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    renderModal();
+
+    fireEvent.click(fresh());
+
+    expect((await screen.findByRole('alert')).textContent).toContain('не получило ответа');
+    expect(fresh().hasAttribute('disabled')).toBe(false);
+  });
+
   it('«Сначала сохранить текущий» отдаёт выбор экрану и ничего не шлёт', () => {
     const api = stubApi();
     const { onSaveFirst } = renderModal();

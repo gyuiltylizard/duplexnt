@@ -35,7 +35,7 @@ import {
   withoutCut,
   type DropSide,
 } from '../state/edits';
-import { errorText, errorTextInline } from '../state/error-text';
+import { errorTextInline } from '../state/error-text';
 import type { EditState } from '../state/history';
 import { survivingPasses } from '../state/screen';
 import {
@@ -480,21 +480,31 @@ export function EditorScreen({
     edits.edit({ edits: edits.current.edits, rotate180: event.target.checked }, []);
   };
 
-  // Закрытие сессии без модалки: пустая сессия и «Сначала сохранить текущий» после успеха.
-  // Отказ — тостом: сессия цела (S17).
-  const closeSession = (closedToast?: string): void => {
+  // Закрытие сессии без модалки: пустая сессия и «Сначала сохранить текущий» после записи
+  // (`saved` — текст тоста сохранения). Отказ и молчание моста — тостом: сессия цела (S17), а
+  // после записи человек должен узнать и то, что файлы сохранены.
+  const closeSession = (saved?: string): void => {
+    const failed = (reason: string): void => {
+      onToast(
+        saved === undefined
+          ? t('toast.closeFailed', { error: reason })
+          : t('toast.savedCloseFailed', { saved, error: reason }),
+        SAVE_TOAST_MS,
+      );
+    };
     window.api.closeSession().then(
       (result) => {
-        if (result.ok) {
-          if (closedToast !== undefined) {
-            onToast(closedToast, THEN_NEW_TOAST_MS);
-          }
+        if (!result.ok) {
+          failed(errorTextInline(t, result.error));
           return;
         }
-        onToast(errorText(t, result.error), SAVE_TOAST_MS);
+        if (saved !== undefined) {
+          onToast(t('toast.savedThenNew', { saved }), THEN_NEW_TOAST_MS);
+        }
       },
       (error: unknown) => {
         console.error('[renderer] закрытие сессии не ответило', error);
+        failed(t('toast.closeNoResponse'));
       },
     );
   };
@@ -510,10 +520,11 @@ export function EditorScreen({
     setModal('newscan');
   };
 
-  // Имена из модалки `save` — в документы одним шагом undo, до записи пакета (S16).
-  const renameDocuments = (next: readonly string[]): Promise<boolean> => {
-    const target = next.reduce(
-      (state, name, index) => renamed(state, index, name),
+  // Имена, тронутые в модалке `save`, — в документы одним шагом undo, до записи пакета (S16).
+  // Только тронутые: нетронутые строки показывают живые имена, откатывать ими нечего.
+  const renameDocuments = (next: ReadonlyMap<number, string>): Promise<boolean> => {
+    const target = [...next].reduce(
+      (state, [index, name]) => renamed(state, index, name),
       edits.current.edits,
     );
     if (target === edits.current.edits) {
@@ -544,13 +555,17 @@ export function EditorScreen({
         ? t('toast.saved', { file: only.fileName, folder: report.folder })
         : t('toast.savedMany', { count: report.written.length, folder: report.folder });
     if (modal === 'saveThenNew') {
-      closeSession(t('toast.savedThenNew', { saved: text }));
+      closeSession(text);
       return;
     }
     onToast(text, SAVE_TOAST_MS, {
       label: t('toast.newScanAction'),
+      // Тост лежит поверх затемнения: открытую модалку — запись, откат, подключение — кнопка не
+      // подменяет.
       onClick: () => {
-        setModal('newscan');
+        if (document.querySelector('[aria-modal="true"]') === null) {
+          setModal('newscan');
+        }
       },
     });
   };
@@ -811,6 +826,7 @@ export function EditorScreen({
           singleDefault={t('editor.doc.defaultSingleName', { date: today })}
           total={total}
           onRename={renameDocuments}
+          editsBusy={edits.busy}
           onWriting={setSaving}
           onNeedCuts={() => {
             onToast(t('toast.needCuts'));

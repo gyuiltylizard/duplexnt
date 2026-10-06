@@ -1,6 +1,5 @@
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { DomainError } from '@shared';
 import { Modal } from '../components/Modal';
 import { useUnmounted } from '../components/useUnmounted';
 import { errorText } from '../state/error-text';
@@ -40,7 +39,8 @@ export function NewScanModal({
 }: NewScanModalProps): ReactNode {
   const { t } = useTranslation();
   const [closing, setClosing] = useState(false);
-  const [failure, setFailure] = useState<DomainError | null>(null);
+  /** Текст отказа: ошибка ядра или «мост не ответил». */
+  const [failure, setFailure] = useState<string | null>(null);
   const unmounted = useUnmounted();
 
   const kind = kindOf(total, saved);
@@ -62,12 +62,14 @@ export function NewScanModal({
           return;
         }
         setClosing(false);
-        setFailure(result.error);
+        setFailure(errorText(t, result.error));
       },
       (error: unknown) => {
         console.error('[renderer] закрытие сессии не ответило', error);
+        // Удаляет ли ядро страницы, неизвестно — человек должен это узнать, а не гадать.
         if (!unmounted.current) {
           setClosing(false);
+          setFailure(t('newScan.noResponse'));
         }
       },
     );
@@ -93,7 +95,7 @@ export function NewScanModal({
   } else if (failure !== null) {
     status = (
       <p className="modal__status modal__status--danger" role="alert">
-        {errorText(t, failure)}
+        {failure}
       </p>
     );
   } else {

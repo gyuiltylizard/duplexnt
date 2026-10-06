@@ -29,8 +29,16 @@ export interface SaveModalProps {
   readonly singleDefault: string;
   /** Страниц в ленте. */
   readonly total: number;
-  /** Записать имена документов одной правкой; `false` — не записались (об этом уже сказано). */
-  readonly onRename: (names: readonly string[]) => Promise<boolean>;
+  /**
+   * Записать имена, тронутые в модалке (номер документа → имя), одной правкой; `false` — не
+   * записались (об этом уже сказано).
+   */
+  readonly onRename: (names: ReadonlyMap<number, string>) => Promise<boolean>;
+  /**
+   * Правка редактора в полёте — например, имя из ленты, зафиксированное уходом фокуса на кнопку
+   * сохранения: «Сохранить…» ждёт её снимка, иначе правка имён ушла бы от устаревших правок.
+   */
+  readonly editsBusy: boolean;
   /** Идёт запись пакета: правки заблокированы (KTD-9). */
   readonly onWriting: (writing: boolean) => void;
   /** Нажаты «Отдельные файлы» при одном документе — подсказка тостом (UI_SPEC §7.3). */
@@ -66,6 +74,7 @@ export function SaveModal({
   singleDefault,
   total,
   onRename,
+  editsBusy,
   onWriting,
   onNeedCuts,
   onSaved,
@@ -74,7 +83,8 @@ export function SaveModal({
   const { t } = useTranslation();
   const several = documents.length > 1;
   const [mode, setMode] = useState<SaveMode>(several ? 'separate' : 'single');
-  const [docNames, setDocNames] = useState(() => documents.map((doc) => doc.name));
+  // Имена документов, тронутые в модалке; остальные строки — живые имена из снимка.
+  const [edited, setEdited] = useState<ReadonlyMap<number, string>>(() => new Map());
   const [fileName, setFileName] = useState('');
   const [folder, setFolder] = useState<string | null>(null);
   const [choosing, setChoosing] = useState(false);
@@ -114,11 +124,11 @@ export function SaveModal({
   const locked = writing || outcome !== null;
 
   const docRows: Row[] = documents.map((doc, index) => ({
-    value: docNames[index] ?? '',
+    value: edited.get(index) ?? doc.name,
     placeholder: defaultNames[index] ?? '',
     pages: doc.count,
     onChange: (value) => {
-      setDocNames((previous) => previous.map((name, at) => (at === index ? value : name)));
+      setEdited((previous) => new Map(previous).set(index, value));
     },
   }));
   // «Один файл» при одном документе — это его имя; при нескольких — имя файла вне журнала.
@@ -166,13 +176,13 @@ export function SaveModal({
   };
 
   const submit = (): void => {
-    if (locked) {
+    if (locked || editsBusy) {
       return;
     }
     const requested = requestedNames(rows);
     setWriting(true);
     setFailure(null);
-    void (perDocument ? onRename(docNames) : Promise.resolve(true)).then((renamed) => {
+    void (perDocument ? onRename(edited) : Promise.resolve(true)).then((renamed) => {
       if (unmounted.current) {
         return;
       }
@@ -196,8 +206,10 @@ export function SaveModal({
         }
         setChoosing(false);
         if (result.ok) {
-          // Отказ в диалоге оставляет прежнюю папку — она и приходит.
+          // Отказ в диалоге оставляет прежнюю папку — она и приходит. Прежняя ошибка записи
+          // (часто — недоступная папка) к новой папке не относится.
           setFolder(result.value.folder);
+          setFailure(null);
         } else {
           setFailure(errorText(t, result.error));
         }
@@ -276,7 +288,7 @@ export function SaveModal({
           ref={primaryRef}
           type="button"
           className="btn btn--primary btn--small"
-          disabled={writing}
+          disabled={writing || (retry === null && editsBusy)}
           aria-busy={writing ? true : undefined}
           onClick={() => {
             if (retry === null) {
