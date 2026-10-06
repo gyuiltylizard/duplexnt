@@ -22,7 +22,7 @@ import {
   noRequestSchema,
   parseInput,
   scanParamsSchema,
-  setRotateBacksRequestSchema,
+  setEditsRequestSchema,
 } from './schemas';
 
 // Обработчики команд моста (ADR 0005; план M1, U18, KTD-39): вход приходит непроверенным и
@@ -204,9 +204,11 @@ export function createCommands(context: CommandContext): Commands {
       stopPass: withoutRequest(() => done(() => service.stopPass())),
       acceptPass: withoutRequest(() => done(() => service.acceptPass())),
       declineBacks: withoutRequest(() => done(() => service.declineBacks())),
-      setRotateBacks: async (rawRequest) => {
-        const request = parseInput(setRotateBacksRequestSchema, rawRequest);
-        return request.ok ? done(() => service.setRotateBacks(request.value.rotate)) : request;
+      setEdits: async (rawRequest) => {
+        const request = parseInput(setEditsRequestSchema, rawRequest);
+        return request.ok
+          ? done(() => service.setEdits(request.value.edits, request.value.rotate180))
+          : request;
       },
       savePdf: withoutRequest(() => service.savePdf(context.askSavePdfPath)),
       closeSession: withoutRequest(() => done(() => service.closeSession())),

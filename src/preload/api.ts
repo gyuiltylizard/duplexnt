@@ -61,7 +61,7 @@ export function buildApi(ipcRenderer: PreloadIpcRenderer): Api {
     stopPass: command(ipcRenderer, 'stopPass'),
     acceptPass: command(ipcRenderer, 'acceptPass'),
     declineBacks: command(ipcRenderer, 'declineBacks'),
-    setRotateBacks: command(ipcRenderer, 'setRotateBacks'),
+    setEdits: command(ipcRenderer, 'setEdits'),
     savePdf: command(ipcRenderer, 'savePdf'),
     closeSession: command(ipcRenderer, 'closeSession'),
     openDataFolder: command(ipcRenderer, 'openDataFolder'),

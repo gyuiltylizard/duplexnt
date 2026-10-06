@@ -2,6 +2,7 @@ import { mkdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PDFDocument } from '@cantoo/pdf-lib';
 import { describe, expect, it } from 'vitest';
+import { EMPTY_EDITS } from '@shared';
 import { probeScanner, type ConnectedScanner } from '../../src/core/escl/connect';
 import type { ScanJobLimits } from '../../src/core/escl/scan-job';
 import {
@@ -115,7 +116,7 @@ describe('два прохода через эмулятор (M2)', () => {
 
     expect(unwrap(await service.startPass())).toMatchObject({ end: 'completed', pages: 3 });
     expect(unwrap(await service.startPass())).toMatchObject({ end: 'completed', pages: 3 });
-    unwrap(await service.setRotateBacks(true));
+    unwrap(await service.setEdits(EMPTY_EDITS, true));
 
     const outDir = join(root, 'выход');
     await mkdir(outDir, { recursive: true });
@@ -267,7 +268,7 @@ describe('два прохода через эмулятор (M2)', () => {
     ).toBe(true);
 
     expect(service.snapshot().session?.passes.map((pass) => pass.number)).toEqual([1, 3]);
-    expect(await service.setRotateBacks(true)).toEqual({ ok: true, value: undefined });
+    expect(await service.setEdits(EMPTY_EDITS, true)).toEqual({ ok: true, value: undefined });
     expect(service.snapshot().session?.passes.map((pass) => [pass.number, pass.rotate180])).toEqual(
       [
         [1, false],

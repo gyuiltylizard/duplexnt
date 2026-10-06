@@ -167,13 +167,9 @@ export interface SessionStore {
   /** «Оставить как есть»: прерванный проход принят. */
   acceptPass(): Promise<Result<void>>;
   /**
-   * «Повернуть обороты на 180°» (M2, KTD-2): флаг на проходе в роли оборотов — втором уцелевшем
-   * (KTD-4). Смена флага снимает отметку о сохранении: на диске лежит PDF без поворота.
-   */
-  setRotateBacks(rotate: boolean): Promise<Result<void>>;
-  /**
-   * Правки редактора (M3, KTD-3): итоговое состояние целиком и поворот оборотов — одной записью
-   * журнала, чтобы «Вернуть» был одним шагом. Правка снимает отметку о сохранении; во время
+   * Правки редактора (M3, KTD-3): итоговое состояние целиком и поворот оборотов на 180° (флаг
+   * прохода в роли оборотов — второго уцелевшего, KTD-4) — одной записью журнала, чтобы
+   * «Вернуть» был одним шагом. Правка снимает отметку о сохранении; во время
    * прохода отклоняется. Нормализация — забота хранилища, не вызывающего.
    */
   setEdits(edits: SessionEdits, rotate180: boolean): Promise<Result<void>>;
@@ -684,25 +680,6 @@ export function createSessionStore(
           return conflict(state === 'running' ? 'passRunning' : 'notInterrupted');
         }
         return commit(withLastPass(journal, { ...pass, accepted: true }), 'must');
-      }),
-
-    setRotateBacks: (rotate) =>
-      mutating(async () => {
-        if (journal === null || isVacant(journal)) {
-          return conflict('noSession');
-        }
-        const backs = backsPassOf(journal);
-        if (backs === null) {
-          return conflict('noBacksPass');
-        }
-        if (backs.rotate180 === rotate) {
-          return ok(undefined);
-        }
-        const passes = journal.passes.map((pass) =>
-          pass === backs ? { ...pass, rotate180: rotate } : pass,
-        );
-        // Смена поворота меняет вывод: сохранённый PDF устарел (KTD-7).
-        return commit({ ...journal, passes, saved: false }, 'must');
       }),
 
     setEdits: (edits, rotate180) =>

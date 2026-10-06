@@ -11,6 +11,7 @@ import {
   type SavePdfReport,
   type ScanParams,
   type SessionConflictReason,
+  type SessionEdits,
   type ScannerState,
   type Snapshot,
   type StartupNotice,
@@ -96,8 +97,11 @@ export interface PassService {
   acceptPass(): Promise<Result<void>>;
   /** «Обороты не нужны» (M2, KTD-6): durable-отметка, идемпотентно. */
   declineBacks(): Promise<Result<void>>;
-  /** Тумблер «повернуть обороты на 180°» (M2, KTD-2): флаг прохода в роли оборотов. */
-  setRotateBacks(rotate: boolean): Promise<Result<void>>;
+  /**
+   * Правки редактора и тумблер 180° (M3, KTD-3). Отклоняется, пока пишется PDF (`saving`) и
+   * пока идёт проход (`passRunning`) — KTD-9.
+   */
+  setEdits(edits: SessionEdits, rotate180: boolean): Promise<Result<void>>;
   /**
    * «Сохранить документ» (M2, U6): путь спрашивает `askPath` (диалог main, `null` — отказ),
    * ядро читает страницы в собранном порядке, собирает PDF и пишет атомарно рядом с целью;
@@ -629,8 +633,16 @@ export function createPassService(
       return declined;
     },
 
-    async setRotateBacks(rotate) {
-      const set = await store.setRotateBacks(rotate);
+    async setEdits(edits, rotate180) {
+      // Запись PDF читает ленту по снимку: правка посреди неё сделала бы файл и отметку
+      // «сохранено» неправдой, а повтор неудавшихся — гонкой с лентой (KTD-9).
+      if (saving) {
+        return conflict('saving');
+      }
+      if (run !== null) {
+        return conflict('passRunning');
+      }
+      const set = await store.setEdits(edits, rotate180);
       notify();
       return set;
     },

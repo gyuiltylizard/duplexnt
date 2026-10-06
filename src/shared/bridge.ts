@@ -13,6 +13,7 @@
 //   `Uint8Array` и `ArrayBuffer` можно; `Buffer`, `Blob` и потоки нельзя.
 
 import type { DiscoveryState } from './discovery';
+import type { SessionEdits } from './edits';
 import type { Result } from './errors';
 import type { ScanParams } from './scan-params';
 import type { PassReport, Snapshot } from './snapshot';
@@ -49,9 +50,13 @@ export interface ProbeRequest {
   readonly token: string;
 }
 
-/** Вход тумблера «повернуть обороты на 180°» (M2, KTD-2). */
-export interface SetRotateBacksRequest {
-  readonly rotate: boolean;
+/**
+ * Правки редактора (M3, KTD-3): итоговое состояние целиком и поворот оборотов на 180° — одной
+ * командой, чтобы «Вернуть» и его отмена были одним шагом. Нормализует ядро.
+ */
+export interface SetEditsRequest {
+  readonly edits: SessionEdits;
+  readonly rotate180: boolean;
 }
 
 /** Итог «Сохранить документ» (M2, KTD-3): отказ в диалоге — не ошибка, ничего не записано. */
@@ -107,8 +112,11 @@ export interface BridgeCommands {
   readonly acceptPass: { readonly request: NoRequest; readonly value: undefined };
   /** «Обороты не нужны» (M2, KTD-6): durable-отметка, `flip` больше не показывается. */
   readonly declineBacks: { readonly request: NoRequest; readonly value: undefined };
-  /** Тумблер «повернуть обороты на 180°» (M2, KTD-2); исход — в снимке. */
-  readonly setRotateBacks: { readonly request: SetRotateBacksRequest; readonly value: undefined };
+  /**
+   * Правки редактора и тумблер 180° (M3, KTD-3); исход — в снимке. Во время записи PDF и идущего
+   * прохода отклоняется конфликтом (KTD-9).
+   */
+  readonly setEdits: { readonly request: SetEditsRequest; readonly value: undefined };
   /**
    * «Сохранить документ» (M2, KTD-3): путь спрашивает main системным диалогом, ядро собирает
    * PDF и пишет атомарно; отметка о сохранении — в журнале.
@@ -135,7 +143,7 @@ export const BRIDGE_CHANNELS = {
   stopPass: 'duplexnt:stop-pass',
   acceptPass: 'duplexnt:accept-pass',
   declineBacks: 'duplexnt:decline-backs',
-  setRotateBacks: 'duplexnt:set-rotate-backs',
+  setEdits: 'duplexnt:set-edits',
   savePdf: 'duplexnt:save-pdf',
   closeSession: 'duplexnt:close-session',
   openDataFolder: 'duplexnt:open-data-folder',

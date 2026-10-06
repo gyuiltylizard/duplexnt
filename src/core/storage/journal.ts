@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { EMPTY_EDITS, MAX_DOCUMENT_NAME_LENGTH, type PassState } from '@shared';
+import { EMPTY_EDITS, type PassState } from '@shared';
 import { scanParamsSchema } from '../escl/scan-settings';
+import { editsSchemaOf } from './edits-schema';
 import {
-  isPageKey,
   MAX_PAGE_INDEX,
   MAX_PASS_NUMBER,
   MAX_SEGMENT_NUMBER,
@@ -100,26 +100,7 @@ const countersHold = (journal: {
   isOrdered(journal.passes, journal.nextPass) &&
   journal.passes.every((pass) => isOrdered(pass.segments, pass.nextSegment));
 
-const pageKeySchema = z.string().refine(isPageKey);
-
-const isNonDecreasing = (values: readonly number[]): boolean =>
-  values.every((value, index) => index === 0 || value >= (values[index - 1] ?? 0));
-
-/**
- * Ручные правки (M3; ADR 0004, амендмент 2026-10-06) — итоговое состояние, не лог. Ключи без
- * страниц схема пропускает: их отбрасывает нормализация, а не отказ читать журнал.
- */
-const editsSchema = z
-  .strictObject({
-    order: z.array(pageKeySchema).readonly(),
-    rotations: z
-      .record(pageKeySchema, z.union([z.literal(90), z.literal(180), z.literal(270)]))
-      .readonly(),
-    deleted: z.array(pageKeySchema).readonly(),
-    cuts: z.array(z.number().int().min(0)).readonly(),
-    names: z.array(z.string().max(MAX_DOCUMENT_NAME_LENGTH)).readonly(),
-  })
-  .refine((edits) => edits.names.length === edits.cuts.length + 1 && isNonDecreasing(edits.cuts));
+const editsSchema = editsSchemaOf();
 
 // Журнал версии 2 (M2): без правок редактора. Чтение v2 обязательно, запись — всегда текущей.
 const journalV2Fields = {

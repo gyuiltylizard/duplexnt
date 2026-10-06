@@ -1,11 +1,13 @@
 import {
   BRIDGE_CHANNELS,
+  EMPTY_EDITS,
   fail,
   ok,
   type BridgeCommand,
   type DiscoveryState,
   type Result,
   type SavePdfReport,
+  type SessionEdits,
   type Snapshot,
 } from '@shared';
 import { describe, expect, it, vi } from 'vitest';
@@ -13,6 +15,7 @@ import type { ConnectedScanner, Connector, ScannerAddress } from '../escl/connec
 import type { Discovery } from '../discovery/mdns';
 import type { PassService } from '../scan/pass-service';
 import { addressOf, createCommands } from './handlers';
+import { MAX_EDIT_ITEMS } from './schemas';
 
 // Обработчики команд моста (план M1, U18, KTD-39): верный вход — успех в конверте, мусор — код
 // неверного входа, доменный отказ службы — код, а не исключение. Служба, поиск и подключение —
@@ -48,7 +51,7 @@ function setup(snapshot: Snapshot = EMPTY_SNAPSHOT) {
     stopPass: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
     acceptPass: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
     declineBacks: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
-    setRotateBacks: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
+    setEdits: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
     savePdf: vi.fn((): Promise<Result<SavePdfReport>> =>
       Promise.resolve(ok({ canceled: false, fileName: 'скан.pdf', directory: 'D:\\Сканы' })),
     ),
@@ -212,26 +215,45 @@ describe('снимок и проход', () => {
     );
   });
 
-  it('setRotateBacks: строгая схема, затем служба (M2, U3)', async () => {
+  it('setEdits: строгая схема, затем служба — правки и тумблер одним вызовом (M3, U3)', async () => {
     const { handlers, service } = setup();
+    const edits: SessionEdits = {
+      order: ['p01-s01-0002', 'p01-s01-0001'],
+      rotations: { 'p01-s01-0001': 90 },
+      deleted: ['p02-s01-0001'],
+      cuts: [1],
+      names: ['', 'Договор'],
+    };
 
-    expect(await handlers.setRotateBacks({ rotate: true })).toEqual(ok(undefined));
-    expect(service.setRotateBacks).toHaveBeenCalledExactlyOnceWith(true);
-    expect(await handlers.setRotateBacks({ rotate: false })).toEqual(ok(undefined));
-    expect(service.setRotateBacks).toHaveBeenLastCalledWith(false);
+    expect(await handlers.setEdits({ edits, rotate180: true })).toEqual(ok(undefined));
+    expect(service.setEdits).toHaveBeenCalledExactlyOnceWith(edits, true);
+    expect(await handlers.setEdits({ edits: EMPTY_EDITS, rotate180: false })).toEqual(
+      ok(undefined),
+    );
+    expect(service.setEdits).toHaveBeenLastCalledWith(EMPTY_EDITS, false);
 
-    for (const garbage of [
+    const tooMany = Array.from({ length: MAX_EDIT_ITEMS + 1 }, () => 'p01-s01-0001');
+    const garbage = [
       true,
-      { rotate: 'да' },
-      { rotate: 1 },
-      { rotate: true, extra: 1 },
+      { edits },
+      { edits, rotate180: 'да' },
+      { edits, rotate180: true, extra: 1 },
+      { edits: { ...edits, extra: 1 }, rotate180: false },
+      { edits: { ...edits, names: ['Договор'] }, rotate180: false },
+      { edits: { ...edits, cuts: [2, 1], names: ['', '', ''] }, rotate180: false },
+      { edits: { ...edits, cuts: [-1] }, rotate180: false },
+      { edits: { ...edits, rotations: { 'p01-s01-0001': 45 } }, rotate180: false },
+      { edits: { ...edits, order: ['../p01-s01-0001'] }, rotate180: false },
+      { edits: { ...edits, deleted: tooMany }, rotate180: false },
+      { edits: { ...edits, names: ['', 'я'.repeat(201)] }, rotate180: false },
       {},
       null,
       undefined,
-    ]) {
-      expect(invalid(await handlers.setRotateBacks(garbage)), JSON.stringify(garbage)).toBe(true);
+    ];
+    for (const [index, input] of garbage.entries()) {
+      expect(invalid(await handlers.setEdits(input)), `мусор №${index}`).toBe(true);
     }
-    expect(service.setRotateBacks).toHaveBeenCalledTimes(2);
+    expect(service.setEdits).toHaveBeenCalledTimes(2);
   });
 
   it('setScanParams: строгая схема, затем служба', async () => {

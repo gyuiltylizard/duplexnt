@@ -323,7 +323,9 @@ export function EditorScreen({
   const backsPass = survivingPasses(session)[1];
   const setRotate = (event: ChangeEvent<HTMLInputElement>): void => {
     // Снимок — источник правды: при отказе команда не меняет ничего, и чекбокс вернётся сам.
-    window.api.setRotateBacks({ rotate: event.target.checked }).then(
+    // Тумблер — правка (M3, KTD-3): уходит вместе с текущими правками снимка; в undo-стек он
+    // встанет в U7.
+    window.api.setEdits({ edits: session.edits, rotate180: event.target.checked }).then(
       (result) => {
         if (!result.ok) {
           console.error('[renderer] поворот оборотов не принят', result.error);

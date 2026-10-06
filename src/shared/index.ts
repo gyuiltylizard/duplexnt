@@ -25,7 +25,7 @@ export {
   type ProbeRequest,
   type ProbeResult,
   type SavePdfReport,
-  type SetRotateBacksRequest,
+  type SetEditsRequest,
   type Unsubscribe,
 } from './bridge';
 

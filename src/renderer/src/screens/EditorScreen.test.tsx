@@ -68,7 +68,7 @@ function stubApi(overrides: Partial<Record<keyof Api, unknown>> = {}) {
   const api = {
     acceptPass: vi.fn(() => Promise.resolve(ok(undefined))),
     closeSession: vi.fn(() => Promise.resolve(ok(undefined))),
-    setRotateBacks: vi.fn(() => Promise.resolve(ok(undefined))),
+    setEdits: vi.fn(() => Promise.resolve(ok(undefined))),
     savePdf: vi.fn(() =>
       Promise.resolve(ok({ canceled: false, fileName: 'Скан.pdf', directory: 'Документы' })),
     ),
@@ -159,16 +159,16 @@ describe('экран editor', () => {
     expect(screen.getAllByTitle('У этого листа нет оборота').length).toBe(1);
   });
 
-  it('S7: тумблер поворота виден при проходе оборотов и шлёт setRotateBacks', () => {
+  it('S7: тумблер поворота виден при проходе оборотов и шлёт правку с текущими правками (M3)', () => {
     const api = stubApi();
     renderEditor(twoPass());
 
     const toggle = screen.getByRole('checkbox', { name: 'Повернуть обороты на 180°' });
     fireEvent.click(toggle);
-    expect(api.setRotateBacks).toHaveBeenCalledExactlyOnceWith({ rotate: true });
+    expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({ edits: EMPTY_EDITS, rotate180: true });
   });
 
-  it('S7: включённый поворот разворачивает только обороты; выключение шлёт rotate: false', () => {
+  it('S7: включённый поворот разворачивает только обороты; выключение шлёт rotate180: false', () => {
     const api = stubApi();
     const snapshot = makeSnapshot([
       makePass({ pages: pages(2) }),
@@ -183,7 +183,7 @@ describe('экран editor', () => {
     const toggle = screen.getByRole('checkbox', { name: 'Повернуть обороты на 180°' });
     expect((toggle as HTMLInputElement).checked).toBe(true);
     fireEvent.click(toggle);
-    expect(api.setRotateBacks).toHaveBeenCalledExactlyOnceWith({ rotate: false });
+    expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({ edits: EMPTY_EDITS, rotate180: false });
   });
 
   it('без прохода оборотов тумблера нет', () => {

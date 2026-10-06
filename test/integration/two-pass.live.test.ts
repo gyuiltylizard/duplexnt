@@ -2,6 +2,7 @@ import { mkdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { PDFDocument } from '@cantoo/pdf-lib';
 import { expect, it } from 'vitest';
+import { EMPTY_EDITS } from '@shared';
 import { probeScanner } from '../../src/core/escl/connect';
 import { openPassService } from '../../src/core/scan/pass-service';
 import { describeLive } from '../support/live-device';
@@ -106,7 +107,7 @@ describeLive('два прохода на живом сканере (AE2)', (host
 
       // AE8/AE12 без пересканирования: аварийный тумблер снимает отметку сохранения и кладёт
       // /Rotate 180 только на обороты; выключение возвращает.
-      unwrap(await service.setRotateBacks(true));
+      unwrap(await service.setEdits(EMPTY_EDITS, true));
       expect(service.snapshot().session?.saved).toBe(false);
       const rotatedTarget = resolve('temp', 'duplexnt-live-two-pass-rotated.pdf');
       unwrap(await service.savePdf(() => Promise.resolve(rotatedTarget)));
@@ -114,7 +115,7 @@ describeLive('два прохода на живом сканере (AE2)', (host
       for (const [index, page] of rotated.getPages().entries()) {
         expect(page.getRotation().angle, `страница ${index + 1}`).toBe(index % 2 === 1 ? 180 : 0);
       }
-      unwrap(await service.setRotateBacks(false));
+      unwrap(await service.setEdits(EMPTY_EDITS, false));
 
       console.info(
         `[live] PDF сохранён: ${target} (${fronts.pages * 2} страниц). ` +

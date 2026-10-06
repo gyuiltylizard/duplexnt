@@ -1,7 +1,7 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PDFDocument } from '@cantoo/pdf-lib';
-import { fail } from '@shared';
+import { EMPTY_EDITS, fail, type SessionEdits, type Snapshot } from '@shared';
 import { describe, expect, it } from 'vitest';
 import { ET_3850, readFixture } from '../../../test/support/fixtures';
 import { fsError, interceptFs } from '../../../test/support/intercept-fs';
@@ -351,7 +351,7 @@ describe('служба прохода: команды оборотов (M2, U3)'
     expect(again.snapshot().session?.backsDeclined).toBe(true);
   });
 
-  it('setRotateBacks ставит флаг на проход в роли оборотов — №3 после остановки, не №1', async () => {
+  it('тумблер 180° через setEdits ставит флаг на проход в роли оборотов — №3 после остановки, не №1', async () => {
     const root = await makeTempDataRoot();
     await seedSession(root, [
       { number: 1, pages: 2 },
@@ -359,7 +359,7 @@ describe('служба прохода: команды оборотов (M2, U3)'
     ]);
     const service = await openPassService(root);
 
-    expect(await service.setRotateBacks(true)).toEqual({ ok: true, value: undefined });
+    expect(await service.setEdits(EMPTY_EDITS, true)).toEqual({ ok: true, value: undefined });
 
     const session = service.snapshot().session;
     expect(session?.passes.map((pass) => [pass.number, pass.rotate180])).toEqual([
@@ -372,12 +372,12 @@ describe('служба прохода: команды оборотов (M2, U3)'
     );
   });
 
-  it('setRotateBacks без прохода оборотов — noBacksPass', async () => {
+  it('тумблер 180° без прохода оборотов — noBacksPass', async () => {
     const root = await makeTempDataRoot();
     await seedSession(root, [{ number: 1, pages: 2 }]);
     const service = await openPassService(root);
 
-    expect(await service.setRotateBacks(true)).toEqual({
+    expect(await service.setEdits(EMPTY_EDITS, true)).toEqual({
       ok: false,
       error: { code: 'sessionConflict', details: { reason: 'noBacksPass' } },
     });
@@ -398,6 +398,113 @@ describe('служба прохода: команды оборотов (M2, U3)'
       unpairedSheets: [1],
       mismatch: true,
     });
+  });
+});
+
+describe('служба прохода: правки редактора (M3, U3)', () => {
+  const EDITS: SessionEdits = {
+    order: ['p02-s01-0001', 'p01-s01-0001'],
+    rotations: { 'p01-s01-0002': 90 },
+    deleted: ['p02-s01-0002'],
+    cuts: [1],
+    names: ['', 'Договор'],
+  };
+
+  it('правка видна в снимке и сборке, снимает «сохранено» и переживает перезапуск службы (AE1)', async () => {
+    const root = await makeTempDataRoot();
+    await seedSession(
+      root,
+      [
+        { number: 1, pages: 2 },
+        { number: 2, pages: 2 },
+      ],
+      { saved: true },
+    );
+    const service = await openPassService(root);
+
+    expect(await service.setEdits(EDITS, true)).toEqual({ ok: true, value: undefined });
+
+    const check = (snapshot: Snapshot): void => {
+      expect(snapshot.session).toMatchObject({ saved: false, edits: EDITS });
+      expect(snapshot.assembly?.order.map((page) => [page.key, page.angle])).toEqual([
+        ['p02-s01-0001', 180],
+        ['p01-s01-0001', 0],
+        ['p01-s01-0002', 90],
+      ]);
+      expect(snapshot.assembly?.documents.map((doc) => [doc.name, doc.count])).toEqual([
+        ['', 1],
+        ['Договор', 2],
+      ]);
+      expect(snapshot.assembly).toMatchObject({ orderEdited: true, hasEdits: true, deleted: 1 });
+    };
+    check(service.snapshot());
+    check((await openPassService(root)).snapshot());
+  });
+
+  it('снимок отдаёт правки нормализованными: разрез перед первой позицией снят', async () => {
+    const root = await makeTempDataRoot();
+    await seedSession(root, [{ number: 1, pages: 3 }]);
+    const service = await openPassService(root);
+
+    await service.setEdits({ ...EMPTY_EDITS, cuts: [0, 2], names: ['Пусто', 'А', 'Б'] }, false);
+
+    expect(service.snapshot().session?.edits).toEqual({
+      ...EMPTY_EDITS,
+      cuts: [2],
+      names: ['А', 'Б'],
+    });
+  });
+
+  it('пока пишется PDF, правка отклоняется конфликтом saving (KTD-9)', async () => {
+    const root = await makeTempDataRoot();
+    await seedSession(root, [{ number: 1, pages: 1, fixtures: [1] }]);
+    const service = await openPassService(root);
+    let release: (path: string | null) => void = () => undefined;
+
+    const saving = service.savePdf(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+    expect(await service.setEdits(EDITS, false)).toEqual(
+      fail('sessionConflict', { reason: 'saving' }),
+    );
+    release(null);
+    await saving;
+
+    expect(service.snapshot().session?.edits).toEqual(EMPTY_EDITS);
+    expect(await service.setEdits(EMPTY_EDITS, false)).toEqual({ ok: true, value: undefined });
+  });
+
+  it('пока идёт проход, правка отклоняется конфликтом passRunning (KTD-9)', async () => {
+    const root = await makeTempDataRoot();
+    await seedSession(root, [{ number: 1, pages: 2 }]);
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const connector: ConnectorOptions = {
+      createTransport: () => ({
+        request: async () => {
+          await gate;
+          return fail('scannerUnreachable', { reason: 'refused' });
+        },
+        stream: () => Promise.resolve(fail('scannerUnreachable', { reason: 'refused' })),
+        close: () => undefined,
+      }),
+    };
+    const service = await serviceOver(root, connector);
+
+    const pass = service.startPass();
+    expect(service.snapshot().pass).not.toBeNull();
+    expect(await service.setEdits(EDITS, false)).toEqual(
+      fail('sessionConflict', { reason: 'passRunning' }),
+    );
+    release();
+    await pass;
+
+    expect(service.snapshot().session?.edits).toEqual(EMPTY_EDITS);
   });
 });
 
@@ -440,7 +547,7 @@ describe('служба прохода: сохранение PDF (M2, U6)', () =>
     expect(again.snapshot().session?.passes).toHaveLength(2);
 
     // Правка после сохранения снимает отметку (KTD-7, AE12).
-    expect(await again.setRotateBacks(false)).toMatchObject({ ok: true });
+    expect(await again.setEdits(EMPTY_EDITS, false)).toMatchObject({ ok: true });
     expect(again.snapshot().session?.saved).toBe(false);
   });
 
