@@ -81,7 +81,7 @@ describe('экран editor', () => {
     const api = stubApi();
     const snapshot = makeSnapshot([
       makePass({ pages: pages(2) }),
-      makePass({ number: 2, rotate180: true, pages: pages(2, 1, 'p02-s01') }),
+      makePass({ number: 2, kind: 'backs', rotate180: true, pages: pages(2, 1, 'p02-s01') }),
     ]);
     renderEditor(snapshot);
 
@@ -117,7 +117,7 @@ describe('экран editor', () => {
     renderEditor(
       makeSnapshot([
         makePass({ pages: pages(2) }),
-        makePass({ number: 2, pages: pages(2, 1, 'p02-s01') }),
+        makePass({ number: 2, kind: 'backs', pages: pages(2, 1, 'p02-s01') }),
       ]),
     );
 
@@ -331,6 +331,58 @@ describe('экран editor', () => {
     expect(screen.getByText('3 из 3')).toBeDefined();
     fireEvent.keyDown(options[1] as Element, { key: 'Enter' });
     expect(screen.getByText('2 из 3')).toBeDefined();
+  });
+
+  it('M3.5, S4: прерванный добавленный набор — свои заголовок и текст, действия общие', () => {
+    stubApi();
+    renderEditor(
+      makeSnapshot(
+        [
+          makePass({ pages: pages(3) }),
+          makePass({
+            number: 2,
+            kind: 'added',
+            after: 'p01-s01-0002',
+            state: 'interrupted',
+            pages: pages(2, 1, 'p02-s01'),
+          }),
+        ],
+        { canResume: true, canAccept: true },
+        { backsDeclined: true },
+      ),
+    );
+
+    const banner = screen.getByRole('region', { name: 'Добавление прервалось после страницы 2' });
+    expect(within(banner).getByText(/уже в документе/).textContent).toContain('начиная с 3-го');
+    expect(
+      within(banner)
+        .getAllByRole('button')
+        .map((button) => button.textContent),
+    ).toEqual(['Досканировать остаток', 'Оставить как есть', 'Новое сканирование']);
+  });
+
+  it('M3.5, KTD-4: тумблер 180° — по роли backs, не по позиции прохода', () => {
+    stubApi();
+    const { rerender } = renderEditor(
+      makeSnapshot(
+        [
+          makePass({ pages: pages(2) }),
+          makePass({ number: 2, kind: 'added', after: null, pages: pages(1, 1, 'p02-s01') }),
+        ],
+        {},
+        { backsDeclined: true },
+      ),
+    );
+    expect(screen.queryByRole('checkbox')).toBeNull();
+
+    rerender(
+      makeSnapshot([
+        makePass({ pages: pages(2) }),
+        makePass({ number: 2, kind: 'added', after: null, pages: pages(1, 1, 'p02-s01') }),
+        makePass({ number: 3, kind: 'backs', rotate180: true, pages: pages(2, 1, 'p03-s01') }),
+      ]),
+    );
+    expect(screen.getByRole<HTMLInputElement>('checkbox').checked).toBe(true);
   });
 
   it('плашка прерванного прохода несёт все три действия', () => {

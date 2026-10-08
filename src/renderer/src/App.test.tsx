@@ -9,10 +9,9 @@
 } from '@shared';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { StrictMode } from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import './i18n';
 import { App } from './App';
-import { MERGE_PAUSE_DECLINED_MS } from './screens/MergeScreen';
 import { assemblyOf, NO_EDITS_ASSEMBLY } from './state/assembly-fixture';
 
 function makeSnapshot(overrides: Partial<Snapshot>): Snapshot {
@@ -926,43 +925,57 @@ describe('каркас приложения', () => {
   });
 });
 
-describe('AE9: досканирование при ручном порядке', () => {
-  /** Сессия с лицевым проходом из `count` страниц; обороты не нужны — экран сразу `editor`. */
-  function fronts(count: number, seq: number, orderEdited: boolean): Snapshot {
-    const snapshot = makeSnapshot({
+describe('M3.5: посадка добавленного набора (KTD-7; handoff S9–S10)', () => {
+  type Pass = NonNullable<Snapshot['session']>['passes'][number];
+
+  const pass = (number: number, kind: Pass['kind'], count: number, extra: Partial<Pass> = {}) =>
+    ({
+      number,
+      kind,
+      after: null,
+      state: 'completed',
+      paramsKnown: true,
+      scanner: null,
+      rotate180: false,
+      pages: pages(count).map((page) => ({
+        ...page,
+        key: `p0${String(number)}-s01-${String(page.number).padStart(4, '0')}`,
+      })),
+      ...extra,
+    }) satisfies Pass;
+
+  /** Пары 3+3 плюс добавленный набор из `count` страниц после лица 2. */
+  function withAdded(seq: number, count: number, state: Pass['state'] = 'completed'): Snapshot {
+    return makeSnapshot({
       seq,
       session: {
         id: 'session.x',
-        backsDeclined: true,
+        backsDeclined: false,
         saved: false,
-        edits: orderEdited
-          ? {
-              ...EMPTY_EDITS,
-              order: pages(3)
-                .map((page) => page.key)
-                .reverse(),
-            }
-          : EMPTY_EDITS,
+        edits: EMPTY_EDITS,
         passes: [
-          {
-            number: 1,
-            state: count === 3 ? 'interrupted' : 'completed',
-            paramsKnown: true,
-            scanner: null,
-            kind: 'fronts',
-            after: null,
-            rotate180: false,
-            pages: pages(count),
-          },
+          pass(1, 'fronts', 3),
+          pass(2, 'backs', 3),
+          ...(count === 0 ? [] : [pass(3, 'added', count, { state, after: 'p01-s01-0002' })]),
         ],
       },
     });
-    const assembly = snapshot.assembly;
-    if (assembly === null) {
-      throw new Error('нет сборки');
-    }
-    return { ...snapshot, assembly: { ...assembly, orderEdited, hasEdits: orderEdited } };
   }
+
+  const scanning = (seq: number, count: number): Snapshot => {
+    const base = withAdded(seq, count, 'running');
+    return {
+      ...base,
+      pass: {
+        phase: 'scanning',
+        resumed: false,
+        kind: 'added',
+        expected: null,
+        params: PARAMS,
+        pages: count,
+      },
+    };
+  };
 
   /** Мост со снимком, который подменяет тест: `push` — новый снимок и событие о нём. */
   function liveApi(first: Snapshot): (next: Snapshot) => Promise<void> {
@@ -984,89 +997,121 @@ describe('AE9: досканирование при ручном порядке',
     };
   }
 
-  async function resumed(
-    orderEdited: boolean,
-    before = fronts(3, 1, orderEdited),
-    after = fronts(5, 2, orderEdited),
-  ): Promise<void> {
-    const push = liveApi(before);
+  const toasts = (): string[] =>
+    screen
+      .getAllByRole('status')
+      .flatMap((element) => (element.className === 'toast' ? [element.textContent] : []));
+
+  const currentKey = (): string | null =>
+    screen
+      .getAllByRole('option')
+      .find((element) => element.getAttribute('aria-selected') === 'true')
+      ?.getAttribute('data-key') ?? null;
+
+  const scrollIntoView = vi.fn();
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = scrollIntoView;
+    scrollIntoView.mockClear();
+  });
+
+  it('scan → editor после добавленного прохода: без паузы merge, тост один раз под StrictMode, текущая — первая добавленная, лента прокручена к ней', async () => {
+    // Запуск — из этого процесса (досканирование набора): App помнит страницы до него.
+    const push = liveApi({ ...withAdded(1, 1, 'interrupted'), canResume: true, canAccept: true });
     render(
       <StrictMode>
         <App />
       </StrictMode>,
     );
-    expect(await screen.findByText(/Проход прервался/)).toBeDefined();
+    fireEvent.click(await screen.findByRole('button', { name: 'Досканировать остаток' }));
 
-    // Проход досканирован: две новые страницы в том же проходе.
-    await push(after);
-    const total = after.assembly?.order.length ?? 0;
-    expect(await screen.findByText(`стр. 1 из ${String(total)}`)).toBeDefined();
-  }
+    await push(scanning(2, 2));
+    expect(screen.getByText('ДОБАВЛЯЕМ СТРАНИЦЫ')).toBeDefined();
 
-  it('ручной порядок — тост «Новые страницы (N) — в конце ленты»', async () => {
-    await resumed(true);
-    expect(
-      screen.getByText('Новые страницы (2) — в конце ленты: порядок правили вручную').parentElement
-        ?.className,
-    ).toBe('toast');
+    await push(withAdded(3, 3));
+    expect(screen.queryByText('Сопоставляем проходы')).toBeNull();
+    expect(toasts()).toEqual(['Добавлено 2 стр.']);
+    // Лента: 1л 1о 2л Д1.1 Д1.2 Д1.3 2о 3л 3о — первая новая страница на пятом месте.
+    expect(currentKey()).toBe('p03-s01-0002');
+    expect(screen.getByText('5 из 9')).toBeDefined();
+    // StrictMode монтирует эффект дважды — важно, к какой карточке прокрутили.
+    expect(scrollIntoView).toHaveBeenCalled();
+    expect(new Set(scrollIntoView.mock.instances)).toEqual(
+      new Set([screen.getByRole('option', { selected: true })]),
+    );
+    // Пришёл ещё снимок той же сессии — тост не повторяется.
+    await push(withAdded(4, 3));
+    expect(toasts()).toEqual(['Добавлено 2 стр.']);
   });
 
-  it('путь через scan: редактор → идущий проход → выросшая лента при ручном порядке — тост', async () => {
-    const push = liveApi(fronts(3, 1, true));
-    render(<App />);
-    expect(await screen.findByText('стр. 1 из 3')).toBeDefined();
-
-    // Досканирование идёт — экран уходит на scan, редактор размонтирован.
-    const grown = fronts(4, 2, true);
-    const passes = grown.session?.passes.map((pass) => ({ ...pass, state: 'running' as const }));
-    await push({
-      ...grown,
+  it('после прохода оборотов пауза merge остаётся (регресс); после added её нет даже при сошедшихся парах', async () => {
+    const backs = {
+      ...withAdded(1, 0),
       pass: {
-        phase: 'scanning',
-        resumed: true,
-        kind: 'fronts',
-        expected: null,
+        phase: 'scanning' as const,
+        resumed: false,
+        kind: 'backs' as const,
+        expected: 3,
         params: PARAMS,
-        pages: 1,
+        pages: 3,
       },
-      session: grown.session && { ...grown.session, passes: passes ?? [] },
-    });
-    expect(await screen.findByText('Отсканировано 4')).toBeDefined();
+    };
+    const push = liveApi(backs);
+    render(<App />);
+    expect(await screen.findByText('ПРОХОД 2 · ОБОРОТЫ')).toBeDefined();
 
     vi.useFakeTimers();
     try {
-      await push(fronts(5, 3, true));
-      // Пауза merge после прохода — затем снова редактор.
+      await push(withAdded(2, 0));
+      expect(screen.getByText('Сопоставляем проходы')).toBeDefined();
       act(() => {
-        vi.advanceTimersByTime(MERGE_PAUSE_DECLINED_MS + 1);
+        vi.advanceTimersByTime(1601);
       });
     } finally {
       vi.useRealTimers();
     }
-    expect(screen.getByText('стр. 1 из 5')).toBeDefined();
-    expect(
-      screen.getByText('Новые страницы (2) — в конце ленты: порядок правили вручную').parentElement
-        ?.className,
-    ).toBe('toast');
+    expect(screen.getByText('стр. 1 из 6')).toBeDefined();
   });
 
-  it('автопорядок — страницы встают по схеме, тоста нет', async () => {
-    await resumed(false);
-    expect(screen.queryByText(/в конце ленты/)).toBeNull();
+  it('кадры scan пропущены: editor → editor с выросшей лентой после запуска — тост, не пауза', async () => {
+    const before = withAdded(1, 1, 'interrupted');
+    const push = liveApi({ ...before, canResume: true, canAccept: true });
+    render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Досканировать остаток' }));
+
+    await push(withAdded(2, 3));
+    expect(screen.queryByText('Сопоставляем проходы')).toBeNull();
+    expect(toasts()).toEqual(['Добавлено 2 стр.']);
+    expect(currentKey()).toBe('p03-s01-0002');
   });
 
-  it('лента выросла правкой (удалённая вернулась) — тоста нет', async () => {
-    const full = fronts(3, 2, true);
-    const trimmed = fronts(3, 1, true);
-    const assembly = trimmed.assembly;
-    if (assembly === null) {
-      throw new Error('нет сборки');
-    }
-    await resumed(
-      true,
-      { ...trimmed, assembly: { ...assembly, order: assembly.order.slice(1) } },
-      full,
+  it('обрыв добавленного прохода: плашка S4, тоста нет', async () => {
+    const before = withAdded(1, 1, 'interrupted');
+    const push = liveApi({ ...before, canResume: true, canAccept: true });
+    render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Досканировать остаток' }));
+
+    await push({ ...withAdded(2, 2, 'interrupted'), canResume: true, canAccept: true });
+    expect(screen.getByText('Добавление прервалось после страницы 2')).toBeDefined();
+    expect(toasts()).toEqual([]);
+    // Лента прежняя — текущая первая, как при обычном монтировании.
+    expect(currentKey()).toBe('p01-s01-0001');
+  });
+
+  it('mismatch при добавленном наборе не показывается и после перезапуска (KTD-7)', async () => {
+    const session = withAdded(1, 1).session;
+    stubApi(
+      makeSnapshot({
+        session: session && {
+          ...session,
+          passes: [pass(1, 'fronts', 3), pass(2, 'backs', 2), pass(3, 'added', 1)],
+        },
+      }),
     );
-    expect(screen.queryByText(/в конце ленты/)).toBeNull();
+    render(<App />);
+
+    expect(await screen.findByText('стр. 1 из 6')).toBeDefined();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    // Пометка непарного листа живёт в ленте: отчёт пар добавление не меняет (KTD-7 M3).
+    expect(screen.getByTitle('У этого листа нет оборота')).toBeDefined();
   });
 });

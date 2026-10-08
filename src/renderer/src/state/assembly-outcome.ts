@@ -1,4 +1,5 @@
-import type { AssemblyReport } from '@shared';
+import type { AssemblyReport, PassSnapshot } from '@shared';
+import { rolesOf } from './screen';
 
 // Классификация отчёта сборки — одна на статусную строку `merge` и модалку `mismatch`:
 // порядок веток закреплён здесь, и два экрана не могут назвать одну сборку по-разному.
@@ -28,10 +29,16 @@ export function assemblyLanded(report: AssemblyReport): boolean {
 }
 
 /**
- * Несовпадение заслуживает модалки (KTD-8): отчёт несёт его, и исход окончателен — проход
- * завершён или принят. Прерванный непринятый проход модалку не зовёт: решение ещё за
- * человеком, его ведёт плашка досканирования.
+ * Несовпадение заслуживает модалки (KTD-8) и подсказки про «+ Добавить» в ПРОВЕРКЕ (M3.5,
+ * KTD-7): отчёт несёт его, исход окончателен — проход оборотов завершён или принят — и в
+ * сессии нет добавленного набора со страницами: добавление — ответ человека на несовпадение,
+ * после него модалка не показывается и после перезапуска. Прерванный непринятый проход модалку
+ * не зовёт: решение ещё за человеком, его ведёт плашка досканирования.
  */
-export function mismatchDue(report: AssemblyReport): boolean {
-  return report.mismatch && (report.backsState === 'completed' || report.backsState === 'accepted');
+export function mismatchDue(report: AssemblyReport, passes: readonly PassSnapshot[]): boolean {
+  return (
+    report.mismatch &&
+    (report.backsState === 'completed' || report.backsState === 'accepted') &&
+    rolesOf(passes).added.length === 0
+  );
 }

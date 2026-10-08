@@ -101,7 +101,12 @@ export function nextSnapshot(
 export function twoPass(backCount = 3, backsState: PassSnapshot['state'] = 'completed') {
   return makeSnapshot([
     makePass({ pages: pages(3) }),
-    makePass({ number: 2, state: backsState, pages: pages(backCount, 1, 'p02-s01') }),
+    makePass({
+      number: 2,
+      kind: 'backs',
+      state: backsState,
+      pages: pages(backCount, 1, 'p02-s01'),
+    }),
   ]);
 }
 
@@ -154,6 +159,7 @@ export function renderEditor(
       <EditorScreen
         snapshot={next}
         session={next.session}
+        initialCurrent={null}
         resumeFailure={null}
         onResume={vi.fn()}
         onOpenDevice={vi.fn()}
@@ -189,8 +195,8 @@ export function applied(snapshot: Snapshot, state: EditState): Snapshot {
   const next: SessionSnapshot = {
     ...session,
     edits: state.edits,
-    passes: session.passes.map((pass, index) =>
-      index === 1 ? { ...pass, rotate180: state.rotate180 } : pass,
+    passes: session.passes.map((pass) =>
+      pass.kind === 'backs' ? { ...pass, rotate180: state.rotate180 } : pass,
     ),
   };
   const auto = assemblyOf(next);

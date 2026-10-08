@@ -5,7 +5,8 @@ import { errorText, errorTextInline } from '../state/error-text';
 import { addressOf, reconnectAddress } from '../state/scanner-address';
 
 // Плашка прерванного прохода в `editor` (план M1, U24; handoff U19, S17): досканировать остаток,
-// оставить как есть или начать новое сканирование; отказы — строкой под кнопками.
+// оставить как есть или начать новое сканирование; отказы — строкой под кнопками. У прерванного
+// добавленного набора — свои заголовок и текст (M3.5, handoff S4); остальное общее.
 
 /**
  * Коды отказа досканирования, которые лечатся повторным подключением (S17). Список шире, чем
@@ -76,9 +77,12 @@ export function EditorPassBanner({
   // Текст без кнопки досканирования объясняет почему; при «подключён не тот (или никакой)»
   // ссылка ведёт в `device` с адресом сканера прохода — иначе из `editor` в модалку не
   // попасть и проход не досканировать (тупик, ревью сессии 9; текст ссылки — Copy).
+  const added = last.kind === 'added';
   let text: ReactNode;
   if (snapshot.canResume) {
-    text = t('editor.interrupted.text', { next: lastNumber + 1 });
+    text = t(added ? 'editor.interrupted.textAdded' : 'editor.interrupted.text', {
+      next: lastNumber + 1,
+    });
   } else if (last.paramsKnown) {
     text = (
       <>
@@ -126,7 +130,9 @@ export function EditorPassBanner({
         <span className="kicker kicker--warning">{t('editor.interrupted.kicker')}</span>
       </div>
       <h2 id="pass-banner-title" className="pass-banner__title">
-        {t('editor.interrupted.title', { last: lastNumber })}
+        {t(added ? 'editor.interrupted.titleAdded' : 'editor.interrupted.title', {
+          last: lastNumber,
+        })}
       </h2>
       <p className="pass-banner__text">{text}</p>
       <div className="pass-banner__actions">

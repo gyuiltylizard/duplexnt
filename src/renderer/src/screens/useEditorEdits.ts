@@ -12,7 +12,7 @@ import {
   type EditState,
   type HistoryMove,
 } from '../state/history';
-import { NO_SELECTION, pruned, selectionOf, type Selection } from '../state/selection';
+import { NO_SELECTION, pruned, selectionOf, single, type Selection } from '../state/selection';
 
 // Проводка правок редактора (план M3, U7; KTD-3, KTD-3a; журнал M3, сессия 3): undo-стек и
 // выделение поверх снимка. Настоящее — правки последнего снимка; жест строится от него, уходит
@@ -67,6 +67,7 @@ export function useEditorEdits({
   seq,
   session,
   visible,
+  initialCurrent,
   locked,
   onFailed,
 }: {
@@ -75,6 +76,8 @@ export function useEditorEdits({
   readonly session: SessionSnapshot;
   /** Видимая лента — ключи в порядке снимка. */
   readonly visible: readonly string[];
+  /** Текущая при монтировании; `null` — первая в ленте (M3.5, S9: первая добавленная). */
+  readonly initialCurrent: string | null;
   /** Правки недоступны (идёт запись, KTD-9): жесты игнорируются. */
   readonly locked: boolean;
   /** Правка не записалась: доменный отказ или `null` — мост не ответил. Гонки сюда не идут. */
@@ -90,7 +93,9 @@ export function useEditorEdits({
     setHistory(history);
   }
 
-  const [storedSelection, setSelection] = useState<Selection>(NO_SELECTION);
+  const [storedSelection, setSelection] = useState<Selection>(() =>
+    initialCurrent === null ? NO_SELECTION : single(initialCurrent),
+  );
   const [pending, setPending] = useState<Pending | null>(null);
 
   // Показан снимок с результатом команды (его номер — из ответа; снимок мог прийти и раньше

@@ -38,7 +38,7 @@ import {
 } from '../state/edits';
 import { errorTextInline } from '../state/error-text';
 import type { EditState } from '../state/history';
-import { survivingPasses } from '../state/screen';
+import { rolesOf } from '../state/screen';
 import {
   afterRemoval,
   collapsed,
@@ -68,6 +68,11 @@ import './editor-screen.css';
 export interface EditorScreenProps {
   readonly snapshot: Snapshot;
   readonly session: SessionSnapshot;
+  /**
+   * Текущая страница при монтировании (M3.5, S9): первая добавленная после посадки набора —
+   * лента прокручивается к ней; `null` — первая в ленте, как всегда.
+   */
+  readonly initialCurrent: string | null;
   /** Отказ последнего досканирования — строка в плашке S17; живёт в App: экран уходит. */
   readonly resumeFailure: DomainError | null;
   /** «Досканировать остаток»: тот же `startPass` — сессия есть, ядро продолжит проход. */
@@ -127,6 +132,7 @@ function shortcutLetter(event: globalThis.KeyboardEvent): string {
 export function EditorScreen({
   snapshot,
   session,
+  initialCurrent,
   resumeFailure,
   onResume,
   onOpenDevice,
@@ -150,6 +156,7 @@ export function EditorScreen({
     seq: snapshot.seq,
     session,
     visible,
+    initialCurrent,
     locked: saving,
     // Правка не записалась — человек должен знать, что лента осталась прежней. Текст ошибки
     // длинный — показывается столько же, сколько ошибка сохранения.
@@ -226,6 +233,19 @@ export function EditorScreen({
   });
 
   const focusInRail = (): boolean => railRef.current?.contains(document.activeElement) ?? false;
+
+  // Посадка добавленного набора (S9): лента прокручена к первой добавленной — ближайшим краем,
+  // без анимации (handoff, «Движение»). Один раз, при монтировании; jsdom прокрутки не знает.
+  const revealInitial = useEffectEvent(() => {
+    if (initialCurrent !== null) {
+      railRef.current
+        ?.querySelector<HTMLElement>(`[data-key="${CSS.escape(initialCurrent)}"]`)
+        ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
+  });
+  useEffect(() => {
+    revealInitial();
+  }, []);
 
   /** Ключ ленты по позиции, прижатой к краям. */
   const keyAt = (index: number): string | undefined =>
@@ -472,9 +492,9 @@ export function EditorScreen({
     };
   }, []);
 
-  // Тумблер 180° — у второго уцелевшего прохода (роль, не номер — KTD-4), включая прерванный
-  // и принятый; без прохода оборотов тумблера нет (S7). Правило уцелевшего — одно на renderer.
-  const backsPass = survivingPasses(session)[1];
+  // Тумблер 180° — у прохода оборотов (роль по `kind`, не номер — KTD-4), включая прерванный
+  // и принятый; без прохода оборотов тумблера нет (S7). Правило роли — одно на renderer.
+  const backsPass = rolesOf(session.passes).backs;
   const setRotate = (event: ChangeEvent<HTMLInputElement>): void => {
     // Тумблер — правка (KTD-3, S15): шаг undo с текущими правками снимка. Снимок — источник
     // правды: при отказе команда не меняет ничего, и чекбокс вернётся сам.
@@ -690,7 +710,7 @@ export function EditorScreen({
           onRename={rename}
           onMove={move}
           footer={
-            backsPass !== undefined && (
+            backsPass !== null && (
               <footer className="rail__footer">
                 <label className="toggle-row" title={t('editor.rotateBacksTitle')}>
                   <span className="toggle">
@@ -820,7 +840,7 @@ export function EditorScreen({
             position={currentIndex + 1}
             currentDocument={currentDocument}
             names={names}
-            frontsOnly={backsPass === undefined}
+            frontsOnly={backsPass === null}
             locked={saving}
             onPickDocument={(index) => {
               const first = visible[documents[index]?.start ?? -1];

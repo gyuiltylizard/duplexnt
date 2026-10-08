@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { DomainError, StartupNotice } from '@shared';
+import type { DomainError, SessionSnapshot, StartPassRequest, StartupNotice } from '@shared';
 import { NoticesBar } from './components/NoticesBar';
 import { Toast, type ToastAction } from './components/Toast';
 import { DeviceModal } from './modals/DeviceModal';
@@ -19,7 +19,7 @@ import { MergeScreen, MERGE_PAUSE_DECLINED_MS, MERGE_PAUSE_MS } from './screens/
 import { ScanScreen } from './screens/ScanScreen';
 import { SetupScreen } from './screens/SetupScreen';
 import { assemblyLanded, mismatchDue } from './state/assembly-outcome';
-import { tapeOf } from './state/history';
+import { errorTextInline } from './state/error-text';
 import { createSnapshotStore } from './state/snapshot-store';
 import { screenOf, type Screen } from './state/screen';
 import './app.css';
@@ -28,26 +28,53 @@ import './app.css';
 // нет (KTD-23). Здесь живёт то, что переживает смену экрана: закрытые уведомления запуска,
 // единственный тост (новый гасит предыдущий сменой `key`), модалка `device`, отказ последнего
 // запуска прохода (экран на время запуска уходит и возвращается, S6), пауза `merge` поверх
-// `screenOf` (M2, KTD-5), подтверждение модалки `mismatch` (M2, KTD-8) и тост о страницах,
-// дописанных в конец ленты при ручном порядке (M3, AE9).
+// `screenOf` (M2, KTD-5), подтверждение модалки `mismatch` (M2, KTD-8) и память о последнем
+// запуске прохода — ради посадки добавленного набора (M3.5, KTD-7).
 
 interface ToastState {
   readonly id: number;
   readonly text: string;
   readonly durationMs: number | undefined;
   readonly action: ToastAction | undefined;
+  /** Метка «один раз»: повторный показ с той же меткой не перезапускает тост. */
+  readonly tag: string | undefined;
 }
+
+/** Тост отказа запуска из `add` — 6 с, как у ошибок сохранения (handoff M3.5, S10). */
+const ADD_FAILED_TOAST_MS = 6000;
 
 /**
  * Отказ последнего запуска прохода — с адресатом: запуск с `setup` показывается плашкой S6,
  * досканирование — строкой в плашке S17, запуск оборотов — плашкой на `flip` (M2, S2: потолок
  * ретрая занятости приходит сюда же). Отказ не переезжает между экранами: после «Нового
- * сканирования» плашка `editor` не всплывает на `setup` (ревью сессии 9).
+ * сканирования» плашка `editor` не всплывает на `setup` (ревью сессии 9). Отказ запуска из
+ * модалки `add` идёт тостом, не плашкой (M3.5, KTD-6) — сюда не попадает.
  */
 interface LaunchFailure {
   readonly error: DomainError;
   readonly target: 'setup' | 'editor' | 'flip';
 }
+
+/**
+ * Последний запуск прохода (M3.5, KTD-7): какая сессия и какие страницы были до него. По нему
+ * App узнаёт добавленный набор, когда снимок возвращает в `editor`, — независимо от того, дошёл
+ * ли кадр `scan` (снимки приходят пачкой) и от ответа команды (он может прийти раньше снимка).
+ */
+interface Launch {
+  /** Порядковый номер запуска за процесс: ключ посадки и метка тоста «один раз». */
+  readonly epoch: number;
+  readonly sessionId: string;
+  readonly keysBefore: ReadonlySet<string>;
+}
+
+/** Посадка запуска: лента получила страницы; `key` — первая добавленная, `null` — тоста нет. */
+interface Landing {
+  readonly epoch: number;
+  readonly key: string | null;
+}
+
+const keysOf = (session: SessionSnapshot): ReadonlySet<string> =>
+  new Set(session.passes.flatMap((pass) => pass.pages.map((page) => page.key)));
 
 export function App(): ReactNode {
   const { t } = useTranslation();
@@ -65,20 +92,36 @@ export function App(): ReactNode {
   const expireToast = useCallback(() => {
     setToast(null);
   }, []);
-  // Номер растёт от предыдущего: новый тост со сменой `key` перезапускает срок показа.
-  const showToast = useCallback((text: string, durationMs?: number, action?: ToastAction) => {
-    setToast((previous) => ({ id: (previous?.id ?? 0) + 1, text, durationMs, action }));
-  }, []);
+  // Номер растёт от предыдущего: новый тост со сменой `key` перезапускает срок показа. Метка
+  // делает показ идемпотентным — для тостов из рендера (StrictMode зовёт его дважды).
+  const showToast = useCallback(
+    (text: string, durationMs?: number, action?: ToastAction, tag?: string) => {
+      setToast((previous) =>
+        tag !== undefined && previous?.tag === tag
+          ? previous
+          : { id: (previous?.id ?? 0) + 1, text, durationMs, action, tag },
+      );
+    },
+    [],
+  );
+
+  // Память о запуске (KTD-7) и его посадка: оба — состояние, корректируемое при рендере.
+  const [launch, setLaunch] = useState<Launch | null>(null);
+  const [landing, setLanding] = useState<Landing | null>(null);
+  const epochRef = useRef(0);
 
   // Пауза `merge` (KTD-5): эфемерное состояние поверх `screenOf`, живёт только в renderer и
   // после перезапуска не повторяется — на старте процесса предыдущего экрана нет, переход
   // не срабатывает. Переход ловится корректировкой состояния при рендере (react.dev «You
   // Might Not Need an Effect», как `known` в SetupScreen) — это идемпотентно и переживает
   // StrictMode double-render. Условие читает отчёт, а не промежуточные экраны: снимки могут
-  // прийти пачкой, и кадр `scan` между `flip` и `editor` легко пропустить.
+  // прийти пачкой, и кадр `scan` между `flip` и `editor` легко пропустить. После добавленного
+  // прохода паузы нет (M3.5, R15): роль — у последнего прохода сессии, он и шёл.
   const [mergeHoldMs, setMergeHoldMs] = useState<number | null>(null);
   const [previousScreen, setPreviousScreen] = useState<Screen | null>(null);
   const screen = snapshot === null ? null : screenOf(snapshot);
+  const session = snapshot?.session ?? null;
+  const lastPass = session?.passes.at(-1);
   if (screen !== previousScreen) {
     setPreviousScreen(screen);
     const transitionReport = snapshot?.assembly?.report;
@@ -86,9 +129,43 @@ export function App(): ReactNode {
       screen === 'editor' &&
       (previousScreen === 'scan' || previousScreen === 'flip') &&
       transitionReport !== undefined &&
-      assemblyLanded(transitionReport)
+      assemblyLanded(transitionReport) &&
+      lastPass?.kind !== 'added'
     ) {
       setMergeHoldMs(transitionReport.backsDeclined ? MERGE_PAUSE_DECLINED_MS : MERGE_PAUSE_MS);
+    }
+  }
+
+  // Посадка добавленного набора (KTD-7; handoff S9–S10): в `editor` той же сессии появились
+  // страницы, которых до запуска не было. Проход добавленного набора завершён или остановлен с
+  // принятыми страницами — тост «Добавлено N» один раз и текущая на первой добавленной (ключ
+  // `EditorScreen` меняется — экран монтируется заново, как и после кадра `scan`). Прерван —
+  // тоста нет, его место занимает плашка S4; у прохода другой роли посадки нет — там пауза
+  // `merge`. Пока страниц нет (кадр до первой страницы, «Остановить» на первом сегменте) —
+  // запуск ждёт: следующий запуск его сменит.
+  if (
+    launch !== null &&
+    launch.epoch !== landing?.epoch &&
+    screen === 'editor' &&
+    session !== null &&
+    session.id === launch.sessionId &&
+    lastPass !== undefined
+  ) {
+    const fresh =
+      snapshot?.assembly?.order
+        .map((entry) => entry.key)
+        .filter((key) => !launch.keysBefore.has(key)) ?? [];
+    if (fresh.length > 0) {
+      const added = lastPass.kind === 'added' && lastPass.state !== 'interrupted';
+      setLanding({ epoch: launch.epoch, key: added ? (fresh[0] ?? null) : null });
+      if (added) {
+        showToast(
+          t('toast.added', { count: fresh.length }),
+          undefined,
+          undefined,
+          `added:${String(launch.epoch)}`,
+        );
+      }
     }
   }
 
@@ -103,37 +180,6 @@ export function App(): ReactNode {
       clearTimeout(timer);
     };
   }, [mergeHoldMs]);
-
-  // AE9 (handoff M3, «Досканирование при ручном порядке»): при ручном порядке новые страницы
-  // встают в конец ленты — об этом тост. Ловится здесь, а не в `editor`: на время прохода экран
-  // уходит на `scan` и размонтируется. Сравнивается последний показанный `editor` той же сессии:
-  // лента изменилась не через правку (подпись `tapeOf`) и выросла. При автопорядке страницы
-  // встают по схеме — тоста нет.
-  const editorSeen = useRef<{
-    readonly id: string;
-    readonly tape: string;
-    readonly total: number;
-  } | null>(null);
-  useEffect(() => {
-    const session = snapshot?.session ?? null;
-    const shown = snapshot?.assembly ?? null;
-    if (screen !== 'editor' || mergeHoldMs !== null || session === null || shown === null) {
-      return;
-    }
-    const seen = editorSeen.current;
-    const tape = tapeOf(session);
-    const total = shown.order.length;
-    editorSeen.current = { id: session.id, tape, total };
-    if (
-      seen !== null &&
-      seen.id === session.id &&
-      seen.tape !== tape &&
-      shown.orderEdited &&
-      total > seen.total
-    ) {
-      showToast(t('toast.appended', { count: total - seen.total }));
-    }
-  }, [snapshot, screen, mergeHoldMs, showToast, t]);
 
   // Подтверждение `mismatch` — на время жизни процесса и на конкретную сессию (KTD-8):
   // после перезапуска модалка показывается снова, новая сессия начинает с чистого листа.
@@ -158,34 +204,64 @@ export function App(): ReactNode {
   );
 
   const startInFlight = useRef(false);
-  const startPass = useCallback(() => {
-    // Повторный клик до ответа не шлёт второй запуск: тот вернул бы `passRunning`, и плашка
-    // отказа повисла бы над удавшимся проходом (находка simplify-ревью сессии 9).
-    if (startInFlight.current) {
-      return;
-    }
-    startInFlight.current = true;
-    setLaunchFailure(null);
-    // Ответ придёт, когда задание закрыто; экран тем временем сменится по снимку. Отказ до
-    // первой страницы возвращает на экран-источник — плашка ждёт его здесь, с адресатом.
-    window.api.startPass(null).then(
-      (result) => {
-        startInFlight.current = false;
-        if (!result.ok) {
-          // Адресат отказа — экран, на который снимок вернул после отказа: он и есть
-          // экран-источник запуска (`setup`, `flip` или `editor` при досканировании).
-          const current = store.get();
-          const screen = current === null ? 'setup' : screenOf(current);
-          const target = screen === 'flip' || screen === 'editor' ? screen : 'setup';
-          setLaunchFailure({ error: result.error, target });
-        }
-      },
-      (error: unknown) => {
-        startInFlight.current = false;
-        console.error('[renderer] запуск прохода не ответил', error);
-      },
-    );
-  }, [store]);
+  const startPass = useCallback(
+    (request: StartPassRequest) => {
+      // Повторный клик до ответа не шлёт второй запуск: тот вернул бы `passRunning`, и плашка
+      // отказа повисла бы над удавшимся проходом (находка simplify-ревью сессии 9).
+      if (startInFlight.current) {
+        return;
+      }
+      startInFlight.current = true;
+      setLaunchFailure(null);
+      const before = store.get()?.session ?? null;
+      epochRef.current += 1;
+      setLaunch(
+        before === null
+          ? null
+          : { epoch: epochRef.current, sessionId: before.id, keysBefore: keysOf(before) },
+      );
+      // Ответ придёт, когда задание закрыто; экран тем временем сменится по снимку. Отказ до
+      // первой страницы возвращает на экран-источник — плашка ждёт его здесь, с адресатом.
+      // Запуск из `add` — тостом (KTD-6): и отказ до старта, и обрыв до первой страницы (ядро
+      // отбрасывает пустой проход и отвечает «прерван, 0 стр.» с причиной).
+      window.api.startPass(request).then(
+        (result) => {
+          startInFlight.current = false;
+          const error = result.ok
+            ? result.value.end === 'interrupted' && result.value.pages === 0
+              ? result.value.error
+              : null
+            : result.error;
+          if (error === null) {
+            return;
+          }
+          if (request !== null) {
+            showToast(
+              t('toast.addFailed', { error: errorTextInline(t, error) }),
+              ADD_FAILED_TOAST_MS,
+            );
+            return;
+          }
+          if (!result.ok) {
+            // Адресат отказа — экран, на который снимок вернул после отказа: он и есть
+            // экран-источник запуска (`setup`, `flip` или `editor` при досканировании).
+            const returned = store.get();
+            const screen = returned === null ? 'setup' : screenOf(returned);
+            const target = screen === 'flip' || screen === 'editor' ? screen : 'setup';
+            setLaunchFailure({ error: result.error, target });
+          }
+        },
+        (error: unknown) => {
+          startInFlight.current = false;
+          console.error('[renderer] запуск прохода не ответил', error);
+        },
+      );
+    },
+    [store, showToast, t],
+  );
+  const startNext = useCallback(() => {
+    startPass(null);
+  }, [startPass]);
 
   const stopPass = useCallback(() => {
     // Исход остановки виден по снимку; отдельного текста заслуживает только несмытый сегмент:
@@ -217,8 +293,7 @@ export function App(): ReactNode {
   }
 
   // `pagesLost` показывается, только когда потерянные страницы правда видны в ленте (S20).
-  const anyLost =
-    snapshot.session?.passes.some((pass) => pass.pages.some((page) => page.lost)) ?? false;
+  const anyLost = session?.passes.some((pass) => pass.pages.some((page) => page.lost)) ?? false;
   const notices = snapshot.notices.filter(
     (notice) => !dismissed.has(notice) && (notice !== 'pagesLost' || anyLost),
   );
@@ -228,14 +303,15 @@ export function App(): ReactNode {
   const merging = screen === 'editor' && mergeHoldMs !== null && assembly !== null;
   // `mismatch` (KTD-8): первый вход в editor за процесс при неподтверждённом несовпадении —
   // включая вход через «Оставить как есть» и после перезапуска; условие уместности — общий
-  // предикат `mismatchDue`. Подтверждение — на сессию, id сужается здесь же.
+  // предикат `mismatchDue` (с M3.5 он же снимает модалку при добавленном наборе, KTD-7).
+  // Подтверждение — на сессию, id сужается здесь же.
   const mismatchSessionId =
     screen === 'editor' &&
     !merging &&
     assembly !== null &&
-    mismatchDue(assembly.report) &&
-    snapshot.session !== null
-      ? snapshot.session.id
+    session !== null &&
+    mismatchDue(assembly.report, session.passes)
+      ? session.id
       : null;
   const showMismatch = mismatchSessionId !== null && mismatchConfirmedFor !== mismatchSessionId;
 
@@ -246,7 +322,7 @@ export function App(): ReactNode {
         <SetupScreen
           snapshot={snapshot}
           launchFailure={launchFailure?.target === 'setup' ? launchFailure.error : null}
-          onStart={startPass}
+          onStart={startNext}
           onOpenDevice={openDevice}
         />
       )}
@@ -258,17 +334,19 @@ export function App(): ReactNode {
           snapshot={snapshot}
           pass={snapshot.pass}
           launchFailure={launchFailure?.target === 'flip' ? launchFailure.error : null}
-          onStart={startPass}
+          onStart={startNext}
           onOpenDevice={openDevice}
         />
       )}
       {merging && <MergeScreen assembly={assembly} />}
-      {screen === 'editor' && !merging && snapshot.session !== null && (
+      {screen === 'editor' && !merging && session !== null && (
         <EditorScreen
+          key={landing?.epoch ?? 0}
           snapshot={snapshot}
-          session={snapshot.session}
+          session={session}
+          initialCurrent={landing?.key ?? null}
           resumeFailure={launchFailure?.target === 'editor' ? launchFailure.error : null}
-          onResume={startPass}
+          onResume={startNext}
           onOpenDevice={openDevice}
           onToast={showToast}
         />

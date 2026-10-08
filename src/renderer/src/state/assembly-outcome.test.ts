@@ -1,4 +1,4 @@
-import type { AssemblyReport } from '@shared';
+import type { AssemblyReport, PassSnapshot } from '@shared';
 import { describe, expect, it } from 'vitest';
 import { assemblyLanded, assemblyOutcome, mismatchDue } from './assembly-outcome';
 
@@ -53,7 +53,25 @@ describe('assemblyLanded (пауза merge, KTD-5)', () => {
   });
 });
 
-describe('mismatchDue (модалка mismatch, KTD-8)', () => {
+/** Добавленный проход с `count` страницами (M3.5): со страницами — ответ человека на несовпадение. */
+function added(count: number): PassSnapshot {
+  return {
+    number: 3,
+    kind: 'added',
+    after: null,
+    state: 'completed',
+    paramsKnown: true,
+    scanner: null,
+    rotate180: false,
+    pages: Array.from({ length: count }, (_, index) => ({
+      key: `p03-s01-000${String(index + 1)}`,
+      number: index + 1,
+      lost: false,
+    })),
+  };
+}
+
+describe('mismatchDue (модалка mismatch, KTD-8; подсказка про «+ Добавить», KTD-7 M3.5)', () => {
   it.each([
     ['совпало — не показывается', {}, false],
     ['завершён с недостачей', { backs: 2, pairs: 2, unpairedSheets: [1], mismatch: true }, true],
@@ -68,6 +86,16 @@ describe('mismatchDue (модалка mismatch, KTD-8)', () => {
       false,
     ],
   ] as const)('%s → %s', (_name, overrides, expected) => {
-    expect(mismatchDue(report(overrides))).toBe(expected);
+    expect(mismatchDue(report(overrides), [])).toBe(expected);
+  });
+
+  const fewer = report({ backs: 2, pairs: 2, unpairedSheets: [1], mismatch: true });
+
+  it('добавленный набор со страницами снимает несовпадение: добавление — ответ человека', () => {
+    expect(mismatchDue(fewer, [added(1)])).toBe(false);
+  });
+
+  it('пустой добавленный проход (прерван до первой страницы) ничего не снимает', () => {
+    expect(mismatchDue(fewer, [added(0)])).toBe(true);
   });
 });

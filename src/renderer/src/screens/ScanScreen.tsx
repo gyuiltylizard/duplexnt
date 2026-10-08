@@ -16,8 +16,9 @@ import './scan-screen.css';
 // Экран `scan` (план M1, U23; UI_SPEC раздел 3; handoff U19, S12–S15, S19): тег прохода,
 // иллюстрация подачи, счётчик в живом регионе, строка параметров, лента последних пяти
 // страниц, «Остановить». С M2 вернулись полные тексты (план M2, U8): тег различает роли
-// «лицевые/обороты» (по `expected`, не по номеру — KTD-4), счётчик оборотов — «N из M» (R2)
-// и может перевалить за M — показывается как есть.
+// «лицевые/обороты/добавляем» (по `kind`, не по номеру — KTD-4), счётчик оборотов — «N из M»
+// (R2) и может перевалить за M — показывается как есть. Добавленный набор (M3.5, handoff S3):
+// тег без номера прохода на цвете набора, счётчик без «из M», мета досканирования без номера.
 
 /** Сколько последних страниц показывает лента. */
 export const STRIP_SIZE = 5;
@@ -123,10 +124,14 @@ export function ScanScreen({ snapshot, pass, onStop }: ScanScreenProps): ReactNo
         ? t('scan.counterOf', { count: counted, expected: pass.expected })
         : t('scan.counter', { count: counted });
 
+  const resumeMeta =
+    pass.kind === 'added'
+      ? t('scan.resumeMetaAdded', { count: prior })
+      : t('scan.resumeMeta', { number: passNumber(snapshot), count: prior });
   const meta = busy
     ? t('scan.busy.meta')
     : pass.resumed
-      ? `${t('scan.resumeMeta', { number: passNumber(snapshot), count: prior })} · ${paramsLine(t, pass.params)}`
+      ? `${resumeMeta} · ${paramsLine(t, pass.params)}`
       : paramsLine(t, pass.params);
 
   const strip = pages.slice(-STRIP_SIZE);
@@ -142,11 +147,15 @@ export function ScanScreen({ snapshot, pass, onStop }: ScanScreenProps): ReactNo
 
   return (
     <main className="scan-screen" ref={screenRef} tabIndex={-1}>
-      <div className="scan-screen__tag">
-        {t(pass.expected !== null ? 'scan.tagBacks' : 'scan.tag', {
-          number: passNumber(snapshot),
-        })}
-      </div>
+      {pass.kind === 'added' ? (
+        <div className="scan-screen__tag scan-screen__tag--added">{t('scan.tagAdded')}</div>
+      ) : (
+        <div className="scan-screen__tag">
+          {t(pass.kind === 'backs' ? 'scan.tagBacks' : 'scan.tag', {
+            number: passNumber(snapshot),
+          })}
+        </div>
+      )}
 
       <div className="scan-screen__stage">
         <div className={busy ? 'feed feed--idle' : 'feed'} aria-hidden="true">
