@@ -37,6 +37,7 @@ export function assemblyOf(session: SessionSnapshot): SessionAssembly {
       angle: 0,
       lost: page.lost,
       unpaired: unpairedSheets.includes(sheet),
+      addedSet: null,
     });
     const back = backs[n - sheet];
     if (back !== undefined) {
@@ -47,6 +48,7 @@ export function assemblyOf(session: SessionSnapshot): SessionAssembly {
         angle: backAngle,
         lost: back.lost,
         unpaired: false,
+        addedSet: null,
       });
     }
   });
@@ -58,6 +60,7 @@ export function assemblyOf(session: SessionSnapshot): SessionAssembly {
       angle: backAngle,
       lost: back.lost,
       unpaired: false,
+      addedSet: null,
     });
   }
   return {

@@ -7,10 +7,10 @@ import {
   type SessionEdits,
 } from '@shared';
 
-// Правки редактора поверх автопорядка (план M3, U2; ADR 0004, амендмент 2026-10-06). Чистые
-// функции над ключами страниц: ленту считает только ядро (KTD-2), нормализацию делает только
-// ядро (KTD-3a) — renderer шлёт итоговое состояние как построил, хранилище приводит его к
-// каноническому виду перед записью.
+// Правки редактора поверх автопорядка (план M3, U2; ADR 0004, амендменты 2026-10-06 и
+// 2026-10-07). Чистые функции над ключами страниц: ленту считает только ядро (KTD-2),
+// нормализацию делает только ядро (KTD-3a) — renderer шлёт итоговое состояние как построил,
+// хранилище приводит его к каноническому виду перед записью.
 //
 // Канонический вид: в `order`, `rotations` и `deleted` только ключи живых страниц, без
 // повторов; разрезы строго внутри видимой ленты и по возрастанию — пустых документов нет;
@@ -29,9 +29,9 @@ function unique(keys: readonly string[], keep: (key: string) => boolean): string
 }
 
 /**
- * Видимая лента: явный порядок, за ним — ключи, которых в нём нет, в автопорядке (досканирование
- * при ручном порядке дописывается в конец, R4); удалённые не показываются. Пустой `order` —
- * автосортировка: лента равна автопорядку.
+ * Видимая лента: явный порядок, за ним — ключи, которых в нём нет, в автопорядке (неразмещённые:
+ * новый ключ без предшественника в `order`, см. `rebaseOrder`); удалённые не показываются.
+ * Пустой `order` — автосортировка: лента равна автопорядку.
  */
 export function visibleKeysOf(autoKeys: readonly string[], edits: SessionEdits): string[] {
   const alive = new Set(autoKeys);
@@ -111,9 +111,42 @@ export function remapCuts(
 }
 
 /**
+ * Ручной порядок после появления новых ключей (M3.5, KTD-3; ADR 0004, амендмент 2026-10-07):
+ * каждый новый ключ (есть в `after`, нет в `before`) встаёт в `order` сразу после ближайшего
+ * предшественника по новому автопорядку, который в `order` есть; предшественника нет — ключ не
+ * размещается (лента покажет его в конце, `visibleKeysOf`). Новые ключи обходятся в порядке
+ * автопорядка, каждый следующий видит уже вставленные: страницы одного сегмента ложатся подряд.
+ * Одно правило для всех проходов — добавленного с якорем и досканированного. Это перебазирование,
+ * как `remapCuts`, а не правка: расстановка пользователя не переставляется.
+ */
+export function rebaseOrder(
+  before: readonly string[],
+  after: readonly string[],
+  order: readonly string[],
+): string[] {
+  const known = new Set(before);
+  const placed = [...order];
+  for (const [index, key] of after.entries()) {
+    if (known.has(key) || placed.includes(key)) {
+      continue;
+    }
+    for (let back = index - 1; back >= 0; back -= 1) {
+      const at = placed.indexOf(after[back] ?? '');
+      if (at !== -1) {
+        placed.splice(at + 1, 0, key);
+        break;
+      }
+    }
+  }
+  // Мёртвые ключи вычищает нормализация — здесь только расстановка.
+  return placed;
+}
+
+/**
  * Правки после изменения сессии: если состав живых страниц поменялся (`beforeKeys` — автопорядок
- * до изменения; `null` — сравнивать не с чем), разрезы переносятся вслед за страницами; затем
- * нормализация против нового автопорядка. Правки с исчезнувшими ключами вычищаются здесь же.
+ * до изменения; `null` — сравнивать не с чем), новые ключи встают в ручной порядок на своё место
+ * (`rebaseOrder`), разрезы переносятся вслед за страницами; затем нормализация против нового
+ * автопорядка. Правки с исчезнувшими ключами вычищаются здесь же.
  */
 export function rebaseEdits(
   beforeKeys: readonly string[] | null,
@@ -121,11 +154,17 @@ export function rebaseEdits(
   edits: SessionEdits,
 ): SessionEdits {
   const changed = beforeKeys !== null && !sameList(beforeKeys, afterKeys);
+  if (!changed) {
+    return normalizeEdits(afterKeys, edits);
+  }
+  const order =
+    edits.order.length > 0 ? rebaseOrder(beforeKeys, afterKeys, edits.order) : edits.order;
+  const rebased = { ...edits, order };
   const cuts =
-    changed && edits.cuts.length > 0
-      ? remapCuts(visibleKeysOf(beforeKeys, edits), visibleKeysOf(afterKeys, edits), edits.cuts)
+    edits.cuts.length > 0
+      ? remapCuts(visibleKeysOf(beforeKeys, edits), visibleKeysOf(afterKeys, rebased), edits.cuts)
       : edits.cuts;
-  return normalizeEdits(afterKeys, { ...edits, cuts });
+  return normalizeEdits(afterKeys, { ...rebased, cuts });
 }
 
 /** Документы ленты по разрезам (правки — уже в каноническом виде). */

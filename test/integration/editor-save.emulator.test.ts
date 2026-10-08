@@ -157,7 +157,7 @@ describe('правки и сохранение через эмулятор (M3, 
     }
   });
 
-  it('AE9: досканирование при ручном порядке — новые страницы в конце, расстановка цела', async () => {
+  it('досканирование при ручном порядке — новые страницы на своём месте по автопорядку, расстановка цела (M3.5, KTD-3; замена AE9 M3)', async () => {
     const { emulator, connected, root } = await connect({
       sheets: 4,
       fault: { sheet: 3, kind: 'gone' },
@@ -177,17 +177,23 @@ describe('правки и сохранение через эмулятор (M3, 
     emulator.clearJam();
     expect(unwrap(await service.startPass())).toMatchObject({ end: 'completed', pages: 2 });
 
+    // Предшественник досканированных страниц по автопорядку — p01-s01-0002, первая в ручном
+    // порядке: они встают за ней; разрез остаётся перед той же страницей.
     const snapshot = service.snapshot();
-    expect(snapshot.session?.edits).toEqual(manual);
+    expect(snapshot.session?.edits).toEqual({
+      ...manual,
+      order: ['p01-s01-0002', 'p01-s02-0001', 'p01-s02-0002', 'p01-s01-0001'],
+      cuts: [3],
+    });
     expect(snapshot.assembly?.order.map((page) => page.key)).toEqual([
       'p01-s01-0002',
-      'p01-s01-0001',
       'p01-s02-0001',
       'p01-s02-0002',
+      'p01-s01-0001',
     ]);
     expect(snapshot.assembly?.documents.map((doc) => [doc.name, doc.count])).toEqual([
-      ['', 1],
-      ['Хвост', 3],
+      ['', 3],
+      ['Хвост', 1],
     ]);
 
     const folder = join(root, 'выход');
@@ -200,7 +206,8 @@ describe('правки и сохранение через эмулятор (M3, 
       }),
     );
     expect(saved.failed).toEqual([]);
-    expect(await pdfAngles(join(folder, 'Хвост.pdf'))).toHaveLength(3);
+    expect(await pdfAngles(join(folder, 'Обложка.pdf'))).toHaveLength(3);
+    expect(await pdfAngles(join(folder, 'Хвост.pdf'))).toHaveLength(1);
   });
 });
 

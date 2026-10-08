@@ -336,8 +336,8 @@ describe('хранилище сессии: правки редактора (M3, 
     expect(store.snapshot()?.saved).toBe(true);
   });
 
-  it('досканирование при ручном порядке: новые страницы в конце ленты, в последнем документе (AE9)', async () => {
-    const { store, accept } = await setup();
+  it('досканирование при ручном порядке: новые страницы на своём месте по автопорядку, разрез — перед той же страницей (KTD-3, замена AE9 M3)', async () => {
+    const { store, accept, journalOnDisk } = await setup();
     ok(await store.beginPass(ORIGIN, null));
     await accept(1, 2);
     ok(await store.endSegment('interrupted'));
@@ -353,20 +353,60 @@ describe('хранилище сессии: правки редактора (M3, 
     await accept(3, 4);
     ok(await store.endSegment('completed'));
 
+    // Предшественник новых страниц по автопорядку — p01-s01-0002, первая в ручном порядке.
+    const expected: SessionEdits = {
+      ...manual,
+      order: ['p01-s01-0002', 'p01-s02-0001', 'p01-s02-0002', 'p01-s01-0001'],
+      cuts: [3],
+    };
     const session = store.snapshot();
-    expect(session?.edits).toEqual(manual);
+    expect(session?.edits).toEqual(expected);
+    expect((await journalOnDisk()).edits).toEqual(expected);
     const assembly = assembleSession(session ?? assert.fail('сессии нет'));
-    expect(assembly.order.map((page) => page.key)).toEqual([
-      'p01-s01-0002',
-      'p01-s01-0001',
-      'p01-s02-0001',
-      'p01-s02-0002',
-    ]);
     expect(assembly.documents.map((doc) => [doc.name, doc.count])).toEqual([
-      ['', 1],
-      ['Хвост', 3],
+      ['', 3],
+      ['Хвост', 1],
     ]);
     expect(assembly.orderEdited).toBe(true);
+  });
+
+  it('добавленный набор при ручном порядке и разрезе: за якорем в его документе, без шага правки (KTD-2, KTD-3)', async () => {
+    const { store, accept } = await setup();
+    ok(await store.beginPass(ORIGIN, null));
+    await accept(1, 3);
+    ok(await store.endSegment('completed'));
+    ok(await store.declineBacks());
+    // Лента 3 1 | 2: документ А = {3, 1}, Б = {2}.
+    const manual: SessionEdits = {
+      ...EMPTY_EDITS,
+      order: ['p01-s01-0003', 'p01-s01-0001', 'p01-s01-0002'],
+      cuts: [2],
+      names: ['А', 'Б'],
+    };
+    ok(await store.setEdits(manual, false));
+
+    ok(await store.beginPass(ORIGIN, { kind: 'added', after: 'p01-s01-0001' }));
+    await accept(4, 5);
+    ok(await store.endSegment('completed'));
+
+    const session = store.snapshot();
+    expect(session?.edits).toEqual({
+      ...manual,
+      order: ['p01-s01-0003', 'p01-s01-0001', 'p02-s01-0001', 'p02-s01-0002', 'p01-s01-0002'],
+      cuts: [4],
+    });
+    const assembly = assembleSession(session ?? assert.fail('сессии нет'));
+    expect(assembly.order.map((page) => [page.key, page.addedSet])).toEqual([
+      ['p01-s01-0003', null],
+      ['p01-s01-0001', null],
+      ['p02-s01-0001', 1],
+      ['p02-s01-0002', 1],
+      ['p01-s01-0002', null],
+    ]);
+    expect(assembly.documents.map((doc) => [doc.name, doc.count])).toEqual([
+      ['А', 4],
+      ['Б', 1],
+    ]);
   });
 
   it('углы в другом порядке ключей — не правка: «сохранено» не снимается', async () => {
