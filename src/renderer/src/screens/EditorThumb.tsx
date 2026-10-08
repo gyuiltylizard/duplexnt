@@ -16,15 +16,18 @@ export interface ThumbDrag {
   readonly over: (key: string, event: DragEvent<HTMLElement>) => void;
 }
 
-const modeOf = (event: MouseEvent | KeyboardEvent): PickMode =>
-  event.shiftKey ? 'range' : event.ctrlKey || event.metaKey ? 'toggle' : 'single';
-
-/** Зажат модификатор выделения (Shift / Ctrl / ⌘) — правило одно на клик и на клавиши. */
-export const pickModifierHeld = (event: {
+/** Клавиши-модификаторы события — общее у мыши и клавиатуры, React и DOM. */
+interface ModifierKeys {
   readonly shiftKey: boolean;
   readonly ctrlKey: boolean;
   readonly metaKey: boolean;
-}): boolean => modeOf(event as MouseEvent) !== 'single';
+}
+
+const modeOf = (event: ModifierKeys): PickMode =>
+  event.shiftKey ? 'range' : event.ctrlKey || event.metaKey ? 'toggle' : 'single';
+
+/** Зажат модификатор выделения (Shift / Ctrl / ⌘) — правило одно на клик и на клавиши. */
+export const pickModifierHeld = (event: ModifierKeys): boolean => modeOf(event) !== 'single';
 
 /**
  * Миниатюра в ленте: обычная, потерянная (S18 M1), строится или не построилась (S19 M1),

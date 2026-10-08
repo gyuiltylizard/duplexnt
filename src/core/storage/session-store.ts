@@ -453,14 +453,12 @@ export function createSessionStore(
     ) {
       return target;
     }
-    // Последний проход завершён или принят — очередь оборотов.
-    if (journal.backsDeclined) {
-      return conflict('backsDeclined');
-    }
-    if (roles.backs !== null) {
-      return conflict('backsPresent');
-    }
+    // Последний проход завершён или принят — очередь оборотов (`nextKindOf`); «добавленный» без
+    // намерения — значит, оборотов нет по отказу или они уже есть.
     const kind = nextKindOf(journal);
+    if (kind === 'added') {
+      return conflict(journal.backsDeclined ? 'backsDeclined' : 'backsPresent');
+    }
     return ok({ kind, resumed: false, expected: kind === 'backs' ? frontsPages : null });
   }
 
@@ -551,6 +549,8 @@ export function createSessionStore(
         if (!checked.ok) {
           return checked;
         }
+        // Роль по очереди — та же `nextKindOf`, что в `planPass`: между планом и записью журнал
+        // не меняется, служба держит `run` и отклоняет остальные мутации (`passRunning`).
         const space = await checkFreeSpace();
         if (!space.ok) {
           return space;
@@ -810,15 +810,23 @@ export function createSessionStore(
         if (runningSegmentOf(journal) !== null) {
           return conflict('passRunning');
         }
-        // Пустой проход оборотов (прерван до первой страницы) роли не занимает и отказу не мешает.
         if (rolesOf(journal).backs !== null) {
           return conflict('backsPresent');
         }
         if (journal.backsDeclined) {
           return ok(undefined);
         }
+        // Пустой проход оборотов (прерван до первой страницы) роли не занимает и отказу не
+        // мешает — но остаться прерванным он не должен: иначе «досканировать» снова начало бы
+        // обороты вопреки отказу, а добавление ждало бы «оставить как есть». Страниц и файлов
+        // у него нет — запись просто уходит, как при «Остановить» на пустом сегменте.
+        const last = journal.passes.at(-1);
+        const trimmed =
+          last?.kind === 'backs' && pagesOf(last).length === 0
+            ? withLastPass(journal, null)
+            : journal;
         // Вывод не меняется (оборотов и не было) — отметка о сохранении остаётся.
-        return commit({ ...journal, backsDeclined: true }, 'must');
+        return commit({ ...trimmed, backsDeclined: true }, 'must');
       }),
 
     markSaved: (expectedRevision) =>

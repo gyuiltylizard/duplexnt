@@ -582,6 +582,7 @@ export function EditorScreen({
   const collapseOnSurfaceClick = (event: ReactMouseEvent<HTMLElement>): void => {
     const { target } = event;
     if (
+      event.button === 0 &&
       selection.keys.length > 1 &&
       target instanceof Element &&
       target.closest('button, input, textarea, select, label, a') === null

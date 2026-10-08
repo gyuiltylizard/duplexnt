@@ -551,6 +551,18 @@ describe('хранилище сессии: роль прохода и добав
     });
     ok(await store.declineBacks());
     expect(store.snapshot()?.backsDeclined).toBe(true);
+    // Пустой прерванный проход оборотов ушёл вместе с отказом: досканировать нечего, добавлять
+    // можно сразу.
+    expect(roles(store)).toEqual([[1, 'fronts', null]]);
+    expect(store.resumeTarget()).toMatchObject({
+      ok: false,
+      error: { code: 'sessionConflict', details: { reason: 'notInterrupted' } },
+    });
+    expect(store.planPass(null)).toMatchObject({
+      ok: false,
+      error: { code: 'sessionConflict', details: { reason: 'backsDeclined' } },
+    });
+    expect(store.planPass(ADDED)).toMatchObject({ ok: true, value: { kind: 'added' } });
   });
 
   it('«Остановить» на первом сегменте добавленного набора убирает проход; лента и правки прежние', async () => {
