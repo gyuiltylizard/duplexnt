@@ -7,11 +7,13 @@ import {
   sessionConflict,
   type AddedPassIntent,
   type DomainError,
+  type PassKind,
   type PassSnapshot,
   type Result,
   type SessionConflictReason,
   type SessionEdits,
   type SessionSnapshot,
+  type StartPassRequest,
 } from '@shared';
 import { autoKeysOf } from '../scan/assembly';
 import { rebaseEdits } from '../scan/edits';
@@ -23,8 +25,8 @@ import {
   nextKindOf,
   pageCountOf,
   pagesOf,
-  passesByKind,
   passStateOf,
+  rolesOf,
   runningSegmentOf,
   withLastPass,
   withLastSegment,
@@ -113,6 +115,15 @@ export const NO_SESSION: SessionState = {
   unpreserved: false,
 };
 
+/** Что начнёт `startPass` по запросу — ответ `planPass` (M3.5, KTD-5). */
+export interface PassPlan {
+  readonly kind: PassKind;
+  /** Досканирование прерванного последнего прохода, а не новый проход. */
+  readonly resumed: boolean;
+  /** Ожидаемое число страниц: у оборотов — страницы лицевых; иначе `null` (M2, R2). */
+  readonly expected: number | null;
+}
+
 export interface SegmentStart {
   readonly pass: number;
   readonly segment: number;
@@ -149,10 +160,18 @@ export interface SessionStore {
    */
   revision(): number;
   /**
+   * Политика запуска — чистый запрос над журналом, одно место правила для службы (до сети) и
+   * хранилища (M3.5, KTD-5). Без намерения: прерванный последний проход — досканирование
+   * (отказы `resumeTarget`), лицевые без оборотов — обороты (`backsDeclined` / `backsPresent`
+   * отказывают), пустая сессия — лицевые. Намерение `added`: без сессии — `noSession`, при
+   * прерванном последнем — `passInterrupted` (иначе лицевые застряли бы прерванными навсегда),
+   * якорь не из сессии — `invalidInput`; отказ от оборотов и их наличие не мешают.
+   */
+  planPass(request: StartPassRequest): Result<PassPlan>;
+  /**
    * Новый проход: первый сегмент «идёт» записан в журнал. Вызывается до `POST`. Роль и якорь
-   * пишутся сразу (журнал v4): по намерению (`AddedPassIntent`, M3.5, KTD-5) или по очереди
-   * (`null` — лицевые, затем обороты, `nextKindOf`). Добавленный набор требует сессии
-   * (`noSession`) и якоря из неё (`invalidInput`).
+   * пишутся сразу (журнал v4): по намерению (`AddedPassIntent`) или по очереди (`nextKindOf`).
+   * Намерение проверяется той же проверкой, что в `planPass`.
    */
   beginPass(origin: PassOrigin, intent: AddedPassIntent | null): Promise<Result<SegmentStart>>;
   /** С чем можно досканировать последний проход; отказ — досканировать нельзя. */
@@ -387,6 +406,64 @@ export function createSessionStore(
     return origin === null ? conflict('paramsUnknown') : ok({ ...pass, origin });
   }
 
+  /** Намерение добавленного набора: сессия есть, якорь — её страница (R9). */
+  function checkIntent(intent: AddedPassIntent | null): Result<void> {
+    if (intent === null) {
+      return ok(undefined);
+    }
+    if (journal === null || isVacant(journal)) {
+      return conflict('noSession');
+    }
+    return intent.after !== null && locate(intent.after) === null
+      ? fail('invalidInput', { field: 'after' })
+      : ok(undefined);
+  }
+
+  function planPass(request: StartPassRequest): Result<PassPlan> {
+    if (incompatible) {
+      return { ok: false, error: REFUSAL };
+    }
+    if (runningSegmentOf(journal) !== null) {
+      return conflict('passRunning');
+    }
+    const last = journal?.passes.at(-1);
+    if (request !== null) {
+      const checked = checkIntent(request);
+      if (!checked.ok) {
+        return checked;
+      }
+      if (last !== undefined && passStateOf(last) === 'interrupted') {
+        return conflict('passInterrupted');
+      }
+      return ok({ kind: 'added', resumed: false, expected: null });
+    }
+    if (journal === null || last === undefined || isVacant(journal)) {
+      return ok({ kind: 'fronts', resumed: false, expected: null });
+    }
+    const roles = rolesOf(journal);
+    const frontsPages = roles.fronts === null ? null : pagesOf(roles.fronts).length;
+    const target = resumable();
+    if (target.ok) {
+      const { kind } = last;
+      return ok({ kind, resumed: true, expected: kind === 'backs' ? frontsPages : null });
+    }
+    if (
+      target.error.code !== 'sessionConflict' ||
+      target.error.details?.reason !== 'notInterrupted'
+    ) {
+      return target;
+    }
+    // Последний проход завершён или принят — очередь оборотов.
+    if (journal.backsDeclined) {
+      return conflict('backsDeclined');
+    }
+    if (roles.backs !== null) {
+      return conflict('backsPresent');
+    }
+    const kind = nextKindOf(journal);
+    return ok({ kind, resumed: false, expected: kind === 'backs' ? frontsPages : null });
+  }
+
   function locate(key: string): JournalPass | null {
     const address = parsePageKey(key);
     if (address === null || journal === null) {
@@ -463,18 +540,16 @@ export function createSessionStore(
 
     revision: () => revision,
 
+    planPass,
+
     beginPass: (origin, intent) =>
       mutating(async () => {
         if (runningSegmentOf(journal) !== null) {
           return conflict('passRunning');
         }
-        // Добавлять не к чему: добавленный набор начинается только поверх сессии со страницами.
-        if (intent !== null && (journal === null || isVacant(journal))) {
-          return conflict('noSession');
-        }
-        // Якорь — страница этой сессии (R9); чужой ключ — ошибка входа, не тихий «в конец».
-        if (intent?.after != null && locate(intent.after) === null) {
-          return fail('invalidInput', { field: 'after' });
+        const checked = checkIntent(intent);
+        if (!checked.ok) {
+          return checked;
         }
         const space = await checkFreeSpace();
         if (!space.ok) {
@@ -710,7 +785,7 @@ export function createSessionStore(
         if (runningSegmentOf(journal) !== null) {
           return conflict('passRunning');
         }
-        const { backs } = passesByKind(journal);
+        const { backs } = rolesOf(journal);
         if (backs === null && rotate180) {
           return conflict('noBacksPass');
         }
@@ -736,7 +811,7 @@ export function createSessionStore(
           return conflict('passRunning');
         }
         // Пустой проход оборотов (прерван до первой страницы) роли не занимает и отказу не мешает.
-        if (passesByKind(journal).backs !== null) {
+        if (rolesOf(journal).backs !== null) {
           return conflict('backsPresent');
         }
         if (journal.backsDeclined) {

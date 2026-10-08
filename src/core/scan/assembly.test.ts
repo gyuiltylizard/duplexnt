@@ -212,19 +212,6 @@ describe('сборка: ничего не теряется', () => {
     expect(order.map((page) => page.key).sort()).toEqual(expected);
     expect(order.filter((page) => page.lost).map((page) => page.key)).toEqual(['p02-s01-0002']);
   });
-
-  it('второй проход основной роли (схема такого не пропустит) не выбрасывается: идёт добавленным в конец', () => {
-    const session = sessionOf([passOf(1, 1), passOf(2, 1), passOf(3, 2, { kind: 'backs' })]);
-    const { order, report } = assembleSession(session);
-
-    expect(order.map((page) => [page.key, page.addedSet])).toEqual([
-      ['p01-s01-0001', null],
-      ['p02-s01-0001', null],
-      ['p03-s01-0001', 1],
-      ['p03-s01-0002', 1],
-    ]);
-    expect(report).toMatchObject({ fronts: 1, backs: 1, pairs: 1 });
-  });
 });
 
 describe('сборка: правки поверх автопорядка (M3, U2)', () => {

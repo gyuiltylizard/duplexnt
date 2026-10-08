@@ -19,6 +19,13 @@ export interface ThumbDrag {
 const modeOf = (event: MouseEvent | KeyboardEvent): PickMode =>
   event.shiftKey ? 'range' : event.ctrlKey || event.metaKey ? 'toggle' : 'single';
 
+/** Зажат модификатор выделения (Shift / Ctrl / ⌘) — правило одно на клик и на клавиши. */
+export const pickModifierHeld = (event: {
+  readonly shiftKey: boolean;
+  readonly ctrlKey: boolean;
+  readonly metaKey: boolean;
+}): boolean => modeOf(event as MouseEvent) !== 'single';
+
 /**
  * Миниатюра в ленте: обычная, потерянная (S18 M1), строится или не построилась (S19 M1),
  * оборот с тегом «об», непарный лист с янтарной точкой (S6 M2), угол из ядра (S4 M3),
@@ -84,7 +91,7 @@ export const EditorThumb = memo(function EditorThumb({
     // Клик с модификатором по зоне бара — выделение, не граница (M3.5, KTD-10): всплывает до
     // карточки и уходит в `onPick`. Бар при зажатом модификаторе и так скрыт — это страховка на
     // случай, когда нажатие клавиши лента не видела.
-    if (event.ctrlKey || event.metaKey || event.shiftKey) {
+    if (pickModifierHeld(event)) {
       return;
     }
     // Split-бар внутри карточки: клик по нему — граница, а не выбор страницы.

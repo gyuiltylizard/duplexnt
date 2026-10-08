@@ -14,7 +14,13 @@ import { MAX_DOCUMENT_NAME_LENGTH, type AssembledDocument, type AssembledPage } 
 import type { DropSide } from '../state/edits';
 import { single, type Selection } from '../state/selection';
 import { toneOf } from './EditorInspector';
-import { EditorThumb, type PickMode, type SplitKind, type ThumbDrag } from './EditorThumb';
+import {
+  EditorThumb,
+  pickModifierHeld,
+  type PickMode,
+  type SplitKind,
+  type ThumbDrag,
+} from './EditorThumb';
 
 // Лента редактора (план M3, U7–U8; handoff M3, S2–S7): панель мультивыделения, группы по
 // документам с разделителем «✕» и полем имени, миниатюры с split-баром и перетаскиванием.
@@ -170,7 +176,7 @@ export function EditorRail({
   const [modifierHeld, setModifierHeld] = useState(false);
   useEffect(() => {
     const update = (event: globalThis.KeyboardEvent): void => {
-      setModifierHeld(event.ctrlKey || event.metaKey || event.shiftKey);
+      setModifierHeld(pickModifierHeld(event));
     };
     const release = (): void => {
       setModifierHeld(false);

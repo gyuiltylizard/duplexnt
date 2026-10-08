@@ -1,5 +1,6 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { interceptFs, type FsCall } from './intercept-fs';
+import { unwrap } from './result';
 import { makeTempDataRoot } from './temp-data-root';
 import { parseJournal, type Journal, type PassOrigin } from '../../src/core/storage/journal';
 import { layoutOf } from '../../src/core/storage/layout';
@@ -40,12 +41,26 @@ export async function* body(...chunks: Uint8Array[]): AsyncGenerator<Uint8Array>
   }
 }
 
-export const ok = <T>(result: { ok: true; value: T } | { ok: false; error: unknown }): T => {
-  if (!result.ok) {
-    throw new Error(`ожидался успех: ${JSON.stringify(result.error)}`);
+/** Разворачивает успех конверта (тот же `unwrap`, короткое имя в тестах хранилища). */
+export const ok = unwrap;
+
+/** Роли проходов в сравнимом виде: `[номер, роль, якорь]`. */
+export const rolesOf = (
+  passes: readonly {
+    readonly number: number;
+    readonly kind: string;
+    readonly after: string | null;
+  }[],
+): (string | number | null)[][] => passes.map((pass) => [pass.number, pass.kind, pass.after]);
+
+/** Журнал сессии с диска; нечитаемый — падение теста. */
+export async function journalOnDisk(root: string): Promise<Journal> {
+  const parsed = parseJournal(await readFile(layoutOf(root).journalFile));
+  if (parsed.kind !== 'ok') {
+    throw new Error(`журнал на диске не читается: ${parsed.kind}`);
   }
-  return result.value;
-};
+  return parsed.value;
+}
 
 export async function setup(before?: (call: FsCall) => void, options: SessionStoreOptions = {}) {
   const root = await makeTempDataRoot();
@@ -60,20 +75,14 @@ export async function setup(before?: (call: FsCall) => void, options: SessionSto
 
   const pageFiles = async (): Promise<string[]> =>
     (await readdir(layout.pagesDir).catch(() => [])).sort();
-  const journalOnDisk = async (): Promise<Journal> => {
-    const parsed = parseJournal(await readFile(layout.journalFile));
-    if (parsed.kind !== 'ok') {
-      throw new Error(`журнал на диске не читается: ${parsed.kind}`);
-    }
-    return parsed.value;
-  };
+  const journalOnDiskHere = (): Promise<Journal> => journalOnDisk(root);
   /** Принимает страницы с номерами содержимого `from…to` в идущий сегмент. */
   const accept = async (from: number, to: number): Promise<void> => {
     for (let number = from; number <= to; number += 1) {
       await store.acceptPage(body(page(number)));
     }
   };
-  return { root, layout, store, calls, pageFiles, journalOnDisk, accept };
+  return { root, layout, store, calls, pageFiles, journalOnDisk: journalOnDiskHere, accept };
 }
 
 export const isJournalRename = (call: FsCall): boolean =>

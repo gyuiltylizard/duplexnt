@@ -31,6 +31,32 @@ export interface PageSnapshot {
 export const PASS_KINDS = ['fronts', 'backs', 'added'] as const;
 export type PassKind = (typeof PASS_KINDS)[number];
 
+export interface PassesByKind<T> {
+  readonly fronts: T | null;
+  readonly backs: T | null;
+  /** Добавленные наборы в порядке проходов (по возрастанию номера). */
+  readonly added: readonly T[];
+}
+
+/**
+ * Проходы по ролям — единственное место правила (M3.5, KTD-4) для журнала, снимка и renderer:
+ * роль читается из `kind`, не из позиции, и только у прохода хотя бы с одной страницей
+ * (`hasPages`) — пустой проход (прерван до первой страницы) роли не занимает при любом `kind`,
+ * иначе он блокировал бы «обороты не нужны». Лицевых и оборотов со страницами не больше одного
+ * (схема журнала); `passes` идут по возрастанию номера.
+ */
+export function passesByKind<T extends { readonly kind: PassKind }>(
+  passes: readonly T[],
+  hasPages: (pass: T) => boolean,
+): PassesByKind<T> {
+  const counted = passes.filter(hasPages);
+  return {
+    fronts: counted.find((pass) => pass.kind === 'fronts') ?? null,
+    backs: counted.find((pass) => pass.kind === 'backs') ?? null,
+    added: counted.filter((pass) => pass.kind === 'added'),
+  };
+}
+
 export interface PassSnapshot {
   readonly number: number;
   readonly kind: PassKind;

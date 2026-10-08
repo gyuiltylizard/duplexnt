@@ -1,9 +1,15 @@
 import { z } from 'zod';
-import { EMPTY_EDITS, PASS_KINDS, type PassKind, type PassState } from '@shared';
-import { scanParamsSchema } from '../escl/scan-settings';
-import { editsSchemaOf } from './edits-schema';
 import {
-  isPageKey,
+  EMPTY_EDITS,
+  PASS_KINDS,
+  passesByKind,
+  type PassesByKind,
+  type PassKind,
+  type PassState,
+} from '@shared';
+import { scanParamsSchema } from '../escl/scan-settings';
+import { editsSchemaOf, pageKeySchema } from './edits-schema';
+import {
   MAX_PAGE_INDEX,
   MAX_PASS_NUMBER,
   MAX_SEGMENT_NUMBER,
@@ -71,7 +77,7 @@ const passSchema = z
   .strictObject({
     ...passV3Fields,
     kind: z.enum(PASS_KINDS),
-    after: z.string().refine(isPageKey).nullable(),
+    after: pageKeySchema.nullable(),
   })
   .refine((pass) => pass.kind === 'added' || pass.after === null);
 
@@ -113,23 +119,23 @@ const countersHold = (journal: {
   isOrdered(journal.passes, journal.nextPass) &&
   journal.passes.every((pass) => isOrdered(pass.segments, pass.nextSegment));
 
-interface KindedPass {
-  readonly kind: PassKind;
+interface CountedPass {
   readonly segments: readonly { readonly pageCount: number }[];
 }
 
 /** Роль действует только у прохода со страницами (амендмент 2026-10-07). */
-const hasPages = (pass: { readonly segments: readonly { readonly pageCount: number }[] }) =>
+const hasPages = (pass: CountedPass): boolean =>
   pass.segments.some((segment) => segment.pageCount > 0);
 
 // Лицевых и оборотов — не больше одного каждого. Считаются только проходы со страницами:
 // пустой проход роли не занимает, и после сбоя до первой страницы повторный запуск той же роли
 // получает новый номер рядом с пустым (журнал его не выбрасывает).
-const rolesHold = (journal: { readonly passes: readonly KindedPass[] }): boolean => {
+const rolesHold = (journal: {
+  readonly passes: readonly (CountedPass & { readonly kind: PassKind })[];
+}): boolean => {
   const counted = journal.passes.filter(hasPages);
-  return (['fronts', 'backs'] as const).every(
-    (kind) => counted.filter((pass) => pass.kind === kind).length <= 1,
-  );
+  const of = (kind: PassKind): number => counted.filter((pass) => pass.kind === kind).length;
+  return of('fronts') <= 1 && of('backs') <= 1;
 };
 
 const editsSchema = editsSchemaOf();
@@ -190,7 +196,7 @@ type JournalV3 = z.infer<typeof journalV3Schema>;
 const upgradeToV4 = (journal: JournalV3): Journal => {
   let rank = 0;
   const passes = journal.passes.map((pass) => {
-    const kind: PassKind = rank === 0 ? 'fronts' : rank === 1 ? 'backs' : 'added';
+    const kind: PassKind = (['fronts', 'backs'] as const)[rank] ?? 'added';
     if (hasPages(pass)) {
       rank += 1;
     }
@@ -281,27 +287,9 @@ export function pagesOf(pass: JournalPass): JournalPage[] {
   return pages;
 }
 
-export interface PassesByKind {
-  readonly fronts: JournalPass | null;
-  readonly backs: JournalPass | null;
-  /** Добавленные наборы по возрастанию номера прохода. */
-  readonly added: readonly JournalPass[];
-}
-
-/**
- * Проходы по ролям — единственное место правила в ядре (M3.5, KTD-4). Роль читается из `kind`,
- * не из позиции; роль есть только у прохода хотя бы с одной страницей: пустой проход (прерван
- * до первой страницы) роли не занимает при любом `kind` — иначе он блокировал бы «обороты не
- * нужны».
- */
-export function passesByKind(journal: Journal): PassesByKind {
-  const counted = journal.passes.filter(hasPages);
-  return {
-    fronts: counted.find((pass) => pass.kind === 'fronts') ?? null,
-    backs: counted.find((pass) => pass.kind === 'backs') ?? null,
-    added: counted.filter((pass) => pass.kind === 'added'),
-  };
-}
+/** Проходы журнала по ролям (`passesByKind` из shared над записями журнала). */
+export const rolesOf = (journal: Journal): PassesByKind<JournalPass> =>
+  passesByKind(journal.passes, hasPages);
 
 /**
  * Роль следующего прохода без явного намерения — для нового прохода и для усыновлённых сверкой
@@ -309,7 +297,7 @@ export function passesByKind(journal: Journal): PassesByKind {
  * иначе — добавленный набор без якоря.
  */
 export function nextKindOf(journal: Journal): PassKind {
-  const { fronts, backs } = passesByKind(journal);
+  const { fronts, backs } = rolesOf(journal);
   if (fronts === null) {
     return 'fronts';
   }

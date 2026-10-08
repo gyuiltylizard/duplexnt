@@ -1,9 +1,10 @@
-import type {
-  AssembledPage,
-  AssemblyReport,
-  PassSnapshot,
-  SessionAssembly,
-  SessionSnapshot,
+import {
+  passesByKind,
+  type AssembledPage,
+  type AssemblyReport,
+  type PassSnapshot,
+  type SessionAssembly,
+  type SessionSnapshot,
 } from '@shared';
 import { documentsOf, hasEdits, normalizeEdits, pageAngle, visibleKeysOf } from './edits';
 
@@ -19,34 +20,9 @@ import { documentsOf, hasEdits, normalizeEdits, pageAngle, visibleKeysOf } from 
 // Роль прохода — `kind` из журнала (M3.5; ADR 0004, амендмент 2026-10-07), не позиция и не
 // чётность номера; роль есть только у прохода со страницами.
 
-/** Уцелевшие проходы: с хотя бы одной страницей. */
-const survivingOf = (passes: readonly PassSnapshot[]): PassSnapshot[] =>
-  passes.filter((pass) => pass.pages.length > 0);
-
-export interface PassesByKind {
-  readonly fronts: PassSnapshot | null;
-  readonly backs: PassSnapshot | null;
-  /** Добавленные наборы по возрастанию номера прохода. */
-  readonly added: readonly PassSnapshot[];
-}
-
-/**
- * Проходы снимка по ролям — зеркало `passesByKind` хранилища для снимка (KTD-4): роль только у
- * прохода со страницами. Второй проход той же основной роли схема журнала не пропустит; если он
- * всё же пришёл, его страницы не выбрасываются — он идёт добавленным набором.
- */
-export function passesByKindOf(passes: readonly PassSnapshot[]): PassesByKind {
-  const counted = survivingOf(passes);
-  const fronts = counted.find((pass) => pass.kind === 'fronts') ?? null;
-  const backs = counted.find((pass) => pass.kind === 'backs') ?? null;
-  return {
-    fronts,
-    backs,
-    added: counted
-      .filter((pass) => pass !== fronts && pass !== backs)
-      .sort((left, right) => left.number - right.number),
-  };
-}
+/** Роли проходов снимка: роль только у прохода со страницами (shared `passesByKind`, KTD-4). */
+const rolesOf = (passes: readonly PassSnapshot[]) =>
+  passesByKind(passes, (pass) => pass.pages.length > 0);
 
 /** Страница автопорядка: до правок, без угла ручного поворота. */
 interface AutoPage {
@@ -56,13 +32,14 @@ interface AutoPage {
   /** Страница прохода оборотов: на неё ложится его флаг 180° (KTD-2). */
   readonly ofBacks: boolean;
   readonly lost: boolean;
-  readonly addedSet: number | null;
 }
 
 interface AutoAssembly {
   readonly pages: readonly AutoPage[];
   readonly report: Omit<AssemblyReport, 'backsDeclined'>;
   readonly rotateBacks: boolean;
+  /** Номер добавленного набора по ключу страницы (от 1); у лиц и оборотов записи нет. */
+  readonly addedSetOf: ReadonlyMap<string, number>;
 }
 
 /**
@@ -75,7 +52,7 @@ interface AutoAssembly {
  * позже, потерянная стоит на своём месте.
  */
 function autoAssembly(passes: readonly PassSnapshot[]): AutoAssembly {
-  const { fronts: frontsPass, backs: backsPass, added } = passesByKindOf(passes);
+  const { fronts: frontsPass, backs: backsPass, added } = rolesOf(passes);
   const fronts = frontsPass?.pages ?? [];
   const backs = backsPass?.pages ?? [];
 
@@ -88,7 +65,6 @@ function autoAssembly(passes: readonly PassSnapshot[]): AutoAssembly {
       sheet: front.number,
       ofBacks: false,
       lost: front.lost,
-      addedSet: null,
     });
     // Оборот листа i (с нуля) — страница F−1−i прохода оборотов: пары от его начала.
     const back = backs[fronts.length - 1 - index];
@@ -103,23 +79,16 @@ function autoAssembly(passes: readonly PassSnapshot[]): AutoAssembly {
         sheet: front.number,
         ofBacks: true,
         lost: back.lost,
-        addedSet: null,
       });
     }
   }
   // Лишние обороты — в конец набора, в порядке получения; их листы неизвестны.
   for (const extra of backs.slice(fronts.length)) {
-    pages.push({
-      key: extra.key,
-      side: 'back',
-      sheet: null,
-      ofBacks: true,
-      lost: extra.lost,
-      addedSet: null,
-    });
+    pages.push({ key: extra.key, side: 'back', sheet: null, ofBacks: true, lost: extra.lost });
   }
   // Добавленные наборы: без пар и вне отчёта; номер набора — от 1 среди добавленных, не номер
   // прохода (KTD-4).
+  const addedSetOf = new Map<string, number>();
   added.forEach((pass, index) => {
     const block = pass.pages.map((page): AutoPage => ({
       key: page.key,
@@ -127,8 +96,10 @@ function autoAssembly(passes: readonly PassSnapshot[]): AutoAssembly {
       sheet: null,
       ofBacks: false,
       lost: page.lost,
-      addedSet: index + 1,
     }));
+    for (const page of block) {
+      addedSetOf.set(page.key, index + 1);
+    }
     const anchor = pass.after === null ? -1 : pages.findIndex((page) => page.key === pass.after);
     pages.splice(anchor === -1 ? pages.length : anchor + 1, 0, ...block);
   });
@@ -147,6 +118,7 @@ function autoAssembly(passes: readonly PassSnapshot[]): AutoAssembly {
     },
     // Поворот — атрибут прохода оборотов (KTD-2): флаги других проходов роли не играют.
     rotateBacks: backsPass?.rotate180 ?? false,
+    addedSetOf,
   };
 }
 
@@ -178,7 +150,7 @@ export function assembleSession(session: SessionSnapshot): SessionAssembly {
         angle: pageAngle(edits.rotations[key], page.ofBacks && auto.rotateBacks),
         lost: page.lost,
         unpaired: page.side === 'front' && page.sheet !== null && unpaired.has(page.sheet),
-        addedSet: page.addedSet,
+        addedSet: auto.addedSetOf.get(key) ?? null,
       });
     }
   }

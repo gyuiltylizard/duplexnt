@@ -1,7 +1,14 @@
 import { assert, describe, expect, it } from 'vitest';
-import { EMPTY_EDITS, type SessionEdits, type SessionSnapshot } from '@shared';
+import { EMPTY_EDITS, ok as ok2, type SessionEdits, type SessionSnapshot } from '@shared';
 import { fsError } from '../../../test/support/intercept-fs';
-import { isJournalRename, ok, ORIGIN, page, setup } from '../../../test/support/session-store';
+import {
+  isJournalRename,
+  ok,
+  ORIGIN,
+  page,
+  rolesOf,
+  setup,
+} from '../../../test/support/session-store';
 import { assembleSession } from '../scan/assembly';
 
 describe('хранилище сессии: флаги журнала v2 (M2, U1)', () => {
@@ -428,11 +435,8 @@ describe('хранилище сессии: правки редактора (M3, 
 
 describe('хранилище сессии: роль прохода и добавленные наборы (M3.5, U1)', () => {
   const ADDED = { kind: 'added', after: null } as const;
-  const roles = (store: {
-    snapshot(): {
-      passes: readonly { number: number; kind: string; after: string | null }[];
-    } | null;
-  }) => store.snapshot()?.passes.map((pass) => [pass.number, pass.kind, pass.after]);
+  const roles = (store: { snapshot(): SessionSnapshot | null }) =>
+    rolesOf(store.snapshot()?.passes ?? []);
 
   /** Ключи видимой ленты — как её собирает ядро. */
   const visibleKeys = (store: { snapshot(): SessionSnapshot | null }): string[] => {
@@ -467,9 +471,7 @@ describe('хранилище сессии: роль прохода и добав
       [3, 'added', 'p01-s01-0001'],
     ];
     expect(roles(store)).toEqual(expected);
-    expect(
-      (await journalOnDisk()).passes.map((pass) => [pass.number, pass.kind, pass.after]),
-    ).toEqual(expected);
+    expect(rolesOf((await journalOnDisk()).passes)).toEqual(expected);
   });
 
   it('без намерения при лицевых и оборотах или при отказе от оборотов — добавленный без якоря', async () => {
@@ -480,7 +482,7 @@ describe('хранилище сессии: роль прохода и добав
     ok(await store.beginPass(ORIGIN, null));
     await accept(5, 5);
     ok(await store.endSegment('completed'));
-    expect(roles(store)?.at(-1)).toEqual([3, 'added', null]);
+    expect(roles(store).at(-1)).toEqual([3, 'added', null]);
 
     const declined = await fronts();
     ok(await declined.store.declineBacks());
@@ -582,5 +584,87 @@ describe('хранилище сессии: роль прохода и добав
     await accept(3, 3);
 
     expect(store.snapshot()?.saved).toBe(false);
+  });
+});
+
+describe('хранилище сессии: политика запуска planPass (M3.5, U3; KTD-5)', () => {
+  const ADDED = { kind: 'added', after: null } as const;
+
+  it('пустая сессия — лицевые; после лицевых — обороты с «из M»; после отказа — backsDeclined', async () => {
+    const { store, accept } = await setup();
+    expect(store.planPass(null)).toEqual(ok2({ kind: 'fronts', resumed: false, expected: null }));
+
+    ok(await store.beginPass(ORIGIN, null));
+    await accept(1, 3);
+    ok(await store.endSegment('completed'));
+    expect(store.planPass(null)).toEqual(ok2({ kind: 'backs', resumed: false, expected: 3 }));
+
+    ok(await store.declineBacks());
+    expect(store.planPass(null)).toMatchObject({
+      ok: false,
+      error: { code: 'sessionConflict', details: { reason: 'backsDeclined' } },
+    });
+    // Добавленный набор отказ от оборотов не держит.
+    expect(store.planPass(ADDED)).toEqual(ok2({ kind: 'added', resumed: false, expected: null }));
+  });
+
+  it('при лицевых и оборотах — backsPresent без намерения, added с намерением', async () => {
+    const { store, accept } = await setup();
+    ok(await store.beginPass(ORIGIN, null));
+    await accept(1, 2);
+    ok(await store.endSegment('completed'));
+    ok(await store.beginPass(ORIGIN, null));
+    await accept(3, 4);
+    ok(await store.endSegment('completed'));
+
+    expect(store.planPass(null)).toMatchObject({
+      ok: false,
+      error: { code: 'sessionConflict', details: { reason: 'backsPresent' } },
+    });
+    expect(store.planPass({ kind: 'added', after: 'p02-s01-0001' })).toEqual(
+      ok2({ kind: 'added', resumed: false, expected: null }),
+    );
+    expect(store.planPass({ kind: 'added', after: 'p09-s01-0001' })).toMatchObject({
+      ok: false,
+      error: { code: 'invalidInput', details: { field: 'after' } },
+    });
+  });
+
+  it('прерванный последний проход: без намерения — досканирование той же роли, с намерением — passInterrupted', async () => {
+    const { store, accept } = await setup();
+    ok(await store.beginPass(ORIGIN, null));
+    await accept(1, 3);
+    ok(await store.endSegment('completed'));
+    ok(await store.beginPass(ORIGIN, null));
+    await accept(4, 4);
+    ok(await store.endSegment('interrupted'));
+
+    expect(store.planPass(null)).toEqual(ok2({ kind: 'backs', resumed: true, expected: 3 }));
+    expect(store.planPass(ADDED)).toMatchObject({
+      ok: false,
+      error: { code: 'sessionConflict', details: { reason: 'passInterrupted' } },
+    });
+
+    ok(await store.acceptPass());
+    expect(store.planPass(ADDED)).toEqual(ok2({ kind: 'added', resumed: false, expected: null }));
+    // Прерванный добавленный досканируется без «из M».
+    ok(await store.beginPass(ORIGIN, ADDED));
+    await accept(5, 5);
+    ok(await store.endSegment('interrupted'));
+    expect(store.planPass(null)).toEqual(ok2({ kind: 'added', resumed: true, expected: null }));
+  });
+
+  it('без сессии добавлять не к чему; идущий проход — passRunning', async () => {
+    const { store, accept } = await setup();
+    expect(store.planPass(ADDED)).toMatchObject({
+      ok: false,
+      error: { code: 'sessionConflict', details: { reason: 'noSession' } },
+    });
+    ok(await store.beginPass(ORIGIN, null));
+    await accept(1, 1);
+    expect(store.planPass(null)).toMatchObject({
+      ok: false,
+      error: { code: 'sessionConflict', details: { reason: 'passRunning' } },
+    });
   });
 });

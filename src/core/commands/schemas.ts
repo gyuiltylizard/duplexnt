@@ -14,8 +14,7 @@ import {
 } from '@shared';
 import { DEVICE_PATH_MAX_LENGTH } from '../escl/device-path';
 import { scanParamsSchema } from '../escl/scan-settings';
-import { editsSchemaOf } from '../storage/edits-schema';
-import { isPageKey } from '../storage/layout';
+import { editsSchemaOf, pageKeySchema } from '../storage/edits-schema';
 
 // Схемы входа команд моста (ADR 0005; план M1, KTD-39). Строгие и без приведения типов: лишнее
 // поле и «почти подходящий» тип — отказ, а не молчаливая починка. Типы запросов объявлены в
@@ -35,7 +34,7 @@ export const noRequestSchema = z.undefined();
 export const startPassRequestSchema = z
   .strictObject({
     kind: z.literal('added'),
-    after: z.string().refine(isPageKey).nullable(),
+    after: pageKeySchema.nullable(),
   })
   .nullable() satisfies z.ZodType<StartPassRequest>;
 

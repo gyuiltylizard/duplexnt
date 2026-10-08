@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from 'react';
+import { useId, useState, type MouseEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AssembledPage, SessionAssembly } from '@shared';
 import type { TFunction } from 'i18next';
@@ -140,6 +140,7 @@ export function EditorInspector({
   frontsOnly,
   locked,
   onPickDocument,
+  onMouseDown,
   onRevert,
 }: {
   readonly assembly: SessionAssembly;
@@ -156,6 +157,8 @@ export function EditorInspector({
   /** Идёт запись (KTD-9): «Вернуть» недоступна. */
   readonly locked: boolean;
   readonly onPickDocument: (document: number) => void;
+  /** Клик по поверхности инспектора — сжатие мультивыделения решает экран (M3.5, R21). */
+  readonly onMouseDown?: (event: MouseEvent<HTMLElement>) => void;
   /** «Вернуть» — открыть подтверждение `revert`. */
   readonly onRevert: () => void;
 }): ReactNode {
@@ -170,7 +173,7 @@ export function EditorInspector({
   const pairsWarning = report.mismatch;
 
   return (
-    <aside className="inspector" aria-label={t('inspector.label')}>
+    <aside className="inspector" aria-label={t('inspector.label')} onMouseDown={onMouseDown}>
       {entry !== undefined && (
         <Details
           entry={entry}

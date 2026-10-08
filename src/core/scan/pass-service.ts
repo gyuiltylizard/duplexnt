@@ -54,7 +54,7 @@ import {
 import { ioOf, storageFailure } from '../storage/storage-fs';
 import { pagePixelLimit } from '../storage/thumbnails';
 import { openUnclosedJobs, type UnclosedJobs } from '../storage/unclosed-jobs';
-import { assembleSession, passesByKindOf } from './assembly';
+import { assembleSession } from './assembly';
 
 // Служба прохода (план M1, U17): связывает клиент сканера, хранилище сессии, настройки и
 // незакрытые задания в один сценарий и выдаёт снимок, из которого интерфейс выводит экран
@@ -622,77 +622,32 @@ export function createPassService(
     const { connected, params } = scanner;
     const stored = storedScannerOf(connected);
 
-    // Поверх сессии: прерванный проход — только досканирование; завершённый или принятый
-    // лицевой без оборотов — новый проход оборотов (M2, KTD-4). Роль — `kind` из снимка (M3.5):
-    // пустой проход роли не занимает. Добавленный набор (намерение) идёт поверх любой готовой
-    // сессии и не смотрит ни на отказ от оборотов, ни на их наличие.
-    const freshOrigin: PassOrigin = {
+    // Политика — у хранилища (`planPass`, KTD-5), до сети: что начнётся и с какой ролью.
+    // Служба добавляет только своё: досканировать можно лишь на сканере прохода (KTD-27).
+    const plan = store.planPass(request);
+    if (!plan.ok) {
+      return plan;
+    }
+    let origin: PassOrigin = {
       scanner: stored,
       params,
       pixelLimit: pagePixelLimit(connected.capabilities.adf),
     };
-    let origin: PassOrigin;
-    let resumed = false;
-    let expected: number | null = null;
-    let kind: PassKind;
-    const session = store.snapshot();
-    const last = session?.passes.at(-1);
-    if (request !== null) {
-      if (session === null) {
-        return conflict('noSession');
-      }
-      // Прерванный проход держит `resumable()`/`acceptPass` на последнем проходе: добавленный
-      // поверх него оставил бы лицевые прерванными навсегда (KTD-5).
-      if (last?.state === 'interrupted') {
-        return conflict('passInterrupted');
-      }
-      const { after } = request;
-      if (
-        after !== null &&
-        !session.passes.some((pass) => pass.pages.some((p) => p.key === after))
-      ) {
-        return fail('invalidInput', { field: 'after' });
-      }
-      origin = freshOrigin;
-      kind = 'added';
-    } else if (session === null || last === undefined) {
-      origin = freshOrigin;
-      kind = 'fronts';
-    } else {
-      const roles = passesByKindOf(session.passes);
+    if (plan.value.resumed) {
       const target = resumeTarget();
-      if (target.ok) {
-        origin = target.value;
-        resumed = true;
-        kind = last.kind;
-        // Досканируется последний проход; в роли оборотов его счётчик получает «из M» (R2).
-        expected = kind === 'backs' ? (roles.fronts?.pages.length ?? null) : null;
-      } else if (
-        target.error.code === 'sessionConflict' &&
-        target.error.details?.reason === 'notInterrupted'
-      ) {
-        // Последний проход завершён или принят — очередь оборотов.
-        if (session.backsDeclined) {
-          return conflict('backsDeclined');
-        }
-        if (roles.backs !== null) {
-          return conflict('backsPresent');
-        }
-        origin = freshOrigin;
-        kind = 'backs';
-        expected = roles.fronts?.pages.length ?? null;
-      } else {
+      if (!target.ok) {
         return target;
       }
+      origin = target.value;
     }
 
     const current: Run = {
       controller: new AbortController(),
-      resumed,
-      kind,
+      resumed: plan.value.resumed,
+      kind: plan.value.kind,
       request,
       params: origin.params,
-      expected,
+      expected: plan.value.expected,
       phase: 'starting',
       pages: 0,
       intent: null,

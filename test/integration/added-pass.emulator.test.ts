@@ -1,13 +1,11 @@
-import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import { probeScanner, type ConnectedScanner } from '../../src/core/escl/connect';
 import type { ScanJobLimits } from '../../src/core/escl/scan-job';
 import { openPassService, type PassServiceOptions } from '../../src/core/scan/pass-service';
-import { parseJournal } from '../../src/core/storage/journal';
-import { layoutOf } from '../../src/core/storage/layout';
 import type { Snapshot } from '../../src/shared';
 import type { Scenario } from '../emulator/scenarios';
 import { startTestEmulator } from '../support/emulator';
+import { journalOnDisk, rolesOf } from '../support/session-store';
 import { makeTempDataRoot } from '../support/temp-data-root';
 import { unwrap } from '../support/result';
 
@@ -52,14 +50,6 @@ async function connect(scenario: Partial<Scenario>) {
   return { emulator, root, service, snapshots };
 }
 
-async function journalOf(root: string) {
-  const parsed = parseJournal(await readFile(layoutOf(root).journalFile));
-  if (parsed.kind !== 'ok') {
-    throw new Error(`журнал не читается: ${parsed.kind}`);
-  }
-  return parsed.value;
-}
-
 describe('добавленный набор через эмулятор (M3.5, U3)', () => {
   it('набор после лица 2: роль и якорь в журнале, страницы за якорем, отчёт пар прежний', async () => {
     const { root, service, snapshots } = await connect({
@@ -75,8 +65,8 @@ describe('добавленный набор через эмулятор (M3.5, U
       pages: 2,
     });
 
-    const journal = await journalOf(root);
-    expect(journal.passes.map((pass) => [pass.number, pass.kind, pass.after])).toEqual([
+    const journal = await journalOnDisk(root);
+    expect(rolesOf(journal.passes)).toEqual([
       [1, 'fronts', null],
       [2, 'backs', null],
       [3, 'added', F2],
@@ -137,7 +127,7 @@ describe('добавленный набор через эмулятор (M3.5, U
     expect(
       resumed.every((pass) => pass.kind === 'added' && pass.expected === null && pass.resumed),
     ).toBe(true);
-    const journal = await journalOf(root);
+    const journal = await journalOnDisk(root);
     expect(journal.passes.at(-1)).toMatchObject({ number: 3, kind: 'added', after: F2 });
     expect(journal.passes.at(-1)?.segments.map((segment) => segment.pageCount)).toEqual([1, 2]);
     expect(service.snapshot().assembly?.order.map((page) => page.key)).toEqual([
@@ -169,7 +159,7 @@ describe('добавленный набор через эмулятор (M3.5, U
       value: { end: 'interrupted', pages: 0, error: { code: 'scanFeedFailed' } },
     });
 
-    expect((await journalOf(root)).passes.map((pass) => pass.number)).toEqual([1, 2]);
+    expect((await journalOnDisk(root)).passes.map((pass) => pass.number)).toEqual([1, 2]);
     expect(service.snapshot().assembly?.order.map((page) => page.key)).toEqual(before);
     expect(service.snapshot()).toMatchObject({ canResume: false, canAccept: false });
   });

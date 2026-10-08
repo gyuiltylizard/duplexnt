@@ -8,7 +8,8 @@ import { isPageKey } from './layout';
 // Ключи без страниц схема пропускает: их вычищает нормализация, а не отказ. Совпадающие разрезы
 // (пустой документ) — тоже: их схлопывает нормализация.
 
-const pageKeySchema = z.string().refine(isPageKey);
+/** Ключ страницы — одна схема на правки, журнал и вход команд. */
+export const pageKeySchema = z.string().refine(isPageKey);
 
 const isNonDecreasing = (values: readonly number[]): boolean =>
   values.every((value, index) => index === 0 || value >= (values[index - 1] ?? 0));

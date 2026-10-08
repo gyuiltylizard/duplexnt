@@ -576,25 +576,23 @@ export function EditorScreen({
   const deleteLabel =
     targets.length > 1 ? t('editor.deleteMany', { count: targets.length }) : t('editor.delete');
 
-  // Клик мимо ленты — превью, инспектор, тулбар — сжимает мультивыделение до текущей, как Esc
-  // (M3.5, R21). Кнопки и поля исключены: «↻»/«Удалить N стр.» действуют на выделение, и
-  // сжимать его в момент нажатия нельзя; модалки — тоже.
-  const collapseOnOutsideClick = (event: ReactMouseEvent<HTMLElement>): void => {
+  // Клик по поверхности мимо ленты — тулбар, превью, инспектор — сжимает мультивыделение до
+  // текущей, как Esc (M3.5, R21). Органы управления на этих поверхностях исключены: «↻» и
+  // «Удалить N стр.» действуют на выделение, и сжимать его в момент нажатия нельзя.
+  const collapseOnSurfaceClick = (event: ReactMouseEvent<HTMLElement>): void => {
     const { target } = event;
     if (
-      selection.keys.length <= 1 ||
-      !(target instanceof Element) ||
-      railRef.current?.contains(target) === true ||
-      target.closest('button, input, textarea, select, a, [role="dialog"]') !== null
+      selection.keys.length > 1 &&
+      target instanceof Element &&
+      target.closest('button, input, textarea, select, label, a') === null
     ) {
-      return;
+      setSelection(collapsed(selection));
     }
-    setSelection(collapsed(selection));
   };
 
   return (
-    <main className="editor-screen" onMouseDown={collapseOnOutsideClick}>
-      <header className="editor-screen__toolbar">
+    <main className="editor-screen">
+      <header className="editor-screen__toolbar" onMouseDown={collapseOnSurfaceClick}>
         <div className="editor-screen__toolbar-left">
           <button type="button" className="btn btn--secondary" onClick={newScan}>
             <span aria-hidden="true">↺</span> {t('editor.newScan')}
@@ -711,7 +709,7 @@ export function EditorScreen({
           }
         />
 
-        <section className="stage">
+        <section className="stage" onMouseDown={collapseOnSurfaceClick}>
           <EditorPassBanner
             snapshot={snapshot}
             session={session}
@@ -832,6 +830,7 @@ export function EditorScreen({
             onRevert={() => {
               setModal('revert');
             }}
+            onMouseDown={collapseOnSurfaceClick}
           />
         )}
       </div>

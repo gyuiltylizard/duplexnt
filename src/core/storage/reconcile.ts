@@ -102,9 +102,10 @@ function adopt(
   marked: readonly string[],
 ): Journal {
   let { passes, nextPass } = journal;
-  const created = new Set<number>();
 
-  for (const group of files) {
+  // Обход по возрастанию номера прохода: роль созданного прохода зависит от ролей младших,
+  // порядок обхода каталога на неё влиять не должен.
+  for (const group of [...files].sort((left, right) => left.pass - right.pass)) {
     const found = Math.max(0, ...group.present);
     if (found === 0 || marked.includes(segmentPrefix(group.pass, group.segment))) {
       continue;
@@ -113,8 +114,7 @@ function adopt(
     if (pass === undefined) {
       const fresh: JournalPass = {
         number: group.pass,
-        // Роль — ниже, когда список собран; до этого пересобранный проход считается добавленным.
-        kind: 'added',
+        kind: nextKindOf({ ...journal, passes }),
         after: null,
         accepted: false,
         origin: null,
@@ -123,7 +123,6 @@ function adopt(
         rotate180: false,
       };
       passes = inserted(passes, fresh);
-      created.add(group.pass);
       nextPass = Math.max(nextPass, group.pass + 1);
       continue;
     }
@@ -144,18 +143,7 @@ function adopt(
       segment.state === 'running' ? { ...segment, state: 'interrupted' as const } : segment,
     ),
   }));
-  let adopted: Journal = { ...journal, passes, nextPass };
-  // `passes` упорядочены по номеру: каждый созданный проход видит роли, розданные младшим.
-  for (const pass of adopted.passes) {
-    if (created.has(pass.number)) {
-      const kind = nextKindOf(adopted);
-      adopted = {
-        ...adopted,
-        passes: adopted.passes.map((it) => (it === pass ? { ...it, kind } : it)),
-      };
-    }
-  }
-  return adopted;
+  return { ...journal, passes, nextPass };
 }
 
 export async function reconcileSession(

@@ -5,11 +5,12 @@ import {
   nextKindOf,
   pagesOf,
   parseJournal,
-  passesByKind,
   passStateOf,
+  rolesOf,
   type Journal,
   type JournalPass,
 } from './journal';
+import { rolesOf as rolesOfPasses } from '../../../test/support/session-store';
 import { parsePageFileName, parsePageKey, pageKey, segmentPrefix } from './layout';
 import { isSetAsideName, serializeVersioned } from './versioned-file';
 
@@ -72,6 +73,17 @@ function omit<T extends object, K extends keyof T>(value: T, ...keys: K[]): Omit
 // Проход версии 3 (M3): без роли и якоря — роль выводилась по позиции.
 const V3_PASS = omit(PASS, 'kind', 'after');
 
+/** Проход `number` из `pageCount` страниц одним завершённым сегментом. */
+const passAt = (number: number, pageCount: number, extra: Partial<JournalPass> = {}) => ({
+  ...PASS,
+  number,
+  segments: [{ number: 1, state: 'completed' as const, pageCount }],
+  ...extra,
+});
+/** То же для журнала v3: без `kind`/`after`. */
+const v3PassAt = (number: number, pageCount: number, extra: object = {}) =>
+  omit({ ...passAt(number, pageCount), ...extra }, 'kind', 'after');
+
 // Журнал версии 3 (M3): тот же состав, роль прохода — по позиции.
 const V3_JOURNAL = { ...JOURNAL, version: 3, passes: [V3_PASS] };
 
@@ -105,30 +117,22 @@ describe('журнал: запись и чтение', () => {
 });
 
 describe('журнал: чтение прежних версий (M2, R13; M3, R2; M3.5, R1)', () => {
-  const v3PassAt = (number: number, pageCount: number, extra: object = {}) => ({
-    ...V3_PASS,
-    number,
-    segments: [{ number: 1, state: 'completed', pageCount }],
-    ...extra,
-  });
-  const rolesOf = (passes: object[]) => {
+  const v3RolesOf = (passes: object[]) => {
     const parsed = parse({ ...V3_JOURNAL, nextPass: 9, passes });
     expect(parsed.kind).toBe('ok');
-    return parsed.kind === 'ok'
-      ? parsed.value.passes.map((pass) => [pass.number, pass.kind, pass.after])
-      : [];
+    return parsed.kind === 'ok' ? rolesOfPasses(parsed.value.passes) : [];
   };
 
   it('журнал v3 читается: роль — по позиции среди проходов, якоря нет', () => {
     expect(parse(V3_JOURNAL)).toEqual({ kind: 'ok', value: JOURNAL });
-    expect(rolesOf([v3PassAt(1, 3), v3PassAt(2, 3), v3PassAt(3, 1)])).toEqual([
+    expect(v3RolesOf([v3PassAt(1, 3), v3PassAt(2, 3), v3PassAt(3, 1)])).toEqual([
       [1, 'fronts', null],
       [2, 'backs', null],
       [3, 'added', null],
     ]);
-    expect(rolesOf([v3PassAt(1, 3)])).toEqual([[1, 'fronts', null]]);
+    expect(v3RolesOf([v3PassAt(1, 3)])).toEqual([[1, 'fronts', null]]);
     // Проход 2 остановлен и исчез; повторный запуск оборотов получил номер 3.
-    expect(rolesOf([v3PassAt(1, 3), v3PassAt(3, 3)])).toEqual([
+    expect(v3RolesOf([v3PassAt(1, 3), v3PassAt(3, 3)])).toEqual([
       [1, 'fronts', null],
       [3, 'backs', null],
     ]);
@@ -141,14 +145,14 @@ describe('журнал: чтение прежних версий (M2, R13; M3, R
       passes: [v3PassAt(1, 2), v3PassAt(2, 2, { rotate180: true })],
     });
 
-    expect(parsed.kind === 'ok' ? passesByKind(parsed.value).backs?.rotate180 : null).toBe(true);
+    expect(parsed.kind === 'ok' ? rolesOf(parsed.value).backs?.rotate180 : null).toBe(true);
   });
 
   it('журнал v3: пустой проход роли не занимает — позиция считается по проходам со страницами', () => {
     // Прерван до первой страницы (сбой между началом сегмента и первой страницей), затем
     // лицевые пошли проходом 2: он лицевой, а не обороты.
     expect(
-      rolesOf([
+      v3RolesOf([
         v3PassAt(1, 0, { segments: [{ number: 1, state: 'interrupted', pageCount: 0 }] }),
         v3PassAt(2, 3),
       ]),
@@ -291,12 +295,6 @@ describe('журнал: форма правок (M3)', () => {
 
 describe('журнал: роль прохода и якорь (M3.5; амендмент ADR 0004 от 2026-10-07)', () => {
   const schema = { kind: 'unreadable', reason: 'schema' };
-  const passAt = (number: number, pageCount: number, extra: Partial<JournalPass> = {}) => ({
-    ...PASS,
-    number,
-    segments: [{ number: 1, state: 'completed' as const, pageCount }],
-    ...extra,
-  });
   const withPasses = (passes: JournalPass[]) => parse({ ...JOURNAL, nextPass: 9, passes });
 
   it('добавленный набор с якорем записывается и читается дословно', () => {
@@ -374,7 +372,7 @@ describe('журнал: роль прохода и якорь (M3.5; аменд�
       ],
     };
 
-    const roles = passesByKind(journal);
+    const roles = rolesOf(journal);
     expect(roles.fronts?.number).toBe(1);
     expect(roles.backs).toBeNull();
     expect(roles.added.map((pass) => pass.number)).toEqual([3, 5]);
@@ -390,8 +388,8 @@ describe('журнал: роль прохода и якорь (M3.5; аменд�
       ],
     };
 
-    expect(passesByKind(journal)).toMatchObject({ fronts: null, added: [] });
-    expect(passesByKind(journal).backs?.number).toBe(2);
+    expect(rolesOf(journal)).toMatchObject({ fronts: null, added: [] });
+    expect(rolesOf(journal).backs?.number).toBe(2);
   });
 
   it('роль следующего прохода по очереди: лицевые → обороты (если не отказались) → добавленный', () => {

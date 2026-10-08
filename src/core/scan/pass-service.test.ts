@@ -258,6 +258,25 @@ function refusingConnector() {
   return { requests, connector };
 }
 
+/** Транспорт, который держит первый запрос до `release`: снимок идущего прохода виден снаружи. */
+function gatedConnector() {
+  let release = (): void => undefined;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const connector: ConnectorOptions = {
+    createTransport: () => ({
+      request: async () => {
+        await gate;
+        return fail('scannerUnreachable', { reason: 'refused' });
+      },
+      stream: () => Promise.resolve(fail('scannerUnreachable', { reason: 'refused' })),
+      close: () => undefined,
+    }),
+  };
+  return { connector, release };
+}
+
 async function serviceOver(root: string, connector: ConnectorOptions) {
   const service = await openPassService(root, { connector });
   await service.useScanner(connected());
@@ -270,25 +289,6 @@ describe('служба прохода: добавленный набор (M3.5, 
     { number: 1, pages: 3 },
     { number: 2, pages: 3 },
   ] as const;
-
-  /** Транспорт, который держит первый запрос до `release`: снимок идущего прохода виден снаружи. */
-  function gatedConnector() {
-    let release = (): void => undefined;
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    const connector: ConnectorOptions = {
-      createTransport: () => ({
-        request: async () => {
-          await gate;
-          return fail('scannerUnreachable', { reason: 'refused' });
-        },
-        stream: () => Promise.resolve(fail('scannerUnreachable', { reason: 'refused' })),
-        close: () => undefined,
-      }),
-    };
-    return { connector, release };
-  }
 
   it.each([
     ['при лицевых и оборотах', [...twoPasses], {}],
@@ -463,20 +463,7 @@ describe('служба прохода: политика второго прох�
   it('снимок идущего прохода оборотов: роль backs и «из M» по лицевым (M3.5, R2)', async () => {
     const root = await makeTempDataRoot();
     await seedSession(root, [{ number: 1, pages: 3 }]);
-    let release = (): void => undefined;
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    const connector: ConnectorOptions = {
-      createTransport: () => ({
-        request: async () => {
-          await gate;
-          return fail('scannerUnreachable', { reason: 'refused' });
-        },
-        stream: () => Promise.resolve(fail('scannerUnreachable', { reason: 'refused' })),
-        close: () => undefined,
-      }),
-    };
+    const { connector, release } = gatedConnector();
     const service = await serviceOver(root, connector);
 
     const pass = service.startPass(null);

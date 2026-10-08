@@ -7,6 +7,7 @@ import { fsError, interceptFs } from '../../../test/support/intercept-fs';
 import { makeTempDataRoot } from '../../../test/support/temp-data-root';
 import type { PassOrigin } from './journal';
 import { layoutOf, type DataLayout } from './layout';
+import { rolesOf } from '../../../test/support/session-store';
 import { openSessionStore, reconcileSession } from './reconcile';
 import { createSessionStore } from './session-store';
 import { realStorageFs } from './storage-fs';
@@ -215,16 +216,14 @@ describe('сверка при запуске: таблица плана', () => 
     const { session, notices } = await reconciled(root);
 
     expect(notices).toEqual([]);
-    const roles = (passes: readonly { number: number; kind: string; after: string | null }[]) =>
-      passes.map((it) => [it.number, it.kind, it.after]);
-    expect(roles(session?.passes ?? [])).toEqual([
+    expect(rolesOf(session?.passes ?? [])).toEqual([
       [1, 'fronts', null],
       [2, 'backs', null],
       [3, 'added', null],
     ]);
     const journal = await journalOnDisk(layout);
     expect(journal.version).toBe(4);
-    expect(roles(journal.passes)).toEqual(roles(session?.passes ?? []));
+    expect(rolesOf(journal.passes)).toEqual(rolesOf(session?.passes ?? []));
     expect(journal.passes[1]).toMatchObject({ rotate180: true });
 
     const before = await dirSnapshot(root);
@@ -635,10 +634,8 @@ describe('сверка при запуске: таблица плана', () => 
       const { root, layout } = await seed(journal, files);
       const { session } = await reconciled(root);
       const onDisk = await journalOnDisk(layout);
-      expect(onDisk.passes.map((it) => [it.number, it.kind, it.after])).toEqual(
-        session?.passes.map((it) => [it.number, it.kind, it.after]),
-      );
-      return session?.passes.map((it) => [it.number, it.kind, it.after]);
+      expect(rolesOf(onDisk.passes)).toEqual(rolesOf(session?.passes ?? []));
+      return rolesOf(session?.passes ?? []);
     };
 
     expect(await roles(journalOf([pass(1, [segment(1, 'completed', 2)])]))).toEqual([
@@ -685,12 +682,9 @@ describe('сверка при запуске: таблица плана', () => 
       const second = await openSessionStore(root, { fs });
       expect(await dirSnapshot(root)).toEqual(before);
       const journal = await journalOnDisk(layout);
-      const rolesOf = (store: typeof first.store) =>
-        store.snapshot()?.passes.map((it) => [it.number, it.kind, it.after]);
-      expect(journal.passes.map((it) => [it.number, it.kind, it.after])).toEqual(
-        rolesOf(second.store),
-      );
-      return rolesOf(first.store);
+      const storeRoles = (store: typeof first.store) => rolesOf(store.snapshot()?.passes ?? []);
+      expect(rolesOf(journal.passes)).toEqual(storeRoles(second.store));
+      return storeRoles(first.store);
     };
     const expected = [
       [1, 'fronts', null],

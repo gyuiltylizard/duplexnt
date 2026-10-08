@@ -63,11 +63,13 @@ export {
 
 export {
   PASS_KINDS,
+  passesByKind,
   type AssembledDocument,
   type AssembledPage,
   type AssemblyReport,
   type PageAngle,
   type PageSnapshot,
+  type PassesByKind,
   type PassKind,
   type PassProgress,
   type PassReport,

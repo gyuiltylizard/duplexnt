@@ -127,7 +127,7 @@ export function rebaseOrder(
   const known = new Set(before);
   const placed = [...order];
   for (const [index, key] of after.entries()) {
-    if (known.has(key) || placed.includes(key)) {
+    if (known.has(key)) {
       continue;
     }
     for (let back = index - 1; back >= 0; back -= 1) {
@@ -157,9 +157,7 @@ export function rebaseEdits(
   if (!changed) {
     return normalizeEdits(afterKeys, edits);
   }
-  const order =
-    edits.order.length > 0 ? rebaseOrder(beforeKeys, afterKeys, edits.order) : edits.order;
-  const rebased = { ...edits, order };
+  const rebased = { ...edits, order: rebaseOrder(beforeKeys, afterKeys, edits.order) };
   const cuts =
     edits.cuts.length > 0
       ? remapCuts(visibleKeysOf(beforeKeys, edits), visibleKeysOf(afterKeys, rebased), edits.cuts)
