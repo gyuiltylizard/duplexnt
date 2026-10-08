@@ -568,6 +568,99 @@
   cursor: pointer;
 }
 
+/* — карточка-радио «Что сканируем» (handoff M3.5, S2): рецепт дизайн-системы, впервые в коде — */
+.radio-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.radio-card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-6);
+  width: 100%;
+  padding: var(--space-6);
+  border: var(--border-width) solid var(--color-border-default);
+  border-radius: var(--radius-l);
+  background: var(--color-bg-surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.radio-card:hover:not([aria-disabled='true']) {
+  border-color: var(--color-accent);
+}
+.radio-card--selected {
+  background: var(--color-bg-selected);
+  border-color: var(--color-border-focus);
+}
+.radio-card__dot {
+  flex: none;
+  width: var(--size-check);
+  height: var(--size-check);
+  margin-top: var(--space-px);
+  border-radius: var(--radius-round);
+  border: var(--border-width) solid var(--color-border-heavy);
+  background: var(--color-bg-paper);
+}
+.radio-card--selected .radio-card__dot {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+}
+.radio-card__text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.radio-card__title {
+  font: var(--font-weight-medium) var(--font-size-base) / var(--leading-snug)
+    var(--font-family-sans);
+  color: var(--color-text-primary);
+}
+.radio-card__note {
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-relaxed)
+    var(--font-family-sans);
+  color: var(--color-text-muted);
+  text-wrap: pretty;
+}
+.radio-card:focus-visible {
+  outline: var(--space-1) solid var(--color-border-focus);
+  outline-offset: var(--space-1);
+}
+
+/* — крупные сегменты «Куда вставить» (handoff M3.5, S2) — */
+.segments--wide {
+  gap: var(--space-4);
+}
+.segments--wide .segment {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+.segment--large {
+  font-size: var(--font-size-m);
+  line-height: var(--leading-normal);
+  padding: var(--space-6) var(--space-6);
+  border-radius: var(--radius-l);
+}
+.segment[aria-disabled='true'] {
+  opacity: var(--opacity-disabled);
+  cursor: default;
+}
+.segment[aria-disabled='true']:hover {
+  border-color: var(--color-border-default);
+}
+
+/* — кикер-подсказка секции модалки и точка «сканера нет» — */
+.kicker--hint {
+  color: var(--color-text-hint);
+}
+.dot--faint {
+  background: var(--color-text-faint);
+}
+
 /* — карточки выбора `newscan` (handoff M3, S17) — */
 .choices {
   gap: var(--space-4);

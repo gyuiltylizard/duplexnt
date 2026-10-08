@@ -3,9 +3,10 @@ import { useTranslation } from 'react-i18next';
 import type { AssembledPage, SessionAssembly } from '@shared';
 import type { TFunction } from 'i18next';
 
-// Инспектор редактора (handoff M3, S11–S13): ДЕТАЛИ текущей страницы, ДОКУМЕНТЫ В НАБОРЕ и
-// ПРОВЕРКА, внизу — плашка правок S14 с «Вернуть». Только показ снимка: пары, порядок и наличие
-// правок — из отчёта и флагов сборки ядра (KTD-2, KTD-7).
+// Инспектор редактора (handoff M3, S11–S13; M3.5, S6–S7): ДЕТАЛИ текущей страницы, ДОКУМЕНТЫ В
+// НАБОРЕ и ПРОВЕРКА, внизу — плашка правок S14 с «Вернуть». Только показ снимка: пары, порядок
+// и наличие правок — из отчёта и флагов сборки ядра (KTD-2, KTD-7). Страница добавленного набора
+// — без «лица» и «листа»: факт «Набор» и своё пояснение.
 
 /** Тон документа по номеру с нуля: четыре цвета по кругу (handoff M3, Anatomy). */
 export const toneOf = (document: number): string => `doc-tone--${String((document % 4) + 1)}`;
@@ -14,22 +15,29 @@ export const toneOf = (document: number): string => `doc-tone--${String((documen
 const isExtraBack = (entry: AssembledPage): boolean =>
   entry.side === 'back' && entry.sheet === null;
 
-function titleOf(t: TFunction, entry: AssembledPage, position: number): string {
+/**
+ * Что это за страница: «лицо листа 4», «оборот листа 4», «лишний оборот», «добавленный набор 1»
+ * — заголовок ДЕТАЛЕЙ без «Стр. N —»; теми же словами сводка модалки `add` называет якорь.
+ */
+export function whatOf(t: TFunction, entry: AssembledPage): string {
   const sheet = entry.sheet ?? 0;
+  if (entry.addedSet !== null) {
+    return t('inspector.what.added', { set: entry.addedSet });
+  }
   if (isExtraBack(entry)) {
-    return t('inspector.titleExtraBack', { page: position });
+    return t('inspector.what.extraBack');
   }
-  if (entry.side === 'back') {
-    return t('inspector.titleBack', { page: position, sheet });
-  }
-  return t('inspector.titleFront', { page: position, sheet });
+  return t(entry.side === 'back' ? 'inspector.what.back' : 'inspector.what.front', { sheet });
 }
 
-/** Пояснение — по самому важному: потеря, лишний оборот, непарность, односторонний набор. */
+/** Пояснение — по самому важному: потеря, добавленный набор, лишний оборот, непарность. */
 function noteOf(t: TFunction, entry: AssembledPage, frontsOnly: boolean): string {
   const sheet = entry.sheet ?? 0;
   if (entry.lost) {
     return t('inspector.note.lost');
+  }
+  if (entry.addedSet !== null) {
+    return t('inspector.note.added');
   }
   if (isExtraBack(entry)) {
     return t('inspector.note.extraBack');
@@ -80,7 +88,7 @@ function Details({
   const { t } = useTranslation();
   const bodyId = useId();
 
-  const title = titleOf(t, entry, position);
+  const title = t('inspector.title', { page: position, what: whatOf(t, entry) });
   const note = noteOf(t, entry, frontsOnly);
 
   return (
@@ -104,20 +112,32 @@ function Details({
       <div id={bodyId} className="details" hidden={!open}>
         <h2 className="details__title">{title}</h2>
         <dl className="facts">
-          <div className="facts__row">
-            <dt className="facts__key">{t('inspector.fact.sheet')}</dt>
-            <dd className="facts__value">
-              {entry.sheet === null
-                ? t('inspector.fact.sheetNone')
-                : t('inspector.fact.sheetValue', { sheet: entry.sheet })}
-            </dd>
-          </div>
-          <div className="facts__row">
-            <dt className="facts__key">{t('inspector.fact.side')}</dt>
-            <dd className="facts__value">
-              {entry.side === 'back' ? t('inspector.fact.back') : t('inspector.fact.front')}
-            </dd>
-          </div>
+          {entry.addedSet !== null ? (
+            // S6 M3.5: у добавленной страницы нет ни листа, ни стороны — только набор.
+            <div className="facts__row">
+              <dt className="facts__key">{t('inspector.fact.set')}</dt>
+              <dd className="facts__value">
+                {t('inspector.fact.setValue', { set: entry.addedSet })}
+              </dd>
+            </div>
+          ) : (
+            <>
+              <div className="facts__row">
+                <dt className="facts__key">{t('inspector.fact.sheet')}</dt>
+                <dd className="facts__value">
+                  {entry.sheet === null
+                    ? t('inspector.fact.sheetNone')
+                    : t('inspector.fact.sheetValue', { sheet: entry.sheet })}
+                </dd>
+              </div>
+              <div className="facts__row">
+                <dt className="facts__key">{t('inspector.fact.side')}</dt>
+                <dd className="facts__value">
+                  {entry.side === 'back' ? t('inspector.fact.back') : t('inspector.fact.front')}
+                </dd>
+              </div>
+            </>
+          )}
           <div className="facts__row">
             <dt className="facts__key">{t('inspector.fact.angle')}</dt>
             <dd className="facts__value">
@@ -138,6 +158,7 @@ export function EditorInspector({
   currentDocument,
   names,
   frontsOnly,
+  pairsHint,
   locked,
   onPickDocument,
   onMouseDown,
@@ -154,6 +175,11 @@ export function EditorInspector({
   readonly names: readonly string[];
   /** Прохода оборотов нет — набор односторонний. */
   readonly frontsOnly: boolean;
+  /**
+   * Подсказка про «+ Добавить» в пункте пар (S7 M3.5): несовпадение окончательно и
+   * добавленного набора ещё нет — условие общее с модалкой `mismatch` (KTD-7).
+   */
+  readonly pairsHint: boolean;
   /** Идёт запись (KTD-9): «Вернуть» недоступна. */
   readonly locked: boolean;
   readonly onPickDocument: (document: number) => void;
@@ -248,6 +274,7 @@ export function EditorInspector({
           ) : (
             <Check warning={pairsWarning}>
               {t('inspector.check.pairs', { pairs: report.pairs, fronts: report.fronts })}
+              {pairsHint && <span className="check__hint">{t('inspector.check.pairsHint')}</span>}
             </Check>
           )}
           <Check warning={assembly.orderEdited}>

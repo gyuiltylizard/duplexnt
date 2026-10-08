@@ -22,6 +22,7 @@ import {
   type Snapshot,
 } from '@shared';
 import type { ToastAction } from '../components/Toast';
+import { AddModal } from '../modals/AddModal';
 import { NewScanModal } from '../modals/NewScanModal';
 import { RevertModal } from '../modals/RevertModal';
 import { SaveModal } from '../modals/SaveModal';
@@ -36,6 +37,7 @@ import {
   withoutCut,
   type DropSide,
 } from '../state/edits';
+import { mismatchDue } from '../state/assembly-outcome';
 import { errorTextInline } from '../state/error-text';
 import type { EditState } from '../state/history';
 import { rolesOf } from '../state/screen';
@@ -49,7 +51,7 @@ import {
   targetsOf,
   toggled,
 } from '../state/selection';
-import { EditorInspector, toneOf } from './EditorInspector';
+import { EditorInspector, toneOf, whatOf } from './EditorInspector';
 import { EditorPassBanner } from './EditorPassBanner';
 import { EditorPreview } from './EditorPreview';
 import { docNameId, EditorRail } from './EditorRail';
@@ -63,7 +65,8 @@ import './editor-screen.css';
 // поворотом и удалением, инспектор с плашкой правок, тумблер 180° внизу ленты, плашка
 // прерванного прохода. Каждая правка — перенос, поворот, удаление, граница, имя, тумблер,
 // «Вернуть» — один `setEdits` и один шаг undo (KTD-3); ленту считает только ядро (KTD-2).
-// Модалки `save`, `newscan`, `revert` — одна за раз (M3, U9; handoff M3, S14, S16, S17).
+// Модалки `save`, `newscan`, `revert`, `add` — одна за раз (M3, U9; handoff M3, S14, S16, S17;
+// M3.5, S1–S2: «+ Добавить» с причинами недоступности, якорь — из видимой ленты, KTD-8).
 
 export interface EditorScreenProps {
   readonly snapshot: Snapshot;
@@ -77,6 +80,8 @@ export interface EditorScreenProps {
   readonly resumeFailure: DomainError | null;
   /** «Досканировать остаток»: тот же `startPass` — сессия есть, ядро продолжит проход. */
   readonly onResume: () => void;
+  /** «Начать скан» из модалки `add`: `startPass` с намерением и якорем (M3.5, KTD-5). */
+  readonly onAdd: (after: string | null) => void;
   /** Ссылка «подключите заново» в отказе досканирования (S17). */
   readonly onOpenDevice: (initialAddress?: string) => void;
   /**
@@ -95,7 +100,7 @@ const THEN_NEW_TOAST_MS = 3600;
  * `saveThenNew` — `save`, открытая из `newscan` («Сначала сохранить текущий»): после полного
  * успеха сессия закрывается.
  */
-type EditorModal = 'save' | 'saveThenNew' | 'newscan' | 'revert';
+type EditorModal = 'save' | 'saveThenNew' | 'newscan' | 'revert' | 'add';
 
 /** Пустая лента без сборки: стабильные ссылки для мемоизации. */
 const NO_PAGES: readonly AssembledPage[] = [];
@@ -135,6 +140,7 @@ export function EditorScreen({
   initialCurrent,
   resumeFailure,
   onResume,
+  onAdd,
   onOpenDevice,
   onToast,
 }: EditorScreenProps): ReactNode {
@@ -591,6 +597,32 @@ export function EditorScreen({
     });
   };
 
+  // «+ Добавить» (S1 M3.5, R12): недоступна при записи, правке в полёте и прерванном последнем
+  // проходе — причина в `title`; пустая лента — доступна (набор в конец ленты).
+  const lastInterrupted = session.passes.at(-1)?.state === 'interrupted';
+  const addDisabledReason = saving
+    ? t('editor.addDisabled.saving')
+    : edits.busy
+      ? t('editor.addDisabled.busy')
+      : lastInterrupted
+        ? t('editor.addDisabled.interrupted')
+        : null;
+  // Якорь и его имя для сводки (KTD-8): текущая страница — та, что в превью; конец документа —
+  // его последняя видимая страница, имя — как в тулбаре.
+  const addCurrent =
+    currentEntry === undefined
+      ? null
+      : { key: currentEntry.key, page: currentIndex + 1, what: whatOf(t, currentEntry) };
+  const documentEndIndex =
+    currentDoc === undefined || currentDocument === null
+      ? -1
+      : currentDoc.start + currentDoc.count - 1;
+  const documentEndKey = visible[documentEndIndex];
+  const addDocumentEnd =
+    documentEndKey === undefined || currentDocument === null
+      ? null
+      : { key: documentEndKey, page: documentEndIndex + 1, name: names[currentDocument] ?? '' };
+
   const rotateLabel =
     targets.length > 1 ? t('editor.rotateMany', { count: targets.length }) : t('editor.rotate');
   const deleteLabel =
@@ -617,6 +649,20 @@ export function EditorScreen({
         <div className="editor-screen__toolbar-left">
           <button type="button" className="btn btn--secondary" onClick={newScan}>
             <span aria-hidden="true">↺</span> {t('editor.newScan')}
+          </button>
+          <button
+            type="button"
+            className="btn btn--secondary editor-screen__add"
+            disabled={addDisabledReason !== null}
+            title={addDisabledReason ?? undefined}
+            onClick={() => {
+              setModal('add');
+            }}
+          >
+            <span className="editor-screen__add-plus" aria-hidden="true">
+              +
+            </span>{' '}
+            {t('editor.add')}
           </button>
         </div>
         {/* S1: документ текущей страницы — тон, имя, позиция. */}
@@ -841,6 +887,7 @@ export function EditorScreen({
             currentDocument={currentDocument}
             names={names}
             frontsOnly={backsPass === null}
+            pairsHint={mismatchDue(snapshot.assembly.report, session.passes)}
             locked={saving}
             onPickDocument={(index) => {
               const first = visible[documents[index]?.start ?? -1];
@@ -893,6 +940,17 @@ export function EditorScreen({
             setModal(null);
           }}
           onConfirm={revert}
+        />
+      )}
+      {modal === 'add' && (
+        <AddModal
+          scanner={snapshot.scanner}
+          current={addCurrent}
+          documentEnd={addDocumentEnd}
+          onStart={onAdd}
+          onClose={() => {
+            setModal(null);
+          }}
         />
       )}
     </main>

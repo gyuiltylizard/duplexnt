@@ -407,6 +407,7 @@ export function EditorRail({
                       lost={entry.lost}
                       position={position + 1}
                       unpaired={entry.unpaired}
+                      addedSet={entry.addedSet}
                       current={entry.key === selection.current}
                       selected={selectedKeys.has(entry.key)}
                       multi={multi && selectedKeys.has(entry.key)}

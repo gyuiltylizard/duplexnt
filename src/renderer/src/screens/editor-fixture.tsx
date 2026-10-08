@@ -162,6 +162,7 @@ export function renderEditor(
         initialCurrent={null}
         resumeFailure={null}
         onResume={vi.fn()}
+        onAdd={vi.fn()}
         onOpenDevice={vi.fn()}
         onToast={onToast}
         {...overrides}

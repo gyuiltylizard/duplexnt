@@ -52,6 +52,24 @@
   padding: var(--space-5) var(--space-4);
 }
 
+/* S1 M3.5: «+ Добавить» рядом с «Новое сканирование»; причина недоступности — в title. */
+.editor-screen__toolbar-left .editor-screen__add {
+  color: var(--color-text-primary);
+}
+.editor-screen__toolbar-left .editor-screen__add:hover:not(:disabled) {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+.editor-screen__add:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: default;
+}
+.editor-screen__add-plus {
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-l);
+  line-height: var(--leading-none);
+}
+
 .editor-screen__toolbar-center {
   display: flex;
   align-items: center;
@@ -373,6 +391,11 @@
   line-height: var(--leading-none);
   letter-spacing: var(--tracking-wide);
   color: var(--color-pass-2);
+}
+
+/* S5 M3.5: тег набора «Д1» — форма тега «об», цвет набора. */
+.thumb__tag--added {
+  color: var(--color-pass-3);
 }
 
 /* S6: янтарная точка непарного листа. */
@@ -919,6 +942,15 @@
     var(--font-family-sans);
   color: var(--color-text-secondary);
   text-wrap: pretty;
+}
+
+/* S7 M3.5: подсказка в пункте ПРОВЕРКИ про «+ Добавить». */
+.check__hint {
+  display: block;
+  margin-top: var(--space-1);
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-relaxed)
+    var(--font-family-sans);
+  color: var(--color-text-hint);
 }
 
 /* S14 M3: плашка правок — прижата к низу колонки. */

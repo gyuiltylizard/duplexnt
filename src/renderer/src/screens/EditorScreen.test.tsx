@@ -61,11 +61,11 @@ describe('экран editor', () => {
     // Обороты пришли от последнего листа: без оборота остался лист №1 (младший).
     expect(options[0]?.getAttribute('aria-label')).toBe('Лист 1 — без оборота');
     expect(
-      (options[0] as Element).querySelector('[title="У этого листа нет оборота"]'),
+      (options[0] as Element).querySelector('[title="У этого листа не нашлось пары"]'),
     ).not.toBeNull();
     // Парные листы точки не несут.
     expect(options[1]?.getAttribute('aria-label')).toBe('Страница 2');
-    expect(screen.getAllByTitle('У этого листа нет оборота').length).toBe(1);
+    expect(screen.getAllByTitle('У этого листа не нашлось пары').length).toBe(1);
   });
 
   it('S7: тумблер поворота виден при проходе оборотов и шлёт правку с текущими правками (M3)', () => {
@@ -431,11 +431,10 @@ describe('экран editor', () => {
     expect(screen.getByText('СТРАНИЦА 1')).toBeDefined();
   });
 
-  it('элементов вех после M3 нет в разметке: «Добавить», «Пересканировать», пустые обороты', () => {
+  it('элементов вех после M3.5 нет в разметке: «Пересканировать», пустые обороты', () => {
     stubApi();
     renderEditor(makeSnapshot([makePass({})]));
 
-    expect(screen.queryByText(/Добавить/)).toBeNull();
     expect(screen.queryByText(/Пересканировать/)).toBeNull();
     expect(screen.queryByText(/пустые/)).toBeNull();
   });

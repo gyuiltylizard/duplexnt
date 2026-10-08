@@ -861,7 +861,7 @@ describe('каркас приложения', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Понятно' }));
     expect(screen.queryByRole('dialog')).toBeNull();
     // Пометка непарного листа живёт в ленте и после закрытия модалки (S6).
-    expect(screen.getByTitle('У этого листа нет оборота')).toBeDefined();
+    expect(screen.getByTitle('У этого листа не нашлось пары')).toBeDefined();
   });
 
   it('KTD-8: прерванный и не принятый проход оборотов модалку не зовёт — решение за плашкой', async () => {
@@ -1097,6 +1097,29 @@ describe('M3.5: посадка добавленного набора (KTD-7; han
     expect(currentKey()).toBe('p01-s01-0001');
   });
 
+  it.each([
+    ['отказ до старта (лоток пуст)', fail('scanNoPaper')],
+    [
+      'обрыв до первой страницы при живой сессии',
+      ok({ end: 'interrupted' as const, pages: 0, error: { code: 'scanFeedFailed' as const } }),
+    ],
+  ])('отказ запуска из add — %s — тост 6 с, плашки нет, editor прежний', async (_name, result) => {
+    const startPass = vi.fn(() => Promise.resolve(result));
+    stubApi({ ...withAdded(1, 0), scanner: READY }, { startPass });
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Добавить' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
+    expect(startPass).toHaveBeenCalledExactlyOnceWith({ kind: 'added', after: 'p01-s01-0001' });
+
+    const toast = await screen.findByText(/^Не удалось начать: /);
+    expect(toast.parentElement?.className).toBe('toast');
+    expect(toast.textContent).toMatch(/лотке нет бумаги|прервал подачу/);
+    expect(screen.queryByRole('region', { name: /прерв/ })).toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByText('стр. 1 из 6')).toBeDefined();
+  });
+
   it('mismatch при добавленном наборе не показывается и после перезапуска (KTD-7)', async () => {
     const session = withAdded(1, 1).session;
     stubApi(
@@ -1112,6 +1135,6 @@ describe('M3.5: посадка добавленного набора (KTD-7; han
     expect(await screen.findByText('стр. 1 из 6')).toBeDefined();
     expect(screen.queryByRole('dialog')).toBeNull();
     // Пометка непарного листа живёт в ленте: отчёт пар добавление не меняет (KTD-7 M3).
-    expect(screen.getByTitle('У этого листа нет оборота')).toBeDefined();
+    expect(screen.getByTitle('У этого листа не нашлось пары')).toBeDefined();
   });
 });

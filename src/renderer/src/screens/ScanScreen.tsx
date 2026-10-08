@@ -1,16 +1,9 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  pageImageUrl,
-  type PageSnapshot,
-  type PassProgress,
-  type ScanParams,
-  type Snapshot,
-} from '@shared';
-import type { TFunction } from 'i18next';
+import { pageImageUrl, type PageSnapshot, type PassProgress, type Snapshot } from '@shared';
 import { useFocusWhen } from '../components/useFocusWhen';
 import { useImageLoad } from '../components/useImageLoad';
-import { lowerFirst } from '../state/error-text';
+import { paramsLine } from '../state/params-line';
 import './scan-screen.css';
 
 // Экран `scan` (план M1, U23; UI_SPEC раздел 3; handoff U19, S12–S15, S19): тег прохода,
@@ -48,15 +41,6 @@ function passPages(snapshot: Snapshot, pass: PassProgress): readonly PageSnapsho
     return running.pages;
   }
   return pass.resumed ? (passes[passes.length - 1]?.pages ?? []) : [];
-}
-
-/** Строка параметров прохода: «300 dpi · оттенки серого · A4». */
-function paramsLine(t: TFunction, params: ScanParams): string {
-  return t('scan.params', {
-    resolution: params.resolution,
-    color: lowerFirst(t(`setup.params.colorMode.${params.colorMode}`)),
-    size: params.paperSize,
-  });
 }
 
 /** Карточка ленты: скелетон, пока миниатюра строится; номер вместо не построившейся (S19). */

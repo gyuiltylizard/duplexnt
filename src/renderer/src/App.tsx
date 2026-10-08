@@ -262,6 +262,12 @@ export function App(): ReactNode {
   const startNext = useCallback(() => {
     startPass(null);
   }, [startPass]);
+  const startAdded = useCallback(
+    (after: string | null) => {
+      startPass({ kind: 'added', after });
+    },
+    [startPass],
+  );
 
   const stopPass = useCallback(() => {
     // Исход остановки виден по снимку; отдельного текста заслуживает только несмытый сегмент:
@@ -347,6 +353,7 @@ export function App(): ReactNode {
           initialCurrent={landing?.key ?? null}
           resumeFailure={launchFailure?.target === 'editor' ? launchFailure.error : null}
           onResume={startNext}
+          onAdd={startAdded}
           onOpenDevice={openDevice}
           onToast={showToast}
         />

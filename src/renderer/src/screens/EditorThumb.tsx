@@ -32,7 +32,8 @@ export const pickModifierHeld = (event: ModifierKeys): boolean => modeOf(event) 
 /**
  * Миниатюра в ленте: обычная, потерянная (S18 M1), строится или не построилась (S19 M1),
  * оборот с тегом «об», непарный лист с янтарной точкой (S6 M2), угол из ядра (S4 M3),
- * перетаскивание с маркером вставки (S6 M3) и split-бар границы (S7 M3).
+ * перетаскивание с маркером вставки (S6 M3), split-бар границы (S7 M3), страница
+ * добавленного набора с тегом «Д1» (S5 M3.5).
  * Пропсы — примитивы, чтобы `memo` переживал новый снимок (объекты порядка пересоздаются
  * десериализацией IPC): тумблер и отметка сохранения не перерисовывают всю ленту, смена
  * выделения — только затронутые карточки.
@@ -46,6 +47,7 @@ export const EditorThumb = memo(function EditorThumb({
   lost,
   position,
   unpaired,
+  addedSet,
   current,
   selected,
   multi,
@@ -67,6 +69,8 @@ export const EditorThumb = memo(function EditorThumb({
   /** Номер по порядку в ленте, с единицы — сквозной через документы. */
   readonly position: number;
   readonly unpaired: boolean;
+  /** Номер добавленного набора от 1 (KTD-4) — тег «Д{{set}}»; `null` — лицо или оборот. */
+  readonly addedSet: number | null;
   /** Текущая — её показывает превью; точка входа клавиатуры (роуминг `tabindex`). */
   readonly current: boolean;
   /** В выделении (`aria-selected`). */
@@ -150,11 +154,14 @@ export const EditorThumb = memo(function EditorThumb({
     classes.push('thumb--dragging');
   }
 
+  // У добавленной страницы нет ни «лица», ни «оборота» — её называет тег набора (S5).
   const base = lost
     ? t('thumb.lostLabel', { number: position })
     : unpaired
       ? t('thumb.unpairedLabel', { number: sheet ?? position })
-      : t('thumb.alt', { number: position });
+      : addedSet !== null
+        ? t('thumb.addedLabel', { number: position, set: addedSet })
+        : t('thumb.alt', { number: position });
   const label = angle === 0 ? base : `${base}, ${t('thumb.angle', { angle })}`;
 
   return (
@@ -196,6 +203,14 @@ export const EditorThumb = memo(function EditorThumb({
       <div className="thumb__foot">
         <span className="thumb__num">{position}</span>
         {side === 'back' && <span className="thumb__tag">{t('thumb.tagBacks')}</span>}
+        {addedSet !== null && (
+          <span
+            className="thumb__tag thumb__tag--added"
+            aria-label={t('thumb.tagAddedLabel', { set: addedSet })}
+          >
+            {t('thumb.tagAdded', { set: addedSet })}
+          </span>
+        )}
         {unpaired && (
           <span
             className="dot dot--warning thumb__flag"
