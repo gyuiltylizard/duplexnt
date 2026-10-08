@@ -5,6 +5,7 @@ import {
   JOURNAL_VERSION,
   journalSchema,
   newJournal,
+  nextKindOf,
   pageCountOf,
   pagesOf,
   parseJournal,
@@ -46,7 +47,8 @@ import { readVersionMarker, setAside, setAsidePathOf, writeVersioned } from './v
 // | пометка об удалении сегмента                        | удаление доводится до конца             |
 // | временный файл страницы или журнала                 | удаляется                               |
 // | страница без записи                                 | возвращается в свой сегмент по ключу    |
-// | страница, у прохода или сегмента которой нет записи | проход и сегмент создаются прерванными  |
+// | страница, у прохода или сегмента которой нет записи | проход и сегмент создаются прерванными; |
+// |                                                     | роль — по очереди, якорь — `null`       |
 // | правка с ключом без страницы; разрез вне ленты      | правка вычищается, разрез переезжает    |
 // | запись без файла или файл нулевой длины             | страница потеряна, место сохраняется    |
 // | сегмент «идёт»                                      | прерван                                 |
@@ -89,7 +91,9 @@ function inserted<T extends { readonly number: number }>(items: readonly T[], it
  * Возвращает найденные файлы в журнал. Страница без записи попадает в свой сегмент по ключу;
  * сегмент или проход, которых в журнале нет, создаются прерванными — у созданного прохода нет ни
  * сканера, ни параметров. Пропуск в нумерации становится записью без файла: потерянной страницей.
- * Сегмент «идёт» становится прерванным.
+ * Сегмент «идёт» становится прерванным. Роли созданным проходам раздаются после сборки списка,
+ * по возрастанию номера (амендмент 2026-10-07): лицевые, обороты (если не отказались), дальше
+ * добавленные — порядок обхода каталога на роль не влияет; якоря у пересобранных нет.
  */
 function adopt(
   journal: Journal,
@@ -98,6 +102,7 @@ function adopt(
   marked: readonly string[],
 ): Journal {
   let { passes, nextPass } = journal;
+  const created = new Set<number>();
 
   for (const group of files) {
     const found = Math.max(0, ...group.present);
@@ -106,15 +111,19 @@ function adopt(
     }
     const pass = passes.find((it) => it.number === group.pass);
     if (pass === undefined) {
-      const created: JournalPass = {
+      const fresh: JournalPass = {
         number: group.pass,
+        // Роль — ниже, когда список собран; до этого пересобранный проход считается добавленным.
+        kind: 'added',
+        after: null,
         accepted: false,
         origin: null,
         nextSegment: group.segment + 1,
         segments: [interruptedSegment(group.segment, found)],
         rotate180: false,
       };
-      passes = inserted(passes, created);
+      passes = inserted(passes, fresh);
+      created.add(group.pass);
       nextPass = Math.max(nextPass, group.pass + 1);
       continue;
     }
@@ -135,7 +144,18 @@ function adopt(
       segment.state === 'running' ? { ...segment, state: 'interrupted' as const } : segment,
     ),
   }));
-  return { ...journal, passes, nextPass };
+  let adopted: Journal = { ...journal, passes, nextPass };
+  // `passes` упорядочены по номеру: каждый созданный проход видит роли, розданные младшим.
+  for (const pass of adopted.passes) {
+    if (created.has(pass.number)) {
+      const kind = nextKindOf(adopted);
+      adopted = {
+        ...adopted,
+        passes: adopted.passes.map((it) => (it === pass ? { ...it, kind } : it)),
+      };
+    }
+  }
+  return adopted;
 }
 
 export async function reconcileSession(

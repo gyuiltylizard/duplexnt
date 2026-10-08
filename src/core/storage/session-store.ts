@@ -16,15 +16,15 @@ import { autoKeysOf } from '../scan/assembly';
 import { rebaseEdits } from '../scan/edits';
 import { isTempName, removeByPrefix, renameWithRetry, writeStreamAtomic } from './atomic-file';
 import {
-  backsPassOf,
   JOURNAL_VERSION,
   journalSchema,
   newJournal,
+  nextKindOf,
   pageCountOf,
   pagesOf,
+  passesByKind,
   passStateOf,
   runningSegmentOf,
-  survivingPassesOf,
   withLastPass,
   withLastSegment,
   type Journal,
@@ -112,6 +112,16 @@ export const NO_SESSION: SessionState = {
   unpreserved: false,
 };
 
+/**
+ * Намерение запуска прохода (M3.5, KTD-5): добавленный однопроходный набор с якорем вставки.
+ * `null` у `beginPass` — проход по очереди: лицевые, затем обороты (`nextKindOf`).
+ */
+export interface AddedPassIntent {
+  readonly kind: 'added';
+  /** Ключ страницы сессии, после которой встанет набор; `null` — в конец ленты. */
+  readonly after: string | null;
+}
+
 export interface SegmentStart {
   readonly pass: number;
   readonly segment: number;
@@ -147,8 +157,12 @@ export interface SessionStore {
    * долгой операции, он позволяет проверить «набор не менялся» без сравнения содержимого.
    */
   revision(): number;
-  /** Новый проход: первый сегмент «идёт» записан в журнал. Вызывается до `POST`. */
-  beginPass(origin: PassOrigin): Promise<Result<SegmentStart>>;
+  /**
+   * Новый проход: первый сегмент «идёт» записан в журнал. Вызывается до `POST`. Роль и якорь
+   * пишутся сразу (журнал v4): по намерению или по очереди. Добавленный набор требует сессии
+   * (`noSession`) и якоря из неё (`invalidInput`).
+   */
+  beginPass(origin: PassOrigin, intent: AddedPassIntent | null): Promise<Result<SegmentStart>>;
   /** С чем можно досканировать последний проход; отказ — досканировать нельзя. */
   resumeTarget(): Result<PassOrigin>;
   /** Досканирование прерванного прохода: новый сегмент того же прохода. */
@@ -169,7 +183,7 @@ export interface SessionStore {
   acceptPass(): Promise<Result<void>>;
   /**
    * Правки редактора (M3, KTD-3): итоговое состояние целиком и поворот оборотов на 180° (флаг
-   * прохода в роли оборотов — второго уцелевшего, KTD-4) — одной записью журнала, чтобы
+   * прохода `kind: 'backs'` — M3.5, KTD-4) — одной записью журнала, чтобы
    * «Вернуть» был одним шагом. Правка снимает отметку о сохранении; во время
    * прохода отклоняется. Нормализация — забота хранилища, не вызывающего.
    */
@@ -218,6 +232,8 @@ const isVacant = (journal: Journal): boolean =>
 function passSnapshotsOf(journal: Journal, lost: ReadonlySet<string>): PassSnapshot[] {
   return journal.passes.map((pass) => ({
     number: pass.number,
+    kind: pass.kind,
+    after: pass.after,
     state: passStateOf(pass),
     paramsKnown: pass.origin !== null,
     scanner: pass.origin === null ? null : scannerInfoOf(pass.origin.scanner),
@@ -455,10 +471,18 @@ export function createSessionStore(
 
     revision: () => revision,
 
-    beginPass: (origin) =>
+    beginPass: (origin, intent) =>
       mutating(async () => {
         if (runningSegmentOf(journal) !== null) {
           return conflict('passRunning');
+        }
+        // Добавлять не к чему: добавленный набор начинается только поверх сессии со страницами.
+        if (intent !== null && (journal === null || isVacant(journal))) {
+          return conflict('noSession');
+        }
+        // Якорь — страница этой сессии (R9); чужой ключ — ошибка входа, не тихий «в конец».
+        if (intent?.after != null && locate(intent.after) === null) {
+          return fail('invalidInput', { field: 'after' });
         }
         const space = await checkFreeSpace();
         if (!space.ok) {
@@ -489,6 +513,8 @@ export function createSessionStore(
         }
         const pass: JournalPass = {
           number,
+          kind: intent?.kind ?? nextKindOf(base),
+          after: intent?.after ?? null,
           accepted: false,
           origin,
           nextSegment: segment.value + 1,
@@ -692,7 +718,7 @@ export function createSessionStore(
         if (runningSegmentOf(journal) !== null) {
           return conflict('passRunning');
         }
-        const backs = backsPassOf(journal);
+        const { backs } = passesByKind(journal);
         if (backs === null && rotate180) {
           return conflict('noBacksPass');
         }
@@ -717,7 +743,8 @@ export function createSessionStore(
         if (runningSegmentOf(journal) !== null) {
           return conflict('passRunning');
         }
-        if (survivingPassesOf(journal).length > 1) {
+        // Пустой проход оборотов (прерван до первой страницы) роли не занимает и отказу не мешает.
+        if (passesByKind(journal).backs !== null) {
           return conflict('backsPresent');
         }
         if (journal.backsDeclined) {

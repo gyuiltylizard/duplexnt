@@ -511,7 +511,9 @@ export function createPassService(
           ? ok({ end: 'stopped', pages: 0, error: null })
           : prepared;
       }
-      const begun = current.resumed ? await store.resumePass() : await store.beginPass(origin);
+      const begun = current.resumed
+        ? await store.resumePass()
+        : await store.beginPass(origin, null);
       if (!begun.ok) {
         return begun;
       }

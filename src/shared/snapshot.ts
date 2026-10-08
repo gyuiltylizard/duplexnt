@@ -23,8 +23,22 @@ export interface PageSnapshot {
   readonly lost: boolean;
 }
 
+/**
+ * Роль прохода, записанная в журнале явно (M3.5; ADR 0004, амендмент 2026-10-07): лицевые,
+ * обороты или добавленный однопроходный набор. Роль действует только у прохода хотя бы с одной
+ * страницей: пустой (прерванный до первой страницы) роли не имеет при любом `kind`.
+ */
+export const PASS_KINDS = ['fronts', 'backs', 'added'] as const;
+export type PassKind = (typeof PASS_KINDS)[number];
+
 export interface PassSnapshot {
   readonly number: number;
+  readonly kind: PassKind;
+  /**
+   * Якорь вставки добавленного набора: ключ страницы, после которой встают его страницы в
+   * автопорядке; `null` — в конец ленты. Осмыслен только у `added`, у остальных всегда `null`.
+   */
+  readonly after: string | null;
   readonly state: PassState;
   /**
    * `false` — журнал пересобран по именам файлов: сканер и параметры прохода неизвестны,
@@ -35,7 +49,7 @@ export interface PassSnapshot {
   readonly scanner: ScannerInfo | null;
   /**
    * Повернуть страницы прохода на 180° при показе и в PDF (M2, KTD-2). Осмыслен на проходе
-   * оборотов — втором уцелевшем (роль, не чётность номера — KTD-4); исходники не меняются.
+   * оборотов (`kind: 'backs'`); исходники не меняются.
    */
   readonly rotate180: boolean;
   readonly pages: readonly PageSnapshot[];
@@ -59,8 +73,8 @@ export interface SessionSnapshot {
 export type PageAngle = 0 | 90 | 180 | 270;
 
 /**
- * Страница видимой ленты (M2, KTD-4; M3, KTD-2). Роли «лицо/оборот» выводятся из позиции прохода
- * среди уцелевших, не из чётности номера; угол и непарность считает ядро.
+ * Страница видимой ленты (M2, KTD-4; M3, KTD-2). Роли «лицо/оборот» — по роли прохода (`kind`);
+ * угол и непарность считает ядро.
  */
 export interface AssembledPage {
   readonly key: string;

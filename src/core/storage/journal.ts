@@ -1,8 +1,9 @@
 import { z } from 'zod';
-import { EMPTY_EDITS, type PassState } from '@shared';
+import { EMPTY_EDITS, PASS_KINDS, type PassKind, type PassState } from '@shared';
 import { scanParamsSchema } from '../escl/scan-settings';
 import { editsSchemaOf } from './edits-schema';
 import {
+  isPageKey,
   MAX_PAGE_INDEX,
   MAX_PASS_NUMBER,
   MAX_SEGMENT_NUMBER,
@@ -21,7 +22,7 @@ import { parseVersioned, type VersionedParse } from './versioned-file';
 // - страницы сегмента — номера с 1 по `pageCount`; ключ и имя файла выводятся из номеров;
 // - «страница потеряна» — запись есть, файла нет: это видно по диску, а не по журналу.
 
-export const JOURNAL_VERSION = 3;
+export const JOURNAL_VERSION = 4;
 
 const segmentSchema = z.strictObject({
   number: z.number().int().min(1).max(MAX_SEGMENT_NUMBER),
@@ -54,15 +55,27 @@ const passFields = {
   segments: z.array(segmentSchema).min(1),
 };
 
-const passSchema = z.strictObject({
+const passV3Fields = {
   ...passFields,
   /**
    * Повернуть страницы прохода на 180° при показе и в PDF (M2, KTD-2; амендмент ADR 0004).
-   * Решение пользователя — одно на проход; осмыслен на проходе оборотов (роль по KTD-4),
+   * Решение пользователя — одно на проход; осмыслен на проходе оборотов (`kind: 'backs'`),
    * исходники страниц не меняются.
    */
   rotate180: z.boolean(),
-});
+};
+
+// Проход версии 4 (M3.5; амендмент ADR 0004 от 2026-10-07): роль записана явно, у добавленного
+// набора — якорь вставки. Якорь только у `added`; у основных проходов всегда `null`.
+const passSchema = z
+  .strictObject({
+    ...passV3Fields,
+    kind: z.enum(PASS_KINDS),
+    after: z.string().refine(isPageKey).nullable(),
+  })
+  .refine((pass) => pass.kind === 'added' || pass.after === null);
+
+const passV3Schema = z.strictObject(passV3Fields);
 
 // Номера идут по возрастанию и не достают до счётчика.
 function isOrdered(items: readonly { readonly number: number }[], next: number): boolean {
@@ -100,12 +113,32 @@ const countersHold = (journal: {
   isOrdered(journal.passes, journal.nextPass) &&
   journal.passes.every((pass) => isOrdered(pass.segments, pass.nextSegment));
 
+interface KindedPass {
+  readonly kind: PassKind;
+  readonly segments: readonly { readonly pageCount: number }[];
+}
+
+/** Роль действует только у прохода со страницами (амендмент 2026-10-07). */
+const hasPages = (pass: { readonly segments: readonly { readonly pageCount: number }[] }) =>
+  pass.segments.some((segment) => segment.pageCount > 0);
+
+// Лицевых и оборотов — не больше одного каждого. Считаются только проходы со страницами:
+// пустой проход роли не занимает, и после сбоя до первой страницы повторный запуск той же роли
+// получает новый номер рядом с пустым (журнал его не выбрасывает).
+const rolesHold = (journal: { readonly passes: readonly KindedPass[] }): boolean => {
+  const counted = journal.passes.filter(hasPages);
+  return (['fronts', 'backs'] as const).every(
+    (kind) => counted.filter((pass) => pass.kind === kind).length <= 1,
+  );
+};
+
 const editsSchema = editsSchemaOf();
 
-// Журнал версии 2 (M2): без правок редактора. Чтение v2 обязательно, запись — всегда текущей.
+// Журнал версии 2 (M2): без правок редактора. Чтение прежних версий обязательно, запись —
+// всегда текущей.
 const journalV2Fields = {
   ...journalFields,
-  passes: z.array(passSchema),
+  passes: z.array(passV3Schema),
   /** «Обороты не нужны»: односторонний набор, второй проход не предлагается (M2, KTD-6). */
   backsDeclined: z.boolean(),
   /**
@@ -115,12 +148,20 @@ const journalV2Fields = {
   saved: z.boolean(),
 };
 
+// Журнал версии 3 (M3): правки редактора, роль прохода — по позиции.
+const journalV3Fields = { ...journalV2Fields, edits: editsSchema };
+
 export const journalSchema = z
   .strictObject({
     version: z.literal(JOURNAL_VERSION),
-    ...journalV2Fields,
-    edits: editsSchema,
+    ...journalV3Fields,
+    passes: z.array(passSchema),
   })
+  .refine(countersHold)
+  .refine(rolesHold);
+
+const journalV3Schema = z
+  .strictObject({ version: z.literal(3), ...journalV3Fields })
   .refine(countersHold);
 
 const journalV2Schema = z
@@ -139,10 +180,28 @@ export type JournalSegment = JournalPass['segments'][number];
 export type PassOrigin = NonNullable<JournalPass['origin']>;
 
 type JournalV2 = z.infer<typeof journalV2Schema>;
+type JournalV3 = z.infer<typeof journalV3Schema>;
 
-const upgradeToV3 = (journal: JournalV2): Journal => ({
+/**
+ * Роль по позиции (чтение v3): первый проход со страницами — лицевые, второй — обороты,
+ * остальные — добавленные. Пустой проход получает роль, которую занял бы следующий со
+ * страницами: роли у него всё равно нет, а схема считает только проходы со страницами.
+ */
+const upgradeToV4 = (journal: JournalV3): Journal => {
+  let rank = 0;
+  const passes = journal.passes.map((pass) => {
+    const kind: PassKind = rank === 0 ? 'fronts' : rank === 1 ? 'backs' : 'added';
+    if (hasPages(pass)) {
+      rank += 1;
+    }
+    return { ...pass, kind, after: null };
+  });
+  return { ...journal, version: JOURNAL_VERSION, passes };
+};
+
+const upgradeToV3 = (journal: JournalV2): JournalV3 => ({
   ...journal,
-  version: JOURNAL_VERSION,
+  version: 3,
   edits: EMPTY_EDITS,
 });
 
@@ -155,7 +214,7 @@ const upgradeToV2 = (journal: z.infer<typeof journalV1Schema>): JournalV2 => ({
 });
 
 /**
- * Разбор журнала: текущая версия, затем прежние цепочкой дефолтов (v1 → v2 → v3).
+ * Разбор журнала: текущая версия, затем прежние цепочкой дефолтов (v1 → v2 → v3 → v4).
  * Несовместимость (маркер новее, неизвестное поле) решается по текущей схеме и прежние не
  * пробует: файл с неизвестным полем несовместим при любой версии.
  */
@@ -164,12 +223,18 @@ export function parseJournal(bytes: Uint8Array): VersionedParse<Journal> {
   if (current.kind !== 'unreadable') {
     return current;
   }
+  const v3 = parseVersioned(bytes, journalV3Schema, JOURNAL_VERSION);
+  if (v3.kind === 'ok') {
+    return { kind: 'ok', value: upgradeToV4(v3.value) };
+  }
   const v2 = parseVersioned(bytes, journalV2Schema, JOURNAL_VERSION);
   if (v2.kind === 'ok') {
-    return { kind: 'ok', value: upgradeToV3(v2.value) };
+    return { kind: 'ok', value: upgradeToV4(upgradeToV3(v2.value)) };
   }
   const v1 = parseVersioned(bytes, journalV1Schema, JOURNAL_VERSION);
-  return v1.kind === 'ok' ? { kind: 'ok', value: upgradeToV3(upgradeToV2(v1.value)) } : current;
+  return v1.kind === 'ok'
+    ? { kind: 'ok', value: upgradeToV4(upgradeToV3(upgradeToV2(v1.value))) }
+    : current;
 }
 
 export function newJournal(sessionId: string): Journal {
@@ -216,17 +281,40 @@ export function pagesOf(pass: JournalPass): JournalPage[] {
   return pages;
 }
 
-/**
- * Уцелевшие проходы — с хотя бы одной записью о странице. Роль прохода выводится из позиции
- * здесь, а не из чётности `pass.number` (M2, KTD-4): номера не переиспользуются, и после
- * «Остановить» повторный запуск оборотов получает номер 3.
- */
-export const survivingPassesOf = (journal: Journal): JournalPass[] =>
-  journal.passes.filter((pass) => pass.segments.some((segment) => segment.pageCount > 0));
+export interface PassesByKind {
+  readonly fronts: JournalPass | null;
+  readonly backs: JournalPass | null;
+  /** Добавленные наборы по возрастанию номера прохода. */
+  readonly added: readonly JournalPass[];
+}
 
-/** Проход в роли оборотов — второй уцелевший; `null` — его нет. */
-export const backsPassOf = (journal: Journal): JournalPass | null =>
-  survivingPassesOf(journal)[1] ?? null;
+/**
+ * Проходы по ролям — единственное место правила в ядре (M3.5, KTD-4). Роль читается из `kind`,
+ * не из позиции; роль есть только у прохода хотя бы с одной страницей: пустой проход (прерван
+ * до первой страницы) роли не занимает при любом `kind` — иначе он блокировал бы «обороты не
+ * нужны».
+ */
+export function passesByKind(journal: Journal): PassesByKind {
+  const counted = journal.passes.filter(hasPages);
+  return {
+    fronts: counted.find((pass) => pass.kind === 'fronts') ?? null,
+    backs: counted.find((pass) => pass.kind === 'backs') ?? null,
+    added: counted.filter((pass) => pass.kind === 'added'),
+  };
+}
+
+/**
+ * Роль следующего прохода без явного намерения — для нового прохода и для усыновлённых сверкой
+ * (амендмент 2026-10-07): лицевые, пока их нет; обороты, пока их нет и от них не отказались;
+ * иначе — добавленный набор без якоря.
+ */
+export function nextKindOf(journal: Journal): PassKind {
+  const { fronts, backs } = passesByKind(journal);
+  if (fronts === null) {
+    return 'fronts';
+  }
+  return backs === null && !journal.backsDeclined ? 'backs' : 'added';
+}
 
 export const pageCountOf = (journal: Journal): number =>
   journal.passes.reduce(

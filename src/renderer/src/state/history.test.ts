@@ -173,6 +173,8 @@ describe('подпись ленты и состояние снимка', () => {
       state: 'completed',
       paramsKnown: true,
       scanner: null,
+      kind: number === 1 ? 'fronts' : 'backs',
+      after: null,
       rotate180: false,
       pages: keys.map((key, index) => ({ key, number: index + 1, lost: false })),
       ...extra,

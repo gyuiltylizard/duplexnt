@@ -21,6 +21,8 @@ const passOf = (
   state: 'completed',
   paramsKnown: true,
   scanner: null,
+  kind: number === 1 ? 'fronts' : 'backs',
+  after: null,
   rotate180: false,
   pages: pagesOf(number, count),
   ...extra,

@@ -39,6 +39,8 @@ export function makePass(overrides: Partial<PassSnapshot>): PassSnapshot {
     state: 'completed',
     paramsKnown: true,
     scanner: null,
+    kind: 'fronts',
+    after: null,
     rotate180: false,
     pages: pages(3),
     ...overrides,

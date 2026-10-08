@@ -56,7 +56,7 @@ describe('незакрытые задания', () => {
     };
     const store = createSessionStore(root);
     const jobs = await openUnclosedJobs(root);
-    await store.beginPass(origin);
+    await store.beginPass(origin, null);
     await jobs.add(SCANNER_A, JOB);
     await store.acceptPage(onePage());
 
