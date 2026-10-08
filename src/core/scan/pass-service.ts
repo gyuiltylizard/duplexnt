@@ -5,6 +5,7 @@ import {
   type AssembledPage,
   type DomainError,
   sessionConflict,
+  type PassKind,
   type PassProgress,
   type PassReport,
   type Result,
@@ -15,6 +16,7 @@ import {
   type SaveMode,
   type SessionConflictReason,
   type SessionEdits,
+  type StartPassRequest,
   type SetEditsReport,
   type ScannerState,
   type Snapshot,
@@ -52,7 +54,7 @@ import {
 import { ioOf, storageFailure } from '../storage/storage-fs';
 import { pagePixelLimit } from '../storage/thumbnails';
 import { openUnclosedJobs, type UnclosedJobs } from '../storage/unclosed-jobs';
-import { assembleSession, survivingOf } from './assembly';
+import { assembleSession, passesByKindOf } from './assembly';
 
 // Служба прохода (план M1, U17): связывает клиент сканера, хранилище сессии, настройки и
 // незакрытые задания в один сценарий и выдаёт снимок, из которого интерфейс выводит экран
@@ -96,7 +98,13 @@ export interface PassService {
    * Новый проход или досканирование прерванного. Возвращается, когда задание закрыто. Отказ —
    * проход не начался или не оставил ни страницы, ни сессии.
    */
-  startPass(): Promise<Result<PassReport>>;
+  /**
+   * Проход по запросу (M3.5, KTD-5): `null` — лицевые, обороты или досканирование по очереди;
+   * намерение `added` — добавленный набор поверх сессии: обходит «обороты не нужны» и «обороты
+   * есть», отказывает без сессии (`noSession`), при прерванном последнем проходе
+   * (`passInterrupted`) и с якорем не из сессии (`invalidInput`) — всё до сети.
+   */
+  startPass(request: StartPassRequest): Promise<Result<PassReport>>;
   /** «Остановить». Встаёт за идущей записью страницы; возвращается, когда задание закрыто. */
   stopPass(): Promise<Result<void>>;
   /** «Оставить как есть». */
@@ -171,6 +179,10 @@ type ScannerSlot =
 interface Run {
   readonly controller: AbortController;
   readonly resumed: boolean;
+  /** Роль прохода — для снимка (`PassProgress.kind`); роль в журнале пишет хранилище. */
+  readonly kind: PassKind;
+  /** Намерение запуска — в `beginPass`; `null` — проход по очереди. */
+  readonly request: StartPassRequest;
   /** Параметры прохода — у досканирования из журнала, не из настройки (KTD-27). */
   readonly params: ScanParams;
   /** Ожидаемое число страниц — у прохода оборотов страницы лицевого (M2, R2). */
@@ -408,6 +420,7 @@ export function createPassService(
           : {
               phase: run.phase,
               resumed: run.resumed,
+              kind: run.kind,
               expected: run.expected,
               params: run.params,
               pages: run.pages,
@@ -513,7 +526,7 @@ export function createPassService(
       }
       const begun = current.resumed
         ? await store.resumePass()
-        : await store.beginPass(origin, null);
+        : await store.beginPass(origin, current.request);
       if (!begun.ok) {
         return begun;
       }
@@ -592,7 +605,7 @@ export function createPassService(
     }
   }
 
-  async function startPass(): Promise<Result<PassReport>> {
+  async function startPass(request: StartPassRequest): Promise<Result<PassReport>> {
     if (run !== null) {
       return conflict('passRunning');
     }
@@ -610,8 +623,9 @@ export function createPassService(
     const stored = storedScannerOf(connected);
 
     // Поверх сессии: прерванный проход — только досканирование; завершённый или принятый
-    // единственный уцелевший — новый проход оборотов (M2, KTD-4). Роль считается по позиции
-    // среди уцелевших (непустых) проходов, не по чётности номера.
+    // лицевой без оборотов — новый проход оборотов (M2, KTD-4). Роль — `kind` из снимка (M3.5):
+    // пустой проход роли не занимает. Добавленный набор (намерение) идёт поверх любой готовой
+    // сессии и не смотрит ни на отказ от оборотов, ни на их наличие.
     const freshOrigin: PassOrigin = {
       scanner: stored,
       params,
@@ -620,21 +634,39 @@ export function createPassService(
     let origin: PassOrigin;
     let resumed = false;
     let expected: number | null = null;
+    let kind: PassKind;
     const session = store.snapshot();
-    if (session === null) {
+    const last = session?.passes.at(-1);
+    if (request !== null) {
+      if (session === null) {
+        return conflict('noSession');
+      }
+      // Прерванный проход держит `resumable()`/`acceptPass` на последнем проходе: добавленный
+      // поверх него оставил бы лицевые прерванными навсегда (KTD-5).
+      if (last?.state === 'interrupted') {
+        return conflict('passInterrupted');
+      }
+      const { after } = request;
+      if (
+        after !== null &&
+        !session.passes.some((pass) => pass.pages.some((p) => p.key === after))
+      ) {
+        return fail('invalidInput', { field: 'after' });
+      }
       origin = freshOrigin;
+      kind = 'added';
+    } else if (session === null || last === undefined) {
+      origin = freshOrigin;
+      kind = 'fronts';
     } else {
-      const surviving = survivingOf(session.passes);
+      const roles = passesByKindOf(session.passes);
       const target = resumeTarget();
       if (target.ok) {
         origin = target.value;
         resumed = true;
+        kind = last.kind;
         // Досканируется последний проход; в роли оборотов его счётчик получает «из M» (R2).
-        const resuming = session.passes.at(-1);
-        expected =
-          surviving[1] !== undefined && surviving[1].number === resuming?.number
-            ? (surviving[0]?.pages.length ?? null)
-            : null;
+        expected = kind === 'backs' ? (roles.fronts?.pages.length ?? null) : null;
       } else if (
         target.error.code === 'sessionConflict' &&
         target.error.details?.reason === 'notInterrupted'
@@ -643,11 +675,12 @@ export function createPassService(
         if (session.backsDeclined) {
           return conflict('backsDeclined');
         }
-        if (surviving.length > 1) {
+        if (roles.backs !== null) {
           return conflict('backsPresent');
         }
         origin = freshOrigin;
-        expected = surviving[0]?.pages.length ?? null;
+        kind = 'backs';
+        expected = roles.fronts?.pages.length ?? null;
       } else {
         return target;
       }
@@ -656,6 +689,8 @@ export function createPassService(
     const current: Run = {
       controller: new AbortController(),
       resumed,
+      kind,
+      request,
       params: origin.params,
       expected,
       phase: 'starting',

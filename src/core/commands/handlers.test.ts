@@ -135,7 +135,6 @@ describe('команды без входа', () => {
     'stopDiscovery',
     'cancelConnect',
     'recheckScanner',
-    'startPass',
     'stopPass',
     'acceptPass',
     'declineBacks',
@@ -160,7 +159,7 @@ describe('команды без входа', () => {
         expect(invalid(await handlers[command](argument)), command).toBe(true);
       }
       expect(openDataFolder).not.toHaveBeenCalled();
-      expect(service.startPass).not.toHaveBeenCalled();
+      expect(service.stopPass).not.toHaveBeenCalled();
     },
   );
 
@@ -178,12 +177,39 @@ describe('снимок и проход', () => {
 
   it('startPass отдаёт отчёт прохода; доменный отказ службы доходит кодом', async () => {
     const { handlers, service } = setup();
-    expect(await handlers.startPass(undefined)).toEqual(
-      ok({ end: 'completed', pages: 3, error: null }),
-    );
+    expect(await handlers.startPass(null)).toEqual(ok({ end: 'completed', pages: 3, error: null }));
+    expect(service.startPass).toHaveBeenLastCalledWith(null);
 
     service.startPass.mockResolvedValueOnce(fail('scanNoPaper'));
-    expect(await handlers.startPass(undefined)).toEqual(fail('scanNoPaper'));
+    expect(await handlers.startPass(null)).toEqual(fail('scanNoPaper'));
+  });
+
+  it('startPass с намерением добавленного набора передаёт его службе дословно (M3.5, KTD-5)', async () => {
+    const { handlers, service } = setup();
+    const intent = { kind: 'added', after: 'p01-s01-0002' } as const;
+
+    expect(await handlers.startPass(intent)).toMatchObject({ ok: true });
+    expect(service.startPass).toHaveBeenLastCalledWith(intent);
+    expect(await handlers.startPass({ kind: 'added', after: null })).toMatchObject({ ok: true });
+    expect(service.startPass).toHaveBeenLastCalledWith({ kind: 'added', after: null });
+  });
+
+  it.each([
+    undefined,
+    {},
+    { kind: 'added' },
+    { kind: 'backs', after: null },
+    { kind: 'added', after: 'p01-s01-0002.jpg' },
+    { kind: 'added', after: '../p01-s01-0002' },
+    { kind: 'added', after: 1 },
+    { kind: 'added', after: null, extra: 1 },
+    'added',
+    [],
+  ])('startPass: мусор на входе (%j) — invalidInput до службы', async (argument) => {
+    const { handlers, service } = setup();
+
+    expect(invalid(await handlers.startPass(argument))).toBe(true);
+    expect(service.startPass).not.toHaveBeenCalled();
   });
 
   it('stopPass, acceptPass, closeSession зовут службу и переводят отказ кодом', async () => {
@@ -581,6 +607,7 @@ describe('подключение сканера', () => {
       pass: {
         phase: 'scanning',
         resumed: false,
+        kind: 'fronts',
         expected: null,
         params: { colorMode: 'Grayscale8', resolution: 300, paperSize: 'A4' },
         pages: 2,

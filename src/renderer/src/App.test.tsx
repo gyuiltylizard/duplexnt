@@ -100,7 +100,14 @@ describe('каркас приложения', () => {
   it('идущий проход — экран scan со счётчиком принятых страниц', async () => {
     stubApi(
       makeSnapshot({
-        pass: { phase: 'scanning', resumed: false, expected: null, params: PARAMS, pages: 7 },
+        pass: {
+          phase: 'scanning',
+          resumed: false,
+          kind: 'fronts',
+          expected: null,
+          params: PARAMS,
+          pages: 7,
+        },
         session: {
           id: 'session.x',
           backsDeclined: false,
@@ -320,7 +327,14 @@ describe('каркас приложения', () => {
   it('S15: отказ закрытия сегмента после «Остановить» — тостом', async () => {
     stubApi(
       makeSnapshot({
-        pass: { phase: 'scanning', resumed: false, expected: null, params: PARAMS, pages: 2 },
+        pass: {
+          phase: 'scanning',
+          resumed: false,
+          kind: 'fronts',
+          expected: null,
+          params: PARAMS,
+          pages: 2,
+        },
         session: {
           id: 'session.x',
           backsDeclined: false,
@@ -353,7 +367,14 @@ describe('каркас приложения', () => {
   it('другой отказ «Остановить» тоста не даёт', async () => {
     stubApi(
       makeSnapshot({
-        pass: { phase: 'scanning', resumed: false, expected: null, params: PARAMS, pages: 2 },
+        pass: {
+          phase: 'scanning',
+          resumed: false,
+          kind: 'fronts',
+          expected: null,
+          params: PARAMS,
+          pages: 2,
+        },
         session: {
           id: 'session.x',
           backsDeclined: false,
@@ -549,7 +570,14 @@ describe('каркас приложения', () => {
 
   it('KTD-5: пауза merge после прохода оборотов переживает StrictMode и уходит сама', async () => {
     const scanning = makeSnapshot({
-      pass: { phase: 'scanning', resumed: false, expected: 3, params: PARAMS, pages: 3 },
+      pass: {
+        phase: 'scanning',
+        resumed: false,
+        kind: 'backs',
+        expected: 3,
+        params: PARAMS,
+        pages: 3,
+      },
       session: {
         id: 'session.x',
         backsDeclined: false,
@@ -993,7 +1021,14 @@ describe('AE9: досканирование при ручном порядке',
     const passes = grown.session?.passes.map((pass) => ({ ...pass, state: 'running' as const }));
     await push({
       ...grown,
-      pass: { phase: 'scanning', resumed: true, expected: null, params: PARAMS, pages: 1 },
+      pass: {
+        phase: 'scanning',
+        resumed: true,
+        kind: 'fronts',
+        expected: null,
+        params: PARAMS,
+        pages: 1,
+      },
       session: grown.session && { ...grown.session, passes: passes ?? [] },
     });
     expect(await screen.findByText('Отсканировано 4')).toBeDefined();

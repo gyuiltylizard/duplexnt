@@ -168,7 +168,7 @@ export function App(): ReactNode {
     setLaunchFailure(null);
     // Ответ придёт, когда задание закрыто; экран тем временем сменится по снимку. Отказ до
     // первой страницы возвращает на экран-источник — плашка ждёт его здесь, с адресатом.
-    window.api.startPass().then(
+    window.api.startPass(null).then(
       (result) => {
         startInFlight.current = false;
         if (!result.ok) {

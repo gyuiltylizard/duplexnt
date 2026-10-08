@@ -47,10 +47,10 @@ describe('buildApi', () => {
   it('команда без входа уходит с `undefined`: мост отклонит любой аргумент', async () => {
     const { api, invoke } = setup();
 
-    await api.startPass();
+    await api.startPass(null);
     await api.openDataFolder();
 
-    expect(invoke).toHaveBeenNthCalledWith(1, BRIDGE_CHANNELS.startPass, undefined);
+    expect(invoke).toHaveBeenNthCalledWith(1, BRIDGE_CHANNELS.startPass, null);
     expect(invoke).toHaveBeenNthCalledWith(2, BRIDGE_CHANNELS.openDataFolder, undefined);
   });
 

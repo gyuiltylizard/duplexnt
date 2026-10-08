@@ -38,6 +38,7 @@ const SESSION = makeSession({});
 const PASS: PassProgress = {
   phase: 'scanning',
   resumed: false,
+  kind: 'fronts',
   expected: null,
   params: { colorMode: 'Grayscale8', resolution: 300, paperSize: 'A4' },
   pages: 1,

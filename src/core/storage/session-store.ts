@@ -5,6 +5,7 @@ import {
   ok,
   sameEdits,
   sessionConflict,
+  type AddedPassIntent,
   type DomainError,
   type PassSnapshot,
   type Result,
@@ -112,16 +113,6 @@ export const NO_SESSION: SessionState = {
   unpreserved: false,
 };
 
-/**
- * Намерение запуска прохода (M3.5, KTD-5): добавленный однопроходный набор с якорем вставки.
- * `null` у `beginPass` — проход по очереди: лицевые, затем обороты (`nextKindOf`).
- */
-export interface AddedPassIntent {
-  readonly kind: 'added';
-  /** Ключ страницы сессии, после которой встанет набор; `null` — в конец ленты. */
-  readonly after: string | null;
-}
-
 export interface SegmentStart {
   readonly pass: number;
   readonly segment: number;
@@ -159,7 +150,8 @@ export interface SessionStore {
   revision(): number;
   /**
    * Новый проход: первый сегмент «идёт» записан в журнал. Вызывается до `POST`. Роль и якорь
-   * пишутся сразу (журнал v4): по намерению или по очереди. Добавленный набор требует сессии
+   * пишутся сразу (журнал v4): по намерению (`AddedPassIntent`, M3.5, KTD-5) или по очереди
+   * (`null` — лицевые, затем обороты, `nextKindOf`). Добавленный набор требует сессии
    * (`noSession`) и якоря из неё (`invalidInput`).
    */
   beginPass(origin: PassOrigin, intent: AddedPassIntent | null): Promise<Result<SegmentStart>>;

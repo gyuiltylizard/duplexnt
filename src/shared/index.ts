@@ -11,6 +11,7 @@ export {
   pageImageUrl,
   PROBE_TOKEN_MAX_LENGTH,
   SAVE_MODES,
+  type AddedPassIntent,
   type Api,
   type BridgeCommand,
   type BridgeCommands,
@@ -33,6 +34,7 @@ export {
   type SaveMode,
   type SetEditsReport,
   type SetEditsRequest,
+  type StartPassRequest,
   type Unsubscribe,
 } from './bridge';
 

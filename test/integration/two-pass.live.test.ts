@@ -60,7 +60,7 @@ describeLive('два прохода на живом сканере (AE2)', (host
       await service.useScanner(probed.value);
 
       console.info('[live] проход 1: лицевые стороны — пачка лицом вверх, лист 1 сверху');
-      const fronts = unwrap(await service.startPass());
+      const fronts = unwrap(await service.startPass(null));
       expect(fronts.end).toBe('completed');
       expect(fronts.pages).toBeGreaterThanOrEqual(2);
       console.info(
@@ -71,10 +71,10 @@ describeLive('два прохода на живом сканере (AE2)', (host
 
       // Второй проход: пока лоток пуст, устройство отвечает «нет бумаги» — ждём разворота.
       const deadline = Date.now() + FLIP_DEADLINE_MS;
-      let backs = await service.startPass();
+      let backs = await service.startPass(null);
       while (!backs.ok && backs.error.code === 'scanNoPaper' && Date.now() < deadline) {
         await sleep(FLIP_RETRY_DELAY_MS);
-        backs = await service.startPass();
+        backs = await service.startPass(null);
       }
       const backsReport = unwrap(backs);
       expect(backsReport.end).toBe('completed');

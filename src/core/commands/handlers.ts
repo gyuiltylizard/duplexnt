@@ -25,6 +25,7 @@ import {
   saveDocumentsRequestSchema,
   scanParamsSchema,
   setEditsRequestSchema,
+  startPassRequestSchema,
 } from './schemas';
 
 // Обработчики команд моста (ADR 0005; план M1, U18, KTD-39): вход приходит непроверенным и
@@ -217,7 +218,10 @@ export function createCommands(context: CommandContext): Commands {
         return request.ok ? done(() => service.setParams(request.value)) : request;
       },
 
-      startPass: withoutRequest(() => service.startPass()),
+      startPass: async (rawRequest) => {
+        const request = parseInput(startPassRequestSchema, rawRequest);
+        return request.ok ? service.startPass(request.value) : request;
+      },
       stopPass: withoutRequest(() => done(() => service.stopPass())),
       acceptPass: withoutRequest(() => done(() => service.acceptPass())),
       declineBacks: withoutRequest(() => done(() => service.declineBacks())),

@@ -87,10 +87,10 @@ describe('два прохода через эмулятор (M2)', () => {
   it('AE1: полный прогон — interleave правильный, оборот последнего листа пришёл первым', async () => {
     const { service, snapshots, root } = await setup();
 
-    expect(unwrap(await service.startPass())).toMatchObject({ end: 'completed', pages: 3 });
+    expect(unwrap(await service.startPass(null))).toMatchObject({ end: 'completed', pages: 3 });
     expect(service.snapshot().assembly?.report).toMatchObject({ fronts: 3, backs: 0 });
 
-    expect(unwrap(await service.startPass())).toMatchObject({ end: 'completed', pages: 3 });
+    expect(unwrap(await service.startPass(null))).toMatchObject({ end: 'completed', pages: 3 });
 
     // Счётчик второго прохода нёс «из 3» (R2).
     expect(
@@ -114,8 +114,8 @@ describe('два прохода через эмулятор (M2)', () => {
   it('AE1/AE8: сценарий целиком — два прохода, тумблер 180°, сохранение в PDF', async () => {
     const { service, root } = await setup();
 
-    expect(unwrap(await service.startPass())).toMatchObject({ end: 'completed', pages: 3 });
-    expect(unwrap(await service.startPass())).toMatchObject({ end: 'completed', pages: 3 });
+    expect(unwrap(await service.startPass(null))).toMatchObject({ end: 'completed', pages: 3 });
+    expect(unwrap(await service.startPass(null))).toMatchObject({ end: 'completed', pages: 3 });
     unwrap(await service.setEdits(EMPTY_EDITS, true));
 
     const outDir = join(root, 'выход');
@@ -141,7 +141,7 @@ describe('два прохода через эмулятор (M2)', () => {
 
   it('R6/AE7: перезапуск между проходами — вторая служба доводит второй проход', async () => {
     const { service, restart, root } = await setup();
-    unwrap(await service.startPass());
+    unwrap(await service.startPass(null));
 
     const second = await restart();
     const resumedSnapshot = second.service.snapshot();
@@ -149,14 +149,17 @@ describe('два прохода через эмулятор (M2)', () => {
     expect(resumedSnapshot.session?.passes.map((pass) => pass.state)).toEqual(['completed']);
     expect(resumedSnapshot.session?.backsDeclined).toBe(false);
 
-    expect(unwrap(await second.service.startPass())).toMatchObject({ end: 'completed', pages: 3 });
+    expect(unwrap(await second.service.startPass(null))).toMatchObject({
+      end: 'completed',
+      pages: 3,
+    });
     await expectAssembledFixtures(root, second.service.snapshot(), [1, 4, 2, 5, 3, 6]);
   });
 
   it('AE3: недостающий лист второго прохода — пары не съехали, непарным остался лист №1', async () => {
     const { service, root } = await setup({ trays: [FRONTS, [6, 5]] });
-    unwrap(await service.startPass());
-    unwrap(await service.startPass());
+    unwrap(await service.startPass(null));
+    unwrap(await service.startPass(null));
 
     const snapshot = service.snapshot();
     expect(snapshot.assembly?.report).toMatchObject({
@@ -178,8 +181,8 @@ describe('два прохода через эмулятор (M2)', () => {
         [6, 5, 4],
       ],
     });
-    unwrap(await service.startPass());
-    expect(unwrap(await service.startPass())).toMatchObject({ end: 'completed', pages: 3 });
+    unwrap(await service.startPass(null));
+    expect(unwrap(await service.startPass(null))).toMatchObject({ end: 'completed', pages: 3 });
 
     // «4 из 3» здесь — «3 из 2»: снимок с страницами сверх ожидаемого, не подрезан.
     expect(
@@ -197,8 +200,8 @@ describe('два прохода через эмулятор (M2)', () => {
     const { service, emulator, root } = await setup({
       fault: { sheet: 5, kind: 'gone' },
     });
-    unwrap(await service.startPass());
-    const interrupted = await service.startPass();
+    unwrap(await service.startPass(null));
+    const interrupted = await service.startPass(null);
     expect(interrupted).toMatchObject({
       ok: true,
       value: { end: 'interrupted', pages: 1, error: { code: 'scanFeedFailed' } },
@@ -217,7 +220,7 @@ describe('два прохода через эмулятор (M2)', () => {
     // «Досканировать остаток»: бумага из замятия вынута, остаток стопки — обратно в лоток.
     emulator.clearJam();
     emulator.reloadTray([5, 4]);
-    expect(unwrap(await service.startPass())).toMatchObject({ end: 'completed', pages: 2 });
+    expect(unwrap(await service.startPass(null))).toMatchObject({ end: 'completed', pages: 2 });
 
     snapshot = service.snapshot();
     expect(snapshot.assembly?.report).toMatchObject({ pairs: 3, mismatch: false });
@@ -226,8 +229,8 @@ describe('два прохода через эмулятор (M2)', () => {
 
   it('AE4: «Оставить как есть» после обрыва — сборка по фактическим парам, состояние в отчёте', async () => {
     const { service } = await setup({ fault: { sheet: 5, kind: 'gone' } });
-    unwrap(await service.startPass());
-    await service.startPass();
+    unwrap(await service.startPass(null));
+    await service.startPass(null);
 
     expect(await service.acceptPass()).toEqual({ ok: true, value: undefined });
 
@@ -241,10 +244,10 @@ describe('два прохода через эмулятор (M2)', () => {
 
   it('AE6: «Остановить» на первом сегменте оборотов возвращает к «flip», проход №3 — оборотный', async () => {
     const { service, emulator, snapshots, root } = await setup({ pageDelayMs: 120 });
-    unwrap(await service.startPass());
+    unwrap(await service.startPass(null));
 
     // Второй проход останавливается после первой страницы.
-    const backs = service.startPass();
+    const backs = service.startPass(null);
     await until(() => service.snapshot().pass?.pages === 1);
     expect(await service.stopPass()).toEqual({ ok: true, value: undefined });
     expect(unwrap(await backs)).toMatchObject({ end: 'stopped' });
@@ -259,7 +262,7 @@ describe('два прохода через эмулятор (M2)', () => {
     // Повторный запуск: проход получает номер 3 и ведёт себя как оборотный (KTD-4).
     emulator.reloadTray(BACKS);
     const before = snapshots.length;
-    expect(unwrap(await service.startPass())).toMatchObject({ end: 'completed', pages: 3 });
+    expect(unwrap(await service.startPass(null))).toMatchObject({ end: 'completed', pages: 3 });
     expect(
       snapshots
         .slice(before)
@@ -282,7 +285,7 @@ describe('два прохода через эмулятор (M2)', () => {
 
   it('AE5: «обороты не нужны» переживает перезапуск — сессия не возвращается к развороту', async () => {
     const { service, restart } = await setup();
-    unwrap(await service.startPass());
+    unwrap(await service.startPass(null));
     unwrap(await service.declineBacks());
 
     const second = await restart();
@@ -291,7 +294,7 @@ describe('два прохода через эмулятор (M2)', () => {
       backsDeclined: true,
       mismatch: false,
     });
-    expect(await second.service.startPass()).toMatchObject({
+    expect(await second.service.startPass(null)).toMatchObject({
       ok: false,
       error: { code: 'sessionConflict', details: { reason: 'backsDeclined' } },
     });

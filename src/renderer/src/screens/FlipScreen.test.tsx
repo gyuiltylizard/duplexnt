@@ -152,6 +152,7 @@ describe('FlipScreen', () => {
     const pass: PassProgress = {
       phase: 'busy',
       resumed: false,
+      kind: 'backs',
       expected: 12,
       params: PARAMS,
       pages: 0,

@@ -33,6 +33,7 @@ function running(pageCount: number, passPages: number, phase: PassProgress['phas
   const pass: PassProgress = {
     phase,
     resumed: false,
+    kind: 'fronts',
     expected: null,
     params: PARAMS,
     pages: passPages,
@@ -77,6 +78,7 @@ describe('экран scan', () => {
     const pass: PassProgress = {
       phase: 'scanning',
       resumed: false,
+      kind: 'backs',
       expected: 12,
       params: PARAMS,
       pages: 7,
@@ -122,6 +124,7 @@ describe('экран scan', () => {
     const pass: PassProgress = {
       phase: 'scanning',
       resumed: false,
+      kind: 'backs',
       expected: 3,
       params: PARAMS,
       pages: 4,
@@ -156,6 +159,7 @@ describe('экран scan', () => {
     const pass: PassProgress = {
       phase: 'starting',
       resumed: false,
+      kind: 'fronts',
       expected: null,
       params: PARAMS,
       pages: 0,
@@ -169,6 +173,7 @@ describe('экран scan', () => {
     const pass: PassProgress = {
       phase: 'starting',
       resumed: false,
+      kind: 'fronts',
       expected: null,
       params: PARAMS,
       pages: 0,
@@ -225,6 +230,7 @@ describe('экран scan', () => {
     const pass: PassProgress = {
       phase: 'scanning',
       resumed: true,
+      kind: 'fronts',
       expected: null,
       params: PARAMS,
       pages: 1,
@@ -262,6 +268,7 @@ describe('экран scan', () => {
     const pass: PassProgress = {
       phase: 'starting',
       resumed: true,
+      kind: 'fronts',
       expected: null,
       params: PARAMS,
       pages: 0,
@@ -321,6 +328,7 @@ describe('экран scan', () => {
     const pass: PassProgress = {
       phase: 'scanning',
       resumed: true,
+      kind: 'fronts',
       expected: null,
       params: PARAMS,
       pages: 1,

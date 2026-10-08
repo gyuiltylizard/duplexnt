@@ -129,7 +129,7 @@ describe('служба прохода: проход против эмулято�
   it('AE1: N страниц побайтово равны фикстурам, проход завершён, снимок менялся на каждую', async () => {
     const { root, service, snapshots } = await setup({ sheets: 12 });
 
-    const report = unwrap(await service.startPass());
+    const report = unwrap(await service.startPass(null));
 
     expect(report).toEqual({ end: 'completed', pages: 12, error: null });
     const snapshot = service.snapshot();
@@ -151,7 +151,7 @@ describe('служба прохода: проход против эмулято�
 
   it('снимок не несёт абсолютных путей и адресов заданий (KTD-39)', async () => {
     const { emulator, root, service } = await setup({ sheets: 2 });
-    unwrap(await service.startPass());
+    unwrap(await service.startPass(null));
 
     const text = JSON.stringify(service.snapshot());
 
@@ -162,7 +162,7 @@ describe('служба прохода: проход против эмулято�
 
   it('AE3: после завершённого прохода перезапуск показывает те же страницы', async () => {
     const { root, service, restart } = await setup({ sheets: 3 });
-    unwrap(await service.startPass());
+    unwrap(await service.startPass(null));
 
     const again = await restart();
 
@@ -173,7 +173,7 @@ describe('служба прохода: проход против эмулято�
   it('AE6: занятость видна в снимке как ожидание, затем проход идёт', async () => {
     const { service, snapshots } = await setup({ sheets: 2, busyPosts: 3 });
 
-    const report = unwrap(await service.startPass());
+    const report = unwrap(await service.startPass(null));
 
     expect(report.end).toBe('completed');
     const phases = snapshots.map((it) => it.pass?.phase ?? null);
@@ -184,9 +184,9 @@ describe('служба прохода: проход против эмулято�
   it('второй запуск, пока идёт проход, отклоняется; «Новая пачка» и «оставить» — тоже', async () => {
     const { emulator, service } = await setup({ sheets: 3, pageDelayMs: 100 });
 
-    const running = service.startPass();
+    const running = service.startPass(null);
     await until(() => emulator.jobs().length === 1);
-    const second = await service.startPass();
+    const second = await service.startPass(null);
     const close = await service.closeSession();
     const accept = await service.acceptPass();
     unwrap(await running);
@@ -204,7 +204,7 @@ describe('служба прохода: лоток и отказы до зада�
   it('пустой лоток по статусу — отказ «нет бумаги» без задания и без сессии', async () => {
     const { emulator, root, service } = await setup({ sheets: 0 });
 
-    const result = await service.startPass();
+    const result = await service.startPass(null);
 
     expect(errorOf(result)).toEqual({ code: 'scanNoPaper' });
     expect(emulator.requests()).toEqual([
@@ -218,7 +218,7 @@ describe('служба прохода: лоток и отказы до зада�
   it('ноль страниц при полном лотке по статусу — отказ «нет бумаги», сессия не создана', async () => {
     const { emulator, root, service } = await setup({ sheets: 0, trayReportsLoaded: true });
 
-    const result = await service.startPass();
+    const result = await service.startPass(null);
 
     expect(errorOf(result)).toEqual({ code: 'scanNoPaper' });
     expect(emulator.requests().at(-1)).toBe('DELETE /eSCL/ScanJobs/<job> 404');
@@ -231,7 +231,7 @@ describe('служба прохода: лоток и отказы до зада�
     const root = await makeTempDataRoot();
     const service = await openPassService(root, { jobLimits: FAST });
 
-    expect(errorOf(await service.startPass())).toEqual({ code: 'scannerNotConnected' });
+    expect(errorOf(await service.startPass(null))).toEqual({ code: 'scannerNotConnected' });
     expect(emulator.requests()).toEqual([]);
   });
 
@@ -241,7 +241,7 @@ describe('служба прохода: лоток и отказы до зада�
       { minFreeBytes: Number.MAX_SAFE_INTEGER },
     );
 
-    const result = await service.startPass();
+    const result = await service.startPass(null);
 
     expect(errorOf(result)).toEqual({ code: 'storageFull' });
     expect(emulator.jobs()).toEqual([]);
@@ -251,7 +251,7 @@ describe('служба прохода: лоток и отказы до зада�
   it('занятость дольше потолка — отказ «занят», сегмент убран, сессии нет', async () => {
     const { root, service } = await setup({ sheets: 3, busyPosts: Infinity });
 
-    const result = await service.startPass();
+    const result = await service.startPass(null);
 
     expect(errorOf(result)).toEqual({ code: 'scannerBusy' });
     expect(service.snapshot()).toMatchObject({ session: null, pass: null });
@@ -267,7 +267,7 @@ describe('служба прохода: лоток и отказы до зада�
     const harness = await open(root, await connectTo(emulator));
     const before = await dirSnapshot(root);
 
-    const result = await harness.service.startPass();
+    const result = await harness.service.startPass(null);
 
     expect(errorOf(result)).toEqual({ code: 'storageIncompatible' });
     expect(harness.service.snapshot().storage.incompatible).toBe(true);
@@ -282,7 +282,7 @@ describe('служба прохода: лоток и отказы до зада�
       profile: { ...connected.profile, fingerprint: '00'.repeat(32) },
     });
 
-    const result = await service.startPass();
+    const result = await service.startPass(null);
 
     expect(errorOf(result)).toEqual({ code: 'scannerCertificateChanged' });
     expect(emulator.jobs()).toEqual([]);
@@ -298,7 +298,7 @@ describe('служба прохода: «Остановить»', () => {
       fault: { sheet: 3, kind: 'stall' },
     });
 
-    const running = service.startPass();
+    const running = service.startPass(null);
     await until(
       () => emulator.requests().filter((it) => it.endsWith('NextDocument 200')).length === 3,
     );
@@ -322,7 +322,7 @@ describe('служба прохода: «Остановить»', () => {
       },
     );
 
-    const running = service.startPass();
+    const running = service.startPass(null);
     await until(() => snapshots.some((it) => it.pass?.phase === 'busy'));
     unwrap(await service.stopPass());
     const report = unwrap(await running);
@@ -336,7 +336,7 @@ describe('служба прохода: «Остановить»', () => {
   it('«Остановить» до задания, пока читается лоток, — проход не начался', async () => {
     const { emulator, service } = await setup({ sheets: 3 });
 
-    const running = service.startPass();
+    const running = service.startPass(null);
     unwrap(await service.stopPass());
     const report = unwrap(await running);
 
@@ -346,7 +346,7 @@ describe('служба прохода: «Остановить»', () => {
 
   it('«Остановить», пришедшее после обрыва, отклоняется и ничего не удаляет', async () => {
     const { root, service } = await setup({ sheets: 5, fault: { sheet: 3, kind: 'gone' } });
-    const report = unwrap(await service.startPass());
+    const report = unwrap(await service.startPass(null));
     const files = await pageFiles(root);
 
     const stop = await service.stopPass();
@@ -373,7 +373,7 @@ describe('служба прохода: «Остановить»', () => {
     });
     const { service } = await open(root, await connectTo(emulator), { fs });
 
-    const running = service.startPass();
+    const running = service.startPass(null);
     await until(
       () => emulator.requests().filter((it) => it.endsWith('NextDocument 200')).length === 3,
     );
@@ -429,7 +429,7 @@ describe('служба прохода: обрыв и досканировани�
       fault: { sheet: 18, kind: 'gone' },
     });
 
-    const first = unwrap(await service.startPass());
+    const first = unwrap(await service.startPass(null));
     expect(first).toEqual({
       end: 'interrupted',
       pages: 17,
@@ -438,7 +438,7 @@ describe('служба прохода: обрыв и досканировани�
     expect(service.snapshot()).toMatchObject({ canResume: true, canAccept: true });
     emulator.clearJam();
 
-    const second = unwrap(await service.startPass());
+    const second = unwrap(await service.startPass(null));
 
     expect(second).toEqual({ end: 'completed', pages: 13, error: null });
     const snapshot = service.snapshot();
@@ -456,11 +456,11 @@ describe('служба прохода: обрыв и досканировани�
       sheets: 5,
       fault: { sheet: 3, kind: 'gone' },
     });
-    unwrap(await service.startPass());
+    unwrap(await service.startPass(null));
     emulator.clearJam();
     snapshots.length = 0;
 
-    unwrap(await service.startPass());
+    unwrap(await service.startPass(null));
 
     const progress = snapshots.map((it) => it.pass).filter((it) => it !== null);
     expect(progress.every((it) => it.resumed)).toBe(true);
@@ -472,10 +472,10 @@ describe('служба прохода: обрыв и досканировани�
       sheets: 5,
       fault: { sheet: 3, kind: 'gone' },
     });
-    unwrap(await service.startPass());
+    unwrap(await service.startPass(null));
     emulator.load({ sheets: 3, fault: { sheet: 2, kind: 'stall' } });
 
-    const resumed = service.startPass();
+    const resumed = service.startPass(null);
     // Две страницы первого сегмента, одна — досканирования, и ещё одна начата и молчит.
     await until(
       () => emulator.requests().filter((it) => it.endsWith('NextDocument 200')).length === 4,
@@ -494,9 +494,9 @@ describe('служба прохода: обрыв и досканировани�
       sheets: 5,
       fault: { sheet: 3, kind: 'gone' },
     });
-    unwrap(await service.startPass());
+    unwrap(await service.startPass(null));
     emulator.load({ sheets: 3, fault: { sheet: 2, kind: 'stall' } });
-    const resumed = service.startPass();
+    const resumed = service.startPass(null);
     await until(
       () => emulator.requests().filter((it) => it.endsWith('NextDocument 200')).length === 4,
     );
@@ -504,7 +504,7 @@ describe('служба прохода: обрыв и досканировани�
     unwrap(await resumed);
     emulator.load({ sheets: 3 });
 
-    const again = unwrap(await service.startPass());
+    const again = unwrap(await service.startPass(null));
 
     expect(again).toEqual({ end: 'completed', pages: 3, error: null });
     expect(pageKeys(service.snapshot())).toEqual([
@@ -525,10 +525,10 @@ describe('служба прохода: обрыв и досканировани�
 
   it('второй обрыв при досканировании — третьего сегмента нет, выбор тот же', async () => {
     const { emulator, service } = await setup({ sheets: 5, fault: { sheet: 3, kind: 'gone' } });
-    unwrap(await service.startPass());
+    unwrap(await service.startPass(null));
     emulator.load({ sheets: 3, fault: { sheet: 2, kind: 'gone' } });
 
-    const second = unwrap(await service.startPass());
+    const second = unwrap(await service.startPass(null));
 
     expect(second).toMatchObject({ end: 'interrupted', pages: 1 });
     const snapshot = service.snapshot();
@@ -539,7 +539,7 @@ describe('служба прохода: обрыв и досканировани�
 
   it('«оставить как есть»: проход принят, досканировать больше нельзя', async () => {
     const { emulator, service } = await setup({ sheets: 5, fault: { sheet: 3, kind: 'gone' } });
-    unwrap(await service.startPass());
+    unwrap(await service.startPass(null));
     emulator.clearJam();
 
     unwrap(await service.acceptPass());
@@ -548,7 +548,7 @@ describe('служба прохода: обрыв и досканировани�
     expect(snapshot.session?.passes[0]?.state).toBe('accepted');
     expect(snapshot).toMatchObject({ canResume: false, canAccept: false });
     // С M2 (U3) поверх принятого прохода начинается НОВЫЙ проход — оборотов, не досканирование.
-    expect(unwrap(await service.startPass())).toMatchObject({ end: 'completed', pages: 3 });
+    expect(unwrap(await service.startPass(null))).toMatchObject({ end: 'completed', pages: 3 });
     expect(service.snapshot().session?.passes.map((pass) => [pass.number, pass.state])).toEqual([
       [1, 'accepted'],
       [2, 'completed'],
@@ -570,7 +570,7 @@ describe('служба прохода: обрыв и досканировани�
     });
     const connected = await connectTo(emulator);
     const killed = await open(root, connected, { fs });
-    await killed.service.startPass();
+    await killed.service.startPass(null);
 
     const first = await open(root, connected);
     const afterFirst = await journalOnDisk(root);
@@ -608,7 +608,7 @@ describe('служба прохода: обрыв и досканировани�
     });
     const { service } = await open(root, await connectTo(emulator), { fs });
 
-    const report = unwrap(await service.startPass());
+    const report = unwrap(await service.startPass(null));
 
     expect(report).toMatchObject({ end: 'interrupted', pages: 17 });
     expect(failures).toBe(2);
@@ -635,7 +635,7 @@ describe('служба прохода: обрыв и досканировани�
     });
     const connected = await connectTo(emulator);
     const crashed = await open(root, connected, { fs });
-    const first = unwrap(await crashed.service.startPass());
+    const first = unwrap(await crashed.service.startPass(null));
     expect(first).toMatchObject({ end: 'interrupted', pages: 17 });
     expect(crashed.service.snapshot().storage.unsaved).toBe(true);
     expect(JSON.stringify(await journalOnDisk(root))).toContain('"pageCount":16');
@@ -643,7 +643,7 @@ describe('служба прохода: обрыв и досканировани�
     const restarted = await open(root, connected);
     expect(restarted.service.snapshot().session?.passes[0]?.pages).toHaveLength(17);
     emulator.clearJam();
-    const second = unwrap(await restarted.service.startPass());
+    const second = unwrap(await restarted.service.startPass(null));
 
     expect(second).toEqual({ end: 'completed', pages: 13, error: null });
     await expectPagesEqualFixtures(root, restarted.service.snapshot(), 30);
@@ -659,7 +659,7 @@ describe('служба прохода: обрыв и досканировани�
     });
     const harness = await open(root, await connectTo(emulator), { fs });
 
-    const report = unwrap(await harness.service.startPass());
+    const report = unwrap(await harness.service.startPass(null));
 
     expect(report).toEqual({ end: 'interrupted', pages: 2, error: { code: 'storageFull' } });
     const snapshot = harness.service.snapshot();
@@ -671,7 +671,7 @@ describe('служба прохода: обрыв и досканировани�
   it('обрыв на первой странице нового прохода — отказ кодом, ни страниц, ни сессии', async () => {
     const { root, service } = await setup({ fault: { sheet: 1, kind: 'reset-before-headers' } });
 
-    const result = await service.startPass();
+    const result = await service.startPass(null);
 
     expect(errorOf(result)?.code).toBe('scannerUnreachable');
     expect(service.snapshot().session).toBeNull();
@@ -681,7 +681,7 @@ describe('служба прохода: обрыв и досканировани�
   it('негодный Location — задание закрыто по статусу, проход не состоялся', async () => {
     const { emulator, service } = await setup({ sheets: 2, location: 'missing' });
 
-    const result = await service.startPass();
+    const result = await service.startPass(null);
 
     expect(errorOf(result)).toEqual({
       code: 'scannerBadResponse',
@@ -694,7 +694,7 @@ describe('служба прохода: обрыв и досканировани�
   it('процесс убит после 404 до закрытия задания — проход «завершён» на диске', async () => {
     const { emulator, root, service } = await setup({ sheets: 2, deleteHangs: true });
 
-    const running = service.startPass();
+    const running = service.startPass(null);
     await until(() => emulator.requests().at(-1)?.startsWith('DELETE') === true);
     const journal = JSON.stringify(await journalOnDisk(root));
     unwrap(await running);
@@ -704,11 +704,11 @@ describe('служба прохода: обрыв и досканировани�
 
   it('досканирование на другом устройстве отклоняется кодом', async () => {
     const { emulator, service } = await setup({ sheets: 5, fault: { sheet: 3, kind: 'gone' } });
-    unwrap(await service.startPass());
+    unwrap(await service.startPass(null));
     const other = await startTestEmulator({ scenario: { sheets: 3 } });
     await service.useScanner(await connectTo(other));
 
-    const result = await service.startPass();
+    const result = await service.startPass(null);
 
     expect(errorOf(result)).toEqual({
       code: 'sessionConflict',
@@ -724,14 +724,14 @@ describe('служба прохода: обрыв и досканировани�
       sheets: 5,
       fault: { sheet: 3, kind: 'gone' },
     });
-    unwrap(await service.startPass());
+    unwrap(await service.startPass(null));
     await writeFile(layoutOf(root).journalFile, 'не json');
 
     const rebuilt = await restart();
 
     expect(rebuilt.service.snapshot().notices).toContain('journalRebuilt');
     expect(rebuilt.service.snapshot().session?.passes[0]?.paramsKnown).toBe(false);
-    expect(errorOf(await rebuilt.service.startPass())).toEqual({
+    expect(errorOf(await rebuilt.service.startPass(null))).toEqual({
       code: 'sessionConflict',
       details: { reason: 'paramsUnknown' },
     });
@@ -749,7 +749,7 @@ describe('служба прохода: «Остановить» в погран�
       connector: { createTransport: hold.create },
     });
 
-    const running = service.startPass();
+    const running = service.startPass(null);
     await until(hold.isHeld);
     const stopped = service.stopPass();
     hold.release();
@@ -773,16 +773,16 @@ describe('служба прохода: «Остановить» в погран�
     const deletes = (): number =>
       emulator.requests().filter((it) => it.startsWith('DELETE')).length;
     // Два незакрытых задания: DELETE каждого молчит до срока.
-    unwrap(await service.startPass());
+    unwrap(await service.startPass(null));
     unwrap(await service.closeSession());
     emulator.load({ sheets: 2, deleteHangs: true });
-    unwrap(await service.startPass());
+    unwrap(await service.startPass(null));
     unwrap(await service.closeSession());
     emulator.load({ sheets: 2, deleteHangs: true });
     const before = deletes();
     const requestsBefore = emulator.requests().length;
 
-    const running = service.startPass();
+    const running = service.startPass(null);
     await until(() => deletes() > before);
     const started = Date.now();
     unwrap(await service.stopPass());
@@ -833,7 +833,7 @@ describe('служба прохода: проверка запомненного
     // второе обращение к занятому устройству увело бы слот в «не отвечает» посреди прохода.
     const { service, snapshots } = await setup({ sheets: 3, pageDelayMs: 150 });
 
-    const pass = service.startPass();
+    const pass = service.startPass(null);
     await until(() => snapshots.some((it) => it.pass?.phase === 'scanning'));
     await service.checkRememberedScanner();
     expect(service.snapshot().scanner.kind).toBe('ready');
@@ -849,13 +849,13 @@ describe('служба прохода: проверка запомненного
 describe('служба прохода: незакрытые задания', () => {
   it('незакрытое задание закрывается перед следующим стартом на том же сканере', async () => {
     const { emulator, root, service } = await setup({ sheets: 2, deleteHangs: true });
-    unwrap(await service.startPass());
+    unwrap(await service.startPass(null));
     const jobPath = emulator.jobs()[0]?.path;
     expect(await readFile(layoutOf(root).unclosedJobsFile, 'utf8')).toContain(jobPath);
     unwrap(await service.closeSession());
     emulator.load({ sheets: 2 });
 
-    unwrap(await service.startPass());
+    unwrap(await service.startPass(null));
 
     const requests = emulator.requests();
     const deleteAt = requests.findIndex((it) => it === 'DELETE /eSCL/ScanJobs/<job> 404');
@@ -866,12 +866,12 @@ describe('служба прохода: незакрытые задания', () 
 
   it('незакрытое задание сканера A не порождает запроса к сканеру B', async () => {
     const { emulator, service } = await setup({ sheets: 2, deleteHangs: true });
-    unwrap(await service.startPass());
+    unwrap(await service.startPass(null));
     unwrap(await service.closeSession());
     const other = await startTestEmulator({ scenario: { sheets: 2 } });
     await service.useScanner(await connectTo(other));
 
-    unwrap(await service.startPass());
+    unwrap(await service.startPass(null));
 
     // До собственного задания к B не ушло ни одного `DELETE`; после — только закрытие своего.
     const posted = other.requests().indexOf('POST /eSCL/ScanJobs 201');
@@ -893,7 +893,7 @@ describe('служба прохода: закрытие окна', () => {
       fault: { sheet: 3, kind: 'stall' },
     });
 
-    const running = service.startPass();
+    const running = service.startPass(null);
     await until(
       () => emulator.requests().filter((it) => it.endsWith('NextDocument 200')).length === 3,
     );
@@ -912,7 +912,7 @@ describe('служба прохода: закрытие окна', () => {
       { jobLimits: { ...FAST, deleteDeadlineMs: 1000 } },
     );
 
-    const running = service.startPass();
+    const running = service.startPass(null);
     await until(
       () => emulator.requests().filter((it) => it.endsWith('NextDocument 200')).length === 3,
     );

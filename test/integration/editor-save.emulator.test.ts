@@ -82,8 +82,8 @@ describe('правки и сохранение через эмулятор (M3, 
     });
     const first = await openPassService(root, OPTIONS);
     await first.useScanner(connected);
-    expect(unwrap(await first.startPass())).toMatchObject({ end: 'completed', pages: 3 });
-    expect(unwrap(await first.startPass())).toMatchObject({ end: 'completed', pages: 3 });
+    expect(unwrap(await first.startPass(null))).toMatchObject({ end: 'completed', pages: 3 });
+    expect(unwrap(await first.startPass(null))).toMatchObject({ end: 'completed', pages: 3 });
     unwrap(await first.setEdits(EDITS, true));
 
     const check = (snapshot: Snapshot): void => {
@@ -164,7 +164,7 @@ describe('правки и сохранение через эмулятор (M3, 
     });
     const service = await openPassService(root, OPTIONS);
     await service.useScanner(connected);
-    expect(unwrap(await service.startPass())).toMatchObject({ end: 'interrupted', pages: 2 });
+    expect(unwrap(await service.startPass(null))).toMatchObject({ end: 'interrupted', pages: 2 });
     const manual: SessionEdits = {
       order: ['p01-s01-0002', 'p01-s01-0001'],
       rotations: {},
@@ -175,7 +175,7 @@ describe('правки и сохранение через эмулятор (M3, 
     unwrap(await service.setEdits(manual, false));
 
     emulator.clearJam();
-    expect(unwrap(await service.startPass())).toMatchObject({ end: 'completed', pages: 2 });
+    expect(unwrap(await service.startPass(null))).toMatchObject({ end: 'completed', pages: 2 });
 
     // Предшественник досканированных страниц по автопорядку — p01-s01-0002, первая в ручном
     // порядке: они встают за ней; разрез остаётся перед той же страницей.
@@ -227,13 +227,13 @@ describe('пакетное сохранение через эмулятор (M3)
     const request = { mode: 'single', names: ['Скан'], retry: false } as const;
 
     // Первая сессия: пакет упал на записи — незавершённый.
-    expect(unwrap(await service.startPass())).toMatchObject({ end: 'completed', pages: 2 });
+    expect(unwrap(await service.startPass(null))).toMatchObject({ end: 'completed', pages: 2 });
     const first = service.sessionId();
     expect(unwrap(await service.saveDocuments(folder, request)).failed).toHaveLength(1);
 
     // «Новое сканирование»: другая сессия в той же службе.
     unwrap(await service.closeSession());
-    expect(unwrap(await service.startPass())).toMatchObject({ end: 'completed', pages: 1 });
+    expect(unwrap(await service.startPass(null))).toMatchObject({ end: 'completed', pages: 1 });
     expect(service.sessionId()).not.toBe(first);
 
     failWrite = false;

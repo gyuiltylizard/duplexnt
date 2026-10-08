@@ -20,9 +20,8 @@ import { documentsOf, hasEdits, normalizeEdits, pageAngle, visibleKeysOf } from 
 // чётность номера; роль есть только у прохода со страницами.
 
 /** Уцелевшие проходы: с хотя бы одной страницей. */
-export const survivingOf = <T extends { readonly pages: readonly unknown[] }>(
-  passes: readonly T[],
-): T[] => passes.filter((pass) => pass.pages.length > 0);
+const survivingOf = (passes: readonly PassSnapshot[]): PassSnapshot[] =>
+  passes.filter((pass) => pass.pages.length > 0);
 
 export interface PassesByKind {
   readonly fronts: PassSnapshot | null;
