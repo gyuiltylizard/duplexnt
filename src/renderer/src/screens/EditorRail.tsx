@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -163,6 +164,26 @@ export function EditorRail({
   const multi = selection.keys.length > 1;
   // Правки доступны сейчас: нет записи и команды в полёте — можно тянуть, split-бар виден.
   const editable = !locked && !busy;
+  // Split-бар уступает выделению (M3.5, KTD-10): пока зажат Ctrl/Shift или выделено больше
+  // одной страницы, бара нет — клик по верхнему краю миниатюры с модификатором выделяет.
+  // Клавиши слушает окно: фокус в момент нажатия может быть где угодно.
+  const [modifierHeld, setModifierHeld] = useState(false);
+  useEffect(() => {
+    const update = (event: globalThis.KeyboardEvent): void => {
+      setModifierHeld(event.ctrlKey || event.metaKey || event.shiftKey);
+    };
+    const release = (): void => {
+      setModifierHeld(false);
+    };
+    window.addEventListener('keydown', update);
+    window.addEventListener('keyup', update);
+    window.addEventListener('blur', release);
+    return () => {
+      window.removeEventListener('keydown', update);
+      window.removeEventListener('keyup', update);
+      window.removeEventListener('blur', release);
+    };
+  }, []);
 
   // Позиция, перед которой стоит граница, → номер документа, который с неё начинается.
   const starts = useMemo(
@@ -276,7 +297,11 @@ export function EditorRail({
   };
 
   const splitKind = (position: number): SplitKind =>
-    position === 0 || !editable ? null : starts.has(position) ? 'remove' : 'add';
+    position === 0 || !editable || multi || modifierHeld
+      ? null
+      : starts.has(position)
+        ? 'remove'
+        : 'add';
 
   return (
     <aside className="rail" aria-label={t('editor.railLabel')} ref={railRef} onKeyDown={onKeyDown}>

@@ -640,3 +640,97 @@ describe('editor M3: плашка правок и полный откат (S14)'
     expect(lastSent(api)).toEqual(editedState);
   });
 });
+
+describe('editor M3.5: split-бар уступает выделению (U10, KTD-10; R20, R21)', () => {
+  const bars = (): number => document.querySelectorAll('.thumb__split').length;
+  const current = (): string | undefined =>
+    document.querySelector<HTMLElement>('.thumb--selected')?.dataset.key;
+
+  it('Ctrl-клик по верхнему краю миниатюры — страница в выделении, границы нет', async () => {
+    const api = stubApi();
+    renderEditor(twoPass());
+
+    fireEvent.click(option(1));
+    fireEvent.click(splitBar(2), { ctrlKey: true });
+    await settle();
+
+    expect(selectedKeys()).toEqual([B3, F2]);
+    expect(api.setEdits).not.toHaveBeenCalled();
+    // Выделение из двух — баров нет вовсе.
+    expect(bars()).toBe(0);
+  });
+
+  it('Shift-клик по зоне бара — диапазон, не граница', async () => {
+    const api = stubApi();
+    renderEditor(twoPass());
+
+    fireEvent.click(option(0));
+    fireEvent.click(splitBar(2), { shiftKey: true });
+    await settle();
+
+    expect(selectedKeys()).toEqual([F1, B3, F2]);
+    expect(api.setEdits).not.toHaveBeenCalled();
+  });
+
+  it('бар скрыт, пока зажат Shift или Ctrl; отпустили — бар снова есть', () => {
+    stubApi();
+    renderEditor(twoPass());
+    expect(bars()).toBe(5);
+
+    fireEvent.keyDown(window, { key: 'Shift', shiftKey: true });
+    expect(bars()).toBe(0);
+    fireEvent.keyUp(window, { key: 'Shift', shiftKey: false });
+    expect(bars()).toBe(5);
+
+    fireEvent.keyDown(window, { key: 'Control', ctrlKey: true });
+    expect(bars()).toBe(0);
+    // Окно потеряло фокус — отпускание клавиши оно не увидит: сброс по `blur`.
+    fireEvent.blur(window);
+    expect(bars()).toBe(5);
+  });
+
+  it('клик по превью при трёх выделенных — одна текущая; кнопки действий выделение не сжимают; Esc прежний', () => {
+    stubApi();
+    renderEditor(twoPass());
+    const stage = document.querySelector('.stage');
+    if (stage === null) {
+      throw new Error('нет превью');
+    }
+
+    fireEvent.click(option(0));
+    fireEvent.click(option(2), { shiftKey: true });
+    expect(selectedKeys()).toHaveLength(3);
+    // Нажатие на кнопку, действующую на выделение, — выделение целое.
+    fireEvent.mouseDown(button('Удалить 3 стр.'));
+    expect(selectedKeys()).toHaveLength(3);
+
+    fireEvent.mouseDown(stage);
+    expect(selectedKeys()).toEqual([F2]);
+    expect(current()).toBe(F2);
+    expect(bars()).toBe(5);
+
+    // Esc — как раньше: сжатие до текущей из ленты.
+    fireEvent.click(option(0));
+    fireEvent.click(option(1), { shiftKey: true });
+    expect(selectedKeys()).toHaveLength(2);
+    fireEvent.keyDown(option(1), { key: 'Escape' });
+    expect(selectedKeys()).toEqual([B3]);
+  });
+
+  it('клик по ленте мимо миниатюр и по инспектору: лента выделение держит, инспектор — сжимает', () => {
+    stubApi();
+    renderEditor(twoPass());
+
+    fireEvent.click(option(0));
+    fireEvent.click(option(1), { shiftKey: true });
+    fireEvent.mouseDown(screen.getByRole('listbox'));
+    expect(selectedKeys()).toHaveLength(2);
+
+    const inspector = document.querySelector('.inspector');
+    if (inspector === null) {
+      throw new Error('нет инспектора');
+    }
+    fireEvent.mouseDown(inspector);
+    expect(selectedKeys()).toEqual([B3]);
+  });
+});

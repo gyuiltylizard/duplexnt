@@ -81,6 +81,12 @@ export const EditorThumb = memo(function EditorThumb({
     onPick(pageKey, modeOf(event));
   };
   const splitClick = (event: MouseEvent<HTMLElement>): void => {
+    // Клик с модификатором по зоне бара — выделение, не граница (M3.5, KTD-10): всплывает до
+    // карточки и уходит в `onPick`. Бар при зажатом модификаторе и так скрыт — это страховка на
+    // случай, когда нажатие клавиши лента не видела.
+    if (event.ctrlKey || event.metaKey || event.shiftKey) {
+      return;
+    }
     // Split-бар внутри карточки: клик по нему — граница, а не выбор страницы.
     event.stopPropagation();
     onSplit(pageKey);

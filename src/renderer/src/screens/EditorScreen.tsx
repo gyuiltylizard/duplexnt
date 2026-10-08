@@ -8,6 +8,7 @@ import {
   useState,
   type ChangeEvent,
   type KeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -575,8 +576,24 @@ export function EditorScreen({
   const deleteLabel =
     targets.length > 1 ? t('editor.deleteMany', { count: targets.length }) : t('editor.delete');
 
+  // Клик мимо ленты — превью, инспектор, тулбар — сжимает мультивыделение до текущей, как Esc
+  // (M3.5, R21). Кнопки и поля исключены: «↻»/«Удалить N стр.» действуют на выделение, и
+  // сжимать его в момент нажатия нельзя; модалки — тоже.
+  const collapseOnOutsideClick = (event: ReactMouseEvent<HTMLElement>): void => {
+    const { target } = event;
+    if (
+      selection.keys.length <= 1 ||
+      !(target instanceof Element) ||
+      railRef.current?.contains(target) === true ||
+      target.closest('button, input, textarea, select, a, [role="dialog"]') !== null
+    ) {
+      return;
+    }
+    setSelection(collapsed(selection));
+  };
+
   return (
-    <main className="editor-screen">
+    <main className="editor-screen" onMouseDown={collapseOnOutsideClick}>
       <header className="editor-screen__toolbar">
         <div className="editor-screen__toolbar-left">
           <button type="button" className="btn btn--secondary" onClick={newScan}>
