@@ -14,6 +14,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ConnectedScanner, Connector, ScannerAddress } from '../escl/connect';
 import type { Discovery } from '../discovery/mdns';
 import type { PassService } from '../scan/pass-service';
+import { unwrap } from '../../../test/support/result';
 import { addressOf, createCommands } from './handlers';
 import { MAX_EDIT_ITEMS } from './schemas';
 
@@ -59,7 +60,9 @@ function setup(
       Promise.resolve(ok({ seq: 7 })),
     ),
     saveDocuments: vi.fn((): Promise<Result<SaveDocumentsReport>> =>
-      Promise.resolve(ok({ folder: 'D:\\Сканы', written: [], failed: [] })),
+      Promise.resolve(
+        ok({ folder: 'D:\\Сканы', written: [{ index: 0, fileName: 'Скан.pdf' }], failed: [] }),
+      ),
     ),
     closeSession: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
     rememberedSaveFolder: vi.fn((): string | null => remembered),
@@ -96,12 +99,14 @@ function setup(
   const connector: Connector = { connect, cancel };
 
   const openDataFolder = vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined)));
+  const openFolder = vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined)));
   const askSaveFolder = vi.fn((): Promise<string | null> => Promise.resolve('E:\\Архив'));
   const folderExists = vi.fn((): Promise<boolean> => Promise.resolve(exists));
   const discoveryEvents: number[] = [];
   const commands = createCommands({
     service,
     openDataFolder,
+    openFolder,
     defaultSaveFolder: 'C:\\Users\\Документы',
     askSaveFolder,
     folderExists,
@@ -119,6 +124,7 @@ function setup(
     connector,
     cancel,
     openDataFolder,
+    openFolder,
     askSaveFolder,
     discoveryEvents,
   };
@@ -142,10 +148,12 @@ describe('команды без входа', () => {
     'chooseSaveFolder',
     'closeSession',
     'openDataFolder',
+    'openSaveFolder',
   ];
 
-  it('с `undefined` возвращают успех в конверте', async () => {
+  it('с `undefined` возвращают успех в конверте (openSaveFolder — после пакета)', async () => {
     const { handlers } = setup();
+    unwrap(await handlers.saveDocuments({ mode: 'single', names: ['Скан'], retry: false }));
     for (const command of EMPTY_COMMANDS) {
       expect(await handlers[command](undefined), command).toMatchObject({ ok: true });
     }
@@ -326,7 +334,7 @@ describe('снимок и проход', () => {
     const request = { mode: 'separate', names: ['Счёт', 'Акт'], retry: false } as const;
 
     expect(await handlers.saveDocuments(request)).toEqual(
-      ok({ folder: 'D:\\Сканы', written: [], failed: [] }),
+      ok({ folder: 'D:\\Сканы', written: [{ index: 0, fileName: 'Скан.pdf' }], failed: [] }),
     );
     expect(service.saveDocuments).toHaveBeenCalledExactlyOnceWith('E:\\Архив', request);
 
@@ -386,6 +394,38 @@ describe('снимок и проход', () => {
     expect(openDataFolder).toHaveBeenCalledExactlyOnceWith();
   });
 
+  it('openSaveFolder без пакета — конфликт noBatch, main не зовётся (M3.5, KTD-9)', async () => {
+    const { handlers, openFolder } = setup();
+    expect(await handlers.openSaveFolder(undefined)).toEqual(
+      fail('sessionConflict', { reason: 'noBatch' }),
+    );
+    expect(openFolder).not.toHaveBeenCalled();
+  });
+
+  it('openSaveFolder после пакета открывает папку отчёта; пакет без записанных файлов её не меняет', async () => {
+    const { handlers, service, openFolder } = setup();
+    unwrap(await handlers.saveDocuments({ mode: 'single', names: ['Скан'], retry: false }));
+    expect(await handlers.openSaveFolder(undefined)).toEqual(ok(undefined));
+    expect(openFolder).toHaveBeenCalledExactlyOnceWith('D:\\Сканы');
+
+    // Пакет, где ни один файл не записался, папку не трогает: открывать там нечего.
+    vi.mocked(service.saveDocuments).mockResolvedValueOnce(
+      ok({
+        folder: 'E:\\Архив',
+        written: [],
+        failed: [{ index: 0, fileName: 'Скан.pdf', error: { code: 'saveWriteFailed' } }],
+      }),
+    );
+    unwrap(await handlers.saveDocuments({ mode: 'single', names: ['Скан'], retry: false }));
+    expect(await handlers.openSaveFolder(undefined)).toEqual(ok(undefined));
+    expect(openFolder).toHaveBeenLastCalledWith('D:\\Сканы');
+
+    openFolder.mockResolvedValueOnce(fail('storageFailed', { reason: 'openPath' }));
+    expect(await handlers.openSaveFolder(undefined)).toEqual(
+      fail('storageFailed', { reason: 'openPath' }),
+    );
+  });
+
   it('openDataFolder: отказ main доходит кодом, а не успехом', async () => {
     const { handlers, openDataFolder } = setup();
     openDataFolder.mockResolvedValueOnce(fail('storageFailed', { reason: 'openPath' }));
@@ -436,6 +476,7 @@ describe('поиск устройств', () => {
     const commands = createCommands({
       service,
       openDataFolder: () => Promise.resolve(ok(undefined)),
+      openFolder: () => Promise.resolve(ok(undefined)),
       defaultSaveFolder: 'C:\\Users\\Документы',
       askSaveFolder: () => Promise.resolve(null),
       onDiscoveryChanged: () => {

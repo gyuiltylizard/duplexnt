@@ -2,7 +2,17 @@ import { EMPTY_EDITS, fail } from '@shared';
 import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../i18n';
-import { makePass, makeSnapshot, pages, renderEditor, stubApi, twoPass } from './editor-fixture';
+import {
+  makePass,
+  makeSnapshot,
+  nameField,
+  option,
+  pages,
+  renderEditor,
+  settle,
+  stubApi,
+  twoPass,
+} from './editor-fixture';
 
 // Экран `editor`: поведение M1–M2 (лента, превью, тумблер, точка несохранённого, плашка прохода).
 // Правки, выделение, документы и инспектор M3 — в EditorScreen.edits.test.tsx; сохранение и
@@ -383,6 +393,52 @@ describe('экран editor', () => {
       ]),
     );
     expect(screen.getByRole<HTMLInputElement>('checkbox').checked).toBe(true);
+  });
+
+  it('M3.5, S13: «↺» слева от «↻», −90° одним шагом для всего выделения; подписи с числом страниц', async () => {
+    const api = stubApi();
+    renderEditor(twoPass());
+
+    const tools = screen.getAllByRole('button', { name: /Повернуть/ });
+    expect(tools.map((button) => button.textContent)).toEqual(['↺', '↻']);
+    fireEvent.click(option(0));
+    fireEvent.click(option(2), { ctrlKey: true });
+    const left = screen.getByRole('button', { name: 'Повернуть 2 стр. на 90° против часовой' });
+    expect(left.getAttribute('title')).toBe('Повернуть 2 стр. на 90° против часовой');
+    fireEvent.click(left);
+    await settle();
+
+    expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({
+      edits: { ...EMPTY_EDITS, rotations: { 'p01-s01-0001': 270, 'p01-s01-0002': 270 } },
+      rotate180: false,
+    });
+  });
+
+  it('M3.5, S14: Enter в имени документа фиксирует имя и уводит фокус на карточку текущей', async () => {
+    const api = stubApi();
+    renderEditor(twoPass());
+    fireEvent.click(option(1));
+
+    const field = nameField(1);
+    field.focus();
+    fireEvent.change(field, { target: { value: 'Акт' } });
+    fireEvent.keyDown(field, { key: 'Enter' });
+    await settle();
+
+    expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({
+      edits: { ...EMPTY_EDITS, names: ['Акт'] },
+      rotate180: false,
+    });
+    expect(document.activeElement).toBe(option(1));
+  });
+
+  it('R26: подсказка под списком документов говорит про Ctrl/Shift и «Выделить в документ»', () => {
+    stubApi();
+    renderEditor(twoPass());
+
+    expect(screen.getByText(/^Границы не отмечены/).textContent).toContain(
+      'выделите страницы подряд (Shift — диапазон, Ctrl — по одной) и нажмите «Выделить в документ»',
+    );
   });
 
   it('плашка прерванного прохода несёт все три действия', () => {

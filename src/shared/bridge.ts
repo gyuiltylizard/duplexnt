@@ -195,6 +195,11 @@ export interface BridgeCommands {
   readonly closeSession: { readonly request: NoRequest; readonly value: undefined };
   /** Открывает каталог данных в проводнике — при несовместимых данных. Каталог знает main. */
   readonly openDataFolder: { readonly request: NoRequest; readonly value: undefined };
+  /**
+   * Открывает папку последнего записанного пакета — «Открыть папку» в тосте «Сохранено»
+   * (M3.5, KTD-9). Папку помнит ядро до выхода; пакета не было — конфликт `noBatch`.
+   */
+  readonly openSaveFolder: { readonly request: NoRequest; readonly value: undefined };
 }
 
 export type BridgeCommand = keyof BridgeCommands;
@@ -219,6 +224,7 @@ export const BRIDGE_CHANNELS = {
   saveDocuments: 'duplexnt:save-documents',
   closeSession: 'duplexnt:close-session',
   openDataFolder: 'duplexnt:open-data-folder',
+  openSaveFolder: 'duplexnt:open-save-folder',
 } as const satisfies Record<BridgeCommand, string>;
 
 export type CommandResult<K extends BridgeCommand> = Result<BridgeCommands[K]['value']>;

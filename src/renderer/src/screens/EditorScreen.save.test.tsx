@@ -58,8 +58,9 @@ describe('сохранение из редактора', () => {
     expect(button('Сохранить документ').hasAttribute('disabled')).toBe(true);
   });
 
-  it('S18: полный успех — модалка закрыта, тост 6 с с кнопкой «Новое сканирование» → newscan', async () => {
-    const api = stubApi();
+  it('S18 (M3.5, S10): полный успех — модалка закрыта, тост 6 с с «Открыть папку» → команда без входа', async () => {
+    const openSaveFolder = vi.fn(() => Promise.resolve(ok(undefined)));
+    const api = stubApi({ openSaveFolder });
     const { onToast } = renderEditor(twoDocuments());
 
     fireEvent.click(button('Сохранить 2 файла'));
@@ -77,15 +78,16 @@ describe('сохранение из редактора', () => {
     expect(onToast).toHaveBeenCalledExactlyOnceWith(
       'Сохранено 2 файла → C:\\Документы',
       6000,
-      expect.objectContaining({ label: 'Новое сканирование' }),
+      expect.objectContaining({ label: 'Открыть папку' }),
     );
-    // Кнопка тоста открывает `newscan`, а не закрывает сессию молча.
+    // Кнопка тоста зовёт команду без входа: папку помнит ядро (KTD-9). Сессия не трогается.
     const action = onToast.mock.calls[0]?.[2] as { onClick: () => void };
-    await settle();
     action.onClick();
     await settle();
-    expect(screen.getByRole('dialog', { name: 'Начать новое сканирование?' })).toBeDefined();
+    expect(openSaveFolder).toHaveBeenCalledExactlyOnceWith();
     expect(api.closeSession).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(onToast).toHaveBeenCalledTimes(1);
   });
 
   it('один файл — тост называет файл и папку', async () => {
@@ -168,8 +170,10 @@ describe('сохранение из редактора', () => {
     expect(onToast).toHaveBeenCalledExactlyOnceWith('Сначала отметьте границы между документами');
   });
 
-  it('S18: кнопка тоста при открытой модалке ничего не подменяет', async () => {
-    const api = stubApi();
+  it('S10 (M3.5): отказ «Открыть папку» — тост ошибки 6 с с причиной', async () => {
+    stubApi({
+      openSaveFolder: vi.fn(() => Promise.resolve(fail('storageFailed', { reason: 'openPath' }))),
+    });
     const { onToast } = renderEditor(twoDocuments());
     fireEvent.click(button('Сохранить 2 файла'));
     fireEvent.click(inDialog('Сохранить 2 файла'));
@@ -177,14 +181,12 @@ describe('сохранение из редактора', () => {
     await settle();
     const action = onToast.mock.calls[0]?.[2] as { onClick: () => void };
 
-    // Снова открыли сохранение — и нажали кнопку тоста, пока он ещё висит.
-    fireEvent.click(button('Сохранить 2 файла'));
     action.onClick();
     await settle();
 
-    expect(screen.getByRole('dialog', { name: 'Сохранить 2 файла' })).toBeDefined();
-    expect(screen.queryByRole('dialog', { name: 'Начать новое сканирование?' })).toBeNull();
-    expect(api.closeSession).not.toHaveBeenCalled();
+    expect(onToast).toHaveBeenCalledTimes(2);
+    expect(onToast.mock.calls[1]?.[0]).toMatch(/^Не удалось открыть папку: не удалось записать/u);
+    expect(onToast.mock.calls[1]?.[1]).toBe(6000);
   });
 
   it('имя из ленты ещё пишется — «Сохранить» ждёт, потом строка с новым именем без отката', async () => {

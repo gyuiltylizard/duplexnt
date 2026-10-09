@@ -54,6 +54,7 @@ function DocName({
   disabled,
   busy,
   onCommit,
+  onEnter,
 }: {
   readonly index: number;
   readonly value: string;
@@ -61,6 +62,8 @@ function DocName({
   readonly disabled: boolean;
   readonly busy: boolean;
   readonly onCommit: (docIndex: number, name: string) => boolean;
+  /** Enter зафиксировал имя: фокус уходит из поля — на карточку текущей страницы (M3.5, S14). */
+  readonly onEnter: () => void;
 }): ReactNode {
   const { t } = useTranslation();
   const [draft, setDraft] = useState<{ readonly text: string; readonly sent: boolean } | null>(
@@ -86,7 +89,13 @@ function DocName({
   const keyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
     if (event.key === 'Enter') {
       event.preventDefault();
-      commit();
+      // Enter «закрывает» ввод (замечание приёмки M3): фокус уходит на ленту — следующий шаг
+      // человека обычно там, — а имя фиксирует уход фокуса, как и раньше: один `setEdits`.
+      // Карточки нет (лента пуста) — поле просто отпускает фокус.
+      onEnter();
+      if (document.activeElement === event.currentTarget) {
+        event.currentTarget.blur();
+      }
     } else if (event.key === 'Escape') {
       // Esc в поле — отмена ввода, а не сжатие выделения ленты; фокус остаётся в поле.
       event.stopPropagation();
@@ -166,6 +175,10 @@ export function EditorRail({
 }: EditorRailProps): ReactNode {
   const { t } = useTranslation();
   const total = order.length;
+  /** Фокус на карточку текущей страницы — точку входа клавиатуры (роуминг `tabindex`). */
+  const focusCurrent = (): void => {
+    railRef.current?.querySelector<HTMLElement>('[role="option"][tabindex="0"]')?.focus();
+  };
   const selectedKeys = useMemo(() => new Set(selection.keys), [selection.keys]);
   const multi = selection.keys.length > 1;
   // Правки доступны сейчас: нет записи и команды в полёте — можно тянуть, split-бар виден.
@@ -382,6 +395,7 @@ export function EditorRail({
                   disabled={locked}
                   busy={busy}
                   onCommit={onRename}
+                  onEnter={focusCurrent}
                 />
                 <span className="doc-group__count">
                   {t('editor.doc.count', { count: doc.count })}

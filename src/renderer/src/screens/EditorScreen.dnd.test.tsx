@@ -442,7 +442,7 @@ describe('editor M3: границы документов (S1, S2, S5, S7)', () =
 });
 
 describe('editor M3: имя документа (S3)', () => {
-  it('ввод по буквам локален; Enter — один setEdits; уход фокуса после него ничего не шлёт', async () => {
+  it('ввод по буквам локален; Enter — один setEdits и уход фокуса на текущую (M3.5, S14); повторный blur ничего не шлёт', async () => {
     const api = stubApi();
     const snapshot = makeSnapshot([makePass({ pages: pages(3) })]);
     const { rerender } = renderEditor(snapshot);
@@ -460,9 +460,9 @@ describe('editor M3: имя документа (S3)', () => {
       edits: edits({ names: ['Акт'] }),
       rotate180: false,
     });
-    // До снимка поле показывает отправленное, а не прежнее.
+    // До снимка поле показывает отправленное, а не прежнее; фокус — на карточке текущей.
     expect(field.value).toBe('Акт');
-    expect(document.activeElement).toBe(field);
+    expect(document.activeElement).toBe(option(0));
     fireEvent.blur(field);
     expect(api.setEdits).toHaveBeenCalledTimes(1);
 

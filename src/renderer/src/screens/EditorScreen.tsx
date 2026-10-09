@@ -36,6 +36,7 @@ import {
   withCut,
   withoutCut,
   type DropSide,
+  type RotateDirection,
 } from '../state/edits';
 import { mismatchDue } from '../state/assembly-outcome';
 import { errorTextInline } from '../state/error-text';
@@ -86,7 +87,7 @@ export interface EditorScreenProps {
   readonly onOpenDevice: (initialAddress?: string) => void;
   /**
    * Тосты живут в App (новый гасит предыдущий); сохранение показывает их дольше обычного, а
-   * тост полного успеха несёт кнопку «Новое сканирование» (S18).
+   * тост полного успеха несёт кнопку «Открыть папку» (S18 M3, пересмотр M3.5 S10).
    */
   readonly onToast: (text: string, durationMs?: number, action?: ToastAction) => void;
 }
@@ -336,10 +337,11 @@ export function EditorScreen({
     focusKey.current = key;
   };
 
-  // ↻ — +90° по часовой текущей или всему выделению, один шаг; тоста нет — поворот виден (S9).
-  const rotate = (): void => {
+  // «↻» +90° / «↺» −90° (M3.5, KTD-11) — текущей или всему выделению, один шаг; тоста нет —
+  // поворот виден (S9).
+  const rotate = (direction: RotateDirection): void => {
     if (targets.length > 0) {
-      edits.edit(withEdits(rotated(edits.current.edits, targets)), targets);
+      edits.edit(withEdits(rotated(edits.current.edits, targets, direction)), targets);
     }
   };
 
@@ -572,8 +574,26 @@ export function EditorScreen({
     });
   };
 
-  // Пакет записан целиком: тост 6 с с кнопкой «Новое сканирование» — она открывает `newscan`,
-  // а не закрывает сессию молча (S18). После «Сначала сохранить текущий» — сразу закрытие.
+  // «Открыть папку» из тоста «Сохранено» (M3.5, KTD-9): команда без входа — папку последнего
+  // пакета помнит ядро, путь от renderer не принимается; отказ — тостом ошибки.
+  const openSaveFolder = (): void => {
+    window.api.openSaveFolder().then(
+      (result) => {
+        if (!result.ok) {
+          onToast(
+            t('toast.openFolderFailed', { error: errorTextInline(t, result.error) }),
+            SAVE_TOAST_MS,
+          );
+        }
+      },
+      (error: unknown) => {
+        console.error('[renderer] открытие папки не ответило', error);
+      },
+    );
+  };
+
+  // Пакет записан целиком: тост 6 с с кнопкой «Открыть папку» (S18 M3, пересмотр M3.5 S10:
+  // «Новое сканирование» есть в тулбаре). После «Сначала сохранить текущий» — сразу закрытие.
   const saved = (report: SaveDocumentsReport): void => {
     setModal(null);
     const [only] = report.written;
@@ -585,16 +605,7 @@ export function EditorScreen({
       closeSession(text);
       return;
     }
-    onToast(text, SAVE_TOAST_MS, {
-      label: t('toast.newScanAction'),
-      // Тост лежит поверх затемнения: открытую модалку — запись, откат, подключение — кнопка не
-      // подменяет.
-      onClick: () => {
-        if (document.querySelector('[aria-modal="true"]') === null) {
-          setModal('newscan');
-        }
-      },
-    });
+    onToast(text, SAVE_TOAST_MS, { label: t('toast.openFolder'), onClick: openSaveFolder });
   };
 
   // «+ Добавить» (S1 M3.5, R12): недоступна при записи, правке в полёте и прерванном последнем
@@ -625,6 +636,10 @@ export function EditorScreen({
 
   const rotateLabel =
     targets.length > 1 ? t('editor.rotateMany', { count: targets.length }) : t('editor.rotate');
+  const rotateLeftLabel =
+    targets.length > 1
+      ? t('editor.rotateLeftMany', { count: targets.length })
+      : t('editor.rotateLeft');
   const deleteLabel =
     targets.length > 1 ? t('editor.deleteMany', { count: targets.length }) : t('editor.delete');
 
@@ -843,10 +858,24 @@ export function EditorScreen({
             <button
               type="button"
               className="btn btn--icon stage__tool"
+              aria-label={rotateLeftLabel}
+              title={rotateLeftLabel}
+              disabled={total === 0 || saving}
+              onClick={() => {
+                rotate('ccw');
+              }}
+            >
+              ↺
+            </button>
+            <button
+              type="button"
+              className="btn btn--icon stage__tool"
               aria-label={rotateLabel}
               title={rotateLabel}
               disabled={total === 0 || saving}
-              onClick={rotate}
+              onClick={() => {
+                rotate('cw');
+              }}
             >
               ↻
             </button>

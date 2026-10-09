@@ -40,6 +40,8 @@ export interface CommandContext {
   readonly service: PassService;
   /** Открывает каталог данных в проводнике; какой — знает main (KTD-39). */
   readonly openDataFolder: () => Promise<Result<void>>;
+  /** Открывает папку в проводнике — папку последнего пакета (M3.5, KTD-9); открывает main. */
+  readonly openFolder: (path: string) => Promise<Result<void>>;
   /** Папка сохранения пакета по умолчанию (M3, KTD-5): «Документы» пользователя. */
   readonly defaultSaveFolder: string;
   /** Диалог выбора папки (M3, KTD-5), открытый на текущей; `null` — пользователь отказался. */
@@ -109,6 +111,8 @@ export function createCommands(context: CommandContext): Commands {
    * Пропавшая с диска (вынута флешка) уступает «Документам» — но не забывается.
    */
   let saveFolder = service.rememberedSaveFolder() ?? context.defaultSaveFolder;
+  /** Папка последнего пакета, записанного хотя бы частично (M3.5, KTD-9); до выхода. */
+  let lastBatchFolder: string | null = null;
   let announced = false;
 
   // `onChange` поиска вызывается из обработчика сокета: исключение в нём стало бы необработанным.
@@ -251,11 +255,26 @@ export function createCommands(context: CommandContext): Commands {
       }),
       saveDocuments: async (rawRequest) => {
         const request = parseInput(saveDocumentsRequestSchema, rawRequest);
-        return request.ok ? service.saveDocuments(saveFolder, request.value) : request;
+        if (!request.ok) {
+          return request;
+        }
+        const result = await service.saveDocuments(saveFolder, request.value);
+        // Папка последнего пакета, записанного целиком или частично, — для «Открыть папку»
+        // (M3.5, KTD-9): живёт в памяти процесса, тост к следующему запуску давно ушёл.
+        if (result.ok && result.value.written.length > 0) {
+          lastBatchFolder = result.value.folder;
+        }
+        return result;
       },
       closeSession: withoutRequest(() => done(() => service.closeSession())),
 
       openDataFolder: withoutRequest(() => done(() => context.openDataFolder())),
+      openSaveFolder: withoutRequest(() => {
+        const folder = lastBatchFolder;
+        return folder === null
+          ? { ok: false, error: sessionConflict('noBatch') }
+          : done(() => context.openFolder(folder));
+      }),
     },
 
     dispose() {

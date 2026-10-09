@@ -91,6 +91,8 @@ export const SESSION_CONFLICT_REASONS = [
   'noFailedFiles',
   /** Лента менялась после первой попытки пакета: дописывать к нему нельзя, только заново. */
   'batchStale',
+  /** Пакета ещё не было: открывать нечего (M3.5, KTD-9). */
+  'noBatch',
 ] as const;
 
 export type SessionConflictReason = (typeof SESSION_CONFLICT_REASONS)[number];
