@@ -7,6 +7,7 @@ import {
   normalizeEdits,
   pageAngle,
   rebaseEdits,
+  rebaseOrder,
   remapCuts,
   visibleKeysOf,
 } from './edits';
@@ -200,10 +201,13 @@ describe('правки: разрезы при изменении ленты вн
     expect(remapCuts(['a', 'b', 'c'], ['a'], [1])).toEqual([1]);
   });
 
-  it('хвостовая дописка при ручном порядке разрезы не двигает', () => {
+  it('хвостовая дописка при ручном порядке: ключ встаёт за предшественником, разрез — перед той же страницей', () => {
     const manual = edits({ order: ['c', 'a', 'b'], cuts: [1], names: ['', 'Хвост'] });
 
-    expect(rebaseEdits(['a', 'b', 'c'], ['a', 'b', 'c', 'd'], manual)).toEqual(manual);
+    // «d» идёт в автопорядке за «c»; «c» первый в ручном порядке — «d» за ним, разрез перед «a».
+    expect(rebaseEdits(['a', 'b', 'c'], ['a', 'b', 'c', 'd'], manual)).toEqual(
+      edits({ order: ['c', 'd', 'a', 'b'], cuts: [2], names: ['', 'Хвост'] }),
+    );
   });
 
   it('отброс сегмента в середине: разрез переехал, правки мёртвых ключей вычищены', () => {
@@ -262,5 +266,160 @@ describe('правки: угол и признак правок', () => {
     expect(
       sameEdits(edits({ cuts: [1], names: ['', ''] }), edits({ cuts: [2], names: ['', ''] })),
     ).toBe(false);
+  });
+});
+
+describe('правки: ручной порядок при новых ключах (M3.5, KTD-3)', () => {
+  // Пары 1л 1о 2л 2о 3л 3о в коротких ключах: f1 b1 f2 b2 f3 b3; добавленные — d1, d2, e1.
+  const PAIRS = ['f1', 'b1', 'f2', 'b2', 'f3', 'b3'];
+  /** Автопорядок после вставки набора `keys` сразу за `after`. */
+  const inserted = (auto: readonly string[], after: string, keys: readonly string[]): string[] => {
+    const at = auto.indexOf(after);
+    return [...auto.slice(0, at + 1), ...keys, ...auto.slice(at + 1)];
+  };
+  const AFTER_F2 = inserted(PAIRS, 'f2', ['d1', 'd2']);
+
+  it.each([
+    [
+      'полный ручной порядок: новые ключи за предшественником по автопорядку',
+      ['f3', 'f1', 'f2', 'b1', 'b2', 'b3'],
+      ['f3', 'f1', 'f2', 'd1', 'd2', 'b1', 'b2', 'b3'],
+    ],
+    [
+      'неполный порядок: предшественник ищется среди размещённых',
+      ['f3', 'f1'],
+      ['f3', 'f1', 'd1', 'd2'],
+    ],
+    [
+      'якоря нет в порядке — предшественник по автопорядку, который в порядке есть',
+      ['b3', 'f1'],
+      ['b3', 'f1', 'd1', 'd2'],
+    ],
+    ['предшественника в порядке нет — ключ не размещается', ['b3', 'b2'], ['b3', 'b2']],
+  ])('%s', (_name, order, expected) => {
+    expect(rebaseOrder(PAIRS, AFTER_F2, order)).toEqual(expected);
+  });
+
+  it('якорь удалён правкой: в порядке он есть — набор за ним, видимая лента — за предыдущей', () => {
+    const given = edits({ order: ['f3', 'f1', 'f2', 'b1'], deleted: ['f2'] });
+
+    const rebased = rebaseEdits(PAIRS, AFTER_F2, given);
+    expect(rebased.order).toEqual(['f3', 'f1', 'f2', 'd1', 'd2', 'b1']);
+    expect(visibleKeysOf(AFTER_F2, rebased)).toEqual(['f3', 'f1', 'd1', 'd2', 'b1', 'b2', 'b3']);
+  });
+
+  it('три ключа одним коммитом (усыновлённый сегмент) — подряд, как при трёх коммитах', () => {
+    const order = ['f3', 'f1', 'f2', 'b1'];
+    const after = inserted(PAIRS, 'f2', ['d1', 'd2', 'd3']);
+
+    const atOnce = rebaseOrder(PAIRS, after, order);
+    const oneByOne = rebaseOrder(
+      inserted(PAIRS, 'f2', ['d1', 'd2']),
+      after,
+      rebaseOrder(
+        inserted(PAIRS, 'f2', ['d1']),
+        inserted(PAIRS, 'f2', ['d1', 'd2']),
+        rebaseOrder(PAIRS, inserted(PAIRS, 'f2', ['d1']), order),
+      ),
+    );
+    expect(atOnce).toEqual(['f3', 'f1', 'f2', 'd1', 'd2', 'd3', 'b1']);
+    expect(oneByOne).toEqual(atOnce);
+  });
+
+  it('первый набор перетащен в начало, второй добавлен после того же якоря — за якорем, не рядом с первым', () => {
+    const before = AFTER_F2;
+    const after = inserted(PAIRS, 'f2', ['e1', 'd1', 'd2']);
+    const order = ['d1', 'd2', 'f1', 'b1', 'f2', 'b2', 'f3', 'b3'];
+
+    expect(rebaseOrder(before, after, order)).toEqual([
+      'd1',
+      'd2',
+      'f1',
+      'b1',
+      'f2',
+      'e1',
+      'b2',
+      'f3',
+      'b3',
+    ]);
+  });
+
+  it('разрезы переезжают, углы и удаления целы; повтор ничего не меняет', () => {
+    const given = edits({
+      order: ['f3', 'f1', 'f2', 'b1', 'b2', 'b3'],
+      rotations: { f1: 90, b3: 180 },
+      deleted: ['b2'],
+      cuts: [2, 3],
+      names: ['А', 'Б', 'В'],
+    });
+    // Видимая лента до: f3 f1 | f2 | b1 b3; после: f3 f1 | f2 d1 d2 | b1 b3.
+    const rebased = rebaseEdits(PAIRS, AFTER_F2, given);
+
+    expect(rebased).toEqual(
+      edits({
+        order: ['f3', 'f1', 'f2', 'd1', 'd2', 'b1', 'b2', 'b3'],
+        rotations: { f1: 90, b3: 180 },
+        deleted: ['b2'],
+        cuts: [2, 5],
+        names: ['А', 'Б', 'В'],
+      }),
+    );
+    expect(rebaseEdits(AFTER_F2, AFTER_F2, rebased)).toEqual(rebased);
+  });
+
+  it('досканирование лицевых при ручном порядке — на своё место, не в конец (замена AE9 M3)', () => {
+    // Лицевые f1 f2 прерваны, обороты b2 b1; досканирован f3: автопорядок f1 b1 f2 b2 f3.
+    const before = ['f1', 'b1', 'f2', 'b2'];
+    const after = ['f1', 'b1', 'f2', 'b2', 'f3'];
+    const manual = edits({ order: ['f2', 'b2', 'f1', 'b1'], cuts: [2], names: ['', 'Хвост'] });
+
+    expect(rebaseEdits(before, after, manual)).toEqual(
+      edits({ order: ['f2', 'b2', 'f3', 'f1', 'b1'], cuts: [3], names: ['', 'Хвост'] }),
+    );
+  });
+
+  describe('разрезы и документы', () => {
+    const documentNames = (auto: readonly string[], given: SessionEdits): string[] => {
+      const visible = visibleKeysOf(auto, given);
+      return documentsOf(visible.length, given).flatMap((doc) =>
+        visible.slice(doc.start, doc.start + doc.count).map(() => doc.name),
+      );
+    };
+
+    it('якорь — последняя страница документа → набор в нём', () => {
+      // Документы: А = f1 b1 f2, Б = b2 f3 b3; набор после f2 (последняя в А).
+      const given = edits({ cuts: [3], names: ['А', 'Б'] });
+
+      const rebased = rebaseEdits(PAIRS, AFTER_F2, given);
+      expect(rebased.cuts).toEqual([5]);
+      expect(documentNames(AFTER_F2, rebased)).toEqual(['А', 'А', 'А', 'А', 'А', 'Б', 'Б', 'Б']);
+    });
+
+    it('первый набор отрезан в отдельный документ, второй добавлен после того же якоря → в документе якоря', () => {
+      // Лента f1 b1 f2 | d1 d2 | b2 f3 b3; набор e1 после f2 встаёт перед d1 — в документе якоря.
+      const given = edits({ cuts: [3, 5], names: ['А', 'Набор', 'Б'] });
+      const after = inserted(PAIRS, 'f2', ['e1', 'd1', 'd2']);
+
+      const rebased = rebaseEdits(AFTER_F2, after, given);
+      expect(rebased.cuts).toEqual([4, 6]);
+      expect(documentNames(after, rebased)).toEqual([
+        'А',
+        'А',
+        'А',
+        'А',
+        'Набор',
+        'Набор',
+        'Б',
+        'Б',
+        'Б',
+      ]);
+    });
+
+    it('якорь — последняя страница ленты → разрезы не тронуты', () => {
+      const given = edits({ cuts: [3], names: ['А', 'Б'] });
+      const after = inserted(PAIRS, 'b3', ['d1', 'd2']);
+
+      expect(rebaseEdits(PAIRS, after, given)).toEqual(given);
+    });
   });
 });

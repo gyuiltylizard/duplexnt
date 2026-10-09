@@ -14,6 +14,8 @@ function makePass(overrides: Partial<PassSnapshot>): PassSnapshot {
     state: 'completed',
     paramsKnown: true,
     scanner: null,
+    kind: 'fronts',
+    after: null,
     rotate180: false,
     pages: [{ key: 'p01-s01-0001', number: 1, lost: false }],
     ...overrides,
@@ -36,6 +38,7 @@ const SESSION = makeSession({});
 const PASS: PassProgress = {
   phase: 'scanning',
   resumed: false,
+  kind: 'fronts',
   expected: null,
   params: { colorMode: 'Grayscale8', resolution: 300, paperSize: 'A4' },
   pages: 1,
@@ -104,6 +107,7 @@ describe('screenOf', () => {
         makePass({}),
         makePass({
           number: 2,
+          kind: 'backs',
           pages: [{ key: 'p02-s01-0001', number: 1, lost: false }],
         }),
       ],
@@ -117,6 +121,7 @@ describe('screenOf', () => {
         makePass({}),
         makePass({
           number: 2,
+          kind: 'backs',
           state: 'interrupted',
           pages: [{ key: 'p02-s01-0001', number: 1, lost: false }],
         }),
@@ -125,36 +130,85 @@ describe('screenOf', () => {
     expect(screenOf(makeSnapshot({ session }))).toBe('editor');
   });
 
-  it('пустой проход не считается уцелевшим: роль по позиции, не по номеру (KTD-4)', () => {
+  it('пустой проход роли не занимает при любом kind (KTD-4): прерванные до первой страницы обороты — flip', () => {
     const session = makeSession({
-      passes: [makePass({}), makePass({ number: 2, state: 'running', pages: [] })],
+      passes: [
+        makePass({}),
+        makePass({ number: 2, kind: 'backs', state: 'interrupted', pages: [] }),
+      ],
     });
-    // Снимок без идущего прохода, но с пустой записью — страхующий фильтр оставляет flip.
     expect(screenOf(makeSnapshot({ session }))).toBe('flip');
   });
+
+  // — M3.5 (KTD-4): роль — `kind`, не позиция; добавленный набор — всегда `editor` —
+
+  it('роль по kind, не по позиции: лицевые — проход №3 после двух остановок — flip', () => {
+    const session = makeSession({ passes: [makePass({ number: 3 })] });
+    expect(screenOf(makeSnapshot({ session }))).toBe('flip');
+  });
+
+  it.each([true, false])(
+    '[лицевые, добавленный] при backsDeclined=%s — editor: разворот позади',
+    (backsDeclined) => {
+      const session = makeSession({
+        backsDeclined,
+        passes: [
+          makePass({}),
+          makePass({
+            number: 2,
+            kind: 'added',
+            after: 'p01-s01-0001',
+            pages: [{ key: 'p02-s01-0001', number: 1, lost: false }],
+          }),
+        ],
+      });
+      expect(screenOf(makeSnapshot({ session }))).toBe('editor');
+    },
+  );
+
+  it.each(['starting', 'busy'] as const)(
+    'добавленный проход в фазе %s без страниц — сразу scan: ожидание S2 только у оборотов',
+    (phase) => {
+      const pass: PassProgress = { ...PASS, kind: 'added', phase, pages: 0 };
+      expect(screenOf(makeSnapshot({ pass, session: SESSION }))).toBe('scan');
+    },
+  );
 
   // — S2 (KTD-11): запуск оборотов с flip при занятом устройстве не уводит с экрана —
 
   it.each(['starting', 'busy'] as const)(
     'проход оборотов в фазе %s без страниц — остаёмся на flip',
     (phase) => {
-      const pass: PassProgress = { ...PASS, phase, expected: 12, pages: 0 };
+      const pass: PassProgress = { ...PASS, kind: 'backs', phase, expected: 12, pages: 0 };
       expect(screenOf(makeSnapshot({ pass, session: SESSION }))).toBe('flip');
     },
   );
 
   it('первая страница оборотов уводит на scan', () => {
-    const pass: PassProgress = { ...PASS, phase: 'busy', expected: 12, pages: 1 };
+    const pass: PassProgress = { ...PASS, kind: 'backs', phase: 'busy', expected: 12, pages: 1 };
     expect(screenOf(makeSnapshot({ pass, session: SESSION }))).toBe('scan');
   });
 
   it('фаза scanning оборотов — scan и без страниц', () => {
-    const pass: PassProgress = { ...PASS, phase: 'scanning', expected: 12, pages: 0 };
+    const pass: PassProgress = {
+      ...PASS,
+      kind: 'backs',
+      phase: 'scanning',
+      expected: 12,
+      pages: 0,
+    };
     expect(screenOf(makeSnapshot({ pass, session: SESSION }))).toBe('scan');
   });
 
   it('досканирование прерванных оборотов — сразу scan (семантика M1)', () => {
-    const pass: PassProgress = { ...PASS, phase: 'busy', expected: 12, pages: 0, resumed: true };
+    const pass: PassProgress = {
+      ...PASS,
+      kind: 'backs',
+      phase: 'busy',
+      expected: 12,
+      pages: 0,
+      resumed: true,
+    };
     expect(screenOf(makeSnapshot({ pass, session: SESSION }))).toBe('scan');
   });
 

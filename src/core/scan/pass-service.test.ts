@@ -84,7 +84,7 @@ describe('служба прохода без сканера', () => {
   it('без сканера проход, параметры и «Остановить» отклоняются кодом', async () => {
     const service = await openPassService(await makeTempDataRoot());
 
-    expect(await service.startPass()).toEqual({
+    expect(await service.startPass(null)).toEqual({
       ok: false,
       error: { code: 'scannerNotConnected' },
     });
@@ -258,11 +258,155 @@ function refusingConnector() {
   return { requests, connector };
 }
 
+/** Транспорт, который держит первый запрос до `release`: снимок идущего прохода виден снаружи. */
+function gatedConnector() {
+  let release = (): void => undefined;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const connector: ConnectorOptions = {
+    createTransport: () => ({
+      request: async () => {
+        await gate;
+        return fail('scannerUnreachable', { reason: 'refused' });
+      },
+      stream: () => Promise.resolve(fail('scannerUnreachable', { reason: 'refused' })),
+      close: () => undefined,
+    }),
+  };
+  return { connector, release };
+}
+
 async function serviceOver(root: string, connector: ConnectorOptions) {
   const service = await openPassService(root, { connector });
   await service.useScanner(connected());
   return service;
 }
+
+describe('служба прохода: добавленный набор (M3.5, U3; KTD-5)', () => {
+  const ADDED = { kind: 'added', after: null } as const;
+  const twoPasses = [
+    { number: 1, pages: 3 },
+    { number: 2, pages: 3 },
+  ] as const;
+
+  it.each([
+    ['при лицевых и оборотах', [...twoPasses], {}],
+    ['при отказе от оборотов', [{ number: 1, pages: 3 }], { backsDeclined: true }],
+    [
+      'при принятом как есть лицевом',
+      [{ number: 1, pages: 2, state: 'interrupted', accepted: true }],
+      {},
+    ],
+  ] as const)(
+    '%s добавленный набор допускается: отказ приходит от сети',
+    async (_name, passes, extra) => {
+      const root = await makeTempDataRoot();
+      await seedSession(root, passes, extra);
+      const { requests, connector } = refusingConnector();
+      const service = await serviceOver(root, connector);
+
+      expect(await service.startPass(ADDED)).toEqual({
+        ok: false,
+        error: { code: 'scannerUnreachable', details: { reason: 'refused' } },
+      });
+      expect(requests.length).toBeGreaterThan(0);
+    },
+  );
+
+  it('снимок идущего добавленного прохода: роль added, счётчик без «из M», не досканирование', async () => {
+    const root = await makeTempDataRoot();
+    await seedSession(root, [...twoPasses]);
+    const { connector, release } = gatedConnector();
+    const service = await serviceOver(root, connector);
+
+    const pass = service.startPass({ kind: 'added', after: 'p01-s01-0002' });
+    expect(service.snapshot().pass).toMatchObject({
+      kind: 'added',
+      expected: null,
+      resumed: false,
+    });
+    // Второй запуск поверх идущего — passRunning, как и прежде.
+    expect(await service.startPass(ADDED)).toEqual(
+      fail('sessionConflict', { reason: 'passRunning' }),
+    );
+    release();
+    await pass;
+    expect(service.snapshot().pass).toBeNull();
+  });
+
+  it('без сессии добавлять не к чему — noSession, сеть не трогается', async () => {
+    const root = await makeTempDataRoot();
+    const { requests, connector } = refusingConnector();
+    const service = await serviceOver(root, connector);
+
+    expect(await service.startPass(ADDED)).toEqual(
+      fail('sessionConflict', { reason: 'noSession' }),
+    );
+    // Без намерения проход начинается: отказ от сети.
+    expect(await service.startPass(null)).toMatchObject({
+      ok: false,
+      error: { code: 'scannerUnreachable' },
+    });
+    expect(requests.length).toBeGreaterThan(0);
+  });
+
+  it('последний проход прерван — passInterrupted до сети; досканирование и «оставить как есть» прежние', async () => {
+    const root = await makeTempDataRoot();
+    await seedSession(root, [
+      { number: 1, pages: 3 },
+      { number: 2, pages: 1, state: 'interrupted' },
+    ]);
+    const { requests, connector } = refusingConnector();
+    const service = await serviceOver(root, connector);
+
+    expect(await service.startPass(ADDED)).toEqual(
+      fail('sessionConflict', { reason: 'passInterrupted' }),
+    );
+    expect(requests).toEqual([]);
+    expect(service.snapshot().canAccept).toBe(true);
+    // Без намерения — путь досканирования: пересобранный журнал даёт paramsUnknown, не новый проход.
+    expect(await service.startPass(null)).toEqual(
+      fail('sessionConflict', { reason: 'paramsUnknown' }),
+    );
+    expect(await service.acceptPass()).toMatchObject({ ok: true });
+    expect(await service.startPass(ADDED)).toMatchObject({
+      ok: false,
+      error: { code: 'scannerUnreachable' },
+    });
+  });
+
+  it('якорь не из сессии — invalidInput до сети; `after: null` проходит', async () => {
+    const root = await makeTempDataRoot();
+    await seedSession(root, [...twoPasses]);
+    const { requests, connector } = refusingConnector();
+    const service = await serviceOver(root, connector);
+
+    expect(await service.startPass({ kind: 'added', after: 'p01-s01-0009' })).toEqual(
+      fail('invalidInput', { field: 'after' }),
+    );
+    expect(await service.startPass({ kind: 'added', after: 'p03-s01-0001' })).toEqual(
+      fail('invalidInput', { field: 'after' }),
+    );
+    expect(requests).toEqual([]);
+    expect(await service.startPass({ kind: 'added', after: 'p02-s01-0003' })).toMatchObject({
+      ok: false,
+      error: { code: 'scannerUnreachable' },
+    });
+    expect(requests.length).toBeGreaterThan(0);
+  });
+
+  it('без сканера добавленный набор отклоняется тем же кодом, что и обычный проход', async () => {
+    const root = await makeTempDataRoot();
+    await seedSession(root, [...twoPasses]);
+    const service = await openPassService(root);
+
+    expect(await service.startPass(ADDED)).toEqual({
+      ok: false,
+      error: { code: 'scannerNotConnected' },
+    });
+  });
+});
 
 describe('служба прохода: политика второго прохода (M2, U3)', () => {
   it('поверх завершённого лицевого новый проход допускается: отказ приходит от сети, не политики', async () => {
@@ -271,7 +415,7 @@ describe('служба прохода: политика второго прох�
     const { requests, connector } = refusingConnector();
     const service = await serviceOver(root, connector);
 
-    expect(await service.startPass()).toEqual({
+    expect(await service.startPass(null)).toEqual({
       ok: false,
       error: { code: 'scannerUnreachable', details: { reason: 'refused' } },
     });
@@ -283,7 +427,7 @@ describe('служба прохода: политика второго прох�
     await seedSession(root, [{ number: 1, pages: 2, state: 'interrupted', accepted: true }]);
     const service = await serviceOver(root, refusingConnector().connector);
 
-    const result = await service.startPass();
+    const result = await service.startPass(null);
     expect(result).toMatchObject({ ok: false, error: { code: 'scannerUnreachable' } });
   });
 
@@ -293,14 +437,14 @@ describe('служба прохода: политика второго прох�
     const { requests, connector } = refusingConnector();
     const service = await serviceOver(root, connector);
 
-    expect(await service.startPass()).toEqual({
+    expect(await service.startPass(null)).toEqual({
       ok: false,
       error: { code: 'sessionConflict', details: { reason: 'backsDeclined' } },
     });
     expect(requests).toEqual([]);
   });
 
-  it('при двух уцелевших проходах третий не начинается — до сети', async () => {
+  it('при лицевых и оборотах третий проход без намерения не начинается — до сети', async () => {
     const root = await makeTempDataRoot();
     await seedSession(root, [
       { number: 1, pages: 3 },
@@ -309,11 +453,23 @@ describe('служба прохода: политика второго прох�
     const { requests, connector } = refusingConnector();
     const service = await serviceOver(root, connector);
 
-    expect(await service.startPass()).toEqual({
+    expect(await service.startPass(null)).toEqual({
       ok: false,
       error: { code: 'sessionConflict', details: { reason: 'backsPresent' } },
     });
     expect(requests).toEqual([]);
+  });
+
+  it('снимок идущего прохода оборотов: роль backs и «из M» по лицевым (M3.5, R2)', async () => {
+    const root = await makeTempDataRoot();
+    await seedSession(root, [{ number: 1, pages: 3 }]);
+    const { connector, release } = gatedConnector();
+    const service = await serviceOver(root, connector);
+
+    const pass = service.startPass(null);
+    expect(service.snapshot().pass).toMatchObject({ kind: 'backs', expected: 3, resumed: false });
+    release();
+    await pass;
   });
 
   it('прерванный непринятый проход — только досканирование: политика нового прохода не включается', async () => {
@@ -322,7 +478,7 @@ describe('служба прохода: политика второго прох�
     const service = await serviceOver(root, refusingConnector().connector);
 
     // `origin: null` — пересобранный журнал: досканировать нельзя, и это НЕ путь к новому проходу.
-    expect(await service.startPass()).toEqual({
+    expect(await service.startPass(null)).toEqual({
       ok: false,
       error: { code: 'sessionConflict', details: { reason: 'paramsUnknown' } },
     });
@@ -508,7 +664,7 @@ describe('служба прохода: правки редактора (M3, U3)'
     };
     const service = await serviceOver(root, connector);
 
-    const pass = service.startPass();
+    const pass = service.startPass(null);
     expect(service.snapshot().pass).not.toBeNull();
     expect(await service.setEdits(EDITS, false)).toEqual(
       fail('sessionConflict', { reason: 'passRunning' }),
@@ -560,6 +716,8 @@ describe('служба прохода: пакетное сохранение (M3
       ok: true,
       value: { folder, written: [{ index: 0, fileName: 'скан.pdf' }], failed: [] },
     });
+    // Папка пакета — для «Открыть папку» (M3.5, KTD-9); до пакета её нет.
+    expect(service.lastBatchFolder()).toBe(folder);
     const document = await PDFDocument.load(await readFile(join(folder, 'скан.pdf')));
     // Порядок: 1л, 1о, 2л, 2о; обороты повёрнуты.
     expect(document.getPageCount()).toBe(4);
@@ -582,6 +740,7 @@ describe('служба прохода: пакетное сохранение (M3
     await duplex(root);
     await rm(join(layoutOf(root).pagesDir, 'p01-s01-0002.jpg'));
     const service = await openPassService(root);
+    expect(service.lastBatchFolder()).toBeNull();
 
     expect(
       await service.saveDocuments(folder, { mode: 'single', names: ['скан'], retry: false }),
@@ -600,6 +759,8 @@ describe('служба прохода: пакетное сохранение (M3
     });
     expect(await readdir(folder)).toEqual([]);
     expect(service.snapshot().session?.saved).toBe(false);
+    // Пакет без единого записанного файла папку не помнит: открывать там нечего.
+    expect(service.lastBatchFolder()).toBeNull();
   });
 
   it('без сессии — noSession; в папку ничего не пишется', async () => {
@@ -869,7 +1030,7 @@ describe('служба прохода: пакетное сохранение (M3
     // Второй пакет (двойной клик), закрытие сессии и новый проход — тоже ждут конца записи.
     expect(await service.saveDocuments(folder, request)).toEqual(busy);
     expect(await service.closeSession()).toEqual(busy);
-    expect(await service.startPass()).toEqual(busy);
+    expect(await service.startPass(null)).toEqual(busy);
     release();
     expect(await saving).toMatchObject({ ok: true, value: { failed: [] } });
     expect(await readdir(folder)).toEqual(['А.pdf']);

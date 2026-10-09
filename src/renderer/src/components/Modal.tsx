@@ -8,6 +8,14 @@ const FOCUSABLE =
   'button:not(:disabled), input:not(:disabled), select:not(:disabled), ' +
   'textarea:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])';
 
+/**
+ * Что в обходе Tab внутри `root`: кнопки с `tabIndex=-1` (невыбранные радио в группах с одной
+ * остановкой, M3.5) фокусируемы, но не tabbable — ловушка и начальный фокус их пропускают,
+ * иначе кольцо расходится с нативным обходом и Shift+Tab утекает под затемнение.
+ */
+const tabbablesOf = (root: ParentNode): HTMLElement[] =>
+  [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((element) => element.tabIndex >= 0);
+
 export interface ModalProps {
   /** `id` заголовка — для `aria-labelledby`. */
   readonly labelledBy: string;
@@ -41,7 +49,7 @@ export function Modal({
   useEffect(() => {
     const dialog = dialogRef.current;
     if (dialog !== null && !dialog.contains(document.activeElement)) {
-      dialog.querySelector<HTMLElement>(FOCUSABLE)?.focus();
+      tabbablesOf(dialog)[0]?.focus();
     }
     return () => {
       if (opener instanceof HTMLElement && opener.isConnected) {
@@ -50,9 +58,7 @@ export function Modal({
       }
       // Открывшая кнопка исчезла — например, вместе с плашкой отказа (S6, S17). Фокус не
       // бросается на body, а идёт на первый фокусируемый элемент экрана под модалкой.
-      const fallback = [...document.querySelectorAll<HTMLElement>(FOCUSABLE)].find(
-        (element) => !dialog?.contains(element),
-      );
+      const fallback = tabbablesOf(document).find((element) => !dialog?.contains(element));
       fallback?.focus();
     };
   }, [opener]);
@@ -76,7 +82,7 @@ export function Modal({
     if (dialog === null) {
       return;
     }
-    const focusable = [...dialog.querySelectorAll<HTMLElement>(FOCUSABLE)];
+    const focusable = tabbablesOf(dialog);
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
     if (first === undefined || last === undefined) {

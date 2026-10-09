@@ -54,7 +54,7 @@ async function sessionWith(pages: readonly Uint8Array[], origin: PassOrigin = OR
   const root = await makeTempDataRoot();
   const layout = layoutOf(root);
   const { store } = await openSessionStore(root);
-  valueOf(await store.beginPass(origin));
+  valueOf(await store.beginPass(origin, null));
   for (const page of pages) {
     await store.acceptPage(body(page));
   }
@@ -223,7 +223,7 @@ describe('миниатюры', () => {
 
     // Новая пачка: тот же ключ, другая страница.
     valueOf(await store.closeSession());
-    valueOf(await store.beginPass(ORIGIN));
+    valueOf(await store.beginPass(ORIGIN, null));
     await store.acceptPage(body(pageFixture(2)));
     valueOf(await store.endSegment('completed'));
     const fromSecondSession = valueOf(await thumbnails.get(KEY));

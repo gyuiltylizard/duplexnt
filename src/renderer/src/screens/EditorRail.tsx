@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -12,8 +13,14 @@ import { useTranslation } from 'react-i18next';
 import { MAX_DOCUMENT_NAME_LENGTH, type AssembledDocument, type AssembledPage } from '@shared';
 import type { DropSide } from '../state/edits';
 import { single, type Selection } from '../state/selection';
-import { toneOf } from './EditorInspector';
-import { EditorThumb, type PickMode, type SplitKind, type ThumbDrag } from './EditorThumb';
+import { toneOf } from '../state/page-text';
+import {
+  EditorThumb,
+  pickModifierHeld,
+  type PickMode,
+  type SplitKind,
+  type ThumbDrag,
+} from './EditorThumb';
 
 // Лента редактора (план M3, U7–U8; handoff M3, S2–S7): панель мультивыделения, группы по
 // документам с разделителем «✕» и полем имени, миниатюры с split-баром и перетаскиванием.
@@ -47,6 +54,7 @@ function DocName({
   disabled,
   busy,
   onCommit,
+  onEnter,
 }: {
   readonly index: number;
   readonly value: string;
@@ -54,6 +62,8 @@ function DocName({
   readonly disabled: boolean;
   readonly busy: boolean;
   readonly onCommit: (docIndex: number, name: string) => boolean;
+  /** Enter зафиксировал имя: фокус уходит из поля — на карточку текущей страницы (M3.5, S14). */
+  readonly onEnter: () => void;
 }): ReactNode {
   const { t } = useTranslation();
   const [draft, setDraft] = useState<{ readonly text: string; readonly sent: boolean } | null>(
@@ -79,7 +89,15 @@ function DocName({
   const keyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
     if (event.key === 'Enter') {
       event.preventDefault();
-      commit();
+      // Команда в полёте — черновик не отправить; фокус остаётся в поле, иначе имя выглядело
+      // бы принятым, а в журнал не попало бы (код-ревью сессий 3–4).
+      if (busy) {
+        return;
+      }
+      // Enter «закрывает» ввод (замечание приёмки M3): уход фокуса фиксирует имя, как и
+      // раньше (один `setEdits`), затем фокус уходит на ленту — следующий шаг человека там.
+      event.currentTarget.blur();
+      onEnter();
     } else if (event.key === 'Escape') {
       // Esc в поле — отмена ввода, а не сжатие выделения ленты; фокус остаётся в поле.
       event.stopPropagation();
@@ -107,6 +125,11 @@ function DocName({
     />
   );
 }
+
+/** Фокус на карточку страницы по ключу — одно место для селектора карточки в ленте. */
+export const focusThumb = (rail: HTMLElement | null, key: string): void => {
+  rail?.querySelector<HTMLElement>(`[data-key="${CSS.escape(key)}"]`)?.focus();
+};
 
 export interface EditorRailProps {
   readonly sessionId: string;
@@ -159,10 +182,36 @@ export function EditorRail({
 }: EditorRailProps): ReactNode {
   const { t } = useTranslation();
   const total = order.length;
+  /** Фокус на карточку текущей страницы — точку входа клавиатуры (роуминг `tabindex`). */
+  const focusCurrent = (): void => {
+    if (selection.current !== null) {
+      focusThumb(railRef.current, selection.current);
+    }
+  };
   const selectedKeys = useMemo(() => new Set(selection.keys), [selection.keys]);
   const multi = selection.keys.length > 1;
   // Правки доступны сейчас: нет записи и команды в полёте — можно тянуть, split-бар виден.
   const editable = !locked && !busy;
+  // Split-бар уступает выделению (M3.5, KTD-10): пока зажат Ctrl/Shift или выделено больше
+  // одной страницы, бара нет — клик по верхнему краю миниатюры с модификатором выделяет.
+  // Клавиши слушает окно: фокус в момент нажатия может быть где угодно.
+  const [modifierHeld, setModifierHeld] = useState(false);
+  useEffect(() => {
+    const update = (event: globalThis.KeyboardEvent): void => {
+      setModifierHeld(pickModifierHeld(event));
+    };
+    const release = (): void => {
+      setModifierHeld(false);
+    };
+    window.addEventListener('keydown', update);
+    window.addEventListener('keyup', update);
+    window.addEventListener('blur', release);
+    return () => {
+      window.removeEventListener('keydown', update);
+      window.removeEventListener('keyup', update);
+      window.removeEventListener('blur', release);
+    };
+  }, []);
 
   // Позиция, перед которой стоит граница, → номер документа, который с неё начинается.
   const starts = useMemo(
@@ -276,7 +325,11 @@ export function EditorRail({
   };
 
   const splitKind = (position: number): SplitKind =>
-    position === 0 || !editable ? null : starts.has(position) ? 'remove' : 'add';
+    position === 0 || !editable || multi || modifierHeld
+      ? null
+      : starts.has(position)
+        ? 'remove'
+        : 'add';
 
   return (
     <aside className="rail" aria-label={t('editor.railLabel')} ref={railRef} onKeyDown={onKeyDown}>
@@ -351,6 +404,7 @@ export function EditorRail({
                   disabled={locked}
                   busy={busy}
                   onCommit={onRename}
+                  onEnter={focusCurrent}
                 />
                 <span className="doc-group__count">
                   {t('editor.doc.count', { count: doc.count })}
@@ -376,6 +430,7 @@ export function EditorRail({
                       lost={entry.lost}
                       position={position + 1}
                       unpaired={entry.unpaired}
+                      addedSet={entry.addedSet}
                       current={entry.key === selection.current}
                       selected={selectedKeys.has(entry.key)}
                       multi={multi && selectedKeys.has(entry.key)}

@@ -1,40 +1,19 @@
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AssemblyReport } from '@shared';
-import type { TFunction } from 'i18next';
 import { Modal } from '../components/Modal';
 import { assemblyOutcome } from '../state/assembly-outcome';
 
-// Модалка `mismatch` (план M2, U9; UI_SPEC раздел 7.5; handoff M2, S5): сообщает о несовпадении
-// проходов, кнопок действия нет — документ уже собран по совпавшим парам, закрыть — нормальный
-// исход. Три исхода Copy: оборотов меньше, оборотов больше, проход принят коротким. Показ
-// выводится из снимка в App (KTD-8), закрытие — подтверждение на время жизни процесса.
+// Модалка `mismatch` (план M2, U9; UI_SPEC раздел 7.5; handoff M2, S5; M3.5, S8): сообщает о
+// несовпадении проходов, кнопок действия нет — документ уже собран по совпавшим парам, закрыть —
+// нормальный исход. Три исхода Copy: оборотов меньше, оборотов больше, проход принят коротким.
+// Пропущенный лист текст не называет (R18): пары считаются от начала, какой именно лист не
+// прошёл, приложение не знает — отсылает к «+ Добавить». Показ выводится из снимка в App
+// (KTD-8), закрытие — подтверждение на время жизни процесса.
 
 export interface MismatchModalProps {
   readonly report: AssemblyReport;
   readonly onClose: () => void;
-}
-
-/**
- * Листы без оборота текстом: «лист №1», «листы №1–5», «листы №1, 4» — подряд идущие номера
- * сворачиваются в диапазон. Вход — отсортированный список из отчёта сборки.
- */
-export function sheetsLabel(t: TFunction, sheets: readonly number[]): string {
-  const ranges: [number, number][] = [];
-  for (const sheet of sheets) {
-    const last = ranges[ranges.length - 1];
-    if (last !== undefined && sheet === last[1] + 1) {
-      last[1] = sheet;
-    } else {
-      ranges.push([sheet, sheet]);
-    }
-  }
-  const list = ranges
-    .map(([from, to]) =>
-      from === to ? `${from}` : to === from + 1 ? `${from}, ${to}` : `${from}–${to}`,
-    )
-    .join(', ');
-  return sheets.length === 1 ? t('mismatch.sheetOne', { list }) : t('mismatch.sheetMany', { list });
 }
 
 export function MismatchModal({ report, onClose }: MismatchModalProps): ReactNode {
@@ -49,23 +28,17 @@ export function MismatchModal({ report, onClose }: MismatchModalProps): ReactNod
   if (outcome === 'accepted') {
     title = t('mismatch.accepted.title', { backs: report.backs, fronts: report.fronts });
     // Принят может быть и длинный прерванный проход: непарных лиц нет, зато есть лишние
-    // обороты — перечень пустых листов в тексте был бы битым.
+    // обороты — текст про листы без пары был бы ложью.
     text =
       report.unpairedSheets.length > 0
-        ? t('mismatch.accepted.text', {
-            count: report.unpairedSheets.length,
-            sheets: sheetsLabel(t, report.unpairedSheets),
-          })
+        ? t('mismatch.accepted.text')
         : t('mismatch.accepted.textExtra');
   } else if (outcome === 'extra') {
     title = t('mismatch.extra.title', { backs: report.backs, fronts: report.fronts });
     text = t('mismatch.extra.text');
   } else {
     title = t('mismatch.fewer.title', { count: report.fronts, backs: report.backs });
-    text = t('mismatch.fewer.text', {
-      count: report.unpairedSheets.length,
-      sheets: sheetsLabel(t, report.unpairedSheets),
-    });
+    text = t('mismatch.fewer.text');
   }
 
   return (

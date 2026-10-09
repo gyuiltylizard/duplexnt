@@ -43,6 +43,8 @@ function makeSnapshot(fronts: number): Snapshot {
           state: 'completed',
           paramsKnown: true,
           scanner: null,
+          kind: 'fronts',
+          after: null,
           rotate180: false,
           pages: Array.from({ length: fronts }, (_, index) => ({
             key: `p01-s01-${String(index + 1).padStart(4, '0')}`,
@@ -150,6 +152,7 @@ describe('FlipScreen', () => {
     const pass: PassProgress = {
       phase: 'busy',
       resumed: false,
+      kind: 'backs',
       expected: 12,
       params: PARAMS,
       pages: 0,

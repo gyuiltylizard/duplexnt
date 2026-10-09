@@ -2,7 +2,17 @@ import { EMPTY_EDITS, fail } from '@shared';
 import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../i18n';
-import { makePass, makeSnapshot, pages, renderEditor, stubApi, twoPass } from './editor-fixture';
+import {
+  makePass,
+  makeSnapshot,
+  nameField,
+  option,
+  pages,
+  renderEditor,
+  settle,
+  stubApi,
+  twoPass,
+} from './editor-fixture';
 
 // Экран `editor`: поведение M1–M2 (лента, превью, тумблер, точка несохранённого, плашка прохода).
 // Правки, выделение, документы и инспектор M3 — в EditorScreen.edits.test.tsx; сохранение и
@@ -61,11 +71,11 @@ describe('экран editor', () => {
     // Обороты пришли от последнего листа: без оборота остался лист №1 (младший).
     expect(options[0]?.getAttribute('aria-label')).toBe('Лист 1 — без оборота');
     expect(
-      (options[0] as Element).querySelector('[title="У этого листа нет оборота"]'),
+      (options[0] as Element).querySelector('[title="У этого листа не нашлось пары"]'),
     ).not.toBeNull();
     // Парные листы точки не несут.
     expect(options[1]?.getAttribute('aria-label')).toBe('Страница 2');
-    expect(screen.getAllByTitle('У этого листа нет оборота').length).toBe(1);
+    expect(screen.getAllByTitle('У этого листа не нашлось пары').length).toBe(1);
   });
 
   it('S7: тумблер поворота виден при проходе оборотов и шлёт правку с текущими правками (M3)', () => {
@@ -81,7 +91,7 @@ describe('экран editor', () => {
     const api = stubApi();
     const snapshot = makeSnapshot([
       makePass({ pages: pages(2) }),
-      makePass({ number: 2, rotate180: true, pages: pages(2, 1, 'p02-s01') }),
+      makePass({ number: 2, kind: 'backs', rotate180: true, pages: pages(2, 1, 'p02-s01') }),
     ]);
     renderEditor(snapshot);
 
@@ -117,7 +127,7 @@ describe('экран editor', () => {
     renderEditor(
       makeSnapshot([
         makePass({ pages: pages(2) }),
-        makePass({ number: 2, pages: pages(2, 1, 'p02-s01') }),
+        makePass({ number: 2, kind: 'backs', pages: pages(2, 1, 'p02-s01') }),
       ]),
     );
 
@@ -333,6 +343,104 @@ describe('экран editor', () => {
     expect(screen.getByText('2 из 3')).toBeDefined();
   });
 
+  it('M3.5, S4: прерванный добавленный набор — свои заголовок и текст, действия общие', () => {
+    stubApi();
+    renderEditor(
+      makeSnapshot(
+        [
+          makePass({ pages: pages(3) }),
+          makePass({
+            number: 2,
+            kind: 'added',
+            after: 'p01-s01-0002',
+            state: 'interrupted',
+            pages: pages(2, 1, 'p02-s01'),
+          }),
+        ],
+        { canResume: true, canAccept: true },
+        { backsDeclined: true },
+      ),
+    );
+
+    const banner = screen.getByRole('region', { name: 'Добавление прервалось после страницы 2' });
+    expect(within(banner).getByText(/уже в документе/).textContent).toContain('начиная с 3-го');
+    expect(
+      within(banner)
+        .getAllByRole('button')
+        .map((button) => button.textContent),
+    ).toEqual(['Досканировать остаток', 'Оставить как есть', 'Новое сканирование']);
+  });
+
+  it('M3.5, KTD-4: тумблер 180° — по роли backs, не по позиции прохода', () => {
+    stubApi();
+    const { rerender } = renderEditor(
+      makeSnapshot(
+        [
+          makePass({ pages: pages(2) }),
+          makePass({ number: 2, kind: 'added', after: null, pages: pages(1, 1, 'p02-s01') }),
+        ],
+        {},
+        { backsDeclined: true },
+      ),
+    );
+    expect(screen.queryByRole('checkbox')).toBeNull();
+
+    rerender(
+      makeSnapshot([
+        makePass({ pages: pages(2) }),
+        makePass({ number: 2, kind: 'added', after: null, pages: pages(1, 1, 'p02-s01') }),
+        makePass({ number: 3, kind: 'backs', rotate180: true, pages: pages(2, 1, 'p03-s01') }),
+      ]),
+    );
+    expect(screen.getByRole<HTMLInputElement>('checkbox').checked).toBe(true);
+  });
+
+  it('M3.5, S13: «↺» слева от «↻», −90° одним шагом для всего выделения; подписи с числом страниц', async () => {
+    const api = stubApi();
+    renderEditor(twoPass());
+
+    const tools = screen.getAllByRole('button', { name: /Повернуть/ });
+    expect(tools.map((button) => button.textContent)).toEqual(['↺', '↻']);
+    fireEvent.click(option(0));
+    fireEvent.click(option(2), { ctrlKey: true });
+    const left = screen.getByRole('button', { name: 'Повернуть 2 стр. на 90° против часовой' });
+    expect(left.getAttribute('title')).toBe('Повернуть 2 стр. на 90° против часовой');
+    fireEvent.click(left);
+    await settle();
+
+    expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({
+      edits: { ...EMPTY_EDITS, rotations: { 'p01-s01-0001': 270, 'p01-s01-0002': 270 } },
+      rotate180: false,
+    });
+  });
+
+  it('M3.5, S14: Enter в имени документа фиксирует имя и уводит фокус на карточку текущей', async () => {
+    const api = stubApi();
+    renderEditor(twoPass());
+    fireEvent.click(option(1));
+
+    const field = nameField(1);
+    field.focus();
+    fireEvent.change(field, { target: { value: 'Акт' } });
+    fireEvent.keyDown(field, { key: 'Enter' });
+    await settle();
+
+    expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({
+      edits: { ...EMPTY_EDITS, names: ['Акт'] },
+      rotate180: false,
+    });
+    expect(document.activeElement).toBe(option(1));
+  });
+
+  it('R26: подсказка под списком документов говорит про Ctrl/Shift и «Выделить в документ»', () => {
+    stubApi();
+    renderEditor(twoPass());
+
+    expect(screen.getByText(/^Границы не отмечены/).textContent).toContain(
+      'выделите страницы подряд (Shift — диапазон, Ctrl — по одной) и нажмите «Выделить в документ»',
+    );
+  });
+
   it('плашка прерванного прохода несёт все три действия', () => {
     stubApi();
     renderEditor(
@@ -379,11 +487,10 @@ describe('экран editor', () => {
     expect(screen.getByText('СТРАНИЦА 1')).toBeDefined();
   });
 
-  it('элементов вех после M3 нет в разметке: «Добавить», «Пересканировать», пустые обороты', () => {
+  it('элементов вех после M3.5 нет в разметке: «Пересканировать», пустые обороты', () => {
     stubApi();
     renderEditor(makeSnapshot([makePass({})]));
 
-    expect(screen.queryByText(/Добавить/)).toBeNull();
     expect(screen.queryByText(/Пересканировать/)).toBeNull();
     expect(screen.queryByText(/пустые/)).toBeNull();
   });

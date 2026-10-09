@@ -33,6 +33,7 @@ function running(pageCount: number, passPages: number, phase: PassProgress['phas
   const pass: PassProgress = {
     phase,
     resumed: false,
+    kind: 'fronts',
     expected: null,
     params: PARAMS,
     pages: passPages,
@@ -50,6 +51,8 @@ function running(pageCount: number, passPages: number, phase: PassProgress['phas
           state: 'running',
           paramsKnown: true,
           scanner: null,
+          kind: 'fronts',
+          after: null,
           rotate180: false,
           pages: pages(pageCount),
         },
@@ -75,6 +78,7 @@ describe('экран scan', () => {
     const pass: PassProgress = {
       phase: 'scanning',
       resumed: false,
+      kind: 'backs',
       expected: 12,
       params: PARAMS,
       pages: 7,
@@ -92,6 +96,8 @@ describe('экран scan', () => {
             state: 'completed',
             paramsKnown: true,
             scanner: null,
+            kind: 'fronts',
+            after: null,
             rotate180: false,
             pages: pages(12),
           },
@@ -100,6 +106,8 @@ describe('экран scan', () => {
             state: 'running',
             paramsKnown: true,
             scanner: null,
+            kind: 'backs',
+            after: null,
             rotate180: false,
             pages: pages(7),
           },
@@ -112,10 +120,49 @@ describe('экран scan', () => {
     expect(screen.getByRole('status').textContent).toBe('Отсканировано 7 из 12');
   });
 
+  it('M3.5, S3: добавленный набор — тег без номера прохода на цвете набора, счётчик без «из M»', () => {
+    const { snapshot } = running(2, 2);
+    const pass: PassProgress = {
+      phase: 'scanning',
+      resumed: false,
+      kind: 'added',
+      expected: null,
+      params: PARAMS,
+      pages: 2,
+    };
+    render(<ScanScreen snapshot={snapshot} pass={pass} onStop={vi.fn()} />);
+
+    const tag = screen.getByText('ДОБАВЛЯЕМ СТРАНИЦЫ');
+    expect(tag.className).toBe('scan-screen__tag scan-screen__tag--added');
+    expect(screen.queryByText(/ПРОХОД/)).toBeNull();
+    expect(screen.getByRole('status').textContent).toBe('Отсканировано 2');
+    expect(screen.getByText('300 dpi · оттенки серого · A4')).toBeDefined();
+  });
+
+  it('M3.5, S3: досканирование добавленного набора — мета без номера прохода', () => {
+    const { snapshot } = running(3, 1);
+    const pass: PassProgress = {
+      phase: 'scanning',
+      resumed: true,
+      kind: 'added',
+      expected: null,
+      params: PARAMS,
+      pages: 1,
+    };
+    render(<ScanScreen snapshot={snapshot} pass={pass} onStop={vi.fn()} />);
+
+    expect(
+      screen.getByText(
+        'досканируем добавленный набор · до обрыва было 2 · 300 dpi · оттенки серого · A4',
+      ),
+    ).toBeDefined();
+  });
+
   it('счётчик оборотов переваливает за ожидаемое и не подрезается (R2)', () => {
     const pass: PassProgress = {
       phase: 'scanning',
       resumed: false,
+      kind: 'backs',
       expected: 3,
       params: PARAMS,
       pages: 4,
@@ -133,6 +180,8 @@ describe('экран scan', () => {
             state: 'running',
             paramsKnown: true,
             scanner: null,
+            kind: 'backs',
+            after: null,
             rotate180: false,
             pages: pages(4),
           },
@@ -148,6 +197,7 @@ describe('экран scan', () => {
     const pass: PassProgress = {
       phase: 'starting',
       resumed: false,
+      kind: 'fronts',
       expected: null,
       params: PARAMS,
       pages: 0,
@@ -161,6 +211,7 @@ describe('экран scan', () => {
     const pass: PassProgress = {
       phase: 'starting',
       resumed: false,
+      kind: 'fronts',
       expected: null,
       params: PARAMS,
       pages: 0,
@@ -217,6 +268,7 @@ describe('экран scan', () => {
     const pass: PassProgress = {
       phase: 'scanning',
       resumed: true,
+      kind: 'fronts',
       expected: null,
       params: PARAMS,
       pages: 1,
@@ -234,6 +286,8 @@ describe('экран scan', () => {
             state: 'running',
             paramsKnown: true,
             scanner: null,
+            kind: 'fronts',
+            after: null,
             rotate180: false,
             pages: pages(18),
           },
@@ -252,6 +306,7 @@ describe('экран scan', () => {
     const pass: PassProgress = {
       phase: 'starting',
       resumed: true,
+      kind: 'fronts',
       expected: null,
       params: PARAMS,
       pages: 0,
@@ -269,6 +324,8 @@ describe('экран scan', () => {
             state: 'interrupted',
             paramsKnown: true,
             scanner: null,
+            kind: 'fronts',
+            after: null,
             rotate180: false,
             pages: pages(17),
           },
@@ -309,6 +366,7 @@ describe('экран scan', () => {
     const pass: PassProgress = {
       phase: 'scanning',
       resumed: true,
+      kind: 'fronts',
       expected: null,
       params: PARAMS,
       pages: 1,
@@ -326,6 +384,8 @@ describe('экран scan', () => {
             state: 'running',
             paramsKnown: true,
             scanner: null,
+            kind: 'fronts',
+            after: null,
             rotate180: false,
             pages: [{ key: 'p01-s01-0001', number: 1, lost: true }, ...pages(2, 2)],
           },

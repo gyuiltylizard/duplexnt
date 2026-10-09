@@ -10,7 +10,7 @@ import { Modal } from '../components/Modal';
 import { useUnmounted } from '../components/useUnmounted';
 import { errorText, errorTextInline } from '../state/error-text';
 import { asRequested, requestedNames, resultRows } from '../state/save-result';
-import { toneOf } from '../screens/EditorInspector';
+import { toneOf } from '../state/page-text';
 import './save-modal.css';
 
 // Модалка `save` (план M3, U9; handoff M3, S16; UI_SPEC §7.3): режим «Отдельные файлы / Один

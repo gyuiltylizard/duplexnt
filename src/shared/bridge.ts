@@ -136,6 +136,21 @@ export interface ProbeResult {
 /** Команда без входа: любое значение, кроме `undefined`, отклоняется (KTD-39). */
 export type NoRequest = undefined;
 
+/**
+ * Намерение запуска добавленного набора (M3.5, KTD-5): однопроходный набор без пар, который
+ * встаёт в ленту сразу после страницы-якоря; `after: null` — в конец ленты.
+ */
+export interface AddedPassIntent {
+  readonly kind: 'added';
+  readonly after: string | null;
+}
+
+/**
+ * Запрос `startPass`: `null` — проход по очереди (лицевые, обороты, досканирование прерванного);
+ * намерение — добавленный набор поверх готовой сессии.
+ */
+export type StartPassRequest = AddedPassIntent | null;
+
 export interface BridgeCommands {
   readonly probe: { readonly request: ProbeRequest; readonly value: ProbeResult };
   /** Снимок состояния — единственный источник правды для экрана (KTD-23). */
@@ -150,8 +165,12 @@ export interface BridgeCommands {
   /** Проверка запомненного сканера ещё раз — кнопка «Повторить» (U19, S3); исход — в снимке. */
   readonly recheckScanner: { readonly request: NoRequest; readonly value: undefined };
   readonly setScanParams: { readonly request: ScanParams; readonly value: undefined };
-  /** Новый проход или досканирование; возвращается, когда задание закрыто. */
-  readonly startPass: { readonly request: NoRequest; readonly value: PassReport };
+  /**
+   * Новый проход, досканирование или добавленный набор (M3.5); возвращается, когда задание
+   * закрыто. Добавление без сессии — `noSession`, при прерванном последнем проходе —
+   * `passInterrupted`, якорь не из сессии — `invalidInput`.
+   */
+  readonly startPass: { readonly request: StartPassRequest; readonly value: PassReport };
   readonly stopPass: { readonly request: NoRequest; readonly value: undefined };
   readonly acceptPass: { readonly request: NoRequest; readonly value: undefined };
   /** «Обороты не нужны» (M2, KTD-6): durable-отметка, `flip` больше не показывается. */
@@ -176,6 +195,11 @@ export interface BridgeCommands {
   readonly closeSession: { readonly request: NoRequest; readonly value: undefined };
   /** Открывает каталог данных в проводнике — при несовместимых данных. Каталог знает main. */
   readonly openDataFolder: { readonly request: NoRequest; readonly value: undefined };
+  /**
+   * Открывает папку последнего записанного пакета — «Открыть папку» в тосте «Сохранено»
+   * (M3.5, KTD-9). Папку помнит ядро до выхода; пакета не было — конфликт `noBatch`.
+   */
+  readonly openSaveFolder: { readonly request: NoRequest; readonly value: undefined };
 }
 
 export type BridgeCommand = keyof BridgeCommands;
@@ -200,6 +224,7 @@ export const BRIDGE_CHANNELS = {
   saveDocuments: 'duplexnt:save-documents',
   closeSession: 'duplexnt:close-session',
   openDataFolder: 'duplexnt:open-data-folder',
+  openSaveFolder: 'duplexnt:open-save-folder',
 } as const satisfies Record<BridgeCommand, string>;
 
 export type CommandResult<K extends BridgeCommand> = Result<BridgeCommands[K]['value']>;

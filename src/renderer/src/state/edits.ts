@@ -22,11 +22,19 @@ function cutsWithout(cuts: readonly number[], removed: readonly number[]): numbe
 const positionsOf = (visible: readonly string[], keys: ReadonlySet<string>): number[] =>
   visible.flatMap((key, index) => (keys.has(key) ? [index] : []));
 
-/** Поворот на 90° по часовой каждой из страниц; полный оборот снимает запись. */
-export function rotated(edits: SessionEdits, keys: readonly string[]): SessionEdits {
+/** Направление поворота: «↻» — по часовой (+90°), «↺» — против (−90°, M3.5, KTD-11). */
+export type RotateDirection = 'cw' | 'ccw';
+
+/** Поворот на 90° каждой из страниц в заданную сторону; полный оборот снимает запись. */
+export function rotated(
+  edits: SessionEdits,
+  keys: readonly string[],
+  direction: RotateDirection = 'cw',
+): SessionEdits {
   const rotations = new Map(Object.entries(edits.rotations));
+  const step = direction === 'cw' ? 90 : 270;
   for (const key of new Set(keys)) {
-    const angle = ((rotations.get(key) ?? 0) + 90) % 360;
+    const angle = ((rotations.get(key) ?? 0) + step) % 360;
     if (angle === 0) {
       rotations.delete(key); // 0 в журнале не хранится
     } else {

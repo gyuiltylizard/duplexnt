@@ -67,6 +67,7 @@ export function buildApi(ipcRenderer: PreloadIpcRenderer): Api {
     saveDocuments: command(ipcRenderer, 'saveDocuments'),
     closeSession: command(ipcRenderer, 'closeSession'),
     openDataFolder: command(ipcRenderer, 'openDataFolder'),
+    openSaveFolder: command(ipcRenderer, 'openSaveFolder'),
     onSnapshotChanged: subscription(ipcRenderer, 'snapshotChanged'),
     onDiscoveryChanged: subscription(ipcRenderer, 'discoveryChanged'),
   };

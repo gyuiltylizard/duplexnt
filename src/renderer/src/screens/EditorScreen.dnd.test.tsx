@@ -1,8 +1,9 @@
-import { EMPTY_EDITS } from '@shared';
+import { EMPTY_EDITS, ok } from '@shared';
 import { cleanup, createEvent, fireEvent, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../i18n';
 import {
+  deferredSetEdits,
   applied,
   B1,
   B2,
@@ -442,7 +443,7 @@ describe('editor M3: границы документов (S1, S2, S5, S7)', () =
 });
 
 describe('editor M3: имя документа (S3)', () => {
-  it('ввод по буквам локален; Enter — один setEdits; уход фокуса после него ничего не шлёт', async () => {
+  it('ввод по буквам локален; Enter — один setEdits и уход фокуса на текущую (M3.5, S14); повторный blur ничего не шлёт', async () => {
     const api = stubApi();
     const snapshot = makeSnapshot([makePass({ pages: pages(3) })]);
     const { rerender } = renderEditor(snapshot);
@@ -460,9 +461,9 @@ describe('editor M3: имя документа (S3)', () => {
       edits: edits({ names: ['Акт'] }),
       rotate180: false,
     });
-    // До снимка поле показывает отправленное, а не прежнее.
+    // До снимка поле показывает отправленное, а не прежнее; фокус — на карточке текущей.
     expect(field.value).toBe('Акт');
-    expect(document.activeElement).toBe(field);
+    expect(document.activeElement).toBe(option(0));
     fireEvent.blur(field);
     expect(api.setEdits).toHaveBeenCalledTimes(1);
 
@@ -470,6 +471,29 @@ describe('editor M3: имя документа (S3)', () => {
     rerender(applied(snapshot, lastSent(api)));
     expect(nameField(1).value).toBe('Акт');
     expect(within(screen.getByRole('banner')).getByText('Акт')).toBeDefined();
+  });
+
+  it('Enter при команде в полёте оставляет фокус и черновик в поле (код-ревью сессий 3–4)', async () => {
+    const { setEdits, answer } = deferredSetEdits();
+    const api = stubApi({ setEdits });
+    const snapshot = makeSnapshot([makePass({ pages: pages(3) })]);
+    const { rerender } = renderEditor(snapshot);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Повернуть на 90° по часовой' }));
+    const field = nameField(1);
+    field.focus();
+    fireEvent.change(field, { target: { value: 'Акт' } });
+    fireEvent.keyDown(field, { key: 'Enter' });
+    expect(document.activeElement).toBe(field);
+    expect(field.value).toBe('Акт');
+    expect(api.setEdits).toHaveBeenCalledTimes(1);
+
+    // Команда дошла, снимок показан — уход фокуса дожимает имя.
+    answer(ok({ seq: 2 }));
+    await settle();
+    rerender(applied(snapshot, lastSent(api)));
+    fireEvent.blur(nameField(1));
+    expect(api.setEdits).toHaveBeenCalledTimes(2);
   });
 
   it('уход фокуса фиксирует; без изменений — ничего не шлётся', () => {
@@ -638,5 +662,99 @@ describe('editor M3: плашка правок и полный откат (S14)'
     ctrlZ();
     expect(api.setEdits).toHaveBeenCalledTimes(2);
     expect(lastSent(api)).toEqual(editedState);
+  });
+});
+
+describe('editor M3.5: split-бар уступает выделению (U10, KTD-10; R20, R21)', () => {
+  const bars = (): number => document.querySelectorAll('.thumb__split').length;
+  const current = (): string | undefined =>
+    document.querySelector<HTMLElement>('.thumb--selected')?.dataset.key;
+
+  it('Ctrl-клик по верхнему краю миниатюры — страница в выделении, границы нет', async () => {
+    const api = stubApi();
+    renderEditor(twoPass());
+
+    fireEvent.click(option(1));
+    fireEvent.click(splitBar(2), { ctrlKey: true });
+    await settle();
+
+    expect(selectedKeys()).toEqual([B3, F2]);
+    expect(api.setEdits).not.toHaveBeenCalled();
+    // Выделение из двух — баров нет вовсе.
+    expect(bars()).toBe(0);
+  });
+
+  it('Shift-клик по зоне бара — диапазон, не граница', async () => {
+    const api = stubApi();
+    renderEditor(twoPass());
+
+    fireEvent.click(option(0));
+    fireEvent.click(splitBar(2), { shiftKey: true });
+    await settle();
+
+    expect(selectedKeys()).toEqual([F1, B3, F2]);
+    expect(api.setEdits).not.toHaveBeenCalled();
+  });
+
+  it('бар скрыт, пока зажат Shift или Ctrl; отпустили — бар снова есть', () => {
+    stubApi();
+    renderEditor(twoPass());
+    expect(bars()).toBe(5);
+
+    fireEvent.keyDown(window, { key: 'Shift', shiftKey: true });
+    expect(bars()).toBe(0);
+    fireEvent.keyUp(window, { key: 'Shift', shiftKey: false });
+    expect(bars()).toBe(5);
+
+    fireEvent.keyDown(window, { key: 'Control', ctrlKey: true });
+    expect(bars()).toBe(0);
+    // Окно потеряло фокус — отпускание клавиши оно не увидит: сброс по `blur`.
+    fireEvent.blur(window);
+    expect(bars()).toBe(5);
+  });
+
+  it('клик по превью при трёх выделенных — одна текущая; кнопки действий выделение не сжимают; Esc прежний', () => {
+    stubApi();
+    renderEditor(twoPass());
+    const stage = document.querySelector('.stage');
+    if (stage === null) {
+      throw new Error('нет превью');
+    }
+
+    fireEvent.click(option(0));
+    fireEvent.click(option(2), { shiftKey: true });
+    expect(selectedKeys()).toHaveLength(3);
+    // Нажатие на кнопку, действующую на выделение, — выделение целое.
+    fireEvent.mouseDown(button('Удалить 3 стр.'));
+    expect(selectedKeys()).toHaveLength(3);
+
+    fireEvent.mouseDown(stage);
+    expect(selectedKeys()).toEqual([F2]);
+    expect(current()).toBe(F2);
+    expect(bars()).toBe(5);
+
+    // Esc — как раньше: сжатие до текущей из ленты.
+    fireEvent.click(option(0));
+    fireEvent.click(option(1), { shiftKey: true });
+    expect(selectedKeys()).toHaveLength(2);
+    fireEvent.keyDown(option(1), { key: 'Escape' });
+    expect(selectedKeys()).toEqual([B3]);
+  });
+
+  it('клик по ленте мимо миниатюр и по инспектору: лента выделение держит, инспектор — сжимает', () => {
+    stubApi();
+    renderEditor(twoPass());
+
+    fireEvent.click(option(0));
+    fireEvent.click(option(1), { shiftKey: true });
+    fireEvent.mouseDown(screen.getByRole('listbox'));
+    expect(selectedKeys()).toHaveLength(2);
+
+    const inspector = document.querySelector('.inspector');
+    if (inspector === null) {
+      throw new Error('нет инспектора');
+    }
+    fireEvent.mouseDown(inspector);
+    expect(selectedKeys()).toEqual([B3]);
   });
 });

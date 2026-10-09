@@ -1,23 +1,17 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  pageImageUrl,
-  type PageSnapshot,
-  type PassProgress,
-  type ScanParams,
-  type Snapshot,
-} from '@shared';
-import type { TFunction } from 'i18next';
+import { pageImageUrl, type PageSnapshot, type PassProgress, type Snapshot } from '@shared';
 import { useFocusWhen } from '../components/useFocusWhen';
 import { useImageLoad } from '../components/useImageLoad';
-import { lowerFirst } from '../state/error-text';
+import { paramsLine } from '../state/params-line';
 import './scan-screen.css';
 
 // Экран `scan` (план M1, U23; UI_SPEC раздел 3; handoff U19, S12–S15, S19): тег прохода,
 // иллюстрация подачи, счётчик в живом регионе, строка параметров, лента последних пяти
 // страниц, «Остановить». С M2 вернулись полные тексты (план M2, U8): тег различает роли
-// «лицевые/обороты» (по `expected`, не по номеру — KTD-4), счётчик оборотов — «N из M» (R2)
-// и может перевалить за M — показывается как есть.
+// «лицевые/обороты/добавляем» (по `kind`, не по номеру — KTD-4), счётчик оборотов — «N из M»
+// (R2) и может перевалить за M — показывается как есть. Добавленный набор (M3.5, handoff S3):
+// тег без номера прохода на цвете набора, счётчик без «из M», мета досканирования без номера.
 
 /** Сколько последних страниц показывает лента. */
 export const STRIP_SIZE = 5;
@@ -47,15 +41,6 @@ function passPages(snapshot: Snapshot, pass: PassProgress): readonly PageSnapsho
     return running.pages;
   }
   return pass.resumed ? (passes[passes.length - 1]?.pages ?? []) : [];
-}
-
-/** Строка параметров прохода: «300 dpi · оттенки серого · A4». */
-function paramsLine(t: TFunction, params: ScanParams): string {
-  return t('scan.params', {
-    resolution: params.resolution,
-    color: lowerFirst(t(`setup.params.colorMode.${params.colorMode}`)),
-    size: params.paperSize,
-  });
 }
 
 /** Карточка ленты: скелетон, пока миниатюра строится; номер вместо не построившейся (S19). */
@@ -123,11 +108,18 @@ export function ScanScreen({ snapshot, pass, onStop }: ScanScreenProps): ReactNo
         ? t('scan.counterOf', { count: counted, expected: pass.expected })
         : t('scan.counter', { count: counted });
 
-  const meta = busy
-    ? t('scan.busy.meta')
-    : pass.resumed
-      ? `${t('scan.resumeMeta', { number: passNumber(snapshot), count: prior })} · ${paramsLine(t, pass.params)}`
-      : paramsLine(t, pass.params);
+  let meta = busy ? t('scan.busy.meta') : paramsLine(t, pass.params);
+  if (!busy && pass.resumed) {
+    const resume =
+      pass.kind === 'added'
+        ? t('scan.resumeMetaAdded', { count: prior })
+        : t('scan.resumeMeta', { number: passNumber(snapshot), count: prior });
+    meta = `${resume} · ${meta}`;
+  }
+  const tag =
+    pass.kind === 'added'
+      ? t('scan.tagAdded')
+      : t(pass.kind === 'backs' ? 'scan.tagBacks' : 'scan.tag', { number: passNumber(snapshot) });
 
   const strip = pages.slice(-STRIP_SIZE);
   const sessionId = snapshot.session?.id;
@@ -142,10 +134,12 @@ export function ScanScreen({ snapshot, pass, onStop }: ScanScreenProps): ReactNo
 
   return (
     <main className="scan-screen" ref={screenRef} tabIndex={-1}>
-      <div className="scan-screen__tag">
-        {t(pass.expected !== null ? 'scan.tagBacks' : 'scan.tag', {
-          number: passNumber(snapshot),
-        })}
+      <div
+        className={
+          pass.kind === 'added' ? 'scan-screen__tag scan-screen__tag--added' : 'scan-screen__tag'
+        }
+      >
+        {tag}
       </div>
 
       <div className="scan-screen__stage">

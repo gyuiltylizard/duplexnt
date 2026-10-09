@@ -1,4 +1,5 @@
 import type { AssembledDocument, AssembledPage, SessionAssembly, SessionSnapshot } from '@shared';
+import { rolesOf } from './screen';
 
 /** Пустая лента без правок: основа для снимков, где важен только отчёт. */
 export const NO_EDITS_ASSEMBLY: Omit<SessionAssembly, 'report'> = {
@@ -10,21 +11,23 @@ export const NO_EDITS_ASSEMBLY: Omit<SessionAssembly, 'report'> = {
 };
 
 /**
- * ТОЛЬКО ДЛЯ ТЕСТОВ renderer: упрощённое зеркало автопорядка ядра (KTD-4) — лицевые по порядку,
- * обороты обратным порядком от последнего листа; непарными остаются младшие листы, лишние
- * обороты — в конце. Правки не применяются: ленту с правками renderer получает из снимка
- * готовой (M3, KTD-2), и тесты с правками строят сборку сами. Настоящая функция живёт в
- * `src/core/scan/assembly.ts` и недоступна renderer'у границей слоёв.
+ * ТОЛЬКО ДЛЯ ТЕСТОВ renderer: упрощённое зеркало автопорядка ядра (M2, KTD-4; M3.5, KTD-2) —
+ * лицевые по порядку, обороты обратным порядком от последнего листа; непарными остаются
+ * младшие листы, лишние обороты — в конце; затем блоки добавленных наборов по возрастанию
+ * номера прохода, каждый сразу за якорем (перед прикреплёнными к нему раньше), без якоря — в
+ * конец. Правки не применяются: ленту с правками renderer получает из снимка готовой (M3,
+ * KTD-2), и тесты с правками строят сборку сами. Настоящая функция живёт в
+ * `src/core/scan/assembly.ts` и недоступна renderer'у границей слоёв; расхождение ловит
+ * табличный тест `test/guards/assembly-fixture.test.ts` на одних данных.
  */
 export function assemblyOf(session: SessionSnapshot): SessionAssembly {
-  const surviving = session.passes.filter((pass) => pass.pages.length > 0);
-  const backsPass = surviving[1];
-  const fronts = surviving[0]?.pages ?? [];
+  const { fronts: frontsPass, backs: backsPass, added } = rolesOf(session.passes);
+  const fronts = frontsPass?.pages ?? [];
   const backs = backsPass?.pages ?? [];
   const n = fronts.length;
   const backAngle = backsPass?.rotate180 === true ? 180 : 0;
   const unpairedSheets =
-    backsPass === undefined
+    backsPass === null
       ? []
       : Array.from({ length: Math.max(0, n - backs.length) }, (_, index) => index + 1);
   const order: AssembledPage[] = [];
@@ -37,6 +40,7 @@ export function assemblyOf(session: SessionSnapshot): SessionAssembly {
       angle: 0,
       lost: page.lost,
       unpaired: unpairedSheets.includes(sheet),
+      addedSet: null,
     });
     const back = backs[n - sheet];
     if (back !== undefined) {
@@ -47,6 +51,7 @@ export function assemblyOf(session: SessionSnapshot): SessionAssembly {
         angle: backAngle,
         lost: back.lost,
         unpaired: false,
+        addedSet: null,
       });
     }
   });
@@ -58,8 +63,22 @@ export function assemblyOf(session: SessionSnapshot): SessionAssembly {
       angle: backAngle,
       lost: back.lost,
       unpaired: false,
+      addedSet: null,
     });
   }
+  added.forEach((pass, index) => {
+    const block = pass.pages.map((page): AssembledPage => ({
+      key: page.key,
+      side: 'front',
+      sheet: null,
+      angle: 0,
+      lost: page.lost,
+      unpaired: false,
+      addedSet: index + 1,
+    }));
+    const anchor = pass.after === null ? -1 : order.findIndex((page) => page.key === pass.after);
+    order.splice(anchor === -1 ? order.length : anchor + 1, 0, ...block);
+  });
   return {
     order,
     documents: [{ name: '', start: 0, count: order.length }],
@@ -74,7 +93,7 @@ export function assemblyOf(session: SessionSnapshot): SessionAssembly {
       extraBacks: Math.max(0, backs.length - n),
       backsState: backsPass?.state ?? null,
       backsDeclined: session.backsDeclined,
-      mismatch: backsPass !== undefined && backs.length !== n,
+      mismatch: backsPass !== null && backs.length !== n,
     },
   };
 }

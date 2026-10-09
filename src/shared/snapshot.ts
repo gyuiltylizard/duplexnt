@@ -23,8 +23,48 @@ export interface PageSnapshot {
   readonly lost: boolean;
 }
 
+/**
+ * Роль прохода, записанная в журнале явно (M3.5; ADR 0004, амендмент 2026-10-07): лицевые,
+ * обороты или добавленный однопроходный набор. Роль действует только у прохода хотя бы с одной
+ * страницей: пустой (прерванный до первой страницы) роли не имеет при любом `kind`.
+ */
+export const PASS_KINDS = ['fronts', 'backs', 'added'] as const;
+export type PassKind = (typeof PASS_KINDS)[number];
+
+export interface PassesByKind<T> {
+  readonly fronts: T | null;
+  readonly backs: T | null;
+  /** Добавленные наборы в порядке проходов (по возрастанию номера). */
+  readonly added: readonly T[];
+}
+
+/**
+ * Проходы по ролям — единственное место правила (M3.5, KTD-4) для журнала, снимка и renderer:
+ * роль читается из `kind`, не из позиции, и только у прохода хотя бы с одной страницей
+ * (`hasPages`) — пустой проход (прерван до первой страницы) роли не занимает при любом `kind`,
+ * иначе он блокировал бы «обороты не нужны». Лицевых и оборотов со страницами не больше одного
+ * (схема журнала); `passes` идут по возрастанию номера.
+ */
+export function passesByKind<T extends { readonly kind: PassKind }>(
+  passes: readonly T[],
+  hasPages: (pass: T) => boolean,
+): PassesByKind<T> {
+  const counted = passes.filter(hasPages);
+  return {
+    fronts: counted.find((pass) => pass.kind === 'fronts') ?? null,
+    backs: counted.find((pass) => pass.kind === 'backs') ?? null,
+    added: counted.filter((pass) => pass.kind === 'added'),
+  };
+}
+
 export interface PassSnapshot {
   readonly number: number;
+  readonly kind: PassKind;
+  /**
+   * Якорь вставки добавленного набора: ключ страницы, после которой встают его страницы в
+   * автопорядке; `null` — в конец ленты. Осмыслен только у `added`, у остальных всегда `null`.
+   */
+  readonly after: string | null;
   readonly state: PassState;
   /**
    * `false` — журнал пересобран по именам файлов: сканер и параметры прохода неизвестны,
@@ -35,7 +75,7 @@ export interface PassSnapshot {
   readonly scanner: ScannerInfo | null;
   /**
    * Повернуть страницы прохода на 180° при показе и в PDF (M2, KTD-2). Осмыслен на проходе
-   * оборотов — втором уцелевшем (роль, не чётность номера — KTD-4); исходники не меняются.
+   * оборотов (`kind: 'backs'`); исходники не меняются.
    */
   readonly rotate180: boolean;
   readonly pages: readonly PageSnapshot[];
@@ -59,8 +99,8 @@ export interface SessionSnapshot {
 export type PageAngle = 0 | 90 | 180 | 270;
 
 /**
- * Страница видимой ленты (M2, KTD-4; M3, KTD-2). Роли «лицо/оборот» выводятся из позиции прохода
- * среди уцелевших, не из чётности номера; угол и непарность считает ядро.
+ * Страница видимой ленты (M2, KTD-4; M3, KTD-2). Роли «лицо/оборот» — по роли прохода (`kind`);
+ * угол и непарность считает ядро.
  */
 export interface AssembledPage {
   readonly key: string;
@@ -73,6 +113,12 @@ export interface AssembledPage {
   readonly lost: boolean;
   /** Лист без оборота по отчёту пар (KTD-7): пометка в ленте. */
   readonly unpaired: boolean;
+  /**
+   * Страница добавленного набора (M3.5, R16): порядковый номер набора от 1 среди добавленных
+   * проходов со страницами — тег на миниатюре; `null` — лицевые и обороты. Номер стабилен: набор
+   * исчезает только до первой страницы.
+   */
+  readonly addedSet: number | null;
 }
 
 /** Документ ленты: отрезок `order` от `start` длиной `count` (M3, R10). */
@@ -189,9 +235,12 @@ export interface PassProgress {
     | 'stopping';
   /** Досканирование прерванного прохода, а не новый проход. */
   readonly resumed: boolean;
+  /** Роль идущего прохода (M3.5, KTD-4): экран `scan` строит тег и счётчик по ней. */
+  readonly kind: PassKind;
   /**
    * Ожидаемое число страниц (M2, R2): у прохода оборотов — страницы лицевого; `null` — лицевой
-   * проход, общее число неизвестно. Счётчик может перевалить за него и не подрезается.
+   * или добавленный проход, общее число неизвестно. Счётчик может перевалить за него и не
+   * подрезается.
    */
   readonly expected: number | null;
   /**

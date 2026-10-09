@@ -11,6 +11,7 @@ export {
   pageImageUrl,
   PROBE_TOKEN_MAX_LENGTH,
   SAVE_MODES,
+  type AddedPassIntent,
   type Api,
   type BridgeCommand,
   type BridgeCommands,
@@ -33,6 +34,7 @@ export {
   type SaveMode,
   type SetEditsReport,
   type SetEditsRequest,
+  type StartPassRequest,
   type Unsubscribe,
 } from './bridge';
 
@@ -59,22 +61,26 @@ export {
   type ScanParams,
 } from './scan-params';
 
-export type {
-  AssembledDocument,
-  AssembledPage,
-  AssemblyReport,
-  PageAngle,
-  PageSnapshot,
-  PassProgress,
-  PassReport,
-  PassSnapshot,
-  PassState,
-  ScannerInfo,
-  ScannerState,
-  SessionAssembly,
-  SessionSnapshot,
-  Snapshot,
-  StartupNotice,
+export {
+  PASS_KINDS,
+  passesByKind,
+  type AssembledDocument,
+  type AssembledPage,
+  type AssemblyReport,
+  type PageAngle,
+  type PageSnapshot,
+  type PassesByKind,
+  type PassKind,
+  type PassProgress,
+  type PassReport,
+  type PassSnapshot,
+  type PassState,
+  type ScannerInfo,
+  type ScannerState,
+  type SessionAssembly,
+  type SessionSnapshot,
+  type Snapshot,
+  type StartupNotice,
 } from './snapshot';
 
 export {

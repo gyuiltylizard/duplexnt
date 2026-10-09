@@ -1,6 +1,7 @@
 import { memo, type DragEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { pageImageUrl, type AssembledPage, type PageAngle } from '@shared';
+import type { TFunction } from 'i18next';
 import { useImageLoad } from '../components/useImageLoad';
 import type { DropSide } from '../state/edits';
 
@@ -16,13 +17,50 @@ export interface ThumbDrag {
   readonly over: (key: string, event: DragEvent<HTMLElement>) => void;
 }
 
-const modeOf = (event: MouseEvent | KeyboardEvent): PickMode =>
+/** Клавиши-модификаторы события — общее у мыши и клавиатуры, React и DOM. */
+interface ModifierKeys {
+  readonly shiftKey: boolean;
+  readonly ctrlKey: boolean;
+  readonly metaKey: boolean;
+}
+
+const modeOf = (event: ModifierKeys): PickMode =>
   event.shiftKey ? 'range' : event.ctrlKey || event.metaKey ? 'toggle' : 'single';
+
+/** Зажат модификатор выделения (Shift / Ctrl / ⌘) — правило одно на клик и на клавиши. */
+export const pickModifierHeld = (event: ModifierKeys): boolean => modeOf(event) !== 'single';
+
+/**
+ * Имя карточки для скринридера — по самому важному: потеря, непарность, добавленный набор
+ * (у его страницы нет ни «лица», ни «оборота» — её называет набор, S5), иначе номер.
+ */
+function thumbLabelOf(
+  t: TFunction,
+  page: {
+    readonly lost: boolean;
+    readonly unpaired: boolean;
+    readonly addedSet: number | null;
+    readonly sheet: number | null;
+    readonly position: number;
+  },
+): string {
+  if (page.lost) {
+    return t('thumb.lostLabel', { number: page.position });
+  }
+  if (page.unpaired) {
+    return t('thumb.unpairedLabel', { number: page.sheet ?? page.position });
+  }
+  if (page.addedSet !== null) {
+    return t('thumb.addedLabel', { number: page.position, set: page.addedSet });
+  }
+  return t('thumb.alt', { number: page.position });
+}
 
 /**
  * Миниатюра в ленте: обычная, потерянная (S18 M1), строится или не построилась (S19 M1),
  * оборот с тегом «об», непарный лист с янтарной точкой (S6 M2), угол из ядра (S4 M3),
- * перетаскивание с маркером вставки (S6 M3) и split-бар границы (S7 M3).
+ * перетаскивание с маркером вставки (S6 M3), split-бар границы (S7 M3), страница
+ * добавленного набора с тегом «Д1» (S5 M3.5).
  * Пропсы — примитивы, чтобы `memo` переживал новый снимок (объекты порядка пересоздаются
  * десериализацией IPC): тумблер и отметка сохранения не перерисовывают всю ленту, смена
  * выделения — только затронутые карточки.
@@ -36,6 +74,7 @@ export const EditorThumb = memo(function EditorThumb({
   lost,
   position,
   unpaired,
+  addedSet,
   current,
   selected,
   multi,
@@ -57,6 +96,8 @@ export const EditorThumb = memo(function EditorThumb({
   /** Номер по порядку в ленте, с единицы — сквозной через документы. */
   readonly position: number;
   readonly unpaired: boolean;
+  /** Номер добавленного набора от 1 (KTD-4) — тег «Д{{set}}»; `null` — лицо или оборот. */
+  readonly addedSet: number | null;
   /** Текущая — её показывает превью; точка входа клавиатуры (роуминг `tabindex`). */
   readonly current: boolean;
   /** В выделении (`aria-selected`). */
@@ -81,6 +122,12 @@ export const EditorThumb = memo(function EditorThumb({
     onPick(pageKey, modeOf(event));
   };
   const splitClick = (event: MouseEvent<HTMLElement>): void => {
+    // Клик с модификатором по зоне бара — выделение, не граница (M3.5, KTD-10): всплывает до
+    // карточки и уходит в `onPick`. Бар при зажатом модификаторе и так скрыт — это страховка на
+    // случай, когда нажатие клавиши лента не видела.
+    if (pickModifierHeld(event)) {
+      return;
+    }
     // Split-бар внутри карточки: клик по нему — граница, а не выбор страницы.
     event.stopPropagation();
     onSplit(pageKey);
@@ -134,11 +181,7 @@ export const EditorThumb = memo(function EditorThumb({
     classes.push('thumb--dragging');
   }
 
-  const base = lost
-    ? t('thumb.lostLabel', { number: position })
-    : unpaired
-      ? t('thumb.unpairedLabel', { number: sheet ?? position })
-      : t('thumb.alt', { number: position });
+  const base = thumbLabelOf(t, { lost, unpaired, addedSet, sheet, position });
   const label = angle === 0 ? base : `${base}, ${t('thumb.angle', { angle })}`;
 
   return (
@@ -180,6 +223,14 @@ export const EditorThumb = memo(function EditorThumb({
       <div className="thumb__foot">
         <span className="thumb__num">{position}</span>
         {side === 'back' && <span className="thumb__tag">{t('thumb.tagBacks')}</span>}
+        {addedSet !== null && (
+          <span
+            className="thumb__tag thumb__tag--added"
+            aria-label={t('thumb.tagAddedLabel', { set: addedSet })}
+          >
+            {t('thumb.tagAdded', { set: addedSet })}
+          </span>
+        )}
         {unpaired && (
           <span
             className="dot dot--warning thumb__flag"

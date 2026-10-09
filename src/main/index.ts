@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, protocol, session, shell } f
 import { join } from 'node:path';
 import { createCommands, createThumbnails, layoutOf, openPassService } from '@core';
 import ru from '@locales/ru/common.json';
-import { APP_NAME, fail, ok, PAGE_IMAGE_SCHEME } from '@shared';
+import { APP_NAME, fail, ok, PAGE_IMAGE_SCHEME, type Result } from '@shared';
 import { registerBridge } from './bridge';
 import { resolveDataRoot } from './data-root';
 import { createEventSender } from './events';
@@ -96,17 +96,20 @@ async function start(): Promise<void> {
     }),
   );
 
+  // `shell.openPath` не бросает: причину отказа он возвращает строкой. Папка пакета (M3.5,
+  // KTD-9) приходит из ядра, не от renderer.
+  const openFolder = async (path: string): Promise<Result<void>> => {
+    const problem = await shell.openPath(path);
+    if (problem === '') {
+      return ok(undefined);
+    }
+    console.error('[main] папка не открылась', problem);
+    return fail('storageFailed', { reason: 'openPath' });
+  };
   const commands = createCommands({
     service,
-    // `shell.openPath` не бросает: причину отказа он возвращает строкой.
-    openDataFolder: async () => {
-      const problem = await shell.openPath(dataRoot);
-      if (problem === '') {
-        return ok(undefined);
-      }
-      console.error('[main] каталог данных не открылся', problem);
-      return fail('storageFailed', { reason: 'openPath' });
-    },
+    openDataFolder: () => openFolder(dataRoot),
+    openFolder,
     // Папка пакета (M3, KTD-5): файловые диалоги — обязанность main (ADR 0003); имена файлов
     // задаёт модалка, папку — системный диалог.
     defaultSaveFolder: app.getPath('documents'),

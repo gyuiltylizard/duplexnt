@@ -173,6 +173,8 @@ describe('подпись ленты и состояние снимка', () => {
       state: 'completed',
       paramsKnown: true,
       scanner: null,
+      kind: number === 1 ? 'fronts' : 'backs',
+      after: null,
       rotate180: false,
       pages: keys.map((key, index) => ({ key, number: index + 1, lost: false })),
       ...extra,
@@ -228,6 +230,14 @@ describe('подпись ленты и состояние снимка', () => {
     ['новая сессия', session({ id: 'session.20261006-130000-dcba' })],
   ])('меняется: %s', (_name, changed) => {
     expect(tapeOf(changed)).not.toBe(tapeOf(BASE));
+  });
+
+  it('тумблер — у прохода оборотов по kind, не по позиции (M3.5, KTD-4)', () => {
+    const fronts = pass(1, ['f1']);
+    const added = pass(2, ['a1'], { kind: 'added', after: 'f1' });
+    const backs = pass(3, ['b1'], { kind: 'backs', rotate180: true });
+    expect(editStateOf(session({ passes: [fronts, added, backs] })).rotate180).toBe(true);
+    expect(editStateOf(session({ passes: [fronts, added] })).rotate180).toBe(false);
   });
 
   it('состояние стека — правки снимка и тумблер прохода оборотов', () => {

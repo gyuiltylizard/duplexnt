@@ -1,5 +1,5 @@
 import { sameEdits, type SessionEdits, type SessionSnapshot } from '@shared';
-import { survivingPasses } from './screen';
+import { rolesOf } from './screen';
 
 // Undo/redo редактора (план M3, U6; KTD-3, KTD-3a): эфемерный стек в памяти запуска, без
 // предела глубины. Настоящее в стеке не хранится — это всегда правки последнего снимка
@@ -39,9 +39,9 @@ export interface HistoryMove {
 export const sameState = (left: EditState, right: EditState): boolean =>
   left.rotate180 === right.rotate180 && sameEdits(left.edits, right.edits);
 
-/** Правки снимка как состояние стека: тумблер — у прохода оборотов (роль, не номер — M2). */
+/** Правки снимка как состояние стека: тумблер — у прохода оборотов (роль по `kind`, KTD-4). */
 export function editStateOf(session: SessionSnapshot): EditState {
-  return { edits: session.edits, rotate180: survivingPasses(session)[1]?.rotate180 ?? false };
+  return { edits: session.edits, rotate180: rolesOf(session.passes).backs?.rotate180 ?? false };
 }
 
 /**

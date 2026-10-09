@@ -5,6 +5,7 @@ import {
   JOURNAL_VERSION,
   journalSchema,
   newJournal,
+  nextKindOf,
   pageCountOf,
   pagesOf,
   parseJournal,
@@ -46,7 +47,8 @@ import { readVersionMarker, setAside, setAsidePathOf, writeVersioned } from './v
 // | пометка об удалении сегмента                        | удаление доводится до конца             |
 // | временный файл страницы или журнала                 | удаляется                               |
 // | страница без записи                                 | возвращается в свой сегмент по ключу    |
-// | страница, у прохода или сегмента которой нет записи | проход и сегмент создаются прерванными  |
+// | страница, у прохода или сегмента которой нет записи | проход и сегмент создаются прерванными; |
+// |                                                     | роль — по очереди, якорь — `null`       |
 // | правка с ключом без страницы; разрез вне ленты      | правка вычищается, разрез переезжает    |
 // | запись без файла или файл нулевой длины             | страница потеряна, место сохраняется    |
 // | сегмент «идёт»                                      | прерван                                 |
@@ -89,7 +91,9 @@ function inserted<T extends { readonly number: number }>(items: readonly T[], it
  * Возвращает найденные файлы в журнал. Страница без записи попадает в свой сегмент по ключу;
  * сегмент или проход, которых в журнале нет, создаются прерванными — у созданного прохода нет ни
  * сканера, ни параметров. Пропуск в нумерации становится записью без файла: потерянной страницей.
- * Сегмент «идёт» становится прерванным.
+ * Сегмент «идёт» становится прерванным. Роли созданным проходам раздаются после сборки списка,
+ * по возрастанию номера (амендмент 2026-10-07): лицевые, обороты (если не отказались), дальше
+ * добавленные — порядок обхода каталога на роль не влияет; якоря у пересобранных нет.
  */
 function adopt(
   journal: Journal,
@@ -99,22 +103,26 @@ function adopt(
 ): Journal {
   let { passes, nextPass } = journal;
 
-  for (const group of files) {
+  // Обход по возрастанию номера прохода: роль созданного прохода зависит от ролей младших,
+  // порядок обхода каталога на неё влиять не должен.
+  for (const group of [...files].sort((left, right) => left.pass - right.pass)) {
     const found = Math.max(0, ...group.present);
     if (found === 0 || marked.includes(segmentPrefix(group.pass, group.segment))) {
       continue;
     }
     const pass = passes.find((it) => it.number === group.pass);
     if (pass === undefined) {
-      const created: JournalPass = {
+      const fresh: JournalPass = {
         number: group.pass,
+        kind: nextKindOf({ ...journal, passes }),
+        after: null,
         accepted: false,
         origin: null,
         nextSegment: group.segment + 1,
         segments: [interruptedSegment(group.segment, found)],
         rotate180: false,
       };
-      passes = inserted(passes, created);
+      passes = inserted(passes, fresh);
       nextPass = Math.max(nextPass, group.pass + 1);
       continue;
     }

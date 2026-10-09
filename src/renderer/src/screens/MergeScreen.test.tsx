@@ -24,7 +24,15 @@ function assemblyFor(assemblyReport: AssemblyReport): SessionAssembly {
   let key = 0;
   const push = (side: AssembledPage['side'], sheet: number | null): void => {
     key += 1;
-    order.push({ key: `k${key}`, side, sheet, angle: 0, lost: false, unpaired: false });
+    order.push({
+      key: `k${key}`,
+      side,
+      sheet,
+      angle: 0,
+      lost: false,
+      unpaired: false,
+      addedSet: null,
+    });
   };
   for (const sheet of assemblyReport.unpairedSheets) {
     push('front', sheet);

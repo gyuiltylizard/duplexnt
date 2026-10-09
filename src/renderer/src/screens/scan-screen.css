@@ -26,6 +26,11 @@
   color: var(--color-text-on-accent);
 }
 
+/* S3 M3.5: тег добавленного набора — цвет набора, чтобы он читался с первого кадра. */
+.scan-screen__tag--added {
+  background: var(--color-pass-3);
+}
+
 .scan-screen__stage {
   display: flex;
   flex-direction: column;

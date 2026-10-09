@@ -7,6 +7,7 @@ import { fsError, interceptFs } from '../../../test/support/intercept-fs';
 import { makeTempDataRoot } from '../../../test/support/temp-data-root';
 import type { PassOrigin } from './journal';
 import { layoutOf, type DataLayout } from './layout';
+import { rolesOf } from '../../../test/support/session-store';
 import { openSessionStore, reconcileSession } from './reconcile';
 import { createSessionStore } from './session-store';
 import { realStorageFs } from './storage-fs';
@@ -44,11 +45,13 @@ const pass = (number: number, segments: ReturnType<typeof segment>[], extra: obj
   origin: ORIGIN,
   nextSegment: Math.max(...segments.map((it) => it.number)) + 1,
   segments,
+  kind: number === 1 ? 'fronts' : 'backs',
+  after: null,
   rotate180: false,
   ...extra,
 });
 const journalOf = (passes: ReturnType<typeof pass>[], extra: object = {}) => ({
-  version: 3,
+  version: 4,
   sessionId: SESSION,
   nextPass: passes.length + 1,
   passes,
@@ -65,17 +68,24 @@ function omit<T extends object, K extends keyof T>(value: T, ...keys: K[]): Omit
   ) as Omit<T, K>;
 }
 
+/** Журнал версии 3 (M3): тот же состав, роль прохода — по позиции, якоря нет. */
+const journalV3Of = (passes: ReturnType<typeof pass>[], extra: object = {}) => ({
+  ...journalOf(passes, extra),
+  version: 3,
+  passes: passes.map((one) => omit(one, 'kind', 'after')),
+});
+
 /** Журнал версии 2 (M2): тот же состав без правок редактора. */
 const journalV2Of = (passes: ReturnType<typeof pass>[], extra: object = {}) => ({
-  ...omit(journalOf(passes, extra), 'edits'),
+  ...omit(journalV3Of(passes, extra), 'edits'),
   version: 2,
 });
 
-/** Журнал версии 1 (M1): тот же состав без полей v2 и v3. */
+/** Журнал версии 1 (M1): тот же состав без полей v2–v4. */
 const journalV1Of = (passes: ReturnType<typeof pass>[], extra: object = {}) => ({
-  ...omit(journalOf(passes, extra), 'backsDeclined', 'saved', 'edits'),
+  ...omit(journalV3Of(passes, extra), 'backsDeclined', 'saved', 'edits'),
   version: 1,
-  passes: passes.map((one) => omit(one, 'rotate180')),
+  passes: passes.map((one) => omit(one, 'rotate180', 'kind', 'after')),
 });
 
 const page = (number: number): Uint8Array => Uint8Array.of(0xff, 0xd8, number, 0xff, 0xd9);
@@ -136,7 +146,7 @@ describe('сверка при запуске: таблица плана', () => 
 
   it('маркер версии новее понятного → ничего не трогается; режим отказа (AE9)', async () => {
     const { root } = await seed(
-      { ...journalOf([pass(1, [segment(1, 'running', 2)])]), version: 4 },
+      { ...journalOf([pass(1, [segment(1, 'running', 2)])]), version: 5 },
       [...pagesOfFirstSegment(3)],
     );
     const before = await dirSnapshot(root);
@@ -146,7 +156,7 @@ describe('сверка при запуске: таблица плана', () => 
     expect(store.incompatible).toBe(true);
     expect(session).toBeNull();
     expect(await dirSnapshot(root)).toEqual(before);
-    expect(await store.beginPass(ORIGIN)).toMatchObject({
+    expect(await store.beginPass(ORIGIN, null)).toMatchObject({
       ok: false,
       error: { code: 'storageIncompatible' },
     });
@@ -164,11 +174,11 @@ describe('сверка при запуске: таблица плана', () => 
 
     expect(notices).toEqual([]);
     expect(session).toMatchObject({ backsDeclined: false, saved: false });
-    expect(session?.passes[0]).toMatchObject({ rotate180: false });
+    expect(session?.passes[0]).toMatchObject({ rotate180: false, kind: 'fronts', after: null });
     const journal = await journalOnDisk(layout);
-    expect(journal.version).toBe(3);
+    expect(journal.version).toBe(4);
     expect(journal).toMatchObject({ backsDeclined: false, saved: false, edits: EMPTY_EDITS });
-    expect(journal.passes[0]).toMatchObject({ rotate180: false });
+    expect(journal.passes[0]).toMatchObject({ rotate180: false, kind: 'fronts', after: null });
 
     // Повторный прогон уже ничего не меняет: сверка идемпотентна.
     const before = await dirSnapshot(root);
@@ -186,10 +196,55 @@ describe('сверка при запуске: таблица плана', () => 
 
     expect(session).toMatchObject({ saved: true, edits: EMPTY_EDITS });
     const journal = await journalOnDisk(layout);
-    expect(journal).toMatchObject({ version: 3, saved: true, edits: EMPTY_EDITS });
+    expect(journal).toMatchObject({ version: 4, saved: true, edits: EMPTY_EDITS });
 
     const before = await dirSnapshot(root);
     await reconciled(root);
+    expect(await dirSnapshot(root)).toEqual(before);
+  });
+
+  it('журнал версии 3 переписывается текущей версией: роль — по позиции, якоря `null`, флаг поворота цел (M3.5, R1)', async () => {
+    const { root, layout } = await seed(
+      journalV3Of([
+        pass(1, [segment(1, 'completed', 2)]),
+        pass(2, [segment(1, 'completed', 2)], { rotate180: true }),
+        pass(3, [segment(1, 'completed', 1)]),
+      ]),
+      [...pagesOfFirstSegment(2), pageName(2, 1, 1), pageName(2, 1, 2), pageName(3, 1, 1)],
+    );
+
+    const { session, notices } = await reconciled(root);
+
+    expect(notices).toEqual([]);
+    expect(rolesOf(session?.passes ?? [])).toEqual([
+      [1, 'fronts', null],
+      [2, 'backs', null],
+      [3, 'added', null],
+    ]);
+    const journal = await journalOnDisk(layout);
+    expect(journal.version).toBe(4);
+    expect(rolesOf(journal.passes)).toEqual(rolesOf(session?.passes ?? []));
+    expect(journal.passes[1]).toMatchObject({ rotate180: true });
+
+    const before = await dirSnapshot(root);
+    await reconciled(root);
+    expect(await dirSnapshot(root)).toEqual(before);
+  });
+
+  it('добавленный набор с якорем переживает перезапуск-сверку дословно (M3.5, R1)', async () => {
+    const { root } = await seed(
+      journalOf([
+        pass(1, [segment(1, 'completed', 2)]),
+        pass(2, [segment(1, 'completed', 2)]),
+        pass(3, [segment(1, 'completed', 1)], { kind: 'added', after: 'p01-s01-0001' }),
+      ]),
+      [...pagesOfFirstSegment(2), pageName(2, 1, 1), pageName(2, 1, 2), pageName(3, 1, 1)],
+    );
+    const before = await dirSnapshot(root);
+
+    const { session } = await reconciled(root);
+
+    expect(session?.passes[2]).toMatchObject({ kind: 'added', after: 'p01-s01-0001' });
     expect(await dirSnapshot(root)).toEqual(before);
   });
 
@@ -293,7 +348,7 @@ describe('сверка при запуске: таблица плана', () => 
     const { root, layout } = await seed(
       {
         ...journalOf([pass(1, [segment(1, 'running', 1)])], { deletions: ['p01-s02-'] }),
-        version: 4,
+        version: 5,
       },
       [pageName(1, 1, 1), pageName(1, 2, 1)],
     );
@@ -573,6 +628,74 @@ describe('сверка при запуске: таблица плана', () => 
     expect(store.resumeTarget()).toMatchObject({ ok: false });
   });
 
+  it('усыновлённый проход без записи получает роль по очереди: обороты, при отказе от оборотов — добавленный (M3.5, R6)', async () => {
+    const files = [pageName(1, 1, 1), pageName(1, 1, 2), pageName(2, 1, 1)];
+    const roles = async (journal: unknown) => {
+      const { root, layout } = await seed(journal, files);
+      const { session } = await reconciled(root);
+      const onDisk = await journalOnDisk(layout);
+      expect(rolesOf(onDisk.passes)).toEqual(rolesOf(session?.passes ?? []));
+      return rolesOf(session?.passes ?? []);
+    };
+
+    expect(await roles(journalOf([pass(1, [segment(1, 'completed', 2)])]))).toEqual([
+      [1, 'fronts', null],
+      [2, 'backs', null],
+    ]);
+    expect(
+      await roles(journalOf([pass(1, [segment(1, 'completed', 2)])], { backsDeclined: true })),
+    ).toEqual([
+      [1, 'fronts', null],
+      [2, 'added', null],
+    ]);
+  });
+
+  it('усыновлённый третий проход при лицевых и оборотах — добавленный без якоря (M3.5, R6)', async () => {
+    const { root } = await seed(
+      journalOf([pass(1, [segment(1, 'completed', 1)]), pass(2, [segment(1, 'completed', 1)])]),
+      [pageName(1, 1, 1), pageName(2, 1, 1), pageName(3, 1, 1), pageName(3, 1, 2)],
+    );
+
+    const { session, store } = await reconciled(root);
+
+    expect(session?.passes.map((it) => [it.number, it.kind, it.after, it.pages.length])).toEqual([
+      [1, 'fronts', null, 1],
+      [2, 'backs', null, 1],
+      [3, 'added', null, 2],
+    ]);
+    // Добавленный проход без параметров — досканировать его нельзя.
+    expect(store.resumeTarget()).toMatchObject({ ok: false });
+  });
+
+  it('пересобранный журнал: роли по возрастанию номера, не по порядку обхода каталога; якоря `null`; идемпотентно (M3.5, R6)', async () => {
+    const files = [pageName(1, 1, 1), pageName(1, 1, 2), pageName(2, 1, 1), pageName(3, 1, 1)];
+    // Файловая система отдаёт имена в своём порядке; обратный обход — подменой `readdir`.
+    const reversed = {
+      ...realStorageFs,
+      readdir: async (path: string) => [...(await realStorageFs.readdir(path))].reverse(),
+    };
+    const run = async (fs: typeof realStorageFs) => {
+      const { root, layout } = await seed(null, files);
+      const first = await openSessionStore(root, { fs });
+      expect(first.notices).toContain('journalRebuilt');
+      const before = await dirSnapshot(root);
+      const second = await openSessionStore(root, { fs });
+      expect(await dirSnapshot(root)).toEqual(before);
+      const journal = await journalOnDisk(layout);
+      const storeRoles = (store: typeof first.store) => rolesOf(store.snapshot()?.passes ?? []);
+      expect(rolesOf(journal.passes)).toEqual(storeRoles(second.store));
+      return storeRoles(first.store);
+    };
+    const expected = [
+      [1, 'fronts', null],
+      [2, 'backs', null],
+      [3, 'added', null],
+    ];
+
+    expect(await run(realStorageFs)).toEqual(expected);
+    expect(await run(reversed)).toEqual(expected);
+  });
+
   it('запись без файла → страница помечается потерянной, место сохраняется (AE8)', async () => {
     const { root, layout } = await seed(journalOf([pass(1, [segment(1, 'completed', 3)])]), [
       pageName(1, 1, 1),
@@ -743,7 +866,7 @@ describe('сверка при запуске: нечитаемый журнал 
     expect(await readFile(layout.journalFile, 'utf8')).toBe('не журнал');
 
     const store = createSessionStore(root, state);
-    expect(await store.beginPass(ORIGIN)).toMatchObject({ ok: true });
+    expect(await store.beginPass(ORIGIN, null)).toMatchObject({ ok: true });
     const [copy = ''] = await asides(layout);
     expect(await readFile(join(layout.sessionDir, copy), 'utf8')).toBe('не журнал');
   });
@@ -836,7 +959,7 @@ describe('сверка при запуске: сбой на каждом шаг�
     };
 
     try {
-      must(await store.beginPass(ORIGIN));
+      must(await store.beginPass(ORIGIN, null));
       await accept(3);
       must(await store.endSegment('interrupted'));
 
@@ -852,7 +975,7 @@ describe('сверка при запуске: сбой на каждом шаг�
       await accept(2);
       must(await store.endSegment('completed'));
 
-      must(await store.beginPass(ORIGIN));
+      must(await store.beginPass(ORIGIN, null));
       await accept(1);
       must(await store.endSegment('interrupted'));
       must(await store.acceptPass());

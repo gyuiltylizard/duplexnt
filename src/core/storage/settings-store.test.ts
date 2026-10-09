@@ -229,7 +229,7 @@ describe('настройки', () => {
   it('настройки и сессия живут в разных файлах; закрытие сессии настройки не трогает', async () => {
     const { root, file, scanner, bytes } = await remembered();
     const session = createSessionStore(root);
-    await session.beginPass({ scanner, params: PARAMS, pixelLimit: 1000 });
+    await session.beginPass({ scanner, params: PARAMS, pixelLimit: 1000 }, null);
     await session.acceptPage(
       (async function* () {
         await Promise.resolve();

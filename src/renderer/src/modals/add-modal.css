@@ -1,0 +1,46 @@
+/* Модалка add (handoff M3.5, S2): две секции с кикерами, строка сканера, сводка в футере. */
+
+.add-modal__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-9);
+}
+
+.add-modal__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.add-modal__section .kicker {
+  margin: 0;
+}
+
+/* Строка сканера — как строка устройства setup, но без действий. */
+.add-modal__scanner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin: 0;
+  padding: var(--space-4) var(--space-6);
+  border-radius: var(--radius-l);
+  background: var(--color-bg-surface);
+  border: var(--border-width) solid var(--color-border-subtle);
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-normal)
+    var(--font-family-mono);
+  color: var(--color-text-subtle);
+}
+
+.add-modal__scanner-name {
+  font: var(--font-weight-medium) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
+  color: var(--color-text-primary);
+}
+
+.add-modal__scanner--none .add-modal__scanner-status {
+  color: var(--color-text-muted);
+  font-family: var(--font-family-sans);
+}
+
+.add-modal__summary {
+  font-family: var(--font-family-mono);
+}

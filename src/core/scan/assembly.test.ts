@@ -2,8 +2,9 @@ import { EMPTY_EDITS, type PageSnapshot, type PassSnapshot, type SessionSnapshot
 import { describe, expect, it } from 'vitest';
 import { assembleSession } from './assembly';
 
-// Табличные тесты правила пар (план M2, U2; KTD-4) — обязательная зона тест-политики: сборка
-// решает, в каком порядке страницы лягут в документ, и молча ошибиться здесь нельзя.
+// Табличные тесты правила пар (план M2, U2; KTD-4) и размещения добавленных наборов по якорям
+// (план M3.5, U2; KTD-2) — обязательная зона тест-политики: сборка решает, в каком порядке
+// страницы лягут в документ, и молча ошибиться здесь нельзя.
 
 const pagesOf = (pass: number, count: number, lost: readonly number[] = []): PageSnapshot[] =>
   Array.from({ length: count }, (_value, index) => ({
@@ -21,6 +22,8 @@ const passOf = (
   state: 'completed',
   paramsKnown: true,
   scanner: null,
+  kind: number === 1 ? 'fronts' : 'backs',
+  after: null,
   rotate180: false,
   pages: pagesOf(number, count),
   ...extra,
@@ -38,11 +41,26 @@ const sessionOf = (
   ...extra,
 });
 
-/** Порядок в читаемом виде: «1л», «1о», …; лишний оборот — «?о». */
-const shape = (session: SessionSnapshot): string[] =>
-  assembleSession(session).order.map(
-    (page) => `${page.sheet ?? '?'}${page.side === 'front' ? 'л' : 'о'}`,
-  );
+/** Порядок в читаемом виде: «1л», «1о», …; лишний оборот — «?о»; добавленная — «Д1.2». */
+const shape = (session: SessionSnapshot): string[] => {
+  const seen = new Map<number, number>();
+  return assembleSession(session).order.map((page) => {
+    if (page.addedSet === null) {
+      return `${page.sheet ?? '?'}${page.side === 'front' ? 'л' : 'о'}`;
+    }
+    const index = (seen.get(page.addedSet) ?? 0) + 1;
+    seen.set(page.addedSet, index);
+    return `Д${page.addedSet}.${index}`;
+  });
+};
+
+/** Добавленный набор: проход `number` из `count` страниц с якорем `after`. */
+const addedOf = (
+  number: number,
+  count: number,
+  after: string | null,
+  extra: Partial<PassSnapshot> = {},
+): PassSnapshot => passOf(number, count, { kind: 'added', after, ...extra });
 
 describe('сборка: interleave и пары (KTD-4)', () => {
   it('равные проходы 3+3: 1л,1о,2л,2о,3л,3о; первый оборот — у последнего листа', () => {
@@ -135,7 +153,7 @@ describe('сборка: interleave и пары (KTD-4)', () => {
 });
 
 describe('сборка: роль прохода и флаг поворота', () => {
-  it('роль — позиция среди уцелевших: после остановки обороты — проход №3', () => {
+  it('роль — `kind`, не номер: после остановки обороты — проход №3', () => {
     const session = sessionOf([passOf(1, 2), passOf(3, 2, { rotate180: true })]);
     const { order, report } = assembleSession(session);
 
@@ -146,11 +164,19 @@ describe('сборка: роль прохода и флаг поворота', (
     ]);
   });
 
-  it('пустой проход роли не занимает: лицевые — первый непустой', () => {
-    const empty = passOf(1, 0, { state: 'interrupted' });
-    const session = sessionOf([empty, passOf(2, 2), passOf(3, 2)]);
+  it('пустой проход роли не занимает при любом `kind`: лицевые — непустой с ролью', () => {
+    const empty = passOf(1, 0, { state: 'interrupted', kind: 'fronts' });
+    const session = sessionOf([empty, passOf(2, 2, { kind: 'fronts' }), passOf(3, 2)]);
 
     expect(shape(session)).toEqual(['1л', '1о', '2л', '2о']);
+    // Пустые обороты и пустой добавленный — без роли и места.
+    const emptyRoles = sessionOf([
+      passOf(1, 2),
+      passOf(2, 0, { state: 'interrupted' }),
+      addedOf(3, 0, null),
+    ]);
+    expect(shape(emptyRoles)).toEqual(['1л', '2л']);
+    expect(assembleSession(emptyRoles).report).toMatchObject({ backs: 0, backsState: null });
   });
 
   it('поворот прокидывается только к оборотам; флаг лицевого прохода роли не играет', () => {
@@ -185,19 +211,6 @@ describe('сборка: ничего не теряется', () => {
     const expected = [...fronts.pages, ...backs.pages].map((page) => page.key).sort();
     expect(order.map((page) => page.key).sort()).toEqual(expected);
     expect(order.filter((page) => page.lost).map((page) => page.key)).toEqual(['p02-s01-0002']);
-  });
-
-  it('третий набор в M2 не собирается, но и не выбрасывается: страницы в конце', () => {
-    const session = sessionOf([passOf(1, 1), passOf(2, 1), passOf(3, 2)]);
-    const { order, report } = assembleSession(session);
-
-    expect(order.map((page) => page.key)).toEqual([
-      'p01-s01-0001',
-      'p02-s01-0001',
-      'p03-s01-0001',
-      'p03-s01-0002',
-    ]);
-    expect(report).toMatchObject({ fronts: 1, backs: 1, pairs: 1 });
   });
 });
 
@@ -282,5 +295,155 @@ describe('сборка: правки поверх автопорядка (M3, U2
 
     expect(assembly.order.map((page) => page.key)).toEqual(['p01-s01-0002', 'p01-s01-0001']);
     expect(assembly.deleted).toBe(0);
+  });
+});
+
+describe('сборка: добавленные наборы по якорям (M3.5, U2; KTD-2)', () => {
+  /** Пары 1л 1о 2л 2о 3л 3о: лицевые — проход 1, обороты — проход 2. */
+  const pairs = [passOf(1, 3), passOf(2, 3)];
+  const F2 = 'p01-s01-0002';
+
+  it('пример из плана целиком: два набора с одним якорем, якорь внутри блока', () => {
+    const session = sessionOf([
+      ...pairs,
+      addedOf(3, 2, F2),
+      addedOf(4, 1, F2),
+      addedOf(5, 1, 'p03-s01-0002'),
+    ]);
+
+    expect(shape(session)).toEqual([
+      '1л',
+      '1о',
+      '2л',
+      'Д2.1',
+      'Д1.1',
+      'Д1.2',
+      'Д3.1',
+      '2о',
+      '3л',
+      '3о',
+    ]);
+  });
+
+  it('тег набора — номер от 1 среди добавленных со страницами, не номер прохода', () => {
+    const session = sessionOf([passOf(1, 2), addedOf(4, 1, null), addedOf(7, 1, null)], {
+      backsDeclined: true,
+    });
+
+    expect(assembleSession(session).order.map((page) => page.addedSet)).toEqual([null, null, 1, 2]);
+  });
+
+  it.each([
+    ['якорь — лицо при парах', F2, ['1л', '1о', '2л', 'Д1.1', 'Д1.2', '2о', '3л', '3о']],
+    ['якорь — оборот', 'p02-s01-0002', ['1л', '1о', '2л', '2о', 'Д1.1', 'Д1.2', '3л', '3о']],
+    ['якоря нет (`null`) — в конец', null, ['1л', '1о', '2л', '2о', '3л', '3о', 'Д1.1', 'Д1.2']],
+    [
+      'якорь исчез из сессии — в конец',
+      'p09-s01-0001',
+      ['1л', '1о', '2л', '2о', '3л', '3о', 'Д1.1', 'Д1.2'],
+    ],
+    [
+      'якорь — ключ более позднего прохода — в конец',
+      'p04-s01-0001',
+      ['1л', '1о', '2л', '2о', '3л', '3о', 'Д1.1', 'Д1.2'],
+    ],
+  ])('%s', (_name, after, expected) => {
+    expect(shape(sessionOf([...pairs, addedOf(3, 2, after)]))).toEqual(expected);
+  });
+
+  it('якорь удалён правкой — набор за предыдущей видимой; якорь потерян — на месте', () => {
+    const deleted = sessionOf([...pairs, addedOf(3, 1, F2)], {
+      edits: { ...EMPTY_EDITS, deleted: [F2] },
+    });
+    expect(shape(deleted)).toEqual(['1л', '1о', 'Д1.1', '2о', '3л', '3о']);
+
+    const lost = sessionOf([
+      passOf(1, 3, { pages: pagesOf(1, 3, [2]) }),
+      passOf(2, 3),
+      addedOf(3, 1, F2),
+    ]);
+    expect(shape(lost)).toEqual(['1л', '1о', '2л', 'Д1.1', '2о', '3л', '3о']);
+    expect(assembleSession(lost).order[2]).toMatchObject({ key: F2, lost: true });
+  });
+
+  it('досканированный сегмент — в конец блока своего прохода', () => {
+    const resumed = passOf(3, 0, {
+      kind: 'added',
+      after: F2,
+      pages: [
+        ...pagesOf(3, 2),
+        ...pagesOf(3, 1).map((page) => ({ ...page, key: 'p03-s02-0001', number: 3 })),
+      ],
+    });
+    const session = sessionOf([...pairs, resumed, addedOf(4, 1, F2)]);
+
+    expect(assembleSession(session).order.map((page) => page.key)).toEqual([
+      'p01-s01-0001',
+      'p02-s01-0003',
+      F2,
+      'p04-s01-0001',
+      'p03-s01-0001',
+      'p03-s01-0002',
+      'p03-s02-0001',
+      'p02-s01-0002',
+      'p01-s01-0003',
+      'p02-s01-0001',
+    ]);
+  });
+
+  it('[лицевые, добавленный] при «обороты не нужны»: вне отчёта, несовпадения нет, поворот не ложится', () => {
+    const session = sessionOf([passOf(1, 2), addedOf(2, 1, 'p01-s01-0001')], {
+      backsDeclined: true,
+    });
+    const { order, report } = assembleSession(session);
+
+    expect(shape(session)).toEqual(['1л', 'Д1.1', '2л']);
+    expect(report).toMatchObject({
+      fronts: 2,
+      backs: 0,
+      pairs: 0,
+      mismatch: false,
+      backsState: null,
+    });
+    expect(order.every((page) => page.angle === 0 && !page.unpaired)).toBe(true);
+
+    // Флаг поворота на добавленном проходе роли не играет.
+    const flagged = sessionOf([passOf(1, 2), addedOf(2, 1, null, { rotate180: true })], {
+      backsDeclined: true,
+    });
+    expect(assembleSession(flagged).order.map((page) => page.angle)).toEqual([0, 0, 0]);
+  });
+
+  it('добавленный при несовпадении проходов: отчёт пар прежний, непарные помечены как были', () => {
+    const plain = sessionOf([passOf(1, 3), passOf(2, 2)]);
+    const added = sessionOf([passOf(1, 3), passOf(2, 2), addedOf(3, 1, 'p01-s01-0001')]);
+
+    expect(assembleSession(added).report).toEqual(assembleSession(plain).report);
+    expect(shape(added)).toEqual(['1л', 'Д1.1', '2л', '2о', '3л', '3о']);
+    expect(assembleSession(added).order[0]).toMatchObject({ unpaired: true });
+  });
+
+  it('каждая страница — ровно один раз и при добавленных наборах', () => {
+    const passes = [
+      ...pairs,
+      addedOf(3, 2, F2),
+      addedOf(4, 1, 'p03-s01-0001'),
+      addedOf(5, 1, null),
+    ];
+    const { order } = assembleSession(sessionOf(passes));
+
+    const expected = passes.flatMap((pass) => pass.pages.map((page) => page.key)).sort();
+    expect(order.map((page) => page.key).sort()).toEqual(expected);
+  });
+
+  it('«Вернуть» после добавления — набор на месте: правки якорь не трогают', () => {
+    const session = sessionOf([...pairs, addedOf(3, 1, F2)], {
+      edits: { ...EMPTY_EDITS, order: ['p03-s01-0001', 'p01-s01-0001'] },
+    });
+    const reverted = { ...session, edits: EMPTY_EDITS };
+
+    expect(shape(session)).toEqual(['Д1.1', '1л', '1о', '2л', '2о', '3л', '3о']);
+    expect(shape(reverted)).toEqual(['1л', '1о', '2л', 'Д1.1', '2о', '3л', '3о']);
+    expect(assembleSession(reverted)).toMatchObject({ hasEdits: false, orderEdited: false });
   });
 });

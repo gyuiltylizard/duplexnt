@@ -166,7 +166,7 @@ export async function startEmulator(options: EmulatorOptions = {}): Promise<Emul
       scenario.trayReportsLoaded ??
       (scenario.trays === null
         ? sheetsUsed < scenario.sheets
-        : (running?.trayLeft?.length ?? 0) > 0 || trayQueue.length > 0);
+        : (running?.trayLeft?.length ?? 0) > 0 || (trayQueue[0]?.length ?? 0) > 0);
     let adfState = loaded ? 'ScannerAdfLoaded' : 'ScannerAdfEmpty';
     if (jam) {
       adfState = 'ScannerAdfJam';

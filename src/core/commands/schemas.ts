@@ -10,10 +10,11 @@ import {
   type Result,
   type SaveDocumentsRequest,
   type SetEditsRequest,
+  type StartPassRequest,
 } from '@shared';
 import { DEVICE_PATH_MAX_LENGTH } from '../escl/device-path';
 import { scanParamsSchema } from '../escl/scan-settings';
-import { editsSchemaOf } from '../storage/edits-schema';
+import { editsSchemaOf, pageKeySchema } from '../storage/edits-schema';
 
 // Схемы входа команд моста (ADR 0005; план M1, KTD-39). Строгие и без приведения типов: лишнее
 // поле и «почти подходящий» тип — отказ, а не молчаливая починка. Типы запросов объявлены в
@@ -25,6 +26,17 @@ export const probeRequestSchema = z.strictObject({
 
 /** Команда без входа: принимается только `undefined`. */
 export const noRequestSchema = z.undefined();
+
+/**
+ * Запуск прохода (M3.5, KTD-5): `null` — проход по очереди; намерение добавленного набора с
+ * якорем — ключом страницы или `null`. Принадлежность якоря сессии проверяет служба (R9).
+ */
+export const startPassRequestSchema = z
+  .strictObject({
+    kind: z.literal('added'),
+    after: pageKeySchema.nullable(),
+  })
+  .nullable() satisfies z.ZodType<StartPassRequest>;
 
 const ADDRESS_MAX_LENGTH = 1024;
 /** Идентификатор найденного устройства: метка поиска и номер записи (./../discovery/mdns.ts). */

@@ -8,6 +8,7 @@ import {
   useState,
   type ChangeEvent,
   type KeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -21,6 +22,7 @@ import {
   type Snapshot,
 } from '@shared';
 import type { ToastAction } from '../components/Toast';
+import { AddModal, anchorsOf } from '../modals/AddModal';
 import { NewScanModal } from '../modals/NewScanModal';
 import { RevertModal } from '../modals/RevertModal';
 import { SaveModal } from '../modals/SaveModal';
@@ -34,10 +36,13 @@ import {
   withCut,
   withoutCut,
   type DropSide,
+  type RotateDirection,
 } from '../state/edits';
+import { mismatchDue } from '../state/assembly-outcome';
+import { toneOf } from '../state/page-text';
 import { errorTextInline } from '../state/error-text';
 import type { EditState } from '../state/history';
-import { survivingPasses } from '../state/screen';
+import { rolesOf } from '../state/screen';
 import {
   afterRemoval,
   collapsed,
@@ -48,10 +53,10 @@ import {
   targetsOf,
   toggled,
 } from '../state/selection';
-import { EditorInspector, toneOf } from './EditorInspector';
+import { EditorInspector } from './EditorInspector';
 import { EditorPassBanner } from './EditorPassBanner';
 import { EditorPreview } from './EditorPreview';
-import { docNameId, EditorRail } from './EditorRail';
+import { docNameId, EditorRail, focusThumb } from './EditorRail';
 import type { PickMode } from './EditorThumb';
 import { useEditorEdits } from './useEditorEdits';
 import './editor-screen.css';
@@ -62,20 +67,28 @@ import './editor-screen.css';
 // поворотом и удалением, инспектор с плашкой правок, тумблер 180° внизу ленты, плашка
 // прерванного прохода. Каждая правка — перенос, поворот, удаление, граница, имя, тумблер,
 // «Вернуть» — один `setEdits` и один шаг undo (KTD-3); ленту считает только ядро (KTD-2).
-// Модалки `save`, `newscan`, `revert` — одна за раз (M3, U9; handoff M3, S14, S16, S17).
+// Модалки `save`, `newscan`, `revert`, `add` — одна за раз (M3, U9; handoff M3, S14, S16, S17;
+// M3.5, S1–S2: «+ Добавить» с причинами недоступности, якорь — из видимой ленты, KTD-8).
 
 export interface EditorScreenProps {
   readonly snapshot: Snapshot;
   readonly session: SessionSnapshot;
+  /**
+   * Текущая страница при монтировании (M3.5, S9): первая добавленная после посадки набора —
+   * лента прокручивается к ней; `null` — первая в ленте, как всегда.
+   */
+  readonly initialCurrent: string | null;
   /** Отказ последнего досканирования — строка в плашке S17; живёт в App: экран уходит. */
   readonly resumeFailure: DomainError | null;
   /** «Досканировать остаток»: тот же `startPass` — сессия есть, ядро продолжит проход. */
   readonly onResume: () => void;
+  /** «Начать скан» из модалки `add`: `startPass` с намерением и якорем (M3.5, KTD-5). */
+  readonly onAdd: (after: string | null) => void;
   /** Ссылка «подключите заново» в отказе досканирования (S17). */
   readonly onOpenDevice: (initialAddress?: string) => void;
   /**
    * Тосты живут в App (новый гасит предыдущий); сохранение показывает их дольше обычного, а
-   * тост полного успеха несёт кнопку «Новое сканирование» (S18).
+   * тост полного успеха несёт кнопку «Открыть папку» (S18 M3, пересмотр M3.5 S10).
    */
   readonly onToast: (text: string, durationMs?: number, action?: ToastAction) => void;
 }
@@ -89,7 +102,7 @@ const THEN_NEW_TOAST_MS = 3600;
  * `saveThenNew` — `save`, открытая из `newscan` («Сначала сохранить текущий»): после полного
  * успеха сессия закрывается.
  */
-type EditorModal = 'save' | 'saveThenNew' | 'newscan' | 'revert';
+type EditorModal = 'save' | 'saveThenNew' | 'newscan' | 'revert' | 'add';
 
 /** Пустая лента без сборки: стабильные ссылки для мемоизации. */
 const NO_PAGES: readonly AssembledPage[] = [];
@@ -126,8 +139,10 @@ function shortcutLetter(event: globalThis.KeyboardEvent): string {
 export function EditorScreen({
   snapshot,
   session,
+  initialCurrent,
   resumeFailure,
   onResume,
+  onAdd,
   onOpenDevice,
   onToast,
 }: EditorScreenProps): ReactNode {
@@ -149,6 +164,7 @@ export function EditorScreen({
     seq: snapshot.seq,
     session,
     visible,
+    initialCurrent,
     locked: saving,
     // Правка не записалась — человек должен знать, что лента осталась прежней. Текст ошибки
     // длинный — показывается столько же, сколько ошибка сохранения.
@@ -200,7 +216,9 @@ export function EditorScreen({
   // удаления с клавиатуры фокус уходит на страницу, вставшую на место удалённой; после
   // постановки границы — в поле имени нового документа, текст выделен (handoff M3, Границы).
   const railRef = useRef<HTMLElement>(null);
-  const focusKey = useRef<string | null>(null);
+  // Посадка добавленного набора (S9): первая добавленная — текущая и в фокусе, `focus()` сам
+  // прокручивает к ней ближайшим краем, без анимации (handoff, «Движение»).
+  const focusKey = useRef<string | null>(initialCurrent);
   const focusAfterEdit = useRef(false);
   const focusName = useRef<number | null>(null);
   useEffect(() => {
@@ -219,7 +237,7 @@ export function EditorScreen({
       key = selection.current;
     }
     if (key !== null) {
-      railRef.current?.querySelector<HTMLElement>(`[data-key="${CSS.escape(key)}"]`)?.focus();
+      focusThumb(railRef.current, key);
       focusKey.current = null;
     }
   });
@@ -309,10 +327,11 @@ export function EditorScreen({
     focusKey.current = key;
   };
 
-  // ↻ — +90° по часовой текущей или всему выделению, один шаг; тоста нет — поворот виден (S9).
-  const rotate = (): void => {
+  // «↻» +90° / «↺» −90° (M3.5, KTD-11) — текущей или всему выделению, один шаг; тоста нет —
+  // поворот виден (S9).
+  const rotate = (direction: RotateDirection): void => {
     if (targets.length > 0) {
-      edits.edit(withEdits(rotated(edits.current.edits, targets)), targets);
+      edits.edit(withEdits(rotated(edits.current.edits, targets, direction)), targets);
     }
   };
 
@@ -471,9 +490,9 @@ export function EditorScreen({
     };
   }, []);
 
-  // Тумблер 180° — у второго уцелевшего прохода (роль, не номер — KTD-4), включая прерванный
-  // и принятый; без прохода оборотов тумблера нет (S7). Правило уцелевшего — одно на renderer.
-  const backsPass = survivingPasses(session)[1];
+  // Тумблер 180° — у прохода оборотов (роль по `kind`, не номер — KTD-4), включая прерванный
+  // и принятый; без прохода оборотов тумблера нет (S7). Правило роли — одно на renderer.
+  const backsPass = rolesOf(session.passes).backs;
   const setRotate = (event: ChangeEvent<HTMLInputElement>): void => {
     // Тумблер — правка (KTD-3, S15): шаг undo с текущими правками снимка. Снимок — источник
     // правды: при отказе команда не меняет ничего, и чекбокс вернётся сам.
@@ -545,8 +564,26 @@ export function EditorScreen({
     });
   };
 
-  // Пакет записан целиком: тост 6 с с кнопкой «Новое сканирование» — она открывает `newscan`,
-  // а не закрывает сессию молча (S18). После «Сначала сохранить текущий» — сразу закрытие.
+  // «Открыть папку» из тоста «Сохранено» (M3.5, KTD-9): команда без входа — папку последнего
+  // пакета помнит ядро, путь от renderer не принимается; отказ — тостом ошибки.
+  const openSaveFolder = (): void => {
+    window.api.openSaveFolder().then(
+      (result) => {
+        if (!result.ok) {
+          onToast(
+            t('toast.openFolderFailed', { error: errorTextInline(t, result.error) }),
+            SAVE_TOAST_MS,
+          );
+        }
+      },
+      (error: unknown) => {
+        console.error('[renderer] открытие папки не ответило', error);
+      },
+    );
+  };
+
+  // Пакет записан целиком: тост 6 с с кнопкой «Открыть папку» (S18 M3, пересмотр M3.5 S10:
+  // «Новое сканирование» есть в тулбаре). После «Сначала сохранить текущий» — сразу закрытие.
   const saved = (report: SaveDocumentsReport): void => {
     setModal(null);
     const [only] = report.written;
@@ -558,29 +595,76 @@ export function EditorScreen({
       closeSession(text);
       return;
     }
-    onToast(text, SAVE_TOAST_MS, {
-      label: t('toast.newScanAction'),
-      // Тост лежит поверх затемнения: открытую модалку — запись, откат, подключение — кнопка не
-      // подменяет.
-      onClick: () => {
-        if (document.querySelector('[aria-modal="true"]') === null) {
-          setModal('newscan');
-        }
-      },
-    });
+    onToast(text, SAVE_TOAST_MS, { label: t('toast.openFolder'), onClick: openSaveFolder });
   };
 
-  const rotateLabel =
-    targets.length > 1 ? t('editor.rotateMany', { count: targets.length }) : t('editor.rotate');
-  const deleteLabel =
-    targets.length > 1 ? t('editor.deleteMany', { count: targets.length }) : t('editor.delete');
+  // «+ Добавить» (S1 M3.5, R12): недоступна при записи, правке в полёте и прерванном последнем
+  // проходе — первая причина по порядку, в `title`; пустая лента — доступна (набор в конец).
+  const addDisabledReason = (
+    [
+      [saving, 'saving'],
+      [edits.busy, 'busy'],
+      [session.passes.at(-1)?.state === 'interrupted', 'interrupted'],
+    ] as const
+  ).find(([on]) => on)?.[1];
+  // Якоря для модалки — только пока она открыта (KTD-8).
+  const anchors =
+    modal === 'add'
+      ? anchorsOf(t, {
+          entry: currentEntry,
+          index: currentIndex,
+          document: currentDoc,
+          documentName: currentDocument === null ? '' : (names[currentDocument] ?? ''),
+          visible,
+        })
+      : null;
+
+  /** Подпись инструмента по выделению: «Повернуть 3 стр. …» или «Повернуть …». */
+  const countLabel = (key: 'editor.rotate' | 'editor.rotateLeft' | 'editor.delete'): string =>
+    targets.length > 1 ? t(`${key}Many`, { count: targets.length }) : t(key);
+  const rotateLabel = countLabel('editor.rotate');
+  const rotateLeftLabel = countLabel('editor.rotateLeft');
+  const deleteLabel = countLabel('editor.delete');
+
+  // Клик по поверхности мимо ленты — тулбар, превью, инспектор — сжимает мультивыделение до
+  // текущей, как Esc (M3.5, R21). Органы управления на этих поверхностях исключены: «↻» и
+  // «Удалить N стр.» действуют на выделение, и сжимать его в момент нажатия нельзя.
+  const collapseOnSurfaceClick = (event: ReactMouseEvent<HTMLElement>): void => {
+    const { target } = event;
+    if (
+      event.button === 0 &&
+      selection.keys.length > 1 &&
+      target instanceof Element &&
+      target.closest('button, input, textarea, select, label, a') === null
+    ) {
+      setSelection(collapsed(selection));
+    }
+  };
 
   return (
     <main className="editor-screen">
-      <header className="editor-screen__toolbar">
+      <header className="editor-screen__toolbar" onMouseDown={collapseOnSurfaceClick}>
         <div className="editor-screen__toolbar-left">
           <button type="button" className="btn btn--secondary" onClick={newScan}>
             <span aria-hidden="true">↺</span> {t('editor.newScan')}
+          </button>
+          <button
+            type="button"
+            className="btn btn--secondary editor-screen__add"
+            disabled={addDisabledReason !== undefined}
+            title={
+              addDisabledReason === undefined
+                ? undefined
+                : t(`editor.addDisabled.${addDisabledReason}`)
+            }
+            onClick={() => {
+              setModal('add');
+            }}
+          >
+            <span className="editor-screen__add-plus" aria-hidden="true">
+              +
+            </span>{' '}
+            {t('editor.add')}
           </button>
         </div>
         {/* S1: документ текущей страницы — тон, имя, позиция. */}
@@ -674,7 +758,7 @@ export function EditorScreen({
           onRename={rename}
           onMove={move}
           footer={
-            backsPass !== undefined && (
+            backsPass !== null && (
               <footer className="rail__footer">
                 <label className="toggle-row" title={t('editor.rotateBacksTitle')}>
                   <span className="toggle">
@@ -694,7 +778,7 @@ export function EditorScreen({
           }
         />
 
-        <section className="stage">
+        <section className="stage" onMouseDown={collapseOnSurfaceClick}>
           <EditorPassBanner
             snapshot={snapshot}
             session={session}
@@ -761,10 +845,24 @@ export function EditorScreen({
             <button
               type="button"
               className="btn btn--icon stage__tool"
+              aria-label={rotateLeftLabel}
+              title={rotateLeftLabel}
+              disabled={total === 0 || saving}
+              onClick={() => {
+                rotate('ccw');
+              }}
+            >
+              ↺
+            </button>
+            <button
+              type="button"
+              className="btn btn--icon stage__tool"
               aria-label={rotateLabel}
               title={rotateLabel}
               disabled={total === 0 || saving}
-              onClick={rotate}
+              onClick={() => {
+                rotate('cw');
+              }}
             >
               ↻
             </button>
@@ -804,7 +902,8 @@ export function EditorScreen({
             position={currentIndex + 1}
             currentDocument={currentDocument}
             names={names}
-            frontsOnly={backsPass === undefined}
+            frontsOnly={backsPass === null}
+            pairsHint={mismatchDue(snapshot.assembly.report, session.passes)}
             locked={saving}
             onPickDocument={(index) => {
               const first = visible[documents[index]?.start ?? -1];
@@ -815,6 +914,7 @@ export function EditorScreen({
             onRevert={() => {
               setModal('revert');
             }}
+            onMouseDown={collapseOnSurfaceClick}
           />
         )}
       </div>
@@ -856,6 +956,17 @@ export function EditorScreen({
             setModal(null);
           }}
           onConfirm={revert}
+        />
+      )}
+      {anchors !== null && (
+        <AddModal
+          scanner={snapshot.scanner}
+          current={anchors.current}
+          documentEnd={anchors.documentEnd}
+          onStart={onAdd}
+          onClose={() => {
+            setModal(null);
+          }}
         />
       )}
     </main>

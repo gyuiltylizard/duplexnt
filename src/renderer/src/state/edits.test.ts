@@ -27,6 +27,15 @@ describe('жесты: поворот', () => {
   ] as const)('%s', (_name, rotations, keys, expected) => {
     expect(rotated(edits({ rotations }), keys).rotations).toEqual(expected);
   });
+
+  it.each([
+    ['без поворота → 270°', {}, ['a'], { a: 270 }],
+    ['270° → 180°', { a: 270 }, ['a'], { a: 180 }],
+    ['90° → запись снята', { a: 90 }, ['a'], {}],
+    ['группа — каждая на −90°', { b: 90 }, ['a', 'b'], { a: 270 }],
+  ] as const)('против часовой (M3.5, KTD-11): %s', (_name, rotations, keys, expected) => {
+    expect(rotated(edits({ rotations }), keys, 'ccw').rotations).toEqual(expected);
+  });
 });
 
 describe('жесты: удаление', () => {

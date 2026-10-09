@@ -1,86 +1,11 @@
-﻿import {
-  EMPTY_EDITS,
-  fail,
-  ok,
-  type Api,
-  type DiscoveredScanner,
-  type ScannerState,
-  type Snapshot,
-} from '@shared';
+import { EMPTY_EDITS, fail, ok } from '@shared';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { StrictMode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import './i18n';
 import { App } from './App';
-import { MERGE_PAUSE_DECLINED_MS } from './screens/MergeScreen';
-import { assemblyOf, NO_EDITS_ASSEMBLY } from './state/assembly-fixture';
-
-function makeSnapshot(overrides: Partial<Snapshot>): Snapshot {
-  const snapshot: Snapshot = {
-    seq: 1,
-    scanner: { kind: 'none' },
-    session: null,
-    assembly: null,
-    pass: null,
-    canResume: false,
-    canAccept: false,
-    storage: { incompatible: false, unsaved: false },
-    notices: [],
-    ...overrides,
-  };
-  if (snapshot.session !== null && snapshot.assembly === null) {
-    return { ...snapshot, assembly: assemblyOf(snapshot.session) };
-  }
-  return snapshot;
-}
-
-const PARAMS = { colorMode: 'Grayscale8', resolution: 300, paperSize: 'A4' } as const;
-
-const READY: ScannerState = {
-  kind: 'ready',
-  scanner: { name: 'ScanPro 200', scheme: 'https', host: '192.0.2.10', port: 443 },
-  options: { colorModes: ['Grayscale8'], resolutions: [300], paperSizes: ['A4'] },
-  params: PARAMS,
-};
-
-const FOUND: DiscoveredScanner = {
-  id: 'abcdef01-1',
-  name: 'ScanPro 200',
-  address: '192.0.2.10',
-  port: 443,
-  hasAdf: true,
-};
-
-function pages(count: number, from = 1): { key: string; number: number; lost: boolean }[] {
-  return Array.from({ length: count }, (_, index) => ({
-    key: `p01-s01-${String(from + index).padStart(4, '0')}`,
-    number: from + index,
-    lost: false,
-  }));
-}
-
-function stubApi(snapshot: Snapshot, overrides: Partial<Record<keyof Api, unknown>> = {}) {
-  const unsubscribe = vi.fn();
-  const api = {
-    getSnapshot: vi.fn(() => Promise.resolve(ok(snapshot))),
-    onSnapshotChanged: vi.fn(() => unsubscribe),
-    onDiscoveryChanged: vi.fn(() => () => undefined),
-    startDiscovery: vi.fn(() => Promise.resolve(ok({ scanners: [], failure: null }))),
-    getDiscovery: vi.fn(() => Promise.resolve(ok({ scanners: [], failure: null }))),
-    stopDiscovery: vi.fn(() => Promise.resolve(ok(undefined))),
-    cancelConnect: vi.fn(() => Promise.resolve(ok(undefined))),
-    connectScanner: vi.fn(() => Promise.resolve(ok(undefined))),
-    setScanParams: vi.fn(() => Promise.resolve(ok(undefined))),
-    recheckScanner: vi.fn(() => Promise.resolve(ok(undefined))),
-    startPass: vi.fn(() => new Promise(() => undefined)),
-    stopPass: vi.fn(() => Promise.resolve(ok(undefined))),
-    acceptPass: vi.fn(() => Promise.resolve(ok(undefined))),
-    closeSession: vi.fn(() => Promise.resolve(ok(undefined))),
-    ...overrides,
-  } as unknown as Api;
-  vi.stubGlobal('api', api);
-  return { unsubscribe };
-}
+import { FOUND, makeSnapshot, pages, PARAMS, READY, stubApi } from './app-fixture';
+import { NO_EDITS_ASSEMBLY } from './state/assembly-fixture';
 
 afterEach(() => {
   cleanup();
@@ -100,7 +25,14 @@ describe('каркас приложения', () => {
   it('идущий проход — экран scan со счётчиком принятых страниц', async () => {
     stubApi(
       makeSnapshot({
-        pass: { phase: 'scanning', resumed: false, expected: null, params: PARAMS, pages: 7 },
+        pass: {
+          phase: 'scanning',
+          resumed: false,
+          kind: 'fronts',
+          expected: null,
+          params: PARAMS,
+          pages: 7,
+        },
         session: {
           id: 'session.x',
           backsDeclined: false,
@@ -112,6 +44,8 @@ describe('каркас приложения', () => {
               state: 'running',
               paramsKnown: true,
               scanner: null,
+              kind: 'fronts',
+              after: null,
               rotate180: false,
               pages: pages(7),
             },
@@ -140,6 +74,8 @@ describe('каркас приложения', () => {
               state: 'completed',
               paramsKnown: true,
               scanner: null,
+              kind: 'fronts',
+              after: null,
               rotate180: false,
               pages: pages(12),
             },
@@ -184,6 +120,8 @@ describe('каркас приложения', () => {
               state: 'interrupted',
               paramsKnown: true,
               scanner: null,
+              kind: 'fronts',
+              after: null,
               rotate180: false,
               pages: pages(5),
             },
@@ -211,6 +149,8 @@ describe('каркас приложения', () => {
               state: 'completed',
               paramsKnown: true,
               scanner: null,
+              kind: 'fronts',
+              after: null,
               rotate180: false,
               pages: pages(3),
             },
@@ -312,7 +252,14 @@ describe('каркас приложения', () => {
   it('S15: отказ закрытия сегмента после «Остановить» — тостом', async () => {
     stubApi(
       makeSnapshot({
-        pass: { phase: 'scanning', resumed: false, expected: null, params: PARAMS, pages: 2 },
+        pass: {
+          phase: 'scanning',
+          resumed: false,
+          kind: 'fronts',
+          expected: null,
+          params: PARAMS,
+          pages: 2,
+        },
         session: {
           id: 'session.x',
           backsDeclined: false,
@@ -324,6 +271,8 @@ describe('каркас приложения', () => {
               state: 'running',
               paramsKnown: true,
               scanner: null,
+              kind: 'fronts',
+              after: null,
               rotate180: false,
               pages: pages(2),
             },
@@ -343,7 +292,14 @@ describe('каркас приложения', () => {
   it('другой отказ «Остановить» тоста не даёт', async () => {
     stubApi(
       makeSnapshot({
-        pass: { phase: 'scanning', resumed: false, expected: null, params: PARAMS, pages: 2 },
+        pass: {
+          phase: 'scanning',
+          resumed: false,
+          kind: 'fronts',
+          expected: null,
+          params: PARAMS,
+          pages: 2,
+        },
         session: {
           id: 'session.x',
           backsDeclined: false,
@@ -355,6 +311,8 @@ describe('каркас приложения', () => {
               state: 'running',
               paramsKnown: true,
               scanner: null,
+              kind: 'fronts',
+              after: null,
               rotate180: false,
               pages: pages(2),
             },
@@ -391,6 +349,8 @@ describe('каркас приложения', () => {
               state: 'completed',
               paramsKnown: true,
               scanner: null,
+              kind: 'fronts',
+              after: null,
               rotate180: false,
               pages: [
                 { key: 'p01-s01-0001', number: 1, lost: false },
@@ -422,6 +382,8 @@ describe('каркас приложения', () => {
             state: 'interrupted',
             paramsKnown: true,
             scanner: null,
+            kind: 'fronts',
+            after: null,
             rotate180: false,
             pages: pages(3),
           },
@@ -510,6 +472,8 @@ describe('каркас приложения', () => {
               state: 'interrupted',
               paramsKnown: true,
               scanner: null,
+              kind: 'fronts',
+              after: null,
               rotate180: false,
               pages: pages(3),
             },
@@ -531,7 +495,14 @@ describe('каркас приложения', () => {
 
   it('KTD-5: пауза merge после прохода оборотов переживает StrictMode и уходит сама', async () => {
     const scanning = makeSnapshot({
-      pass: { phase: 'scanning', resumed: false, expected: 3, params: PARAMS, pages: 3 },
+      pass: {
+        phase: 'scanning',
+        resumed: false,
+        kind: 'backs',
+        expected: 3,
+        params: PARAMS,
+        pages: 3,
+      },
       session: {
         id: 'session.x',
         backsDeclined: false,
@@ -543,6 +514,8 @@ describe('каркас приложения', () => {
             state: 'completed',
             paramsKnown: true,
             scanner: null,
+            kind: 'fronts',
+            after: null,
             rotate180: false,
             pages: pages(3),
           },
@@ -551,6 +524,8 @@ describe('каркас приложения', () => {
             state: 'running',
             paramsKnown: true,
             scanner: null,
+            kind: 'backs',
+            after: null,
             rotate180: false,
             pages: pages(3, 1).map((page) => ({ ...page, key: `p02-s01-000${page.number}` })),
           },
@@ -570,6 +545,8 @@ describe('каркас приложения', () => {
             state: 'completed',
             paramsKnown: true,
             scanner: null,
+            kind: 'fronts',
+            after: null,
             rotate180: false,
             pages: pages(3),
           },
@@ -578,6 +555,8 @@ describe('каркас приложения', () => {
             state: 'completed',
             paramsKnown: true,
             scanner: null,
+            kind: 'backs',
+            after: null,
             rotate180: false,
             pages: pages(3, 1).map((page) => ({ ...page, key: `p02-s01-000${page.number}` })),
           },
@@ -639,6 +618,8 @@ describe('каркас приложения', () => {
             state: 'completed',
             paramsKnown: true,
             scanner: null,
+            kind: 'fronts',
+            after: null,
             rotate180: false,
             pages: pages(3),
           },
@@ -702,6 +683,8 @@ describe('каркас приложения', () => {
             state: 'completed',
             paramsKnown: true,
             scanner: null,
+            kind: 'fronts',
+            after: null,
             rotate180: false,
             pages: pages(3),
           },
@@ -722,6 +705,8 @@ describe('каркас приложения', () => {
             state: 'completed',
             paramsKnown: true,
             scanner: null,
+            kind: 'backs',
+            after: null,
             rotate180: false,
             pages: pages(3, 1).map((page) => ({ ...page, key: `p02-s01-000${page.number}` })),
           },
@@ -775,6 +760,8 @@ describe('каркас приложения', () => {
               state: 'completed',
               paramsKnown: true,
               scanner: null,
+              kind: 'fronts',
+              after: null,
               rotate180: false,
               pages: pages(3),
             },
@@ -783,6 +770,8 @@ describe('каркас приложения', () => {
               state: 'completed',
               paramsKnown: true,
               scanner: null,
+              kind: 'backs',
+              after: null,
               rotate180: false,
               pages: pages(2, 1).map((page) => ({ ...page, key: `p02-s01-000${page.number}` })),
             },
@@ -798,7 +787,7 @@ describe('каркас приложения', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Понятно' }));
     expect(screen.queryByRole('dialog')).toBeNull();
     // Пометка непарного листа живёт в ленте и после закрытия модалки (S6).
-    expect(screen.getByTitle('У этого листа нет оборота')).toBeDefined();
+    expect(screen.getByTitle('У этого листа не нашлось пары')).toBeDefined();
   });
 
   it('KTD-8: прерванный и не принятый проход оборотов модалку не зовёт — решение за плашкой', async () => {
@@ -817,6 +806,8 @@ describe('каркас приложения', () => {
               state: 'completed',
               paramsKnown: true,
               scanner: null,
+              kind: 'fronts',
+              after: null,
               rotate180: false,
               pages: pages(3),
             },
@@ -825,6 +816,8 @@ describe('каркас приложения', () => {
               state: 'interrupted',
               paramsKnown: true,
               scanner: null,
+              kind: 'backs',
+              after: null,
               rotate180: false,
               pages: pages(2, 1).map((page) => ({ ...page, key: `p02-s01-000${page.number}` })),
             },
@@ -855,141 +848,5 @@ describe('каркас приложения', () => {
       'Сканер подключён: ScanPro 200',
     );
     expect(screen.queryByRole('dialog')).toBeNull();
-  });
-});
-
-describe('AE9: досканирование при ручном порядке', () => {
-  /** Сессия с лицевым проходом из `count` страниц; обороты не нужны — экран сразу `editor`. */
-  function fronts(count: number, seq: number, orderEdited: boolean): Snapshot {
-    const snapshot = makeSnapshot({
-      seq,
-      session: {
-        id: 'session.x',
-        backsDeclined: true,
-        saved: false,
-        edits: orderEdited
-          ? {
-              ...EMPTY_EDITS,
-              order: pages(3)
-                .map((page) => page.key)
-                .reverse(),
-            }
-          : EMPTY_EDITS,
-        passes: [
-          {
-            number: 1,
-            state: count === 3 ? 'interrupted' : 'completed',
-            paramsKnown: true,
-            scanner: null,
-            rotate180: false,
-            pages: pages(count),
-          },
-        ],
-      },
-    });
-    const assembly = snapshot.assembly;
-    if (assembly === null) {
-      throw new Error('нет сборки');
-    }
-    return { ...snapshot, assembly: { ...assembly, orderEdited, hasEdits: orderEdited } };
-  }
-
-  /** Мост со снимком, который подменяет тест: `push` — новый снимок и событие о нём. */
-  function liveApi(first: Snapshot): (next: Snapshot) => Promise<void> {
-    let current = first;
-    let notify: (payload: { seq: number }) => void = () => undefined;
-    stubApi(current, {
-      getSnapshot: vi.fn(() => Promise.resolve(ok(current))),
-      onSnapshotChanged: vi.fn((listener: (payload: { seq: number }) => void) => {
-        notify = listener;
-        return () => undefined;
-      }),
-    });
-    return async (next) => {
-      current = next;
-      await act(async () => {
-        notify({ seq: next.seq });
-        await Promise.resolve();
-      });
-    };
-  }
-
-  async function resumed(
-    orderEdited: boolean,
-    before = fronts(3, 1, orderEdited),
-    after = fronts(5, 2, orderEdited),
-  ): Promise<void> {
-    const push = liveApi(before);
-    render(
-      <StrictMode>
-        <App />
-      </StrictMode>,
-    );
-    expect(await screen.findByText(/Проход прервался/)).toBeDefined();
-
-    // Проход досканирован: две новые страницы в том же проходе.
-    await push(after);
-    const total = after.assembly?.order.length ?? 0;
-    expect(await screen.findByText(`стр. 1 из ${String(total)}`)).toBeDefined();
-  }
-
-  it('ручной порядок — тост «Новые страницы (N) — в конце ленты»', async () => {
-    await resumed(true);
-    expect(
-      screen.getByText('Новые страницы (2) — в конце ленты: порядок правили вручную').parentElement
-        ?.className,
-    ).toBe('toast');
-  });
-
-  it('путь через scan: редактор → идущий проход → выросшая лента при ручном порядке — тост', async () => {
-    const push = liveApi(fronts(3, 1, true));
-    render(<App />);
-    expect(await screen.findByText('стр. 1 из 3')).toBeDefined();
-
-    // Досканирование идёт — экран уходит на scan, редактор размонтирован.
-    const grown = fronts(4, 2, true);
-    const passes = grown.session?.passes.map((pass) => ({ ...pass, state: 'running' as const }));
-    await push({
-      ...grown,
-      pass: { phase: 'scanning', resumed: true, expected: null, params: PARAMS, pages: 1 },
-      session: grown.session && { ...grown.session, passes: passes ?? [] },
-    });
-    expect(await screen.findByText('Отсканировано 4')).toBeDefined();
-
-    vi.useFakeTimers();
-    try {
-      await push(fronts(5, 3, true));
-      // Пауза merge после прохода — затем снова редактор.
-      act(() => {
-        vi.advanceTimersByTime(MERGE_PAUSE_DECLINED_MS + 1);
-      });
-    } finally {
-      vi.useRealTimers();
-    }
-    expect(screen.getByText('стр. 1 из 5')).toBeDefined();
-    expect(
-      screen.getByText('Новые страницы (2) — в конце ленты: порядок правили вручную').parentElement
-        ?.className,
-    ).toBe('toast');
-  });
-
-  it('автопорядок — страницы встают по схеме, тоста нет', async () => {
-    await resumed(false);
-    expect(screen.queryByText(/в конце ленты/)).toBeNull();
-  });
-
-  it('лента выросла правкой (удалённая вернулась) — тоста нет', async () => {
-    const full = fronts(3, 2, true);
-    const trimmed = fronts(3, 1, true);
-    const assembly = trimmed.assembly;
-    if (assembly === null) {
-      throw new Error('нет сборки');
-    }
-    await resumed(
-      true,
-      { ...trimmed, assembly: { ...assembly, order: assembly.order.slice(1) } },
-      full,
-    );
-    expect(screen.queryByText(/в конце ленты/)).toBeNull();
   });
 });
