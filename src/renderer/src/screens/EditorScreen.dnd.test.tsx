@@ -1,8 +1,9 @@
-import { EMPTY_EDITS } from '@shared';
+import { EMPTY_EDITS, ok } from '@shared';
 import { cleanup, createEvent, fireEvent, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../i18n';
 import {
+  deferredSetEdits,
   applied,
   B1,
   B2,
@@ -470,6 +471,29 @@ describe('editor M3: имя документа (S3)', () => {
     rerender(applied(snapshot, lastSent(api)));
     expect(nameField(1).value).toBe('Акт');
     expect(within(screen.getByRole('banner')).getByText('Акт')).toBeDefined();
+  });
+
+  it('Enter при команде в полёте оставляет фокус и черновик в поле (код-ревью сессий 3–4)', async () => {
+    const { setEdits, answer } = deferredSetEdits();
+    const api = stubApi({ setEdits });
+    const snapshot = makeSnapshot([makePass({ pages: pages(3) })]);
+    const { rerender } = renderEditor(snapshot);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Повернуть на 90° по часовой' }));
+    const field = nameField(1);
+    field.focus();
+    fireEvent.change(field, { target: { value: 'Акт' } });
+    fireEvent.keyDown(field, { key: 'Enter' });
+    expect(document.activeElement).toBe(field);
+    expect(field.value).toBe('Акт');
+    expect(api.setEdits).toHaveBeenCalledTimes(1);
+
+    // Команда дошла, снимок показан — уход фокуса дожимает имя.
+    answer(ok({ seq: 2 }));
+    await settle();
+    rerender(applied(snapshot, lastSent(api)));
+    fireEvent.blur(nameField(1));
+    expect(api.setEdits).toHaveBeenCalledTimes(2);
   });
 
   it('уход фокуса фиксирует; без изменений — ничего не шлётся', () => {

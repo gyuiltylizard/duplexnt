@@ -997,10 +997,9 @@ describe('M3.5: посадка добавленного набора (KTD-7; han
     };
   }
 
-  const toasts = (): string[] =>
-    screen
-      .getAllByRole('status')
-      .flatMap((element) => (element.className === 'toast' ? [element.textContent] : []));
+  const toastNodes = (): HTMLElement[] =>
+    screen.queryAllByRole('status').filter((element) => element.classList.contains('toast'));
+  const toasts = (): (string | null)[] => toastNodes().map((element) => element.textContent);
 
   /**
    * Запуск из этого процесса — «Досканировать остаток» прерванного набора из одной страницы:
@@ -1031,16 +1030,99 @@ describe('M3.5: посадка добавленного набора (KTD-7; han
     expect(toasts()).toEqual(['Добавлено 2 стр.']);
     // Лента: 1л 1о 2л Д1.1 Д1.2 Д1.3 2о 3л 3о — первая новая страница на пятом месте.
     expect(currentKey()).toBe('p03-s01-0002');
+    expect(screen.getAllByRole('option', { selected: true })).toHaveLength(1);
     expect(screen.getByText('5 из 9')).toBeDefined();
     // Фокус на первой добавленной: `focus()` и прокручивает к ней (S9), и даёт точку входа
     // клавиатуры.
     expect(document.activeElement).toBe(screen.getByRole('option', { selected: true }));
-    // Пришёл ещё снимок той же сессии — тост не повторяется.
+    // Пришёл ещё снимок той же сессии — тост тот же узел: не перезапущен (ключ по запуску).
+    const [node] = toastNodes();
     await push(withAdded(4, 3));
-    expect(toasts()).toEqual(['Добавлено 2 стр.']);
+    expect(toastNodes()).toEqual([node]);
   });
 
-  it('после прохода оборотов пауза merge остаётся (регресс); после added её нет даже при сошедшихся парах', async () => {
+  it('ответ startPass раньше снимка: посадка по снимку всё равно состоится (KTD-7)', async () => {
+    let answer: (result: unknown) => void = () => undefined;
+    const startPass = vi.fn(() => new Promise((resolve) => (answer = resolve)));
+    const push = liveApi({ ...withAdded(1, 1, 'interrupted'), canResume: true, canAccept: true });
+    vi.mocked(window.api.startPass).mockImplementation(startPass as never);
+    render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Досканировать остаток' }));
+
+    // Ответ пришёл, а снимок хранилище ещё дотягивает.
+    await act(async () => {
+      answer(ok({ end: 'completed', pages: 2, error: null }));
+      await Promise.resolve();
+    });
+    expect(toasts()).toEqual([]);
+
+    await push(withAdded(2, 3));
+    expect(toasts()).toEqual(['Добавлено 2 стр.']);
+    expect(currentKey()).toBe('p03-s01-0002');
+  });
+
+  it('«Остановить» до первой страницы добавленного набора — ни тоста, ни плашки, editor прежний', async () => {
+    const startPass = vi.fn(() => Promise.resolve(ok({ end: 'stopped', pages: 0, error: null })));
+    stubApi({ ...withAdded(1, 0), scanner: READY }, { startPass });
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('option', { name: /Страница 3/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Добавить' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(toasts()).toEqual([]);
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByText('стр. 3 из 6')).toBeDefined();
+  });
+
+  it('повторное «Начать скан» до ответа ядра запуск не дублирует', async () => {
+    const startPass = vi.fn(() => new Promise(() => undefined));
+    stubApi({ ...withAdded(1, 0), scanner: READY }, { startPass });
+    render(<App />);
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      fireEvent.click(await screen.findByRole('button', { name: 'Добавить' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
+    }
+    expect(startPass).toHaveBeenCalledTimes(1);
+  });
+
+  it('добавленный проход без страниц после кадра scan: паузы merge нет, редактор как был', async () => {
+    // Ядро выбросило пустой проход: последним снова стал проход оборотов, но пауза —
+    // по намерению запуска (R15), не по роли последнего прохода.
+    const startPass = vi.fn(() => Promise.resolve(fail('scanNoPaper')));
+    const push = liveApi({ ...withAdded(1, 0), scanner: READY });
+    vi.mocked(window.api.startPass).mockImplementation(startPass);
+    render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Добавить' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
+
+    await push({
+      ...withAdded(2, 0),
+      scanner: READY,
+      pass: {
+        phase: 'starting',
+        resumed: false,
+        kind: 'added',
+        expected: null,
+        params: PARAMS,
+        pages: 0,
+      },
+    });
+    expect(screen.getByText('ДОБАВЛЯЕМ СТРАНИЦЫ')).toBeDefined();
+    await push({ ...withAdded(3, 0), scanner: READY });
+
+    expect(screen.queryByText('Сопоставляем проходы')).toBeNull();
+    expect(screen.getByText('стр. 1 из 6')).toBeDefined();
+    expect(toasts()).toEqual([
+      'Не удалось начать: в лотке нет бумаги. Положите листы в автоподатчик и запустите ещё раз.',
+    ]);
+  });
+
+  it('после прохода оборотов пауза merge остаётся (регресс)', async () => {
     const backs = {
       ...withAdded(1, 0),
       pass: {
@@ -1089,27 +1171,33 @@ describe('M3.5: посадка добавленного набора (KTD-7; han
   });
 
   it.each([
-    ['отказ до старта (лоток пуст)', fail('scanNoPaper')],
+    ['отказ до старта (лоток пуст)', fail('scanNoPaper'), /в лотке нет бумаги/],
     [
       'обрыв до первой страницы при живой сессии',
       ok({ end: 'interrupted' as const, pages: 0, error: { code: 'scanFeedFailed' as const } }),
+      /сканер прервал подачу бумаги/,
     ],
-  ])('отказ запуска из add — %s — тост 6 с, плашки нет, editor прежний', async (_name, result) => {
-    const startPass = vi.fn(() => Promise.resolve(result));
-    stubApi({ ...withAdded(1, 0), scanner: READY }, { startPass });
-    render(<App />);
+  ])(
+    'отказ запуска из add — %s — тост 6 с, плашки нет, editor прежний',
+    async (_name, result, reason) => {
+      const startPass = vi.fn(() => Promise.resolve(result));
+      stubApi({ ...withAdded(1, 0), scanner: READY }, { startPass });
+      render(<App />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Добавить' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
-    expect(startPass).toHaveBeenCalledExactlyOnceWith({ kind: 'added', after: 'p01-s01-0001' });
+      // Текущая — третья: якорь и выделение после отказа должны остаться её.
+      fireEvent.click(await screen.findByRole('option', { name: /Страница 3/ }));
+      fireEvent.click(screen.getByRole('button', { name: 'Добавить' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
+      expect(startPass).toHaveBeenCalledExactlyOnceWith({ kind: 'added', after: 'p01-s01-0002' });
 
-    const toast = await screen.findByText(/^Не удалось начать: /);
-    expect(toast.parentElement?.className).toBe('toast');
-    expect(toast.textContent).toMatch(/лотке нет бумаги|прервал подачу/);
-    expect(screen.queryByRole('region', { name: /прерв/ })).toBeNull();
-    expect(screen.queryByRole('dialog')).toBeNull();
-    expect(screen.getByText('стр. 1 из 6')).toBeDefined();
-  });
+      const toast = await screen.findByText(/^Не удалось начать: /);
+      expect(toast.parentElement?.classList.contains('toast')).toBe(true);
+      expect(toast.textContent).toMatch(reason);
+      expect(screen.queryByRole('alert')).toBeNull();
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(screen.getByText('стр. 3 из 6')).toBeDefined();
+    },
+  );
 
   it('mismatch при добавленном наборе не показывается и после перезапуска (KTD-7)', async () => {
     const session = withAdded(1, 1).session;

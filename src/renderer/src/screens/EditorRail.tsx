@@ -89,6 +89,11 @@ function DocName({
   const keyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
     if (event.key === 'Enter') {
       event.preventDefault();
+      // Команда в полёте — черновик не отправить; фокус остаётся в поле, иначе имя выглядело
+      // бы принятым, а в журнал не попало бы (код-ревью сессий 3–4).
+      if (busy) {
+        return;
+      }
       // Enter «закрывает» ввод (замечание приёмки M3): уход фокуса фиксирует имя, как и
       // раньше (один `setEdits`), затем фокус уходит на ленту — следующий шаг человека там.
       event.currentTarget.blur();

@@ -78,6 +78,8 @@ export function Segments<T extends string | number>({
 }: SegmentsProps<T>): ReactNode {
   const off = disabled === true;
   const enabled = (value: T): boolean => !off && disabledReason?.(value) === undefined;
+  // Остановка Tab в roving-ряду: выбранное значение, без выбранного — первое доступное.
+  const stop = selected ?? values.find(enabled) ?? null;
   return (
     <div
       className={large === true ? 'segments segments--wide' : 'segments'}
@@ -102,7 +104,7 @@ export function Segments<T extends string | number>({
             role="radio"
             aria-checked={value === selected}
             aria-disabled={off || reason !== undefined || undefined}
-            tabIndex={roving === true ? (value === selected ? 0 : -1) : undefined}
+            tabIndex={roving === true ? (value === stop ? 0 : -1) : undefined}
             data-value={value}
             className={classes.join(' ')}
             title={reason ?? titleOf?.(value)}

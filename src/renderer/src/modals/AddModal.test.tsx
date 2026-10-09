@@ -155,13 +155,16 @@ describe('модалка add: запуск и отмена', () => {
     expect(onStart).not.toHaveBeenCalled();
   });
 
-  it('фокус заперт: Tab с «Начать скан» возвращается в окно', () => {
+  it('фокус заперт: Tab с «Начать скан» — на выбранную карточку, Shift+Tab с неё — на «Начать скан»', () => {
     renderModal();
+    // Выбрана вторая карточка: первая в DOM — с tabIndex −1, в кольцо она не входит.
+    fireEvent.click(radio(/Один лист/));
 
     const button = start();
     button.focus();
     fireEvent.keyDown(button, { key: 'Tab' });
-    expect(screen.getByRole('dialog').contains(document.activeElement)).toBe(true);
-    expect(document.activeElement).not.toBe(button);
+    expect(document.activeElement).toBe(radio(/Один лист/));
+    fireEvent.keyDown(radio(/Один лист/), { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(button);
   });
 });

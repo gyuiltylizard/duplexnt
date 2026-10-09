@@ -114,6 +114,10 @@ describe('«+ Добавить»: доступность (S1, R12)', () => {
 
     expect(addButton().hasAttribute('disabled')).toBe(true);
     expect(addButton().getAttribute('title')).toBe('Документ сохраняется — дождитесь конца записи');
+    // S13: обе кнопки поворота тоже недоступны во время записи.
+    expect(screen.getByRole('button', { name: /против часовой/ }).hasAttribute('disabled')).toBe(
+      true,
+    );
   });
 
   it('пустая лента: кнопка доступна, в модалке «После текущей» недоступна, якорь — null', () => {
@@ -191,9 +195,15 @@ describe('«+ Добавить»: якорь из видимой ленты (S2,
     expect(summary()).toBe('Один проход · в конец документа «Акт», после стр. 4');
     fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
     expect(onAdd).toHaveBeenCalledExactlyOnceWith('p02-s01-0002');
+
+    // Документ без имени — в сводке имя по умолчанию, как в тулбаре.
+    fireEvent.click(option(5));
+    fireEvent.click(addButton());
+    fireEvent.click(screen.getByRole('radio', { name: 'В конец документа' }));
+    expect(summary()).toBe('Один проход · в конец документа «Документ 2», после стр. 6');
   });
 
-  it('под StrictMode «Начать скан» зовёт запуск один раз; фокус возвращается на «+ Добавить»', () => {
+  it('после «Начать скан» фокус возвращается на «+ Добавить» (и под StrictMode)', () => {
     stubApi();
     const snapshot = makeSnapshot(pairs(), { scanner: READY });
     if (snapshot.session === null) {
@@ -243,7 +253,7 @@ describe('добавленный набор в ленте и инспектор�
     const card = option(3);
     expect(card.getAttribute('aria-label')).toBe('Страница 4, добавленный набор 1');
     const tag = within(card).getByText('Д1');
-    expect(tag.className).toBe('thumb__tag thumb__tag--added');
+    expect(tag.classList.contains('thumb__tag--added')).toBe(true);
     expect(tag.getAttribute('aria-label')).toBe('добавленный набор 1');
     expect(within(option(1)).getByText('об').className).toBe('thumb__tag');
     expect(within(option(0)).queryByText(/^Д|^об$/)).toBeNull();

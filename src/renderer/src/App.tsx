@@ -68,6 +68,8 @@ interface Landing {
 interface Launch {
   /** Порядковый номер запуска за процесс — ключ `EditorScreen` после посадки. */
   readonly epoch: number;
+  /** Намерение запуска: добавленный набор или проход по политике ядра (`null`). */
+  readonly kind: 'added' | null;
   /** `null` — запуск без сессии (с `setup`): посадки не будет. */
   readonly sessionId: string | null;
   readonly keysBefore: ReadonlySet<string>;
@@ -76,6 +78,12 @@ interface Launch {
 }
 
 const NO_LANDING: Landing = { key: null, added: 0 };
+
+/** Место посадки набора: с какого запуска и на какой странице `EditorScreen` смонтирован. */
+interface Seat {
+  readonly epoch: number;
+  readonly key: string;
+}
 
 const keysOf = (session: SessionSnapshot): ReadonlySet<string> =>
   new Set(session.passes.flatMap((pass) => pass.pages.map((page) => page.key)));
@@ -105,7 +113,9 @@ export function App(): ReactNode {
 
   // Память о запуске (KTD-7): ставится в `startPass`, посадка — корректировкой при рендере.
   const [launch, setLaunch] = useState<Launch | null>(null);
-  const landing = launch?.landed ?? null;
+  // Место посадки живёт отдельно от запуска: следующий запуск не должен перемонтировать
+  // `editor`, пока тот на экране (отказ до снимка оставляет редактор как был).
+  const [seat, setSeat] = useState<Seat | null>(null);
 
   // Пауза `merge` (KTD-5): эфемерное состояние поверх `screenOf`, живёт только в renderer и
   // после перезапуска не повторяется — на старте процесса предыдущего экрана нет, переход
@@ -113,7 +123,9 @@ export function App(): ReactNode {
   // Might Not Need an Effect», как `known` в SetupScreen) — это идемпотентно и переживает
   // StrictMode double-render. Условие читает отчёт, а не промежуточные экраны: снимки могут
   // прийти пачкой, и кадр `scan` между `flip` и `editor` легко пропустить. После добавленного
-  // прохода паузы нет (M3.5, R15): роль — у последнего прохода сессии, он и шёл.
+  // прохода паузы нет (M3.5, R15): по роли последнего прохода сессии (досканирование набора
+  // идёт без намерения) и по намерению запуска — проход без страниц ядро из журнала
+  // выбрасывает, и последним снова становится проход оборотов.
   const [mergeHoldMs, setMergeHoldMs] = useState<number | null>(null);
   const [previousScreen, setPreviousScreen] = useState<Screen | null>(null);
   const screen = snapshot === null ? null : screenOf(snapshot);
@@ -127,7 +139,8 @@ export function App(): ReactNode {
       (previousScreen === 'scan' || previousScreen === 'flip') &&
       transitionReport !== undefined &&
       assemblyLanded(transitionReport) &&
-      lastPass?.kind !== 'added'
+      lastPass?.kind !== 'added' &&
+      !(launch?.kind === 'added' && launch.sessionId === session?.id)
     ) {
       setMergeHoldMs(transitionReport.backsDeclined ? MERGE_PAUSE_DECLINED_MS : MERGE_PAUSE_MS);
     }
@@ -154,10 +167,11 @@ export function App(): ReactNode {
         .filter((key) => !launch.keysBefore.has(key)) ?? [];
     if (fresh.length > 0) {
       const added = lastPass.kind === 'added' && lastPass.state !== 'interrupted';
-      setLaunch({
-        ...launch,
-        landed: added ? { key: fresh[0] ?? null, added: fresh.length } : NO_LANDING,
-      });
+      const key = fresh[0] ?? null;
+      setLaunch({ ...launch, landed: added ? { key, added: fresh.length } : NO_LANDING });
+      if (added && key !== null) {
+        setSeat({ epoch: launch.epoch, key });
+      }
       if (added) {
         setToast({
           key: `added:${String(launch.epoch)}`,
@@ -216,6 +230,7 @@ export function App(): ReactNode {
       const before = store.get()?.session ?? null;
       setLaunch((previous) => ({
         epoch: (previous?.epoch ?? 0) + 1,
+        kind: request === null ? null : request.kind,
         sessionId: before?.id ?? null,
         keysBefore: before === null ? new Set() : keysOf(before),
         landed: null,
@@ -349,10 +364,10 @@ export function App(): ReactNode {
       {merging && <MergeScreen assembly={assembly} />}
       {screen === 'editor' && !merging && session !== null && (
         <EditorScreen
-          key={landing?.key === undefined || landing.key === null ? 0 : launch?.epoch}
+          key={seat?.epoch ?? 0}
           snapshot={snapshot}
           session={session}
-          initialCurrent={landing?.key ?? null}
+          initialCurrent={seat?.key ?? null}
           resumeFailure={launchFailure?.target === 'editor' ? launchFailure.error : null}
           onResume={startNext}
           onAdd={startAdded}
