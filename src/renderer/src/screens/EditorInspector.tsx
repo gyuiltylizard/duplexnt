@@ -2,33 +2,12 @@ import { useId, useState, type MouseEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AssembledPage, SessionAssembly } from '@shared';
 import type { TFunction } from 'i18next';
+import { isExtraBack, toneOf, whatOf } from '../state/page-text';
 
 // Инспектор редактора (handoff M3, S11–S13; M3.5, S6–S7): ДЕТАЛИ текущей страницы, ДОКУМЕНТЫ В
 // НАБОРЕ и ПРОВЕРКА, внизу — плашка правок S14 с «Вернуть». Только показ снимка: пары, порядок
 // и наличие правок — из отчёта и флагов сборки ядра (KTD-2, KTD-7). Страница добавленного набора
 // — без «лица» и «листа»: факт «Набор» и своё пояснение.
-
-/** Тон документа по номеру с нуля: четыре цвета по кругу (handoff M3, Anatomy). */
-export const toneOf = (document: number): string => `doc-tone--${String((document % 4) + 1)}`;
-
-/** Лишний оборот: оборот без листа. */
-const isExtraBack = (entry: AssembledPage): boolean =>
-  entry.side === 'back' && entry.sheet === null;
-
-/**
- * Что это за страница: «лицо листа 4», «оборот листа 4», «лишний оборот», «добавленный набор 1»
- * — заголовок ДЕТАЛЕЙ без «Стр. N —»; теми же словами сводка модалки `add` называет якорь.
- */
-export function whatOf(t: TFunction, entry: AssembledPage): string {
-  const sheet = entry.sheet ?? 0;
-  if (entry.addedSet !== null) {
-    return t('inspector.what.added', { set: entry.addedSet });
-  }
-  if (isExtraBack(entry)) {
-    return t('inspector.what.extraBack');
-  }
-  return t(entry.side === 'back' ? 'inspector.what.back' : 'inspector.what.front', { sheet });
-}
 
 /** Пояснение — по самому важному: потеря, добавленный набор, лишний оборот, непарность. */
 function noteOf(t: TFunction, entry: AssembledPage, frontsOnly: boolean): string {

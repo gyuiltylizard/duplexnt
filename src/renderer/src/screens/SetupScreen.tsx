@@ -12,7 +12,7 @@ import {
 import { LaunchFailureNotice } from '../components/LaunchFailureNotice';
 import { Segments } from '../components/Segments';
 import { errorText } from '../state/error-text';
-import { addressOf } from '../state/scanner-address';
+import { addressOf, scannerLabel } from '../state/scanner-address';
 import './setup-screen.css';
 
 // Экран `setup` (план M1, U22; UI_SPEC раздел 2; handoff U19, S1–S6): строка устройства с
@@ -145,7 +145,7 @@ export function SetupScreen({
     case 'checking':
       deviceRow = (
         <div className="device-row device-row--checking" aria-busy="true">
-          <div className="device-row__name">{scanner.scanner.name ?? scanner.scanner.host}</div>
+          <div className="device-row__name">{scannerLabel(scanner.scanner)}</div>
           {schemeBadge(scanner.scanner)}
           <div className="device-row__status">
             <span className="dot dot--checking" aria-hidden="true" />
@@ -163,7 +163,7 @@ export function SetupScreen({
     case 'ready':
       deviceRow = (
         <div className="device-row">
-          <div className="device-row__name">{scanner.scanner.name ?? scanner.scanner.host}</div>
+          <div className="device-row__name">{scannerLabel(scanner.scanner)}</div>
           {schemeBadge(scanner.scanner)}
           <div className="device-row__status">
             <span className="dot dot--ready" aria-hidden="true" />
@@ -185,7 +185,7 @@ export function SetupScreen({
     case 'unreachable':
       deviceRow = (
         <div className="device-row device-row--unreachable">
-          <div className="device-row__name">{scanner.scanner.name ?? scanner.scanner.host}</div>
+          <div className="device-row__name">{scannerLabel(scanner.scanner)}</div>
           {schemeBadge(scanner.scanner)}
           <div className="device-row__status">
             <span className="dot dot--danger" aria-hidden="true" />
@@ -212,7 +212,7 @@ export function SetupScreen({
     case 'otherDevice':
       deviceRow = (
         <div className="device-row device-row--changed">
-          <div className="device-row__name">{scanner.scanner.name ?? scanner.scanner.host}</div>
+          <div className="device-row__name">{scannerLabel(scanner.scanner)}</div>
           {schemeBadge(scanner.scanner)}
           <div className="device-row__status">
             <span className="dot dot--warning" aria-hidden="true" />

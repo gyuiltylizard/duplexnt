@@ -716,6 +716,8 @@ describe('служба прохода: пакетное сохранение (M3
       ok: true,
       value: { folder, written: [{ index: 0, fileName: 'скан.pdf' }], failed: [] },
     });
+    // Папка пакета — для «Открыть папку» (M3.5, KTD-9); до пакета её нет.
+    expect(service.lastBatchFolder()).toBe(folder);
     const document = await PDFDocument.load(await readFile(join(folder, 'скан.pdf')));
     // Порядок: 1л, 1о, 2л, 2о; обороты повёрнуты.
     expect(document.getPageCount()).toBe(4);
@@ -738,6 +740,7 @@ describe('служба прохода: пакетное сохранение (M3
     await duplex(root);
     await rm(join(layoutOf(root).pagesDir, 'p01-s01-0002.jpg'));
     const service = await openPassService(root);
+    expect(service.lastBatchFolder()).toBeNull();
 
     expect(
       await service.saveDocuments(folder, { mode: 'single', names: ['скан'], retry: false }),
@@ -756,6 +759,8 @@ describe('служба прохода: пакетное сохранение (M3
     });
     expect(await readdir(folder)).toEqual([]);
     expect(service.snapshot().session?.saved).toBe(false);
+    // Пакет без единого записанного файла папку не помнит: открывать там нечего.
+    expect(service.lastBatchFolder()).toBeNull();
   });
 
   it('без сессии — noSession; в папку ничего не пишется', async () => {

@@ -2,9 +2,8 @@ import { mkdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { PDFDocument } from '@cantoo/pdf-lib';
 import { expect, it } from 'vitest';
-import { probeScanner } from '../../src/core/escl/connect';
 import { openPassService } from '../../src/core/scan/pass-service';
-import { describeLive } from '../support/live-device';
+import { describeLive, probeLive, startPassWhenPaper } from '../support/live-device';
 import { makeTempDataRoot } from '../support/temp-data-root';
 import { unwrap } from '../support/result';
 
@@ -26,43 +25,15 @@ import { unwrap } from '../support/result';
 //
 // Адрес сканера в вывод не попадает: он идентифицирует сеть автора.
 
-const BASE_PATH = '/eSCL';
 const TIMEOUT_MS = 20 * 60_000;
-/** Сколько ждать бумаги в лотке между проходами: попытки идут, пока лоток пуст. */
-const PAPER_DEADLINE_MS = 5 * 60_000;
-const PAPER_RETRY_DELAY_MS = 5_000;
-
-const sleep = (ms: number) => new Promise((done) => setTimeout(done, ms));
 
 describeLive('один лист после двух проходов на живом сканере (AE12)', (host) => {
   it(
     'пачка → два прохода → один лист оборотом вверх → PDF с добавленной страницей в конце',
     async () => {
-      const probed = await probeScanner({
-        scheme: 'https',
-        host,
-        port: 443,
-        basePath: BASE_PATH,
-        fingerprint: null,
-      });
-      if (!probed.ok) {
-        throw new Error(`сканер не подключился: ${probed.error.code}`);
-      }
-
       const root = await makeTempDataRoot();
       const service = await openPassService(root);
-      await service.useScanner(probed.value);
-
-      /** Проход стартует, как только в лотке появится бумага. */
-      const whenPaper = async (request: Parameters<typeof service.startPass>[0]) => {
-        const deadline = Date.now() + PAPER_DEADLINE_MS;
-        let result = await service.startPass(request);
-        while (!result.ok && result.error.code === 'scanNoPaper' && Date.now() < deadline) {
-          await sleep(PAPER_RETRY_DELAY_MS);
-          result = await service.startPass(request);
-        }
-        return unwrap(result);
-      };
+      await service.useScanner(await probeLive(host));
 
       console.info('[live] проход 1: лицевые стороны — пачка лицом вверх, лист 1 сверху');
       const fronts = unwrap(await service.startPass(null));
@@ -72,7 +43,7 @@ describeLive('один лист после двух проходов на жив
         `[live] лицевые готовы: ${fronts.pages} листов. Разверни пачку на 180° в плоскости ` +
           '(не переворачивая листы) и положи в лоток — второй проход стартует сам.',
       );
-      const backs = await whenPaper(null);
+      const backs = await startPassWhenPaper(service, null);
       expect(backs.end).toBe('completed');
       expect(backs.pages).toBe(fronts.pages);
 
@@ -87,7 +58,7 @@ describeLive('один лист после двух проходов на жив
         '[live] обороты готовы. Положи ОДИН лист оборотом вверх, развёрнутым на 180° ' +
           '(как лежала пачка на втором проходе), — добавленный проход стартует сам.',
       );
-      const added = await whenPaper({ kind: 'added', after: lastFront.key });
+      const added = await startPassWhenPaper(service, { kind: 'added', after: lastFront.key });
       expect(added.end).toBe('completed');
       expect(added.pages).toBe(1);
 

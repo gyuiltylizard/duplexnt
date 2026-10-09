@@ -13,7 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { MAX_DOCUMENT_NAME_LENGTH, type AssembledDocument, type AssembledPage } from '@shared';
 import type { DropSide } from '../state/edits';
 import { single, type Selection } from '../state/selection';
-import { toneOf } from './EditorInspector';
+import { toneOf } from '../state/page-text';
 import {
   EditorThumb,
   pickModifierHeld,
@@ -89,13 +89,10 @@ function DocName({
   const keyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
     if (event.key === 'Enter') {
       event.preventDefault();
-      // Enter «закрывает» ввод (замечание приёмки M3): фокус уходит на ленту — следующий шаг
-      // человека обычно там, — а имя фиксирует уход фокуса, как и раньше: один `setEdits`.
-      // Карточки нет (лента пуста) — поле просто отпускает фокус.
+      // Enter «закрывает» ввод (замечание приёмки M3): уход фокуса фиксирует имя, как и
+      // раньше (один `setEdits`), затем фокус уходит на ленту — следующий шаг человека там.
+      event.currentTarget.blur();
       onEnter();
-      if (document.activeElement === event.currentTarget) {
-        event.currentTarget.blur();
-      }
     } else if (event.key === 'Escape') {
       // Esc в поле — отмена ввода, а не сжатие выделения ленты; фокус остаётся в поле.
       event.stopPropagation();
@@ -123,6 +120,11 @@ function DocName({
     />
   );
 }
+
+/** Фокус на карточку страницы по ключу — одно место для селектора карточки в ленте. */
+export const focusThumb = (rail: HTMLElement | null, key: string): void => {
+  rail?.querySelector<HTMLElement>(`[data-key="${CSS.escape(key)}"]`)?.focus();
+};
 
 export interface EditorRailProps {
   readonly sessionId: string;
@@ -177,7 +179,9 @@ export function EditorRail({
   const total = order.length;
   /** Фокус на карточку текущей страницы — точку входа клавиатуры (роуминг `tabindex`). */
   const focusCurrent = (): void => {
-    railRef.current?.querySelector<HTMLElement>('[role="option"][tabindex="0"]')?.focus();
+    if (selection.current !== null) {
+      focusThumb(railRef.current, selection.current);
+    }
   };
   const selectedKeys = useMemo(() => new Set(selection.keys), [selection.keys]);
   const multi = selection.keys.length > 1;

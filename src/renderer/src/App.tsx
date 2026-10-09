@@ -32,12 +32,11 @@ import './app.css';
 // запуске прохода — ради посадки добавленного набора (M3.5, KTD-7).
 
 interface ToastState {
-  readonly id: number;
+  /** Идентичность тоста — `key` элемента: новый ключ перезапускает срок показа. */
+  readonly key: string;
   readonly text: string;
   readonly durationMs: number | undefined;
   readonly action: ToastAction | undefined;
-  /** Метка «один раз»: повторный показ с той же меткой не перезапускает тост. */
-  readonly tag: string | undefined;
 }
 
 /** Тост отказа запуска из `add` — 6 с, как у ошибок сохранения (handoff M3.5, S10). */
@@ -55,23 +54,28 @@ interface LaunchFailure {
   readonly target: 'setup' | 'editor' | 'flip';
 }
 
+/** Посадка запуска: лента получила страницы. `key` — первая добавленная, `added` — сколько. */
+interface Landing {
+  readonly key: string | null;
+  readonly added: number;
+}
+
 /**
  * Последний запуск прохода (M3.5, KTD-7): какая сессия и какие страницы были до него. По нему
  * App узнаёт добавленный набор, когда снимок возвращает в `editor`, — независимо от того, дошёл
  * ли кадр `scan` (снимки приходят пачкой) и от ответа команды (он может прийти раньше снимка).
  */
 interface Launch {
-  /** Порядковый номер запуска за процесс: ключ посадки и метка тоста «один раз». */
+  /** Порядковый номер запуска за процесс — ключ `EditorScreen` после посадки. */
   readonly epoch: number;
-  readonly sessionId: string;
+  /** `null` — запуск без сессии (с `setup`): посадки не будет. */
+  readonly sessionId: string | null;
   readonly keysBefore: ReadonlySet<string>;
+  /** `null` — ждём страниц; запуск без страниц (отказ, «Остановить») садится пустым. */
+  readonly landed: Landing | null;
 }
 
-/** Посадка запуска: лента получила страницы; `key` — первая добавленная, `null` — тоста нет. */
-interface Landing {
-  readonly epoch: number;
-  readonly key: string | null;
-}
+const NO_LANDING: Landing = { key: null, added: 0 };
 
 const keysOf = (session: SessionSnapshot): ReadonlySet<string> =>
   new Set(session.passes.flatMap((pass) => pass.pages.map((page) => page.key)));
@@ -92,23 +96,16 @@ export function App(): ReactNode {
   const expireToast = useCallback(() => {
     setToast(null);
   }, []);
-  // Номер растёт от предыдущего: новый тост со сменой `key` перезапускает срок показа. Метка
-  // делает показ идемпотентным — для тостов из рендера (StrictMode зовёт его дважды).
-  const showToast = useCallback(
-    (text: string, durationMs?: number, action?: ToastAction, tag?: string) => {
-      setToast((previous) =>
-        tag !== undefined && previous?.tag === tag
-          ? previous
-          : { id: (previous?.id ?? 0) + 1, text, durationMs, action, tag },
-      );
-    },
-    [],
-  );
+  // Номер растёт: новый тост со сменой `key` перезапускает срок показа.
+  const toastSeq = useRef(0);
+  const showToast = useCallback((text: string, durationMs?: number, action?: ToastAction) => {
+    toastSeq.current += 1;
+    setToast({ key: `toast:${String(toastSeq.current)}`, text, durationMs, action });
+  }, []);
 
-  // Память о запуске (KTD-7) и его посадка: оба — состояние, корректируемое при рендере.
+  // Память о запуске (KTD-7): ставится в `startPass`, посадка — корректировкой при рендере.
   const [launch, setLaunch] = useState<Launch | null>(null);
-  const [landing, setLanding] = useState<Landing | null>(null);
-  const epochRef = useRef(0);
+  const landing = launch?.landed ?? null;
 
   // Пауза `merge` (KTD-5): эфемерное состояние поверх `screenOf`, живёт только в renderer и
   // после перезапуска не повторяется — на старте процесса предыдущего экрана нет, переход
@@ -138,14 +135,14 @@ export function App(): ReactNode {
 
   // Посадка добавленного набора (KTD-7; handoff S9–S10): в `editor` той же сессии появились
   // страницы, которых до запуска не было. Проход добавленного набора завершён или остановлен с
-  // принятыми страницами — тост «Добавлено N» один раз и текущая на первой добавленной (ключ
-  // `EditorScreen` меняется — экран монтируется заново, как и после кадра `scan`). Прерван —
-  // тоста нет, его место занимает плашка S4; у прохода другой роли посадки нет — там пауза
-  // `merge`. Пока страниц нет (кадр до первой страницы, «Остановить» на первом сегменте) —
-  // запуск ждёт: следующий запуск его сменит.
+  // принятыми страницами — текущая на первой добавленной (ключ `EditorScreen` меняется — экран
+  // монтируется заново, как и после кадра `scan`) и тост «Добавлено N»; ключ тоста — номер
+  // запуска, поэтому повторный рендер той же посадки (StrictMode) тост не перезапускает.
+  // Прерван — тоста нет, его место занимает плашка S4; у прохода другой роли посадки нет — там
+  // пауза `merge`. Пока страниц нет (кадр до первой страницы) — запуск ждёт снимка или ответа.
   if (
     launch !== null &&
-    launch.epoch !== landing?.epoch &&
+    launch.landed === null &&
     screen === 'editor' &&
     session !== null &&
     session.id === launch.sessionId &&
@@ -157,14 +154,17 @@ export function App(): ReactNode {
         .filter((key) => !launch.keysBefore.has(key)) ?? [];
     if (fresh.length > 0) {
       const added = lastPass.kind === 'added' && lastPass.state !== 'interrupted';
-      setLanding({ epoch: launch.epoch, key: added ? (fresh[0] ?? null) : null });
+      setLaunch({
+        ...launch,
+        landed: added ? { key: fresh[0] ?? null, added: fresh.length } : NO_LANDING,
+      });
       if (added) {
-        showToast(
-          t('toast.added', { count: fresh.length }),
-          undefined,
-          undefined,
-          `added:${String(launch.epoch)}`,
-        );
+        setToast({
+          key: `added:${String(launch.epoch)}`,
+          text: t('toast.added', { count: fresh.length }),
+          durationMs: undefined,
+          action: undefined,
+        });
       }
     }
   }
@@ -214,12 +214,12 @@ export function App(): ReactNode {
       startInFlight.current = true;
       setLaunchFailure(null);
       const before = store.get()?.session ?? null;
-      epochRef.current += 1;
-      setLaunch(
-        before === null
-          ? null
-          : { epoch: epochRef.current, sessionId: before.id, keysBefore: keysOf(before) },
-      );
+      setLaunch((previous) => ({
+        epoch: (previous?.epoch ?? 0) + 1,
+        sessionId: before?.id ?? null,
+        keysBefore: before === null ? new Set() : keysOf(before),
+        landed: null,
+      }));
       // Ответ придёт, когда задание закрыто; экран тем временем сменится по снимку. Отказ до
       // первой страницы возвращает на экран-источник — плашка ждёт его здесь, с адресатом.
       // Запуск из `add` — тостом (KTD-6): и отказ до старта, и обрыв до первой страницы (ядро
@@ -227,19 +227,21 @@ export function App(): ReactNode {
       window.api.startPass(request).then(
         (result) => {
           startInFlight.current = false;
-          const error = result.ok
-            ? result.value.end === 'interrupted' && result.value.pages === 0
-              ? result.value.error
-              : null
-            : result.error;
-          if (error === null) {
+          if (result.ok && result.value.pages > 0) {
             return;
           }
+          // Страниц этот запуск не дал: ждать посадки по снимку нечего (снимок мог и опередить).
+          setLaunch((previous) =>
+            previous?.landed === null ? { ...previous, landed: NO_LANDING } : previous,
+          );
+          const error = result.ok ? result.value.error : result.error;
           if (request !== null) {
-            showToast(
-              t('toast.addFailed', { error: errorTextInline(t, error) }),
-              ADD_FAILED_TOAST_MS,
-            );
+            if (error !== null) {
+              showToast(
+                t('toast.addFailed', { error: errorTextInline(t, error) }),
+                ADD_FAILED_TOAST_MS,
+              );
+            }
             return;
           }
           if (!result.ok) {
@@ -347,7 +349,7 @@ export function App(): ReactNode {
       {merging && <MergeScreen assembly={assembly} />}
       {screen === 'editor' && !merging && session !== null && (
         <EditorScreen
-          key={landing?.epoch ?? 0}
+          key={landing?.key === undefined || landing.key === null ? 0 : launch?.epoch}
           snapshot={snapshot}
           session={session}
           initialCurrent={landing?.key ?? null}
@@ -377,7 +379,7 @@ export function App(): ReactNode {
       )}
       {toast !== null && (
         <Toast
-          key={toast.id}
+          key={toast.key}
           text={toast.text}
           durationMs={toast.durationMs}
           action={toast.action}

@@ -3,9 +3,8 @@ import { resolve } from 'node:path';
 import { PDFDocument } from '@cantoo/pdf-lib';
 import { expect, it } from 'vitest';
 import { EMPTY_EDITS } from '@shared';
-import { probeScanner } from '../../src/core/escl/connect';
 import { openPassService } from '../../src/core/scan/pass-service';
-import { describeLive } from '../support/live-device';
+import { describeLive, probeLive, startPassWhenPaper } from '../support/live-device';
 import { makeTempDataRoot } from '../support/temp-data-root';
 import { unwrap } from '../support/result';
 
@@ -30,34 +29,17 @@ import { unwrap } from '../support/result';
 //
 // Адрес сканера в вывод не попадает: он идентифицирует сеть автора.
 
-const BASE_PATH = '/eSCL';
 // Страница при 300 dpi идёт до 26 с (журнал M1, U1): два прохода по 12 листов + окно на
 // разворот пачки.
 const TIMEOUT_MS = 20 * 60_000;
-/** Сколько ждать разворота пачки: попытки второго прохода идут, пока лоток пуст. */
-const FLIP_DEADLINE_MS = 5 * 60_000;
-const FLIP_RETRY_DELAY_MS = 5_000;
-
-const sleep = (ms: number) => new Promise((done) => setTimeout(done, ms));
 
 describeLive('два прохода на живом сканере (AE2)', (host) => {
   it(
     'пачка → два прохода → тумблер 180° → PDF в собранном порядке',
     async () => {
-      const probed = await probeScanner({
-        scheme: 'https',
-        host,
-        port: 443,
-        basePath: BASE_PATH,
-        fingerprint: null,
-      });
-      if (!probed.ok) {
-        throw new Error(`сканер не подключился: ${probed.error.code}`);
-      }
-
       const root = await makeTempDataRoot();
       const service = await openPassService(root);
-      await service.useScanner(probed.value);
+      await service.useScanner(await probeLive(host));
 
       console.info('[live] проход 1: лицевые стороны — пачка лицом вверх, лист 1 сверху');
       const fronts = unwrap(await service.startPass(null));
@@ -70,13 +52,7 @@ describeLive('два прохода на живом сканере (AE2)', (host
       );
 
       // Второй проход: пока лоток пуст, устройство отвечает «нет бумаги» — ждём разворота.
-      const deadline = Date.now() + FLIP_DEADLINE_MS;
-      let backs = await service.startPass(null);
-      while (!backs.ok && backs.error.code === 'scanNoPaper' && Date.now() < deadline) {
-        await sleep(FLIP_RETRY_DELAY_MS);
-        backs = await service.startPass(null);
-      }
-      const backsReport = unwrap(backs);
+      const backsReport = await startPassWhenPaper(service, null);
       expect(backsReport.end).toBe('completed');
       expect(backsReport.pages).toBe(fronts.pages);
 

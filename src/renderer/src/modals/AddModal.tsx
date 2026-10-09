@@ -1,8 +1,12 @@
-import { useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ScannerState } from '@shared';
+import type { AssembledDocument, AssembledPage, ScannerState } from '@shared';
+import type { TFunction } from 'i18next';
 import { Modal } from '../components/Modal';
+import { rovingRadioKeyDown, Segments } from '../components/Segments';
+import { whatOf } from '../state/page-text';
 import { paramsLine } from '../state/params-line';
+import { scannerLabel } from '../state/scanner-address';
 import './add-modal.css';
 
 // Модалка `add` (план M3.5, U6; handoff M3.5, S2; UI_SPEC §7): что сканируем — две
@@ -13,28 +17,49 @@ import './add-modal.css';
 // чем ядро начнёт задание, а отказ придёт тостом. Начальный фокус — «Отмена»: запуск — действие
 // с бумагой в лотке, случайный Enter его начинать не должен.
 
-/** Страница-якорь из видимой ленты: ключ и как её назвать в сводке. */
+/** Страница-якорь из видимой ленты: ключ, номер в ленте и как её назвать в сводке. */
 export interface AddAnchor {
   readonly key: string;
-  /** Номер в ленте, с единицы. */
   readonly page: number;
-  /** «лицо листа 4» / «добавленный набор 1» — теми же словами, что заголовок ДЕТАЛЕЙ. */
-  readonly what: string;
+  /** Текущая — «лицо листа 4» (теми же словами, что ДЕТАЛИ); конец документа — его имя. */
+  readonly label: string;
 }
 
-/** Конец документа текущей страницы: последняя видимая страница и имя документа. */
-export interface AddDocumentEnd {
-  readonly key: string;
-  readonly page: number;
-  readonly name: string;
-}
-
-export interface AddModalProps {
-  readonly scanner: ScannerState;
+export interface AddAnchors {
   /** Текущая страница; `null` — лента пуста («После текущей страницы» недоступна). */
   readonly current: AddAnchor | null;
-  /** Конец документа текущей; `null` — лента пуста (набор — в конец ленты). */
-  readonly documentEnd: AddDocumentEnd | null;
+  /** Конец документа текущей: его последняя видимая страница; `null` — лента пуста. */
+  readonly documentEnd: AddAnchor | null;
+}
+
+/**
+ * Якоря из видимой ленты (KTD-8): текущая — та, что в превью; конец документа — последняя
+ * видимая страница документа текущей, имя — как в тулбаре. Пустая лента — оба `null`.
+ */
+export function anchorsOf(
+  t: TFunction,
+  input: {
+    readonly entry: AssembledPage | undefined;
+    /** Позиция текущей в ленте, с нуля. */
+    readonly index: number;
+    readonly document: AssembledDocument | undefined;
+    readonly documentName: string;
+    readonly visible: readonly string[];
+  },
+): AddAnchors {
+  const { entry, index, document } = input;
+  const end = document === undefined ? -1 : document.start + document.count - 1;
+  const endKey = input.visible[end];
+  return {
+    current:
+      entry === undefined ? null : { key: entry.key, page: index + 1, label: whatOf(t, entry) },
+    documentEnd:
+      endKey === undefined ? null : { key: endKey, page: end + 1, label: input.documentName },
+  };
+}
+
+export interface AddModalProps extends AddAnchors {
+  readonly scanner: ScannerState;
   /** «Начать скан»: якорь выбран, модалка уже закрыта. */
   readonly onStart: (after: string | null) => void;
   readonly onClose: () => void;
@@ -45,40 +70,6 @@ type Place = 'end' | 'after';
 
 const KINDS: readonly Kind[] = ['sheets', 'single'];
 const PLACES: readonly Place[] = ['end', 'after'];
-
-/**
- * Группа радио с одной остановкой Tab (handoff, «Клавиатура»): в обходе — выбранный элемент,
- * стрелки переводят выбор и фокус на соседний доступный; недоступный пропускается.
- */
-function radioKeyDown<T extends string>(
-  event: KeyboardEvent<HTMLElement>,
-  values: readonly T[],
-  selected: T,
-  enabled: (value: T) => boolean,
-  onSelect: (value: T) => void,
-): void {
-  const step =
-    event.key === 'ArrowRight' || event.key === 'ArrowDown'
-      ? 1
-      : event.key === 'ArrowLeft' || event.key === 'ArrowUp'
-        ? -1
-        : 0;
-  if (step === 0) {
-    return;
-  }
-  event.preventDefault();
-  const start = values.indexOf(selected);
-  const size = values.length;
-  for (let offset = 1; offset < size; offset += 1) {
-    const candidate = values[(((start + step * offset) % size) + size) % size];
-    if (candidate !== undefined && enabled(candidate)) {
-      onSelect(candidate);
-      const group = event.currentTarget.closest('[role="radiogroup"]');
-      group?.querySelector<HTMLElement>(`[data-value="${candidate}"]`)?.focus();
-      return;
-    }
-  }
-}
 
 export function AddModal({
   scanner,
@@ -91,15 +82,16 @@ export function AddModal({
   const [kind, setKind] = useState<Kind>('sheets');
   // Место по умолчанию — после текущей, если она есть; пустая лента — только «в конец».
   const [place, setPlace] = useState<Place>(current === null ? 'end' : 'after');
-  const placeEnabled = (value: Place): boolean => value === 'end' || current !== null;
 
   const ready = scanner.kind === 'ready';
-  const placeText =
-    place === 'after' && current !== null
-      ? t('add.summary.after', { page: current.page, what: current.what })
-      : documentEnd === null
-        ? t('add.summary.endEmpty')
-        : t('add.summary.end', { name: documentEnd.name, page: documentEnd.page });
+  let placeText: string;
+  if (place === 'after' && current !== null) {
+    placeText = t('add.summary.after', { page: current.page, what: current.label });
+  } else if (documentEnd === null) {
+    placeText = t('add.summary.endEmpty');
+  } else {
+    placeText = t('add.summary.end', { name: documentEnd.label, page: documentEnd.page });
+  }
   const summary = t('add.summary.join', { kind: t(`add.summary.${kind}`), place: placeText });
 
   const start = (): void => {
@@ -125,6 +117,8 @@ export function AddModal({
           <h3 id="add-kind-kicker" className="kicker kicker--hint">
             {t('add.kind.label')}
           </h3>
+          {/* Карточка-радио — рецепт дизайн-системы, впервые в коде; клавиатура общая с
+              сегментами (одна остановка Tab, стрелки). */}
           <div className="radio-cards" role="radiogroup" aria-labelledby="add-kind-kicker">
             {KINDS.map((value) => (
               <button
@@ -139,7 +133,7 @@ export function AddModal({
                   setKind(value);
                 }}
                 onKeyDown={(event) => {
-                  radioKeyDown(event, KINDS, kind, () => true, setKind);
+                  rovingRadioKeyDown(event, KINDS, kind, () => true, setKind);
                 }}
               >
                 <span className="radio-card__dot" aria-hidden="true" />
@@ -156,52 +150,26 @@ export function AddModal({
           <h3 id="add-place-kicker" className="kicker kicker--hint">
             {t('add.place.label')}
           </h3>
-          <div
-            className="segments segments--wide"
-            role="radiogroup"
-            aria-labelledby="add-place-kicker"
-          >
-            {PLACES.map((value) => {
-              const enabled = placeEnabled(value);
-              return (
-                <button
-                  key={value}
-                  type="button"
-                  role="radio"
-                  aria-checked={value === place}
-                  aria-disabled={enabled ? undefined : true}
-                  tabIndex={value === place ? 0 : -1}
-                  data-value={value}
-                  title={enabled ? undefined : t('add.place.afterNone')}
-                  className={
-                    value === place
-                      ? 'segment segment--large segment--selected'
-                      : 'segment segment--large'
-                  }
-                  onClick={() => {
-                    if (enabled) {
-                      setPlace(value);
-                    }
-                  }}
-                  onKeyDown={(event) => {
-                    radioKeyDown(event, PLACES, place, placeEnabled, setPlace);
-                  }}
-                >
-                  {t(`add.place.${value}`)}
-                </button>
-              );
-            })}
-          </div>
+          <Segments
+            labelledBy="add-place-kicker"
+            values={PLACES}
+            selected={place}
+            format={(value) => t(`add.place.${value}`)}
+            disabledReason={(value) =>
+              value === 'after' && current === null ? t('add.place.afterNone') : undefined
+            }
+            roving
+            large
+            onSelect={setPlace}
+          />
         </section>
 
         {/* Строка сканера — как строка устройства `setup`, но без действий: подключить его
             можно только из `setup`, и строка об этом говорит. */}
-        {ready ? (
+        {scanner.kind === 'ready' ? (
           <p className="add-modal__scanner">
             <span className="dot dot--ready" aria-hidden="true" />
-            <span className="add-modal__scanner-name">
-              {scanner.scanner.name ?? scanner.scanner.host}
-            </span>
+            <span className="add-modal__scanner-name">{scannerLabel(scanner.scanner)}</span>
             <span className="add-modal__scanner-status">
               {t('add.scanner.ready', { params: paramsLine(t, scanner.params) })}
             </span>

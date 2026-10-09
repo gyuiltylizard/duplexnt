@@ -22,7 +22,7 @@ import {
   type Snapshot,
 } from '@shared';
 import type { ToastAction } from '../components/Toast';
-import { AddModal } from '../modals/AddModal';
+import { AddModal, anchorsOf } from '../modals/AddModal';
 import { NewScanModal } from '../modals/NewScanModal';
 import { RevertModal } from '../modals/RevertModal';
 import { SaveModal } from '../modals/SaveModal';
@@ -39,6 +39,7 @@ import {
   type RotateDirection,
 } from '../state/edits';
 import { mismatchDue } from '../state/assembly-outcome';
+import { toneOf } from '../state/page-text';
 import { errorTextInline } from '../state/error-text';
 import type { EditState } from '../state/history';
 import { rolesOf } from '../state/screen';
@@ -52,10 +53,10 @@ import {
   targetsOf,
   toggled,
 } from '../state/selection';
-import { EditorInspector, toneOf, whatOf } from './EditorInspector';
+import { EditorInspector } from './EditorInspector';
 import { EditorPassBanner } from './EditorPassBanner';
 import { EditorPreview } from './EditorPreview';
-import { docNameId, EditorRail } from './EditorRail';
+import { docNameId, EditorRail, focusThumb } from './EditorRail';
 import type { PickMode } from './EditorThumb';
 import { useEditorEdits } from './useEditorEdits';
 import './editor-screen.css';
@@ -215,7 +216,9 @@ export function EditorScreen({
   // удаления с клавиатуры фокус уходит на страницу, вставшую на место удалённой; после
   // постановки границы — в поле имени нового документа, текст выделен (handoff M3, Границы).
   const railRef = useRef<HTMLElement>(null);
-  const focusKey = useRef<string | null>(null);
+  // Посадка добавленного набора (S9): первая добавленная — текущая и в фокусе, `focus()` сам
+  // прокручивает к ней ближайшим краем, без анимации (handoff, «Движение»).
+  const focusKey = useRef<string | null>(initialCurrent);
   const focusAfterEdit = useRef(false);
   const focusName = useRef<number | null>(null);
   useEffect(() => {
@@ -234,25 +237,12 @@ export function EditorScreen({
       key = selection.current;
     }
     if (key !== null) {
-      railRef.current?.querySelector<HTMLElement>(`[data-key="${CSS.escape(key)}"]`)?.focus();
+      focusThumb(railRef.current, key);
       focusKey.current = null;
     }
   });
 
   const focusInRail = (): boolean => railRef.current?.contains(document.activeElement) ?? false;
-
-  // Посадка добавленного набора (S9): лента прокручена к первой добавленной — ближайшим краем,
-  // без анимации (handoff, «Движение»). Один раз, при монтировании; jsdom прокрутки не знает.
-  const revealInitial = useEffectEvent(() => {
-    if (initialCurrent !== null) {
-      railRef.current
-        ?.querySelector<HTMLElement>(`[data-key="${CSS.escape(initialCurrent)}"]`)
-        ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-    }
-  });
-  useEffect(() => {
-    revealInitial();
-  }, []);
 
   /** Ключ ленты по позиции, прижатой к краям. */
   const keyAt = (index: number): string | undefined =>
@@ -609,39 +599,32 @@ export function EditorScreen({
   };
 
   // «+ Добавить» (S1 M3.5, R12): недоступна при записи, правке в полёте и прерванном последнем
-  // проходе — причина в `title`; пустая лента — доступна (набор в конец ленты).
-  const lastInterrupted = session.passes.at(-1)?.state === 'interrupted';
-  const addDisabledReason = saving
-    ? t('editor.addDisabled.saving')
-    : edits.busy
-      ? t('editor.addDisabled.busy')
-      : lastInterrupted
-        ? t('editor.addDisabled.interrupted')
-        : null;
-  // Якорь и его имя для сводки (KTD-8): текущая страница — та, что в превью; конец документа —
-  // его последняя видимая страница, имя — как в тулбаре.
-  const addCurrent =
-    currentEntry === undefined
-      ? null
-      : { key: currentEntry.key, page: currentIndex + 1, what: whatOf(t, currentEntry) };
-  const documentEndIndex =
-    currentDoc === undefined || currentDocument === null
-      ? -1
-      : currentDoc.start + currentDoc.count - 1;
-  const documentEndKey = visible[documentEndIndex];
-  const addDocumentEnd =
-    documentEndKey === undefined || currentDocument === null
-      ? null
-      : { key: documentEndKey, page: documentEndIndex + 1, name: names[currentDocument] ?? '' };
+  // проходе — первая причина по порядку, в `title`; пустая лента — доступна (набор в конец).
+  const addDisabledReason = (
+    [
+      [saving, 'saving'],
+      [edits.busy, 'busy'],
+      [session.passes.at(-1)?.state === 'interrupted', 'interrupted'],
+    ] as const
+  ).find(([on]) => on)?.[1];
+  // Якоря для модалки — только пока она открыта (KTD-8).
+  const anchors =
+    modal === 'add'
+      ? anchorsOf(t, {
+          entry: currentEntry,
+          index: currentIndex,
+          document: currentDoc,
+          documentName: currentDocument === null ? '' : (names[currentDocument] ?? ''),
+          visible,
+        })
+      : null;
 
-  const rotateLabel =
-    targets.length > 1 ? t('editor.rotateMany', { count: targets.length }) : t('editor.rotate');
-  const rotateLeftLabel =
-    targets.length > 1
-      ? t('editor.rotateLeftMany', { count: targets.length })
-      : t('editor.rotateLeft');
-  const deleteLabel =
-    targets.length > 1 ? t('editor.deleteMany', { count: targets.length }) : t('editor.delete');
+  /** Подпись инструмента по выделению: «Повернуть 3 стр. …» или «Повернуть …». */
+  const countLabel = (key: 'editor.rotate' | 'editor.rotateLeft' | 'editor.delete'): string =>
+    targets.length > 1 ? t(`${key}Many`, { count: targets.length }) : t(key);
+  const rotateLabel = countLabel('editor.rotate');
+  const rotateLeftLabel = countLabel('editor.rotateLeft');
+  const deleteLabel = countLabel('editor.delete');
 
   // Клик по поверхности мимо ленты — тулбар, превью, инспектор — сжимает мультивыделение до
   // текущей, как Esc (M3.5, R21). Органы управления на этих поверхностях исключены: «↻» и
@@ -668,8 +651,12 @@ export function EditorScreen({
           <button
             type="button"
             className="btn btn--secondary editor-screen__add"
-            disabled={addDisabledReason !== null}
-            title={addDisabledReason ?? undefined}
+            disabled={addDisabledReason !== undefined}
+            title={
+              addDisabledReason === undefined
+                ? undefined
+                : t(`editor.addDisabled.${addDisabledReason}`)
+            }
             onClick={() => {
               setModal('add');
             }}
@@ -971,11 +958,11 @@ export function EditorScreen({
           onConfirm={revert}
         />
       )}
-      {modal === 'add' && (
+      {anchors !== null && (
         <AddModal
           scanner={snapshot.scanner}
-          current={addCurrent}
-          documentEnd={addDocumentEnd}
+          current={anchors.current}
+          documentEnd={anchors.documentEnd}
           onStart={onAdd}
           onClose={() => {
             setModal(null);

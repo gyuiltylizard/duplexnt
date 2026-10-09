@@ -14,8 +14,8 @@ const READY: ScannerState = {
   params: { colorMode: 'Grayscale8', resolution: 300, paperSize: 'A4' },
 };
 
-const CURRENT = { key: 'p02-s01-0009', page: 7, what: 'оборот листа 4' };
-const DOC_END = { key: 'p01-s01-0005', page: 9, name: 'Акт приёма-передачи' };
+const CURRENT = { key: 'p02-s01-0009', page: 7, label: 'оборот листа 4' };
+const DOC_END = { key: 'p01-s01-0005', page: 9, label: 'Акт приёма-передачи' };
 
 function renderModal(props: Partial<AddModalProps> = {}) {
   const onStart = vi.fn();

@@ -6,6 +6,9 @@ import type { ScannerInfo, ScannerState } from '@shared';
  */
 export const addressOf = (scanner: ScannerInfo): string => `${scanner.host}:${scanner.port}`;
 
+/** Имя сканера для строки устройства; без имени — хост (одно правило на `setup` и `add`). */
+export const scannerLabel = (scanner: ScannerInfo): string => scanner.name ?? scanner.host;
+
 /** Адрес запомненного сканера для «Подключить заново»; сканера нет — модалка без адреса. */
 export const reconnectAddress = (state: ScannerState): string | undefined =>
   state.kind === 'none' ? undefined : addressOf(state.scanner);

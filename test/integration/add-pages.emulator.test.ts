@@ -1,14 +1,17 @@
 import { mkdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { PDFDict, PDFDocument, PDFName, PDFRawStream } from '@cantoo/pdf-lib';
 import { describe, expect, it } from 'vitest';
 import { EMPTY_EDITS, type SessionEdits, type Snapshot } from '@shared';
 import { probeScanner, type ConnectedScanner } from '../../src/core/escl/connect';
 import type { ScanJobLimits } from '../../src/core/escl/scan-job';
-import { openPassService, type PassServiceOptions } from '../../src/core/scan/pass-service';
+import {
+  openPassService,
+  type PassService,
+  type PassServiceOptions,
+} from '../../src/core/scan/pass-service';
 import { SCENARIOS, type Scenario } from '../emulator/scenarios';
 import { startTestEmulator } from '../support/emulator';
-import { pageFixture } from '../support/fixtures';
+import { pageFixtureNumberOf, pdfImageStreams } from '../support/fixtures';
 import { journalOnDisk, rolesOf } from '../support/session-store';
 import { makeTempDataRoot } from '../support/temp-data-root';
 import { unwrap } from '../support/result';
@@ -59,32 +62,17 @@ const keysOf = (snapshot: Snapshot): string[] =>
 const setsOf = (snapshot: Snapshot): (number | null)[] =>
   snapshot.assembly?.order.map((page) => page.addedSet) ?? [];
 
-/**
- * Какая фикстурная страница лежит на каждой странице PDF: JPEG вкладывается как есть
- * (`DCTDecode`), байты потока равны байтам фикстуры — так порядок в файле сверяется точно.
- */
+/** Какая фикстурная страница лежит на каждой странице PDF — порядок в файле сверяется точно. */
 async function pdfFixtures(path: string): Promise<number[]> {
-  const document = await PDFDocument.load(await readFile(path));
-  const fixtures = Array.from({ length: 30 }, (_value, index) => pageFixture(index + 1));
-  return document.getPages().map((page, index) => {
-    const xobjects = page.node.Resources()?.lookup(PDFName.of('XObject'));
-    if (!(xobjects instanceof PDFDict)) {
-      throw new Error(`страница ${index + 1} без изображения`);
-    }
-    const streams = [...xobjects.entries()]
-      .map(([, value]) => page.node.context.lookup(value))
-      .filter((stream): stream is PDFRawStream => stream instanceof PDFRawStream);
-    const [stream] = streams;
-    if (stream === undefined || streams.length !== 1) {
-      throw new Error(`страница ${index + 1}: потоков изображений ${streams.length}`);
-    }
-    const bytes = Buffer.from(stream.contents);
-    const number = fixtures.findIndex((fixture) => fixture.equals(bytes));
-    if (number === -1) {
-      throw new Error(`страница ${index + 1}: не фикстура`);
-    }
-    return number + 1;
-  });
+  const streams = await pdfImageStreams(await readFile(path));
+  return streams.map((stream) => pageFixtureNumberOf(stream.contents));
+}
+
+/** Вступительные проходы по порядку: каждый завершён с ожидаемым числом страниц. */
+async function scanned(service: PassService, ...pages: readonly number[]): Promise<void> {
+  for (const count of pages) {
+    expect(unwrap(await service.startPass(null))).toMatchObject({ end: 'completed', pages: count });
+  }
 }
 
 describe('«Добавить» — полный путь через эмулятор (M3.5, U8)', () => {
@@ -98,8 +86,7 @@ describe('«Добавить» — полный путь через эмулят
     } = await connect({
       trays: [[1, 2, 3], [6, 5], [7], [8]],
     });
-    expect(unwrap(await first.startPass(null))).toMatchObject({ end: 'completed', pages: 3 });
-    expect(unwrap(await first.startPass(null))).toMatchObject({ end: 'completed', pages: 2 });
+    await scanned(first, 3, 2);
     expect(first.snapshot().assembly?.report).toMatchObject({
       fronts: 3,
       backs: 2,
@@ -164,7 +151,7 @@ describe('«Добавить» — полный путь через эмулят
 
   it('AE2: «обороты не нужны» → набор в конец документа: вне отчёта, без поворота оборотов', async () => {
     const { service } = await connect(SCENARIOS['add-after-declined']);
-    expect(unwrap(await service.startPass(null))).toMatchObject({ end: 'completed', pages: 3 });
+    await scanned(service, 3);
     unwrap(await service.declineBacks());
 
     // «В конец документа» — якорь последней видимой страницы документа (KTD-8).
@@ -190,8 +177,7 @@ describe('«Добавить» — полный путь через эмулят
     const { service } = await connect({
       trays: [[1, 2, 3], [6, 5, 4], [7, 8], [9], [10]],
     });
-    expect(unwrap(await service.startPass(null))).toMatchObject({ end: 'completed', pages: 3 });
-    expect(unwrap(await service.startPass(null))).toMatchObject({ end: 'completed', pages: 3 });
+    await scanned(service, 3, 3);
 
     unwrap(await service.startPass({ kind: 'added', after: F2 }));
     unwrap(await service.startPass({ kind: 'added', after: F2 }));
@@ -227,8 +213,7 @@ describe('«Добавить» — полный путь через эмулят
 
   it('AE8: пустой лоток при «Начать скан» — отказ scanNoPaper, сессия и лента прежние', async () => {
     const { root, service } = await connect(SCENARIOS['add-empty-tray']);
-    expect(unwrap(await service.startPass(null))).toMatchObject({ end: 'completed', pages: 3 });
-    expect(unwrap(await service.startPass(null))).toMatchObject({ end: 'completed', pages: 3 });
+    await scanned(service, 3, 3);
     const before = keysOf(service.snapshot());
 
     expect(await service.startPass({ kind: 'added', after: F2 })).toMatchObject({
@@ -243,8 +228,7 @@ describe('«Добавить» — полный путь через эмулят
 
   it('AE5: замятие на втором листе набора → плашка переживает перезапуск → досканирование в конец блока', async () => {
     const { emulator, root, service: first } = await connect(SCENARIOS['add-jam']);
-    expect(unwrap(await first.startPass(null))).toMatchObject({ end: 'completed', pages: 3 });
-    expect(unwrap(await first.startPass(null))).toMatchObject({ end: 'completed', pages: 3 });
+    await scanned(first, 3, 3);
     expect(unwrap(await first.startPass({ kind: 'added', after: F2 }))).toMatchObject({
       end: 'interrupted',
       pages: 1,
@@ -283,8 +267,7 @@ describe('«Добавить» — полный путь через эмулят
 
   it('AE5: «Оставить как есть» — набор принят коротким, плашка снята', async () => {
     const { service } = await connect(SCENARIOS['add-jam']);
-    unwrap(await service.startPass(null));
-    unwrap(await service.startPass(null));
+    await scanned(service, 3, 3);
     expect(unwrap(await service.startPass({ kind: 'added', after: F2 }))).toMatchObject({
       end: 'interrupted',
       pages: 1,

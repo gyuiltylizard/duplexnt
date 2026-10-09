@@ -9,7 +9,7 @@
 } from '@shared';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { StrictMode } from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import './i18n';
 import { App } from './App';
 import { assemblyOf, NO_EDITS_ASSEMBLY } from './state/assembly-fixture';
@@ -1002,27 +1002,26 @@ describe('M3.5: посадка добавленного набора (KTD-7; han
       .getAllByRole('status')
       .flatMap((element) => (element.className === 'toast' ? [element.textContent] : []));
 
+  /**
+   * Запуск из этого процесса — «Досканировать остаток» прерванного набора из одной страницы:
+   * App помнит страницы до него. Возвращает `push` для следующих снимков.
+   */
+  async function launchedFromInterrupted(strict = false) {
+    const push = liveApi({ ...withAdded(1, 1, 'interrupted'), canResume: true, canAccept: true });
+    const app = <App />;
+    render(strict ? <StrictMode>{app}</StrictMode> : app);
+    fireEvent.click(await screen.findByRole('button', { name: 'Досканировать остаток' }));
+    return push;
+  }
+
   const currentKey = (): string | null =>
     screen
       .getAllByRole('option')
       .find((element) => element.getAttribute('aria-selected') === 'true')
       ?.getAttribute('data-key') ?? null;
 
-  const scrollIntoView = vi.fn();
-  beforeEach(() => {
-    Element.prototype.scrollIntoView = scrollIntoView;
-    scrollIntoView.mockClear();
-  });
-
-  it('scan → editor после добавленного прохода: без паузы merge, тост один раз под StrictMode, текущая — первая добавленная, лента прокручена к ней', async () => {
-    // Запуск — из этого процесса (досканирование набора): App помнит страницы до него.
-    const push = liveApi({ ...withAdded(1, 1, 'interrupted'), canResume: true, canAccept: true });
-    render(
-      <StrictMode>
-        <App />
-      </StrictMode>,
-    );
-    fireEvent.click(await screen.findByRole('button', { name: 'Досканировать остаток' }));
+  it('scan → editor после добавленного прохода: без паузы merge, тост один раз под StrictMode, текущая — первая добавленная и в фокусе', async () => {
+    const push = await launchedFromInterrupted(true);
 
     await push(scanning(2, 2));
     expect(screen.getByText('ДОБАВЛЯЕМ СТРАНИЦЫ')).toBeDefined();
@@ -1033,11 +1032,9 @@ describe('M3.5: посадка добавленного набора (KTD-7; han
     // Лента: 1л 1о 2л Д1.1 Д1.2 Д1.3 2о 3л 3о — первая новая страница на пятом месте.
     expect(currentKey()).toBe('p03-s01-0002');
     expect(screen.getByText('5 из 9')).toBeDefined();
-    // StrictMode монтирует эффект дважды — важно, к какой карточке прокрутили.
-    expect(scrollIntoView).toHaveBeenCalled();
-    expect(new Set(scrollIntoView.mock.instances)).toEqual(
-      new Set([screen.getByRole('option', { selected: true })]),
-    );
+    // Фокус на первой добавленной: `focus()` и прокручивает к ней (S9), и даёт точку входа
+    // клавиатуры.
+    expect(document.activeElement).toBe(screen.getByRole('option', { selected: true }));
     // Пришёл ещё снимок той же сессии — тост не повторяется.
     await push(withAdded(4, 3));
     expect(toasts()).toEqual(['Добавлено 2 стр.']);
@@ -1073,10 +1070,7 @@ describe('M3.5: посадка добавленного набора (KTD-7; han
   });
 
   it('кадры scan пропущены: editor → editor с выросшей лентой после запуска — тост, не пауза', async () => {
-    const before = withAdded(1, 1, 'interrupted');
-    const push = liveApi({ ...before, canResume: true, canAccept: true });
-    render(<App />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Досканировать остаток' }));
+    const push = await launchedFromInterrupted();
 
     await push(withAdded(2, 3));
     expect(screen.queryByText('Сопоставляем проходы')).toBeNull();
@@ -1085,10 +1079,7 @@ describe('M3.5: посадка добавленного набора (KTD-7; han
   });
 
   it('обрыв добавленного прохода: плашка S4, тоста нет', async () => {
-    const before = withAdded(1, 1, 'interrupted');
-    const push = liveApi({ ...before, canResume: true, canAccept: true });
-    render(<App />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Досканировать остаток' }));
+    const push = await launchedFromInterrupted();
 
     await push({ ...withAdded(2, 2, 'interrupted'), canResume: true, canAccept: true });
     expect(screen.getByText('Добавление прервалось после страницы 2')).toBeDefined();

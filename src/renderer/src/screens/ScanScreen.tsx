@@ -108,15 +108,18 @@ export function ScanScreen({ snapshot, pass, onStop }: ScanScreenProps): ReactNo
         ? t('scan.counterOf', { count: counted, expected: pass.expected })
         : t('scan.counter', { count: counted });
 
-  const resumeMeta =
+  let meta = busy ? t('scan.busy.meta') : paramsLine(t, pass.params);
+  if (!busy && pass.resumed) {
+    const resume =
+      pass.kind === 'added'
+        ? t('scan.resumeMetaAdded', { count: prior })
+        : t('scan.resumeMeta', { number: passNumber(snapshot), count: prior });
+    meta = `${resume} · ${meta}`;
+  }
+  const tag =
     pass.kind === 'added'
-      ? t('scan.resumeMetaAdded', { count: prior })
-      : t('scan.resumeMeta', { number: passNumber(snapshot), count: prior });
-  const meta = busy
-    ? t('scan.busy.meta')
-    : pass.resumed
-      ? `${resumeMeta} · ${paramsLine(t, pass.params)}`
-      : paramsLine(t, pass.params);
+      ? t('scan.tagAdded')
+      : t(pass.kind === 'backs' ? 'scan.tagBacks' : 'scan.tag', { number: passNumber(snapshot) });
 
   const strip = pages.slice(-STRIP_SIZE);
   const sessionId = snapshot.session?.id;
@@ -131,15 +134,13 @@ export function ScanScreen({ snapshot, pass, onStop }: ScanScreenProps): ReactNo
 
   return (
     <main className="scan-screen" ref={screenRef} tabIndex={-1}>
-      {pass.kind === 'added' ? (
-        <div className="scan-screen__tag scan-screen__tag--added">{t('scan.tagAdded')}</div>
-      ) : (
-        <div className="scan-screen__tag">
-          {t(pass.kind === 'backs' ? 'scan.tagBacks' : 'scan.tag', {
-            number: passNumber(snapshot),
-          })}
-        </div>
-      )}
+      <div
+        className={
+          pass.kind === 'added' ? 'scan-screen__tag scan-screen__tag--added' : 'scan-screen__tag'
+        }
+      >
+        {tag}
+      </div>
 
       <div className="scan-screen__stage">
         <div className={busy ? 'feed feed--idle' : 'feed'} aria-hidden="true">

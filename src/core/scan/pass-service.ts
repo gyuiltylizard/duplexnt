@@ -128,6 +128,11 @@ export interface PassService {
   ): Promise<Result<SaveDocumentsReport>>;
   /** «Новая пачка». */
   closeSession(): Promise<Result<void>>;
+  /**
+   * Папка последнего пакета, записанного хотя бы частично (M3.5, KTD-9) — для «Открыть папку»;
+   * живёт до выхода. `null` — пакета ещё не было.
+   */
+  lastBatchFolder(): string | null;
   /** Папка сохранения, выбранная в прошлый раз (M3); `null` — не выбирали. */
   rememberedSaveFolder(): string | null;
   /** Запоминает выбранную папку сохранения; отказ записи оставляет её в памяти. */
@@ -240,6 +245,7 @@ export function createPassService(
    * и «сохранено» не ставится.
    */
   let pendingBatch: PendingBatch | null = null;
+  let lastBatchFolder: string | null = null;
   let seq = 0;
 
   const notify = (): void => {
@@ -395,6 +401,9 @@ export function createPassService(
       (left, right) => left.index - right.index,
     );
     const { failed } = outcome.value;
+    if (written.length > 0) {
+      lastBatchFolder = batch.folder;
+    }
     if (failed.length === 0) {
       pendingBatch = null;
       // Отметка — на набор первой попытки: правка между попытками её не получит (R13).
@@ -822,6 +831,7 @@ export function createPassService(
       return closed;
     },
 
+    lastBatchFolder: () => lastBatchFolder,
     rememberedSaveFolder: () => settings.get().saveFolder,
     rememberSaveFolder: (folder) => settings.rememberSaveFolder(folder),
 

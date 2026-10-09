@@ -14,7 +14,6 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ConnectedScanner, Connector, ScannerAddress } from '../escl/connect';
 import type { Discovery } from '../discovery/mdns';
 import type { PassService } from '../scan/pass-service';
-import { unwrap } from '../../../test/support/result';
 import { addressOf, createCommands } from './handlers';
 import { MAX_EDIT_ITEMS } from './schemas';
 
@@ -65,6 +64,7 @@ function setup(
       ),
     ),
     closeSession: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
+    lastBatchFolder: vi.fn((): string | null => null),
     rememberedSaveFolder: vi.fn((): string | null => remembered),
     rememberSaveFolder: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
     interrupt: vi.fn(() => Promise.resolve()),
@@ -151,9 +151,9 @@ describe('команды без входа', () => {
     'openSaveFolder',
   ];
 
-  it('с `undefined` возвращают успех в конверте (openSaveFolder — после пакета)', async () => {
-    const { handlers } = setup();
-    unwrap(await handlers.saveDocuments({ mode: 'single', names: ['Скан'], retry: false }));
+  it('с `undefined` возвращают успех в конверте (openSaveFolder — когда служба помнит пакет)', async () => {
+    const { handlers, service } = setup();
+    service.lastBatchFolder.mockReturnValue('D:\\Сканы');
     for (const command of EMPTY_COMMANDS) {
       expect(await handlers[command](undefined), command).toMatchObject({ ok: true });
     }
@@ -402,23 +402,11 @@ describe('снимок и проход', () => {
     expect(openFolder).not.toHaveBeenCalled();
   });
 
-  it('openSaveFolder после пакета открывает папку отчёта; пакет без записанных файлов её не меняет', async () => {
+  it('openSaveFolder открывает папку, которую помнит служба; отказ main доходит кодом', async () => {
     const { handlers, service, openFolder } = setup();
-    unwrap(await handlers.saveDocuments({ mode: 'single', names: ['Скан'], retry: false }));
+    service.lastBatchFolder.mockReturnValue('D:\\Сканы');
     expect(await handlers.openSaveFolder(undefined)).toEqual(ok(undefined));
     expect(openFolder).toHaveBeenCalledExactlyOnceWith('D:\\Сканы');
-
-    // Пакет, где ни один файл не записался, папку не трогает: открывать там нечего.
-    vi.mocked(service.saveDocuments).mockResolvedValueOnce(
-      ok({
-        folder: 'E:\\Архив',
-        written: [],
-        failed: [{ index: 0, fileName: 'Скан.pdf', error: { code: 'saveWriteFailed' } }],
-      }),
-    );
-    unwrap(await handlers.saveDocuments({ mode: 'single', names: ['Скан'], retry: false }));
-    expect(await handlers.openSaveFolder(undefined)).toEqual(ok(undefined));
-    expect(openFolder).toHaveBeenLastCalledWith('D:\\Сканы');
 
     openFolder.mockResolvedValueOnce(fail('storageFailed', { reason: 'openPath' }));
     expect(await handlers.openSaveFolder(undefined)).toEqual(

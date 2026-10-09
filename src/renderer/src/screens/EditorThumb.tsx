@@ -1,6 +1,7 @@
 import { memo, type DragEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { pageImageUrl, type AssembledPage, type PageAngle } from '@shared';
+import type { TFunction } from 'i18next';
 import { useImageLoad } from '../components/useImageLoad';
 import type { DropSide } from '../state/edits';
 
@@ -28,6 +29,32 @@ const modeOf = (event: ModifierKeys): PickMode =>
 
 /** Зажат модификатор выделения (Shift / Ctrl / ⌘) — правило одно на клик и на клавиши. */
 export const pickModifierHeld = (event: ModifierKeys): boolean => modeOf(event) !== 'single';
+
+/**
+ * Имя карточки для скринридера — по самому важному: потеря, непарность, добавленный набор
+ * (у его страницы нет ни «лица», ни «оборота» — её называет набор, S5), иначе номер.
+ */
+function thumbLabelOf(
+  t: TFunction,
+  page: {
+    readonly lost: boolean;
+    readonly unpaired: boolean;
+    readonly addedSet: number | null;
+    readonly sheet: number | null;
+    readonly position: number;
+  },
+): string {
+  if (page.lost) {
+    return t('thumb.lostLabel', { number: page.position });
+  }
+  if (page.unpaired) {
+    return t('thumb.unpairedLabel', { number: page.sheet ?? page.position });
+  }
+  if (page.addedSet !== null) {
+    return t('thumb.addedLabel', { number: page.position, set: page.addedSet });
+  }
+  return t('thumb.alt', { number: page.position });
+}
 
 /**
  * Миниатюра в ленте: обычная, потерянная (S18 M1), строится или не построилась (S19 M1),
@@ -154,14 +181,7 @@ export const EditorThumb = memo(function EditorThumb({
     classes.push('thumb--dragging');
   }
 
-  // У добавленной страницы нет ни «лица», ни «оборота» — её называет тег набора (S5).
-  const base = lost
-    ? t('thumb.lostLabel', { number: position })
-    : unpaired
-      ? t('thumb.unpairedLabel', { number: sheet ?? position })
-      : addedSet !== null
-        ? t('thumb.addedLabel', { number: position, set: addedSet })
-        : t('thumb.alt', { number: position });
+  const base = thumbLabelOf(t, { lost, unpaired, addedSet, sheet, position });
   const label = angle === 0 ? base : `${base}, ${t('thumb.angle', { angle })}`;
 
   return (

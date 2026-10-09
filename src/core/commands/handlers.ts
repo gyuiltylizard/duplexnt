@@ -111,8 +111,6 @@ export function createCommands(context: CommandContext): Commands {
    * Пропавшая с диска (вынута флешка) уступает «Документам» — но не забывается.
    */
   let saveFolder = service.rememberedSaveFolder() ?? context.defaultSaveFolder;
-  /** Папка последнего пакета, записанного хотя бы частично (M3.5, KTD-9); до выхода. */
-  let lastBatchFolder: string | null = null;
   let announced = false;
 
   // `onChange` поиска вызывается из обработчика сокета: исключение в нём стало бы необработанным.
@@ -255,22 +253,15 @@ export function createCommands(context: CommandContext): Commands {
       }),
       saveDocuments: async (rawRequest) => {
         const request = parseInput(saveDocumentsRequestSchema, rawRequest);
-        if (!request.ok) {
-          return request;
-        }
-        const result = await service.saveDocuments(saveFolder, request.value);
-        // Папка последнего пакета, записанного целиком или частично, — для «Открыть папку»
-        // (M3.5, KTD-9): живёт в памяти процесса, тост к следующему запуску давно ушёл.
-        if (result.ok && result.value.written.length > 0) {
-          lastBatchFolder = result.value.folder;
-        }
-        return result;
+        return request.ok ? service.saveDocuments(saveFolder, request.value) : request;
       },
       closeSession: withoutRequest(() => done(() => service.closeSession())),
 
       openDataFolder: withoutRequest(() => done(() => context.openDataFolder())),
+      // «Открыть папку» (M3.5, KTD-9): папку последнего пакета помнит служба, путь от renderer
+      // не принимается.
       openSaveFolder: withoutRequest(() => {
-        const folder = lastBatchFolder;
+        const folder = service.lastBatchFolder();
         return folder === null
           ? { ok: false, error: sessionConflict('noBatch') }
           : done(() => context.openFolder(folder));

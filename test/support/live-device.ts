@@ -1,4 +1,9 @@
+import { setTimeout as sleep } from 'node:timers/promises';
 import { describe, it } from 'vitest';
+import type { PassReport, StartPassRequest } from '@shared';
+import { probeScanner, type ConnectedScanner } from '../../src/core/escl/connect';
+import type { PassService } from '../../src/core/scan/pass-service';
+import { unwrap } from './result';
 
 // Прогон против живого устройства — только по явному согласию (план M1, KTD-30): адрес сканера
 // приходит переменной окружения и в репозиторий не записывается. Без неё тесты пропускаются с
@@ -21,6 +26,43 @@ interface LiveOptions {
 export function liveDeviceHost(env: LiveOptions['env'] = process.env): string | null {
   const host = env[LIVE_DEVICE_ENV]?.trim() ?? '';
   return host === '' ? null : host;
+}
+
+/** Пробник живого сканера по адресу из переменной: HTTPS, стандартный порт и путь eSCL. */
+export async function probeLive(host: string): Promise<ConnectedScanner> {
+  const probed = await probeScanner({
+    scheme: 'https',
+    host,
+    port: 443,
+    basePath: '/eSCL',
+    fingerprint: null,
+  });
+  if (!probed.ok) {
+    throw new Error(`сканер не подключился: ${probed.error.code}`);
+  }
+  return probed.value;
+}
+
+/** Сколько ждать бумаги в лотке между проходами по умолчанию: попытки идут, пока лоток пуст. */
+export const PAPER_DEADLINE_MS = 5 * 60_000;
+const PAPER_RETRY_DELAY_MS = 5_000;
+
+/**
+ * Проход стартует, как только в лотке появится бумага: пока устройство отвечает «нет бумаги»,
+ * попытки повторяются до срока. Иной отказ — ошибка.
+ */
+export async function startPassWhenPaper(
+  service: PassService,
+  request: StartPassRequest,
+  deadlineMs = PAPER_DEADLINE_MS,
+): Promise<PassReport> {
+  const deadline = Date.now() + deadlineMs;
+  let result = await service.startPass(request);
+  while (!result.ok && result.error.code === 'scanNoPaper' && Date.now() < deadline) {
+    await sleep(PAPER_RETRY_DELAY_MS);
+    result = await service.startPass(request);
+  }
+  return unwrap(result);
 }
 
 /**

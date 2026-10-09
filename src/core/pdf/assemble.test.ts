@@ -1,7 +1,10 @@
-import { PDFDict, PDFDocument, PDFName, PDFRawStream } from '@cantoo/pdf-lib';
+import { PDFDocument, PDFName } from '@cantoo/pdf-lib';
 import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
-import { pageFixture as fixture } from '../../../test/support/fixtures';
+import {
+  pageFixture as fixture,
+  pdfImageStreams as rawImageStreams,
+} from '../../../test/support/fixtures';
 import { assemblePdf, jfifDpi, type PdfPageInput } from './assemble';
 
 // Сборка PDF (план M2, U5) — обязательная зона тест-политики: против реальных JPEG устройства
@@ -22,25 +25,6 @@ const unwrap = <T>(result: { ok: true; value: T } | { ok: false; error: unknown 
   }
   return result.value;
 };
-
-/** Потоки изображений документа — в порядке страниц, без декодирования фильтров. */
-async function rawImageStreams(pdfBytes: Uint8Array): Promise<PDFRawStream[]> {
-  const document = await PDFDocument.load(pdfBytes);
-  const streams: PDFRawStream[] = [];
-  for (const page of document.getPages()) {
-    const xobjects = page.node.Resources()?.lookup(PDFName.of('XObject'));
-    if (!(xobjects instanceof PDFDict)) {
-      continue;
-    }
-    for (const [, value] of xobjects.entries()) {
-      const stream = page.node.context.lookup(value);
-      if (stream instanceof PDFRawStream) {
-        streams.push(stream);
-      }
-    }
-  }
-  return streams;
-}
 
 const imageStreams = async (pdfBytes: Uint8Array): Promise<Uint8Array[]> =>
   (await rawImageStreams(pdfBytes)).map((stream) => stream.getContents());

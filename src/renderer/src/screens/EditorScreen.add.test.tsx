@@ -41,8 +41,7 @@ const pairs = () => [
 function withAdded(count: number, extra: Parameters<typeof makeSnapshot>[2] = {}) {
   return makeSnapshot(
     [
-      makePass({ pages: pages(3) }),
-      makePass({ number: 2, kind: 'backs', pages: pages(3, 1, 'p02-s01') }),
+      ...pairs(),
       makePass({
         number: 3,
         kind: 'added',
