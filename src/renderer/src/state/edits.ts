@@ -5,13 +5,18 @@ import type { EditState } from './history';
 // снимка и видимой ленты из снимка. Нормализует только ядро — мёртвые ключи, совпавшие разрезы
 // и пустые документы с их именами оно вычистит само. Здесь — одно правило, которого ядро знать
 // не может: разрез — позиция между соседями, и жест, сдвигающий страницы, сдвигает разрезы так,
-// чтобы неподвижные соседи остались по своим сторонам (AE5; журнал M3, требование к U6).
+// чтобы неподвижные соседи остались по своим сторонам (AE5; журнал M3, требование к U6). Граница
+// наборов (M3.6, KTD8) — тоже позиция, но её жест задаёт явно: группа перенесённых — группа
+// страницы-цели, а не «та же, что была».
 
 /** «Вернуть»: правок нет, поворот оборотов выключен (R9). */
 export const REVERTED: EditState = { edits: EMPTY_EDITS, rotate180: false };
 
 /** Куда бросили: перед страницей под курсором или после неё (половина миниатюры, KTD-8). */
 export type DropSide = 'before' | 'after';
+
+/** Группа ленты в режиме раздельных наборов (M3.6, R17): лица — до границы, обороты — после. */
+export type SetSide = 'fronts' | 'backs';
 
 /** Разрезы после изъятия страниц с позиций `removed`: каждый сдвигается на изъятые левее него. */
 function cutsWithout(cuts: readonly number[], removed: readonly number[]): number[] {
@@ -99,6 +104,54 @@ export function moved(
     return null;
   }
   return { ...edits, order, cuts };
+}
+
+/**
+ * Граница наборов после переноса `keys` к странице на позиции `target` видимой ленты (M3.6,
+ * KTD8): перенесённые берут группу страницы-цели — смешанное выделение целиком. Новая граница =
+ * старая − перенесённых из лиц + все перенесённые, если цель в группе лиц. Перенос внутри группы
+ * границу не меняет.
+ */
+export function dividerAfterMove(
+  visible: readonly string[],
+  divider: number,
+  keys: readonly string[],
+  target: number,
+): number {
+  const moving = new Set(keys);
+  const fromFronts = visible.slice(0, divider).filter((key) => moving.has(key)).length;
+  const all = visible.filter((key) => moving.has(key)).length;
+  return divider - fromFronts + (target < divider ? all : 0);
+}
+
+/**
+ * Перенос `keys` через границу наборов без страницы-цели (M3.6, KTD8): бросок на разделитель
+ * (верх — в конец лиц, низ — в начало оборотов) или в пустую группу. Страницы встают вплотную к
+ * границе со стороны `side` в порядке ленты; порядок меняется, только если выделение к границе
+ * не прилегало. Без изменений порядка и границы — `null` (шага нет). Порядок фиксируется явным,
+ * как при любом переносе (R7).
+ */
+export function movedAcross(
+  edits: SessionEdits,
+  visible: readonly string[],
+  divider: number,
+  keys: readonly string[],
+  side: SetSide,
+): SessionEdits | null {
+  const moving = new Set(keys);
+  const group = visible.filter((key) => moving.has(key));
+  if (group.length === 0) {
+    return null;
+  }
+  const rest = visible.filter((key) => !moving.has(key));
+  const fromFronts = visible.slice(0, divider).filter((key) => moving.has(key)).length;
+  const at = divider - fromFronts;
+  const order = [...rest.slice(0, at), ...group, ...rest.slice(at)];
+  const next = side === 'fronts' ? at + group.length : at;
+  if (sameList(order, visible) && next === divider) {
+    return null;
+  }
+  return { ...edits, order, divider: next };
 }
 
 /**

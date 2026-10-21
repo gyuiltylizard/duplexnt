@@ -616,6 +616,8 @@ export function EditorScreen({
           document: currentDoc,
           documentName: currentDocument === null ? '' : (names[currentDocument] ?? ''),
           visible,
+          mode: snapshot.assembly?.report.mode ?? 'pairs',
+          sets: snapshot.assembly?.sets ?? null,
         })
       : null;
 
@@ -903,7 +905,7 @@ export function EditorScreen({
             currentDocument={currentDocument}
             names={names}
             frontsOnly={backsPass === null}
-            pairsHint={mismatchDue(snapshot.assembly.report, session.passes)}
+            pairsHint={mismatchDue(snapshot.assembly.report)}
             locked={saving}
             onPickDocument={(index) => {
               const first = visible[documents[index]?.start ?? -1];
@@ -942,6 +944,7 @@ export function EditorScreen({
           total={total}
           deleted={deletedCount}
           saved={session.saved}
+          unassembled={snapshot.assembly?.report.mode === 'sets'}
           onSaveFirst={() => {
             setModal('saveThenNew');
           }}
@@ -962,7 +965,8 @@ export function EditorScreen({
         <AddModal
           scanner={snapshot.scanner}
           current={anchors.current}
-          documentEnd={anchors.documentEnd}
+          end={anchors.end}
+          endKind={anchors.endKind}
           onStart={onAdd}
           onClose={() => {
             setModal(null);

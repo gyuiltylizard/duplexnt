@@ -324,16 +324,16 @@ export function App(): ReactNode {
   const assembly = snapshot.assembly;
   // Пауза `merge` — поверх выведенного экрана `editor` (KTD-5).
   const merging = screen === 'editor' && mergeHoldMs !== null && assembly !== null;
-  // `mismatch` (KTD-8): первый вход в editor за процесс при неподтверждённом несовпадении —
-  // включая вход через «Оставить как есть» и после перезапуска; условие уместности — общий
-  // предикат `mismatchDue` (с M3.5 он же снимает модалку при добавленном наборе, KTD-7).
-  // Подтверждение — на сессию, id сужается здесь же.
+  // `mismatch` (KTD-8; M3.6, R20): первый вход в editor за процесс при неподтверждённом
+  // режиме раздельных наборов — включая вход через «Оставить как есть» и после перезапуска;
+  // условие уместности — общий предикат `mismatchDue` (добавленные наборы показ не отменяют,
+  // после сборки модалки нет). Подтверждение — на сессию, id сужается здесь же.
   const mismatchSessionId =
     screen === 'editor' &&
     !merging &&
     assembly !== null &&
     session !== null &&
-    mismatchDue(assembly.report, session.passes)
+    mismatchDue(assembly.report)
       ? session.id
       : null;
   const showMismatch = mismatchSessionId !== null && mismatchConfirmedFor !== mismatchSessionId;

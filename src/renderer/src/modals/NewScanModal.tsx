@@ -7,9 +7,10 @@ import { errorText } from '../state/error-text';
 // Модалка `newscan` (план M3, U9; handoff M3, S17; UI_SPEC §7.4): кикер и текст по состоянию
 // набора — сохранён, есть несохранённое, лента пуста, но удалённые ещё можно вернуть. Удалённые
 // пометкой страницы называются числом: закрытие сотрёт и их. Карточка «Сначала сохранить
-// текущий» — только при несохранённом и непустой ленте. Начальный фокус — на «Остаться в
-// документе». Пока идёт закрытие, карточки недоступны; успех уводит на `setup` по снимку, отказ
-// оставляет сессию целой.
+// текущий» — только при несохранённом и непустой ленте; в режиме раздельных наборов (M3.6,
+// R16; handoff S11) её нет — ядро всё равно откажет (`notAssembled`), кикер и текст говорят,
+// что документ не собран. Начальный фокус — на «Остаться в документе». Пока идёт закрытие,
+// карточки недоступны; успех уводит на `setup` по снимку, отказ оставляет сессию целой.
 
 export interface NewScanModalProps {
   /** Страниц в ленте. */
@@ -17,15 +18,20 @@ export interface NewScanModalProps {
   /** Удалённых пометкой — их вернул бы Ctrl+Z или «Вернуть». */
   readonly deleted: number;
   readonly saved: boolean;
+  /** Режим раздельных наборов: документ не собран, сохранить нельзя (M3.6, R16). */
+  readonly unassembled: boolean;
   readonly onSaveFirst: () => void;
   readonly onClose: () => void;
 }
 
-type Kind = 'saved' | 'unsaved' | 'empty';
+type Kind = 'saved' | 'unsaved' | 'empty' | 'unassembled';
 
-const kindOf = (total: number, saved: boolean): Kind => {
+const kindOf = (total: number, saved: boolean, unassembled: boolean): Kind => {
   if (total === 0) {
     return 'empty';
+  }
+  if (unassembled) {
+    return 'unassembled';
   }
   return saved ? 'saved' : 'unsaved';
 };
@@ -34,6 +40,7 @@ export function NewScanModal({
   total,
   deleted,
   saved,
+  unassembled,
   onSaveFirst,
   onClose,
 }: NewScanModalProps): ReactNode {
@@ -43,7 +50,7 @@ export function NewScanModal({
   const [failure, setFailure] = useState<string | null>(null);
   const unmounted = useUnmounted();
 
-  const kind = kindOf(total, saved);
+  const kind = kindOf(total, saved, unassembled);
 
   const confirm = (): void => {
     if (closing) {
@@ -133,9 +140,9 @@ export function NewScanModal({
           <span className="choice__text">
             <span className="choice__title">{t('newScan.fresh')}</span>
             <span className="choice__note">
-              {kind === 'unsaved'
-                ? t('newScan.freshNote.unsaved', { count: total })
-                : t('newScan.freshNote.saved')}
+              {kind === 'saved'
+                ? t('newScan.freshNote.saved')
+                : t('newScan.freshNote.unsaved', { count: total })}
             </span>
           </span>
           <span className="choice__arrow" aria-hidden="true">

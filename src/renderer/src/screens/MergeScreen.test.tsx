@@ -77,7 +77,13 @@ describe('экран merge', () => {
   });
 
   it('при несовпадении статус сообщает о нём первым, формула меняется', () => {
-    const view = renderMerge({ backs: 11, pairs: 11, unpairedSheets: [1], mismatch: true });
+    const view = renderMerge({
+      mode: 'sets',
+      backs: 11,
+      pairs: 11,
+      unpairedSheets: [1],
+      mismatch: true,
+    });
 
     expect(screen.getByRole('status').textContent).toBe('не сошлось: лицевых 12, оборотов 11');
     expect(screen.getByText('Пары не сошлись — документ собран по совпавшим')).toBeDefined();
@@ -90,13 +96,14 @@ describe('экран merge', () => {
   });
 
   it('лишние обороты названы и не потеряны', () => {
-    renderMerge({ backs: 13, pairs: 12, extraBacks: 1, mismatch: true });
+    renderMerge({ mode: 'sets', backs: 13, pairs: 12, extraBacks: 1, mismatch: true });
 
     expect(screen.getByRole('status').textContent).toBe('лишних оборотов: 1 — в конце набора');
   });
 
   it('принятый коротким проход — свой статус', () => {
     renderMerge({
+      mode: 'sets',
       backs: 7,
       pairs: 7,
       unpairedSheets: [1, 2, 3, 4, 5],

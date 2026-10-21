@@ -1,37 +1,13 @@
 import { useId, useState, type MouseEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { AssembledPage, SessionAssembly } from '@shared';
-import type { TFunction } from 'i18next';
-import { isExtraBack, toneOf, whatOf } from '../state/page-text';
+import type { AssembledPage, AssemblyMode, SessionAssembly } from '@shared';
+import { noteOf, toneOf, whatOf } from '../state/page-text';
 
 // Инспектор редактора (handoff M3, S11–S13; M3.5, S6–S7): ДЕТАЛИ текущей страницы, ДОКУМЕНТЫ В
 // НАБОРЕ и ПРОВЕРКА, внизу — плашка правок S14 с «Вернуть». Только показ снимка: пары, порядок
 // и наличие правок — из отчёта и флагов сборки ядра (KTD-2, KTD-7). Страница добавленного набора
-// — без «лица» и «листа»: факт «Набор» и своё пояснение.
-
-/** Пояснение — по самому важному: потеря, добавленный набор, лишний оборот, непарность. */
-function noteOf(t: TFunction, entry: AssembledPage, frontsOnly: boolean): string {
-  const sheet = entry.sheet ?? 0;
-  if (entry.lost) {
-    return t('inspector.note.lost');
-  }
-  if (entry.addedSet !== null) {
-    return t('inspector.note.added');
-  }
-  if (isExtraBack(entry)) {
-    return t('inspector.note.extraBack');
-  }
-  if (entry.unpaired) {
-    return t('inspector.note.unpaired');
-  }
-  if (entry.side === 'back') {
-    return t('inspector.note.back', { sheet });
-  }
-  if (frontsOnly) {
-    return t('inspector.note.frontsOnly');
-  }
-  return t('inspector.note.front', { sheet });
-}
+// — без «лица» и «листа»: факт «Набор» и своё пояснение. Заголовок и пояснение ДЕТАЛЕЙ — по
+// режиму сборки (M3.6, KTD9), теми же словами, что подпись миниатюры и сводка `add`.
 
 /** Строка ПРОВЕРКИ: ✓ — всё хорошо, • — стоит взглянуть. */
 function Check({
@@ -54,12 +30,14 @@ function Check({
 function Details({
   entry,
   position,
+  mode,
   frontsOnly,
   open,
   onToggle,
 }: {
   readonly entry: AssembledPage;
   readonly position: number;
+  readonly mode: AssemblyMode;
   readonly frontsOnly: boolean;
   readonly open: boolean;
   readonly onToggle: () => void;
@@ -67,8 +45,8 @@ function Details({
   const { t } = useTranslation();
   const bodyId = useId();
 
-  const title = t('inspector.title', { page: position, what: whatOf(t, entry) });
-  const note = noteOf(t, entry, frontsOnly);
+  const title = t('inspector.title', { page: position, what: whatOf(t, entry, mode) });
+  const note = noteOf(t, entry, mode, frontsOnly);
 
   return (
     <section className="inspector__section inspector__section--details">
@@ -183,6 +161,7 @@ export function EditorInspector({
         <Details
           entry={entry}
           position={position}
+          mode={report.mode}
           frontsOnly={frontsOnly}
           open={detailsOpen}
           onToggle={() => {
