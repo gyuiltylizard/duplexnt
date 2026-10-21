@@ -56,10 +56,13 @@ import {
   targetsOf,
   toggled,
 } from '../state/selection';
+import { assembleBlockOf, assembleBlockText } from '../state/assemble-block';
 import { EditorInspector } from './EditorInspector';
 import { EditorPassBanner } from './EditorPassBanner';
 import { EditorPreview } from './EditorPreview';
 import { docNameId, EditorRail, focusThumb } from './EditorRail';
+import { EditorStatusBar } from './EditorStatusBar';
+import { EditorToolbar } from './EditorToolbar';
 import type { PickMode } from './EditorThumb';
 import { useEditorEdits } from './useEditorEdits';
 import './editor-screen.css';
@@ -103,8 +106,6 @@ export interface EditorScreenProps {
 /** Тосты сохранения и отказов — 6 с (UI_SPEC раздел 8). */
 const SAVE_TOAST_MS = 6000;
 
-/** Причина недоступности «Собрать документ» (handoff M3.6, S5) — по порядку таблицы. */
-type AssembleBlock = 'saving' | 'busy' | 'interrupted' | 'empty' | 'fewerBacks' | 'fewerFronts';
 /** «Сохранено … — можно закладывать новые листы» после «Сначала сохранить текущий» (S17). */
 const THEN_NEW_TOAST_MS = 3600;
 
@@ -179,14 +180,18 @@ export function EditorScreen({
   const [modal, setModal] = useState<EditorModal | null>(null);
   /** Идёт запись пакета (модалка `save`): правки заблокированы (KTD-9). */
   const [saving, setSaving] = useState(false);
+  /** «Собрать документ» в полёте (M3.6, KTD5): правки заблокированы, как при записи. */
+  const [assembling, setAssembling] = useState(false);
+  const locked = saving || assembling;
 
-  // Правки недоступны на время записи (KTD-9): ядро их всё равно отклонило бы.
+  // Правки недоступны на время записи и сборки (KTD-9): правка внутри круга команды легла бы
+  // поверх записи сборки устаревшим порядком (ревью M3.6, #6).
   const edits = useEditorEdits({
     seq: snapshot.seq,
     session,
     visible,
     initialCurrent,
-    locked: saving,
+    locked,
     // Правка не записалась — человек должен знать, что лента осталась прежней. Текст ошибки
     // длинный — показывается столько же, сколько ошибка сохранения.
     onFailed: (error) => {
@@ -668,33 +673,16 @@ export function EditorScreen({
 
   // «Собрать документ» (S4–S5 M3.6, R19): доступна при равных ненулевых счётчиках групп и без
   // причин по порядку таблицы; до ответа команды — недоступна, повторные клики игнорируются.
-  const [assembling, setAssembling] = useState(false);
-  const assembleBlock: AssembleBlock | undefined =
-    sets === null
+  const assembleBlock = assembleBlockOf({
+    saving,
+    busy: edits.busy,
+    interrupted: lastInterrupted,
+    sets,
+  });
+  const assembleTitle =
+    assembleBlock === undefined || sets === null
       ? undefined
-      : (
-          [
-            [saving, 'saving'],
-            [edits.busy, 'busy'],
-            [lastInterrupted, 'interrupted'],
-            [sets.fronts === 0 && sets.backs === 0, 'empty'],
-            [sets.backs < sets.fronts, 'fewerBacks'],
-            [sets.fronts < sets.backs, 'fewerFronts'],
-          ] as const
-        ).find(([on]) => on)?.[1];
-  const assembleTitle = ((): string | undefined => {
-    if (assembleBlock === undefined || sets === null) {
-      return undefined;
-    }
-    if (assembleBlock === 'fewerBacks' || assembleBlock === 'fewerFronts') {
-      return t(`editor.assembleDisabled.${assembleBlock}`, {
-        count: Math.abs(sets.fronts - sets.backs),
-      });
-    }
-    return t(`editor.assembleDisabled.${assembleBlock}`);
-  })();
-  // Наборы уравнены (S4): равные ненулевые счётчики — акцентная точка и приглашение собрать.
-  const setsEqual = sets !== null && sets.fronts === sets.backs && sets.fronts > 0;
+      : assembleBlockText(t, assembleBlock, sets);
   const assemble = (): void => {
     if (assembling || assembleBlock !== undefined || sets === null) {
       return;
@@ -760,124 +748,32 @@ export function EditorScreen({
 
   return (
     <main className="editor-screen">
-      <header className="editor-screen__toolbar" onMouseDown={collapseOnSurfaceClick}>
-        <div className="editor-screen__toolbar-left">
-          <button type="button" className="btn btn--secondary" onClick={newScan}>
-            <span aria-hidden="true">↺</span> {t('editor.newScan')}
-          </button>
-          <button
-            type="button"
-            className="btn btn--secondary editor-screen__add"
-            disabled={addDisabledReason !== undefined}
-            title={
-              addDisabledReason === undefined
-                ? undefined
-                : t(`editor.addDisabled.${addDisabledReason}`)
-            }
-            onClick={() => {
-              setModal('add');
-            }}
-          >
-            <span className="editor-screen__add-plus" aria-hidden="true">
-              +
-            </span>{' '}
-            {t('editor.add')}
-          </button>
-        </div>
-        {/* S4 M3.6: в режиме наборов — живые счётчики групп вместо метки документа. */}
-        {sets !== null ? (
-          <div className="editor-screen__toolbar-center editor-screen__toolbar-center--sets">
-            <span
-              className={setsEqual ? 'dot dot--accent' : 'dot dot--warning'}
-              aria-hidden="true"
-            />
-            <span className="editor-screen__sets-text" role="status">
-              {setsEqual
-                ? t('editor.sets.equal')
-                : t('editor.sets.mismatch', { fronts: sets.fronts, backs: sets.backs })}
-            </span>
-          </div>
-        ) : (
-          /* S1: документ текущей страницы — тон, имя, позиция. */
-          <div
-            className={
-              currentDocument === null
-                ? 'editor-screen__toolbar-center'
-                : `editor-screen__toolbar-center ${toneOf(currentDocument)}`
-            }
-          >
-            {currentDoc === undefined || currentDocument === null ? (
-              <span className="editor-screen__doc-title">{t('editor.noPages')}</span>
-            ) : (
-              <>
-                <span className="editor-screen__doc-mark" aria-hidden="true" />
-                <span className="editor-screen__doc-title">{names[currentDocument]}</span>
-                <span className="editor-screen__doc-pos">
-                  {documents.length > 1
-                    ? t('editor.docPosition', {
-                        doc: currentDocument + 1,
-                        docs: documents.length,
-                        page: currentIndex - currentDoc.start + 1,
-                        pages: currentDoc.count,
-                      })
-                    : t('editor.pagePosition', { page: currentIndex + 1, pages: total })}
-                </span>
-                {canSplitHere && (
-                  <button
-                    type="button"
-                    className="btn btn--tinted editor-screen__split"
-                    disabled={saving}
-                    onClick={() => {
-                      split(currentIndex);
-                    }}
-                  >
-                    {t('editor.splitHere')}
-                  </button>
-                )}
-              </>
-            )}
-          </div>
-        )}
-        <div className="editor-screen__toolbar-right">
-          {/* S9 M2: точка несохранённого; скрыта, когда набор пуст или сохранён. */}
-          {!session.saved && total > 0 && (
-            <span
-              className="editor-screen__unsaved dot dot--warning"
-              role="status"
-              title={t('editor.unsaved')}
-            >
-              <span className="visually-hidden">{t('editor.unsaved')}</span>
-            </span>
-          )}
-          {sets !== null ? (
-            /* S4–S5 M3.6: «Собрать документ» на месте «Сохранить»; причина — в title. */
-            <button
-              type="button"
-              className="btn btn--primary btn--small editor-screen__assemble"
-              disabled={assembleBlock !== undefined || assembling}
-              title={assembleTitle}
-              onClick={assemble}
-            >
-              {t('editor.assemble')}
-            </button>
-          ) : (
-            /* S1: «Сохранить документ» при одном документе, «Сохранить N файлов» при нескольких;
-               пустая лента — сохранять нечего. */
-            <button
-              type="button"
-              className="btn btn--primary btn--small"
-              disabled={total === 0}
-              onClick={() => {
-                setModal('save');
-              }}
-            >
-              {documents.length > 1
-                ? t('editor.saveFiles', { count: documents.length })
-                : t('editor.save')}
-            </button>
-          )}
-        </div>
-      </header>
+      <EditorToolbar
+        total={total}
+        saved={session.saved}
+        documents={documents}
+        names={names}
+        currentIndex={currentIndex}
+        currentDocument={currentDocument}
+        sets={sets}
+        addDisabledReason={addDisabledReason}
+        assembleDisabled={assembleBlock !== undefined || assembling}
+        assembleTitle={assembleTitle}
+        canSplitHere={canSplitHere}
+        saving={saving}
+        onNewScan={newScan}
+        onAdd={() => {
+          setModal('add');
+        }}
+        onSplit={() => {
+          split(currentIndex);
+        }}
+        onAssemble={assemble}
+        onSave={() => {
+          setModal('save');
+        }}
+        onMouseDown={collapseOnSurfaceClick}
+      />
 
       <div className="editor-screen__body">
         <EditorRail
@@ -888,7 +784,7 @@ export function EditorScreen({
           origins={origins}
           defaultNames={defaultNames}
           selection={selection}
-          locked={saving}
+          locked={locked}
           busy={edits.busy}
           railRef={railRef}
           onKeyDown={railKeyDown}
@@ -959,88 +855,21 @@ export function EditorScreen({
               />
             </div>
           )}
-          <footer className="stage__statusbar">
-            <button
-              type="button"
-              className="btn btn--icon"
-              aria-label={t('editor.prev')}
-              disabled={total === 0}
-              aria-disabled={total > 0 && currentIndex <= 0 ? true : undefined}
-              onClick={() => {
-                selectAt(currentIndex - 1, false);
-              }}
-            >
-              ←
-            </button>
-            <div className="stage__counter">
-              {total === 0
-                ? t('editor.positionNone')
-                : t('editor.position', { current: currentIndex + 1, total })}
-            </div>
-            <button
-              type="button"
-              className="btn btn--icon"
-              aria-label={t('editor.next')}
-              disabled={total === 0}
-              aria-disabled={total > 0 && currentIndex >= total - 1 ? true : undefined}
-              onClick={() => {
-                selectAt(currentIndex + 1, false);
-              }}
-            >
-              →
-            </button>
-            <span className="stage__divider" aria-hidden="true" />
-            <button
-              type="button"
-              className="btn btn--icon stage__tool"
-              aria-label={rotateLeftLabel}
-              title={rotateLeftLabel}
-              disabled={total === 0 || saving}
-              onClick={() => {
-                rotate('ccw');
-              }}
-            >
-              ↺
-            </button>
-            <button
-              type="button"
-              className="btn btn--icon stage__tool"
-              aria-label={rotateLabel}
-              title={rotateLabel}
-              disabled={total === 0 || saving}
-              onClick={() => {
-                rotate('cw');
-              }}
-            >
-              ↻
-            </button>
-            <button
-              type="button"
-              className="btn btn--icon stage__tool stage__tool--danger"
-              aria-label={deleteLabel}
-              title={deleteLabel}
-              disabled={total === 0 || saving}
-              onClick={() => {
-                remove(false);
-              }}
-            >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 14 14"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.2"
-                strokeLinecap="round"
-                aria-hidden="true"
-              >
-                <path d="M2.5 3.6h9" />
-                <path d="M5.6 3.6V2.4h2.8v1.2" />
-                <path d="M3.7 3.6l.55 7.4h5.5l.55-7.4" />
-                <path d="M5.9 5.8v3M8.1 5.8v3" />
-              </svg>
-            </button>
-          </footer>
+          <EditorStatusBar
+            total={total}
+            currentIndex={currentIndex}
+            locked={locked}
+            rotateLabel={rotateLabel}
+            rotateLeftLabel={rotateLeftLabel}
+            deleteLabel={deleteLabel}
+            onStep={(delta) => {
+              selectAt(currentIndex + delta, false);
+            }}
+            onRotate={rotate}
+            onRemove={() => {
+              remove(false);
+            }}
+          />
         </section>
 
         {snapshot.assembly !== null && (
@@ -1052,7 +881,7 @@ export function EditorScreen({
             currentDocument={currentDocument}
             names={names}
             frontsOnly={backsPass === null}
-            locked={saving}
+            locked={locked}
             onPickDocument={(index) => {
               const first = visible[documents[index]?.start ?? -1];
               if (first !== undefined) {

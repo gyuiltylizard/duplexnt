@@ -69,6 +69,9 @@ export function deleted(
     ...edits,
     deleted: [...edits.deleted, ...added],
     cuts: cutsWithout(edits.cuts, removed),
+    // Явная граница наборов — тоже позиция: сдвигается на удалённые левее, как разрез; авто (null)
+    // ядро пересчитает само (M3.6; ревью #3).
+    divider: edits.divider === null ? null : (cutsWithout([edits.divider], removed)[0] ?? null),
   };
 }
 

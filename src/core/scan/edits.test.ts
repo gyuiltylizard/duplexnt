@@ -269,6 +269,14 @@ describe('правки: граница наборов (M3.6, KTD3)', () => {
     );
   });
 
+  it('при явном порядке граница, равная авто, остаётся явной: позиции и группы разошлись (ревью #4)', () => {
+    const moved = edits({ order: ['b', 'c', 'a', 'd', 'e'], divider: 2 });
+
+    expect(normalizeEdits(AUTO, moved, setsContext(2)).divider).toBe(2);
+    // Автопорядок — схлопывается по-прежнему.
+    expect(normalizeEdits(AUTO, edits({ divider: 2 }), setsContext(2)).divider).toBeNull();
+  });
+
   it('при изменении ленты вне правок граница остаётся перед той же страницей (R9)', () => {
     const given = edits({ divider: 2 }); // a b | c d e
 

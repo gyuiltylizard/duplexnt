@@ -76,6 +76,14 @@ describe('жесты: удаление', () => {
     expect(next.deleted).toEqual(['z', 'b', 'd']);
   });
 
+  it('явная граница наборов сдвигается на удалённые левее неё, как разрез (M3.6, ревью #3)', () => {
+    // a b c | d e, граница 3.
+    expect(deleted(edits({ divider: 3 }), TAPE, ['a']).divider).toBe(2);
+    expect(deleted(edits({ divider: 3 }), TAPE, ['a', 'b']).divider).toBe(1);
+    expect(deleted(edits({ divider: 3 }), TAPE, ['d']).divider).toBe(3);
+    expect(deleted(edits({ divider: null }), TAPE, ['a']).divider).toBeNull();
+  });
+
   it('удалять нечего — те же правки', () => {
     const given = edits({ cuts: [2], names: ['', ''] });
 

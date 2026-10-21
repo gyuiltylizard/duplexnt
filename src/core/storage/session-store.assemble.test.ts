@@ -46,8 +46,8 @@ describe('хранилище сессии: «Собрать документ» (
     };
     ok(await store.setEdits(edits, true));
     ok(await store.markSaved());
-    // Лента: F2 F1 [F3] | B2 A1 [B1] — 2/2; граница 2 равна авто и хранится как null.
-    expect(store.snapshot()?.edits.divider).toBeNull();
+    // Лента: F2 F1 [F3] | B2 A1 [B1] — 2/2; при явном порядке граница хранится явно (ревью #4).
+    expect(store.snapshot()?.edits.divider).toBe(2);
 
     expect(await store.assemble()).toEqual({ ok: true, value: undefined });
 

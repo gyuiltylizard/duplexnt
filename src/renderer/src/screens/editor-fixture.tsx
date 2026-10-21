@@ -1,7 +1,6 @@
 import {
   EMPTY_EDITS,
   ok,
-  sameEdits,
   type Api,
   type CommandResult,
   type PassSnapshot,
@@ -13,7 +12,7 @@ import {
 } from '@shared';
 import { act, createEvent, fireEvent, render, screen } from '@testing-library/react';
 import { vi } from 'vitest';
-import { assemblyOf, documentsOf } from '../state/assembly-fixture';
+import { assemblyOf, assemblyWithEditsOf } from '../state/assembly-fixture';
 import type { DropSide } from '../state/edits';
 import type { EditState } from '../state/history';
 import { EditorScreen } from './EditorScreen';
@@ -186,11 +185,9 @@ export const edits = (change: Partial<SessionEdits>): SessionEdits => ({
 });
 
 /**
- * Снимок после того, как ядро приняло правки `state`: сессия несёт их, сборка — лента в явном
- * порядке без удалённых, углы, документы по разрезам, флаги; в режиме наборов (M3.6) — группы
- * по явной границе или по числу видимых страниц группы лиц, сторона и место — по позиции
- * против границы. Упрощённое зеркало ядра (как `assemblyOf`): нормализации нет — тест подаёт
- * ровно то, что ушло в `setEdits`.
+ * Снимок после того, как ядро приняло правки `state`: сессия несёт их дословно (нормализации нет
+ * — тест подаёт ровно то, что ушло в `setEdits`), сборка — зеркало ядра с правками
+ * (`assemblyWithEditsOf`, сверено с ядром guard-тестом).
  */
 export function applied(snapshot: Snapshot, state: EditState): Snapshot {
   const session = snapshot.session;
@@ -204,45 +201,7 @@ export function applied(snapshot: Snapshot, state: EditState): Snapshot {
       pass.kind === 'backs' ? { ...pass, rotate180: state.rotate180 } : pass,
     ),
   };
-  const auto = assemblyOf(next);
-  const byKey = new Map(auto.order.map((entry) => [entry.key, entry]));
-  const explicit = state.edits.order.flatMap((key) => byKey.get(key) ?? []);
-  const rest = auto.order.filter((entry) => !state.edits.order.includes(entry.key));
-  const removed = new Set(state.edits.deleted);
-  const ordered = [...explicit, ...rest]
-    .filter((entry) => !removed.has(entry.key))
-    .map((entry) => {
-      const extra = state.edits.rotations[entry.key] ?? 0;
-      return { ...entry, angle: ((entry.angle + extra) % 360) as typeof entry.angle };
-    });
-  let sets = auto.sets;
-  let order = ordered;
-  if (auto.sets !== null) {
-    const frontKeys = new Set(auto.order.slice(0, auto.sets.divider).map((entry) => entry.key));
-    const divider =
-      state.edits.divider ?? ordered.filter((entry) => frontKeys.has(entry.key)).length;
-    sets = { fronts: divider, backs: ordered.length - divider, divider };
-    order = ordered.map((entry, index) =>
-      index < divider
-        ? { ...entry, side: 'front', sheet: index + 1 }
-        : { ...entry, side: 'back', sheet: index - divider + 1 },
-    );
-  }
-  return {
-    ...snapshot,
-    seq: snapshot.seq + 1,
-    session: next,
-    assembly: {
-      ...auto,
-      order,
-      sets,
-      report: { ...auto.report, groups: sets },
-      documents: documentsOf(order.length, state.edits.cuts, state.edits.names),
-      orderEdited: state.edits.order.length > 0,
-      hasEdits: state.rotate180 || !sameEdits(state.edits, EMPTY_EDITS),
-      deleted: auto.order.length - order.length,
-    },
-  };
+  return { ...snapshot, seq: snapshot.seq + 1, session: next, assembly: assemblyWithEditsOf(next) };
 }
 
 /** `setEdits`, чей ответ тест отдаёт сам — до или после снимка с результатом. */

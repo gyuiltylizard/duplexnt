@@ -307,6 +307,36 @@ describe('хранилище сессии: правки редактора (M3, 
     expect(store.snapshot()).toMatchObject({ edits: EMPTY_EDITS, assembled: null });
   });
 
+  it('досканирование при явном порядке: новый оборот — в группу оборотов, не к лицам (ревью M3.6, #1)', async () => {
+    const { store, accept } = await setup();
+    ok(await store.beginPass(ORIGIN, null));
+    await accept(1, 3);
+    ok(await store.endSegment('completed'));
+    ok(await store.beginPass(ORIGIN, null));
+    await accept(4, 4);
+    ok(await store.endSegment('interrupted'));
+    // Лица переставлены вручную: f2 f1 f3 | b1 — порядок явный.
+    const swapped = ['p01-s01-0002', 'p01-s01-0001', 'p01-s01-0003', 'p02-s01-0001'];
+    ok(await store.setEdits({ ...EMPTY_EDITS, order: swapped }, false));
+
+    ok(await store.resumePass());
+    await accept(5, 5);
+    ok(await store.endSegment('completed'));
+
+    // Пока проход шёл, ключ встал за соседом по проходу — в начало группы оборотов; лица целы.
+    const session = store.snapshot();
+    assert(session !== null);
+    const assembly = assembleSession(session);
+    expect(assembly.order.map((page) => page.key)).toEqual([
+      'p01-s01-0002',
+      'p01-s01-0001',
+      'p01-s01-0003',
+      'p02-s02-0001',
+      'p02-s01-0001',
+    ]);
+    expect(assembly.sets).toEqual({ fronts: 3, backs: 2, divider: 3 });
+  });
+
   it('досканирование вставило оборот — граница наборов переехала вслед; «Остановить» вернул её (KTD-10; M3.6, R9)', async () => {
     const { store, accept, journalOnDisk } = await setup();
     ok(await store.beginPass(ORIGIN, null));

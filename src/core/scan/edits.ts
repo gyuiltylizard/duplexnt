@@ -126,11 +126,14 @@ export function normalizeEdits(
   const base = { order, rotations, deleted };
   switch (context.kind) {
     case 'sets':
+      // «Равна авто» значит «та же граница» только при автопорядке: при явном порядке позиции и
+      // базовые группы расходятся, и схлопнутая к null граница пересчиталась бы по группам
+      // (ревью M3.6, #4).
       return {
         ...base,
         cuts: [],
         names: [''],
-        divider: normalizeDivider(edits.divider, context.auto, length),
+        divider: normalizeDivider(edits.divider, order.length === 0 ? context.auto : null, length),
       };
     case 'transit':
       return {

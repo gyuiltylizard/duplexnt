@@ -70,17 +70,19 @@ export interface BaseAssembly {
 /**
  * Режим сессии (R4): запись сборки — «собрано»; иначе проход оборотов со страницами, который не
  * идёт, с числом страниц не равным лицевому — «раздельные наборы»; иначе — «пары». Идущий проход
- * режим не включает: его числа меняются с каждой страницей.
+ * режим не включает: его числа меняются с каждой страницей. `settled` — режим, каким он стал бы,
+ * кончись идущий проход прямо сейчас: по нему перебазируются правки посреди досканирования.
  */
 function modeOf(
   passes: readonly PassSnapshot[],
   assembled: readonly string[] | null,
+  settled = false,
 ): AssemblyMode {
   if (assembled !== null) {
     return 'assembled';
   }
   const { fronts, backs } = rolesOf(passes);
-  if (backs === null || backs.state === 'running') {
+  if (backs === null || (backs.state === 'running' && !settled)) {
     return 'pairs';
   }
   return backs.pages.length === (fronts?.pages.length ?? 0) ? 'pairs' : 'sets';
@@ -283,12 +285,18 @@ function assembledBase(passes: readonly PassSnapshot[], record: readonly string[
   };
 }
 
-/** Базовый порядок по режиму — то, против чего нормализуются правки (хранилище, сверка). */
+/**
+ * Базовый порядок по режиму — то, против чего нормализуются правки (хранилище, сверка). С
+ * `settled` идущий проход оборотов раскладывается так, как ляжет по его окончании при нынешних
+ * числах (R9; ревью M3.6, #1): новый оборот при явном порядке встаёт за своим соседом по проходу —
+ * в группу оборотов, — а не за лицом из чередования пар.
+ */
 export function baseAssembly(
   passes: readonly PassSnapshot[],
   assembled: readonly string[] | null,
+  settled = false,
 ): BaseAssembly {
-  switch (modeOf(passes, assembled)) {
+  switch (modeOf(passes, assembled, settled)) {
     case 'assembled':
       return assembledBase(passes, assembled ?? []);
     case 'sets':

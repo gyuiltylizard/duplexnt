@@ -181,7 +181,8 @@ describe('раздельные наборы — полный путь через
     unwrap(await service.setEdits({ ...across, divider: 3 }, false));
     snapshot = service.snapshot();
     expect(snapshot.assembly?.sets).toEqual({ fronts: 3, backs: 3, divider: 3 });
-    expect(snapshot.session?.edits.divider).toBeNull();
+    // Порядок явный — граница хранится явно и при равенстве авто (ревью #4).
+    expect(snapshot.session?.edits.divider).toBe(3);
 
     // AE4: «Собрать документ» — запись чередованием, порядок и граница обнулены.
     expect(await service.assemble()).toEqual({ ok: true, value: undefined });

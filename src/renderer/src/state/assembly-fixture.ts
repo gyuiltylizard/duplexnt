@@ -1,11 +1,13 @@
-import type {
-  AssembledDocument,
-  AssembledPage,
-  AssemblyMode,
-  PassSnapshot,
-  SessionAssembly,
-  SessionSnapshot,
-  SetsLayout,
+import {
+  EMPTY_EDITS,
+  sameEdits,
+  type AssembledDocument,
+  type AssembledPage,
+  type AssemblyMode,
+  type PassSnapshot,
+  type SessionAssembly,
+  type SessionSnapshot,
+  type SetsLayout,
 } from '@shared';
 import { rolesOf } from './screen';
 
@@ -204,6 +206,76 @@ export function assemblyOf(session: SessionSnapshot): SessionAssembly {
     hasEdits: backAngle !== 0,
     deleted: 0,
     report: { ...report, groups: sets },
+  };
+}
+
+/**
+ * ТОЛЬКО ДЛЯ ТЕСТОВ: сборка снимка с правками поверх зеркала — как `assembleSession` для
+ * сессии с правками (M3, KTD-2; M3.6, R8–R11): явный порядок, затем остальное базовым порядком,
+ * без удалённых; углы — базовый плюс ручной; в режиме наборов группы по границе (явная,
+ * прижатая к ленте, иначе число видимых страниц базовой группы лиц), сторона и место — по
+ * позиции; после сборки — лист по позиции среди не удалённых ключей записи; разрезы в режиме
+ * наборов не живут. Расхождение с ядром ловит `test/guards/assembly-fixture.test.ts`.
+ */
+export function assemblyWithEditsOf(session: SessionSnapshot): SessionAssembly {
+  const auto = assemblyOf(session);
+  const { edits } = session;
+  const byKey = new Map(auto.order.map((entry) => [entry.key, entry]));
+  const explicit = edits.order.flatMap((key) => byKey.get(key) ?? []);
+  const placed = new Set(explicit.map((entry) => entry.key));
+  const removed = new Set(edits.deleted);
+  const ordered = [...explicit, ...auto.order.filter((entry) => !placed.has(entry.key))]
+    .filter((entry) => !removed.has(entry.key))
+    .map((entry) => {
+      const extra = edits.rotations[entry.key] ?? 0;
+      return { ...entry, angle: ((entry.angle + extra) % 360) as AssembledPage['angle'] };
+    });
+  let sets = auto.sets;
+  let order = ordered;
+  if (auto.sets !== null) {
+    const frontKeys = new Set(auto.order.slice(0, auto.sets.divider).map((entry) => entry.key));
+    const autoDivider = ordered.filter((entry) => frontKeys.has(entry.key)).length;
+    const divider =
+      edits.divider === null
+        ? autoDivider
+        : Math.min(ordered.length, Math.max(0, Math.trunc(edits.divider)));
+    sets = { fronts: divider, backs: ordered.length - divider, divider };
+    order = ordered.map((entry, index) =>
+      index < divider
+        ? { ...entry, side: 'front', sheet: index + 1 }
+        : { ...entry, side: 'back', sheet: index - divider + 1 },
+    );
+  } else if (session.assembled !== null) {
+    const positions = new Map(
+      session.assembled
+        .filter((key) => byKey.has(key) && !removed.has(key))
+        .map((key, index) => [key, index]),
+    );
+    order = ordered.map((entry) => {
+      const position = positions.get(entry.key);
+      return position === undefined
+        ? { ...entry, sheet: null }
+        : {
+            ...entry,
+            side: position % 2 === 0 ? 'front' : 'back',
+            sheet: Math.floor(position / 2) + 1,
+          };
+    });
+  }
+  const alive = new Set(auto.order.map((entry) => entry.key));
+  const deleted = edits.deleted.filter((key) => alive.has(key)).length;
+  return {
+    ...auto,
+    order,
+    sets,
+    report: { ...auto.report, groups: sets },
+    documents:
+      sets === null
+        ? documentsOf(order.length, edits.cuts, edits.names)
+        : documentsOf(order.length),
+    orderEdited: edits.order.length > 0,
+    hasEdits: auto.hasEdits || !sameEdits(edits, EMPTY_EDITS),
+    deleted,
   };
 }
 

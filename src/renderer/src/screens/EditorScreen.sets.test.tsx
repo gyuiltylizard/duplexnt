@@ -405,7 +405,7 @@ describe('тулбар режима и «Собрать документ» (S4�
           resolve = done;
         }),
     );
-    stubApi({ assemble });
+    const api = stubApi({ assemble });
     const snapshot = equalized();
     const { rerender, onToast } = renderEditor(snapshot);
     fireEvent.click(option(1));
@@ -414,6 +414,12 @@ describe('тулбар режима и «Собрать документ» (S4�
     fireEvent.click(assembleButton());
     expect(assemble).toHaveBeenCalledTimes(1);
     expect(assembleButton().hasAttribute('disabled')).toBe(true);
+    // Пока команда в полёте, правки заблокированы, как при записи (ревью #6): ни клавиши, ни
+    // перетаскивания, ни «Вернуть».
+    fireEvent.keyDown(document.body, { key: 'Delete' });
+    fireEvent.click(button('Повернуть на 90° по часовой'));
+    expect(api.setEdits).not.toHaveBeenCalled();
+    expect(option(0).getAttribute('draggable')).toBe('false');
 
     // Снимок режима «собрано»: запись — чередование F1 B2 F2 B1 F3 A1.
     const assembled = {
@@ -450,6 +456,22 @@ describe('тулбар режима и «Собрать документ» (S4�
     expect(document.activeElement).toBe(option(2));
     // Три лица в записи — три листа, добавленный набор в счёт по позиции.
     expect(screen.getByText('Лица и обороты собраны: 3 листа')).toBeDefined();
+  });
+
+  it('мост не ответил — тост 6 с, кнопка снова доступна, экран прежний (ревью #7)', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    stubApi({ assemble: vi.fn(() => Promise.reject(new Error('нет ответа'))) });
+    const { onToast } = renderEditor(equalized());
+
+    fireEvent.click(assembleButton());
+    await settle();
+
+    expect(onToast).toHaveBeenCalledExactlyOnceWith(
+      'Не удалось собрать документ: приложение не получило ответа. Проверьте ленту и повторите.',
+      6000,
+    );
+    expect(assembleButton().hasAttribute('disabled')).toBe(false);
+    expect(screen.getByRole('separator')).toBeDefined();
   });
 
   it('отказ ядра — тост с причиной, экран прежний', async () => {

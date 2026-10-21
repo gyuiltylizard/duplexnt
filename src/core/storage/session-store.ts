@@ -288,15 +288,18 @@ export function withRebasedEdits(previous: Journal | null, next: Journal): Journ
   if (sameEdits(cleaned.edits, EMPTY_EDITS)) {
     return cleaned;
   }
+  // Ключи «до» и «после» — по раскладке, в которой лента окажется после идущего прохода
+  // (`settled`): новый ключ встаёт в явный порядок за соседом по будущей группе. Контекст
+  // нормализации — по настоящему режиму (идёт проход — переходный).
   const before =
     previous === null
       ? null
-      : baseKeysOf(baseAssembly(passSnapshotsOf(previous, NOTHING_LOST), previous.assembled));
+      : baseKeysOf(baseAssembly(passSnapshotsOf(previous, NOTHING_LOST), previous.assembled, true));
   const passes = passSnapshotsOf(cleaned, NOTHING_LOST);
   const base = baseAssembly(passes, cleaned.assembled);
   const edits = rebaseEdits(
     before,
-    baseKeysOf(base),
+    baseKeysOf(baseAssembly(passes, cleaned.assembled, true)),
     cleaned.edits,
     editsContextOf(base, passes, cleaned.edits),
   );
