@@ -86,6 +86,8 @@ describe('каркас приложения', () => {
         assembly: {
           ...NO_EDITS_ASSEMBLY,
           report: {
+            mode: 'pairs',
+            groups: null,
             fronts: 12,
             backs: 0,
             pairs: 0,

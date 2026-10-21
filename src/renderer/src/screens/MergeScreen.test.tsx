@@ -6,6 +6,8 @@ import { MergeScreen } from './MergeScreen';
 
 function report(overrides: Partial<AssemblyReport>): AssemblyReport {
   return {
+    mode: 'pairs',
+    groups: null,
     fronts: 12,
     backs: 12,
     pairs: 12,
@@ -52,6 +54,7 @@ function assemblyFor(assemblyReport: AssemblyReport): SessionAssembly {
   return {
     order,
     documents: [{ name: '', start: 0, count: order.length }],
+    sets: null,
     orderEdited: false,
     hasEdits: false,
     deleted: 0,

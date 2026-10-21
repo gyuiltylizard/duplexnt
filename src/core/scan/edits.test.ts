@@ -9,6 +9,8 @@ import {
   rebaseEdits,
   rebaseOrder,
   remapCuts,
+  setsContext,
+  TRANSIT_CONTEXT,
   visibleKeysOf,
 } from './edits';
 
@@ -230,6 +232,60 @@ describe('правки: разрезы при изменении ленты вн
 
     expect(rebaseEdits(AUTO, AUTO, given)).toEqual(edits({ cuts: [2], names: ['', 'В'] }));
     expect(rebaseEdits(null, AUTO, given)).toEqual(edits({ cuts: [2], names: ['', 'В'] }));
+  });
+});
+
+describe('правки: граница наборов (M3.6, KTD3)', () => {
+  it('вне режима наборов граница всегда null, разрезы — как прежде', () => {
+    expect(normalizeEdits(AUTO, edits({ divider: 2, cuts: [1] }))).toMatchObject({
+      divider: null,
+      cuts: [1],
+      names: ['', ''],
+    });
+  });
+
+  it('в режиме наборов разрезы и имена — как в пустых правках; граница остаётся', () => {
+    expect(
+      normalizeEdits(AUTO, edits({ cuts: [1], names: ['a', 'b'], divider: 1 }), setsContext(2)),
+    ).toEqual({ ...EMPTY_EDITS, divider: 1 });
+  });
+
+  it('идёт проход оборотов — переходное состояние: разрезы и граница остаются, граница прижата', () => {
+    const given = edits({ cuts: [1], names: ['a', 'b'], divider: 9 });
+
+    expect(normalizeEdits(AUTO, given, TRANSIT_CONTEXT)).toEqual({ ...given, divider: 5 });
+  });
+
+  it.each([
+    ['равна авто — null', 2, [], 2, null],
+    ['ноль допустим: группа лиц пуста', 0, [], 2, 0],
+    ['все страницы — лица', 5, [], 2, 5],
+    ['за концом ленты — прижата к концу', 9, [], 2, 5],
+    ['конец ленты считается по видимым', 9, ['e'], 2, 4],
+    ['после прижатия равна авто — null', 9, ['e'], 4, null],
+  ])('граница: %s', (_name, divider, deleted, sets, expected) => {
+    expect(normalizeEdits(AUTO, edits({ divider, deleted }), setsContext(sets)).divider).toBe(
+      expected,
+    );
+  });
+
+  it('при изменении ленты вне правок граница остаётся перед той же страницей (R9)', () => {
+    const given = edits({ divider: 2 }); // a b | c d e
+
+    const sets = setsContext(1);
+
+    expect(rebaseEdits(AUTO, ['a', 'b', 'x', 'c', 'd', 'e'], given, sets).divider).toBe(3);
+    expect(rebaseEdits(AUTO, ['a', 'b', 'd', 'e'], given, sets).divider).toBe(2);
+    // За границей не осталось страниц: граница в конце — допустимо, не схлопывается.
+    expect(rebaseEdits(AUTO, ['a', 'b'], given, sets).divider).toBe(2);
+    // Состав не менялся — только нормализация.
+    expect(rebaseEdits(AUTO, AUTO, given, setsContext(2)).divider).toBeNull();
+  });
+
+  it('граница — правка: есть что откатывать; равенство правок её видит', () => {
+    expect(hasEdits(edits({ divider: 0 }), false)).toBe(true);
+    expect(sameEdits(edits({ divider: 1 }), edits({ divider: null }))).toBe(false);
+    expect(sameEdits(edits({ divider: 1 }), edits({ divider: 1 }))).toBe(true);
   });
 });
 

@@ -286,7 +286,14 @@ describe('хранилище сессии: правки редактора (M3, 
   });
 
   it('граница наборов (M3.6, R1) пишется в журнал и читается дословно; новая сессия её не наследует', async () => {
-    const { store, accept, journalOnDisk } = await twoPasses();
+    // Проходы 2/1 — режим раздельных наборов; при равных граница обнулилась бы нормализацией.
+    const { store, accept, journalOnDisk } = await setup();
+    ok(await store.beginPass(ORIGIN, null));
+    await accept(1, 2);
+    ok(await store.endSegment('completed'));
+    ok(await store.beginPass(ORIGIN, null));
+    await accept(3, 3);
+    ok(await store.endSegment('completed'));
     const divided: SessionEdits = { ...EMPTY_EDITS, divider: 1 };
 
     ok(await store.setEdits(divided, false));
@@ -300,26 +307,30 @@ describe('хранилище сессии: правки редактора (M3, 
     expect(store.snapshot()).toMatchObject({ edits: EMPTY_EDITS, assembled: null });
   });
 
-  it('досканирование вставило оборот в середину — разрез переехал вслед; «Остановить» вернул его (KTD-10)', async () => {
+  it('досканирование вставило оборот — граница наборов переехала вслед; «Остановить» вернул её (KTD-10; M3.6, R9)', async () => {
     const { store, accept, journalOnDisk } = await setup();
     ok(await store.beginPass(ORIGIN, null));
     await accept(1, 3);
     ok(await store.endSegment('completed'));
-    // Обороты прерваны на первом: пришёл оборот листа 3. Лента f1 f2 f3 b1, разрез перед f3.
+    // Обороты прерваны на первом: пришёл оборот листа 3. Раздельные наборы: лента f1 f2 f3 | b1;
+    // разрезы в этом режиме не живут — вместо них граница; b1 перенесён к лицам (граница 4).
     ok(await store.beginPass(ORIGIN, null));
     await accept(4, 4);
     ok(await store.endSegment('interrupted'));
-    ok(await store.setEdits({ ...EMPTY_EDITS, cuts: [2], names: ['', 'Третий'] }, false));
+    ok(
+      await store.setEdits({ ...EMPTY_EDITS, cuts: [2], names: ['', 'Третий'], divider: 4 }, false),
+    );
+    expect(store.snapshot()?.edits).toEqual({ ...EMPTY_EDITS, divider: 4 });
 
     ok(await store.resumePass());
     await accept(5, 5);
 
-    // Оборот листа 2 лёг между f2 и f3: разрез остался перед f3.
-    expect(store.snapshot()?.edits).toMatchObject({ cuts: [3], names: ['', 'Третий'] });
-    expect((await journalOnDisk()).edits.cuts).toEqual([3]);
+    // Оборот листа 2 лёг в начало группы оборотов: f1 f2 f3 b2 b1 — граница в конце осталась в конце.
+    expect(store.snapshot()?.edits).toMatchObject({ divider: 5 });
+    expect((await journalOnDisk()).edits.divider).toBe(5);
 
     ok(await store.discardSegment());
-    expect(store.snapshot()?.edits).toMatchObject({ cuts: [2], names: ['', 'Третий'] });
+    expect(store.snapshot()?.edits).toMatchObject({ divider: 4 });
   });
 
   it('правка нормализуется перед записью: разрез перед первой позицией снят, мёртвый ключ вычищен', async () => {

@@ -658,15 +658,16 @@ describe('editor M3: пустой редактор и инспектор', () =>
     expect(screen.getByRole('heading', { name: 'Стр. 1 — лицо листа 1' })).toBeDefined();
     expect(screen.getByText('У этого листа нет оборота — проходы не сошлись.')).toBeDefined();
 
-    // Состояние раскрытия переживает смену страницы.
-    fireEvent.click(option(2));
+    // Состояние раскрытия переживает смену страницы. Проходы 3/2 — раздельные наборы (M3.6):
+    // лента 1л 2л 3л | 2о 1о, номер — позиция в наборе оборотов; тексты режима наборов — U5.
+    fireEvent.click(option(3));
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
-    expect(screen.getByRole('heading', { name: 'Стр. 3 — оборот листа 2' })).toBeDefined();
-    expect(screen.getByText('№2')).toBeDefined();
+    expect(screen.getByRole('heading', { name: 'Стр. 4 — оборот листа 1' })).toBeDefined();
+    expect(screen.getByText('№1')).toBeDefined();
     expect(screen.getByText('оборот')).toBeDefined();
     expect(screen.getByText('0°')).toBeDefined();
     expect(
-      screen.getByText('Оборот листа 2: сопоставлен с лицом по позиции в проходе оборотов.'),
+      screen.getByText('Оборот листа 1: сопоставлен с лицом по позиции в проходе оборотов.'),
     ).toBeDefined();
   });
 

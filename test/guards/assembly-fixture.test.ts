@@ -131,6 +131,95 @@ describe('зеркало автопорядка renderer против ядра (
         passOf(4, 'added', 1, { after: F2 }),
       ]),
     ],
+    // Режимы M3.6 (KTD2): раздельные наборы и «собрано».
+    [
+      'раздельные наборы 3/2: лица, затем обороты обратным порядком',
+      sessionOf([passOf(1, 'fronts', 3), passOf(2, 'backs', 2)]),
+    ],
+    [
+      'наборы: добавленный с якорем-оборотом — в группе оборотов за якорем',
+      sessionOf([
+        passOf(1, 'fronts', 3),
+        passOf(2, 'backs', 2),
+        passOf(3, 'added', 1, { after: 'p02-s01-0002' }),
+      ]),
+    ],
+    [
+      'наборы: добавленный с якорем-лицом — в группе лиц',
+      sessionOf([
+        passOf(1, 'fronts', 3),
+        passOf(2, 'backs', 2),
+        passOf(3, 'added', 2, { after: F2 }),
+      ]),
+    ],
+    [
+      'наборы: якоря нет — в конец группы оборотов',
+      sessionOf([passOf(1, 'fronts', 3), passOf(2, 'backs', 2), passOf(3, 'added', 1)]),
+    ],
+    [
+      'наборы: обороты прерваны и не приняты',
+      sessionOf([passOf(1, 'fronts', 3), passOf(2, 'backs', 1, { state: 'interrupted' })]),
+    ],
+    [
+      'наборы: обороты повёрнуты на 180°',
+      sessionOf([passOf(1, 'fronts', 2), passOf(2, 'backs', 3, { rotate180: true })]),
+    ],
+    [
+      'проход оборотов идёт при неравных числах — пары',
+      sessionOf([passOf(1, 'fronts', 3), passOf(2, 'backs', 1, { state: 'running' })]),
+    ],
+    [
+      'собрано: лента по записи, сторона и лист по позиции',
+      sessionOf([passOf(1, 'fronts', 3), passOf(2, 'backs', 2)], {
+        assembled: ['p01-s01-0001', 'p02-s01-0002', 'p01-s01-0002', 'p02-s01-0001', 'p01-s01-0003'],
+      }),
+    ],
+    [
+      'собрано: новый добавленный после сборки — по якорю, без листа',
+      sessionOf(
+        [
+          passOf(1, 'fronts', 3),
+          passOf(2, 'backs', 2),
+          passOf(3, 'added', 2, { after: 'p02-s01-0002' }),
+        ],
+        {
+          assembled: [
+            'p01-s01-0001',
+            'p02-s01-0002',
+            'p01-s01-0002',
+            'p02-s01-0001',
+            'p01-s01-0003',
+          ],
+        },
+      ),
+    ],
+    [
+      'собрано: досканированный сегмент оборотов — за предыдущей страницей прохода, повёрнут',
+      sessionOf(
+        [
+          passOf(1, 'fronts', 3),
+          passOf(2, 'backs', 0, {
+            rotate180: true,
+            pages: [...pagesOf(2, 2), { key: 'p02-s02-0001', number: 3, lost: false }],
+          }),
+        ],
+        {
+          assembled: [
+            'p01-s01-0001',
+            'p02-s01-0002',
+            'p01-s01-0002',
+            'p02-s01-0001',
+            'p01-s01-0003',
+          ],
+        },
+      ),
+    ],
+    [
+      'собрано: мёртвый ключ записи пропущен, ключ без записи — в конец',
+      sessionOf([passOf(1, 'fronts', 3), passOf(2, 'backs', 2)], {
+        assembled: ['p01-s01-0001', 'p09-s01-0001', 'p02-s01-0002', 'p01-s01-0003'],
+      }),
+    ],
   ])('%s', (_name, session) => {
     expect(assemblyOf(session)).toEqual(assembleSession(session));
   });

@@ -4,6 +4,8 @@ import { assemblyLanded, assemblyOutcome, mismatchDue } from './assembly-outcome
 
 function report(overrides: Partial<AssemblyReport>): AssemblyReport {
   return {
+    mode: 'pairs',
+    groups: null,
     fronts: 3,
     backs: 3,
     pairs: 3,

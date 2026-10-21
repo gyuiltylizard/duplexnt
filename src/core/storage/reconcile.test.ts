@@ -361,20 +361,22 @@ describe('сверка при запуске: таблица плана', () => 
     expect(await dirSnapshot(root)).toEqual(before);
   });
 
-  it('усыновлённый оборот лёг в середину ленты — разрез переехал вслед за страницей (KTD-10)', async () => {
+  it('усыновлённый оборот лёг в ленту — граница наборов переехала вслед за страницами (KTD-10; M3.6, R9)', async () => {
     // Лицевые 3, обороты: в журнале 1 (оборот листа 3), на диске 2 — сбой до записи журнала.
+    // Проходы не сошлись — режим раздельных наборов: лента f1 f2 f3 | b1, граница вручную
+    // сдвинута в конец (b1 перенесён к лицам).
     const { root } = await seed(
       journalOf([pass(1, [segment(1, 'completed', 3)]), pass(2, [segment(1, 'interrupted', 1)])], {
         nextPass: 3,
-        edits: { ...EMPTY_EDITS, cuts: [2], names: ['', 'Третий'] },
+        edits: { ...EMPTY_EDITS, divider: 4 },
       }),
       [...pagesOfFirstSegment(3), pageName(2, 1, 1), pageName(2, 1, 2)],
     );
 
     const { session } = await reconciled(root);
 
-    // Лента f1 f2 b2 f3 b1: разрез по-прежнему перед f3.
-    expect(session?.edits).toMatchObject({ cuts: [3], names: ['', 'Третий'] });
+    // Лента f1 f2 f3 b2 b1: граница в конце ленты остаётся в конце.
+    expect(session?.edits).toMatchObject({ divider: 5, cuts: [], names: [''] });
   });
 
   it('маркер новее понятного вместе с временными файлами, пометкой и закрываемым каталогом — всё побайтово на месте', async () => {

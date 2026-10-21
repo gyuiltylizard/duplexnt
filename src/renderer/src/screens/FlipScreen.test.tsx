@@ -17,6 +17,8 @@ const PARAMS = { colorMode: 'Grayscale8', resolution: 300, paperSize: 'A4' } as 
 
 function report(fronts: number): AssemblyReport {
   return {
+    mode: 'pairs',
+    groups: null,
     fronts,
     backs: 0,
     pairs: 0,

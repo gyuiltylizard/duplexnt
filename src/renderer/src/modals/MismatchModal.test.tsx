@@ -6,6 +6,8 @@ import { MismatchModal } from './MismatchModal';
 
 function report(overrides: Partial<AssemblyReport>): AssemblyReport {
   return {
+    mode: 'sets',
+    groups: { fronts: 12, backs: 11, divider: 12 },
     fronts: 12,
     backs: 11,
     pairs: 11,

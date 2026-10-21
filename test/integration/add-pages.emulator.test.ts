@@ -87,21 +87,23 @@ describe('«Добавить» — полный путь через эмулят
       trays: [[1, 2, 3], [6, 5], [7], [8]],
     });
     await scanned(first, 3, 2);
+    // Раздельные наборы (M3.6): лица, затем обороты обратным порядком подачи.
     expect(first.snapshot().assembly?.report).toMatchObject({
+      mode: 'sets',
       fronts: 3,
       backs: 2,
       pairs: 2,
       unpairedSheets: [1],
       mismatch: true,
     });
-    expect(keysOf(first.snapshot())).toEqual([F1, F2, B2, F3, B3]);
+    expect(keysOf(first.snapshot())).toEqual([F1, F2, F3, B2, B3]);
 
-    // AE1: текущая — лицо непарного листа; набор из одной страницы встаёт сразу за ним.
+    // AE1: текущая — лицо первого листа; набор из одной страницы встаёт сразу за ним, в группе лиц.
     expect(unwrap(await first.startPass({ kind: 'added', after: F1 }))).toMatchObject({
       end: 'completed',
       pages: 1,
     });
-    expect(keysOf(first.snapshot())).toEqual([F1, A1, F2, B2, F3, B3]);
+    expect(keysOf(first.snapshot())).toEqual([F1, A1, F2, F3, B2, B3]);
     expect(setsOf(first.snapshot())).toEqual([null, 1, null, null, null, null]);
     // Отчёт пар добавление не меняет: лист №1 остаётся непарным (KTD-7 M3).
     expect(first.snapshot().assembly?.report).toMatchObject({
@@ -118,7 +120,7 @@ describe('«Добавить» — полный путь через эмулят
       [2, 'backs', null],
       [3, 'added', F1],
     ]);
-    expect(keysOf(service.snapshot())).toEqual([F1, A1, F2, B2, F3, B3]);
+    expect(keysOf(service.snapshot())).toEqual([F1, A1, F2, F3, B2, B3]);
 
     // AE3: ручной порядок — третий лист в начало; затем добавление после лица 2.
     const manual: SessionEdits = { ...EMPTY_EDITS, order: [F3, F1, A1, F2, B2, B3] };

@@ -15,7 +15,7 @@ import {
   type SessionSnapshot,
   type StartPassRequest,
 } from '@shared';
-import { autoKeysOf } from '../scan/assembly';
+import { baseAssembly, baseKeysOf, editsContextOf } from '../scan/assembly';
 import { rebaseEdits } from '../scan/edits';
 import { isTempName, removeByPrefix, renameWithRetry, writeStreamAtomic } from './atomic-file';
 import {
@@ -256,18 +256,35 @@ function passSnapshotsOf(journal: Journal, lost: ReadonlySet<string>): PassSnaps
 const NOTHING_LOST: ReadonlySet<string> = new Set();
 
 /**
- * Журнал с правками в каноническом виде против своих страниц (M3, KTD-3a, KTD-10). Если
- * состав страниц изменился относительно `previous` не через правку (досканирование, отброс
- * сегмента, сверка), разрезы переезжают вслед за страницами; правки исчезнувших ключей
+ * Журнал с правками в каноническом виде против своих страниц (M3, KTD-3a, KTD-10; M3.6, R8).
+ * Запись сборки чистится от исчезнувших ключей всегда — до раннего выхода. Если состав страниц
+ * изменился относительно `previous` не через правку (досканирование, отброс сегмента, сверка),
+ * разрезы и граница наборов переезжают вслед за страницами; правки исчезнувших ключей
  * вычищаются. Пустые правки уже канонические — на каждой странице прохода их не пересчитывают.
  */
 export function withRebasedEdits(previous: Journal | null, next: Journal): Journal {
-  if (sameEdits(next.edits, EMPTY_EDITS)) {
-    return next;
+  const alive = new Set(next.passes.flatMap((pass) => pagesOf(pass).map((page) => page.key)));
+  const assembled = next.assembled?.filter((key) => alive.has(key)) ?? null;
+  const cleaned =
+    assembled !== null && assembled.length !== next.assembled?.length
+      ? { ...next, assembled }
+      : next;
+  if (sameEdits(cleaned.edits, EMPTY_EDITS)) {
+    return cleaned;
   }
-  const before = previous === null ? null : autoKeysOf(passSnapshotsOf(previous, NOTHING_LOST));
-  const after = autoKeysOf(passSnapshotsOf(next, NOTHING_LOST));
-  return { ...next, edits: rebaseEdits(before, after, next.edits) };
+  const before =
+    previous === null
+      ? null
+      : baseKeysOf(baseAssembly(passSnapshotsOf(previous, NOTHING_LOST), previous.assembled));
+  const passes = passSnapshotsOf(cleaned, NOTHING_LOST);
+  const base = baseAssembly(passes, cleaned.assembled);
+  const edits = rebaseEdits(
+    before,
+    baseKeysOf(base),
+    cleaned.edits,
+    editsContextOf(base, passes, cleaned.edits),
+  );
+  return { ...cleaned, edits };
 }
 
 const isJournalFile = (name: string): boolean =>
