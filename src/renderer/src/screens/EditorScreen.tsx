@@ -682,14 +682,19 @@ export function EditorScreen({
             [sets.fronts < sets.backs, 'fewerFronts'],
           ] as const
         ).find(([on]) => on)?.[1];
-  const assembleTitle =
-    assembleBlock === undefined || sets === null
-      ? undefined
-      : assembleBlock === 'fewerBacks' || assembleBlock === 'fewerFronts'
-        ? t(`editor.assembleDisabled.${assembleBlock}`, {
-            count: Math.abs(sets.fronts - sets.backs),
-          })
-        : t(`editor.assembleDisabled.${assembleBlock}`);
+  const assembleTitle = ((): string | undefined => {
+    if (assembleBlock === undefined || sets === null) {
+      return undefined;
+    }
+    if (assembleBlock === 'fewerBacks' || assembleBlock === 'fewerFronts') {
+      return t(`editor.assembleDisabled.${assembleBlock}`, {
+        count: Math.abs(sets.fronts - sets.backs),
+      });
+    }
+    return t(`editor.assembleDisabled.${assembleBlock}`);
+  })();
+  // Наборы уравнены (S4): равные ненулевые счётчики — акцентная точка и приглашение собрать.
+  const setsEqual = sets !== null && sets.fronts === sets.backs && sets.fronts > 0;
   const assemble = (): void => {
     if (assembling || assembleBlock !== undefined || sets === null) {
       return;
@@ -783,15 +788,11 @@ export function EditorScreen({
         {sets !== null ? (
           <div className="editor-screen__toolbar-center editor-screen__toolbar-center--sets">
             <span
-              className={
-                sets.fronts === sets.backs && sets.fronts > 0
-                  ? 'dot dot--accent'
-                  : 'dot dot--warning'
-              }
+              className={setsEqual ? 'dot dot--accent' : 'dot dot--warning'}
               aria-hidden="true"
             />
             <span className="editor-screen__sets-text" role="status">
-              {sets.fronts === sets.backs && sets.fronts > 0
+              {setsEqual
                 ? t('editor.sets.equal')
                 : t('editor.sets.mismatch', { fronts: sets.fronts, backs: sets.backs })}
             </span>

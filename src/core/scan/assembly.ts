@@ -72,7 +72,7 @@ export interface BaseAssembly {
  * идёт, с числом страниц не равным лицевому — «раздельные наборы»; иначе — «пары». Идущий проход
  * режим не включает: его числа меняются с каждой страницей.
  */
-export function modeOf(
+function modeOf(
   passes: readonly PassSnapshot[],
   assembled: readonly string[] | null,
 ): AssemblyMode {
@@ -322,14 +322,30 @@ export function editsContextOf(
   base: BaseAssembly,
   passes: readonly PassSnapshot[],
   edits: SessionEdits,
+  auto: number | null = autoDividerOf(base, edits),
 ): EditsContext {
-  const auto = autoDividerOf(base, edits);
   if (auto !== null) {
     return setsContext(auto);
   }
   return base.mode === 'pairs' && rolesOf(passes).backs?.state === 'running'
     ? TRANSIT_CONTEXT
     : PAIRS_CONTEXT;
+}
+
+/**
+ * Группы видимой ленты (R10): граница — явная из правок или автоматическая (`auto`); вне
+ * режима раздельных наборов — `null`. Одно правило на снимок и на команду «Собрать документ».
+ */
+export function setsLayoutOf(
+  visible: readonly string[],
+  edits: SessionEdits,
+  auto: number | null,
+): SetsLayout | null {
+  if (auto === null) {
+    return null;
+  }
+  const divider = edits.divider ?? auto;
+  return { fronts: divider, backs: visible.length - divider, divider };
 }
 
 /**
@@ -392,16 +408,18 @@ export function assembleSession(session: SessionSnapshot): SessionAssembly {
   const edits = normalizeEdits(
     baseKeys,
     session.edits,
-    editsContextOf(base, session.passes, session.edits),
+    editsContextOf(base, session.passes, session.edits, autoDivider),
   );
   const visible = visibleKeysOf(baseKeys, edits);
-  const divider = autoDivider === null ? null : (edits.divider ?? autoDivider);
+  const sets = setsLayoutOf(visible, edits, autoDivider);
+  const divider = sets?.divider ?? null;
   // Режим «собрано»: сторона и лист — по позиции в видимом чередовании записи (R11): удалённые
   // позиций не занимают, ключи вне записи — без листа.
   const hidden = new Set(edits.deleted);
+  const recorded = new Set(session.assembled ?? []);
   const recordPosition = new Map(
     (base.mode === 'assembled' ? baseKeys : [])
-      .filter((key) => (session.assembled ?? []).includes(key) && !hidden.has(key))
+      .filter((key) => recorded.has(key) && !hidden.has(key))
       .map((key, index) => [key, index]),
   );
 
@@ -434,8 +452,6 @@ export function assembleSession(session: SessionSnapshot): SessionAssembly {
     ];
   });
 
-  const sets: SetsLayout | null =
-    divider === null ? null : { fronts: divider, backs: visible.length - divider, divider };
   return {
     order,
     documents: documentsOf(order.length, edits),

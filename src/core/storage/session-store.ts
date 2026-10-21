@@ -21,9 +21,9 @@ import {
   baseKeysOf,
   editsContextOf,
   frozenSequenceOf,
+  setsLayoutOf,
 } from '../scan/assembly';
-import { visibleKeysOf } from '../scan/edits';
-import { rebaseEdits } from '../scan/edits';
+import { rebaseEdits, visibleKeysOf } from '../scan/edits';
 import { isTempName, removeByPrefix, renameWithRetry, writeStreamAtomic } from './atomic-file';
 import {
   JOURNAL_VERSION,
@@ -277,12 +277,14 @@ const NOTHING_LOST: ReadonlySet<string> = new Set();
  * вычищаются. Пустые правки уже канонические — на каждой странице прохода их не пересчитывают.
  */
 export function withRebasedEdits(previous: Journal | null, next: Journal): Journal {
-  const alive = new Set(next.passes.flatMap((pass) => pagesOf(pass).map((page) => page.key)));
-  const assembled = next.assembled?.filter((key) => alive.has(key)) ?? null;
-  const cleaned =
-    assembled !== null && assembled.length !== next.assembled?.length
-      ? { ...next, assembled }
-      : next;
+  let cleaned = next;
+  if (next.assembled !== null) {
+    const alive = new Set(next.passes.flatMap((pass) => pagesOf(pass).map((page) => page.key)));
+    const assembled = next.assembled.filter((key) => alive.has(key));
+    if (assembled.length !== next.assembled.length) {
+      cleaned = { ...next, assembled };
+    }
+  }
   if (sameEdits(cleaned.edits, EMPTY_EDITS)) {
     return cleaned;
   }
@@ -881,14 +883,13 @@ export function createSessionStore(
           return conflict('passInterrupted');
         }
         const base = baseAssembly(passSnapshotsOf(journal, NOTHING_LOST), journal.assembled);
-        const auto = autoDividerOf(base, journal.edits);
-        if (auto === null) {
+        const keys = baseKeysOf(base);
+        const visible = visibleKeysOf(keys, journal.edits);
+        const sets = setsLayoutOf(visible, journal.edits, autoDividerOf(base, journal.edits));
+        if (sets === null) {
           return conflict('notSeparate');
         }
-        const keys = baseKeysOf(base);
-        const divider = journal.edits.divider ?? auto;
-        const visible = visibleKeysOf(keys, journal.edits).length;
-        if (divider === 0 || divider * 2 !== visible) {
+        if (sets.fronts === 0 || sets.fronts !== sets.backs) {
           return conflict('setsUnequal');
         }
         // Запись — решение пользователя (амендмент 2026-10-19): расстановка фиксируется, порядок
@@ -896,7 +897,7 @@ export function createSessionStore(
         return commit(
           {
             ...journal,
-            assembled: frozenSequenceOf(keys, journal.edits, divider),
+            assembled: frozenSequenceOf(keys, journal.edits, sets.divider),
             edits: { ...journal.edits, order: [], divider: null },
             saved: false,
           },

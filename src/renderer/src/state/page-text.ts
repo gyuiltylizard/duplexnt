@@ -16,7 +16,11 @@ export const toneOf = (document: number): string => `doc-tone--${String((documen
  * Пары и собрано: «лицо листа 4», «оборот листа 4», «добавленный набор 1»; страница без листа
  * (новая после сборки) — «лицевая, без листа»: «листа 0» не бывает.
  */
-export function whatOf(t: TFunction, entry: AssembledPage, mode: AssemblyMode): string {
+export function whatOf(
+  t: TFunction,
+  entry: Pick<AssembledPage, 'side' | 'sheet' | 'addedSet'>,
+  mode: AssemblyMode,
+): string {
   const back = entry.side === 'back';
   if (mode === 'sets') {
     if (entry.addedSet !== null) {

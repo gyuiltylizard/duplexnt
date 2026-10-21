@@ -19,7 +19,7 @@ import {
 } from '@shared';
 import type { DropSide, SetSide } from '../state/edits';
 import { single, type Selection } from '../state/selection';
-import { toneOf, whatOf } from '../state/page-text';
+import { toneOf } from '../state/page-text';
 import {
   EditorThumb,
   pickModifierHeld,
@@ -386,10 +386,12 @@ export function EditorRail({
       sessionId={sessionId}
       pageKey={entry.key}
       backsOrigin={origins.get(entry.key) === 'backs'}
+      side={entry.side}
+      sheet={entry.sheet}
       angle={entry.angle}
       lost={entry.lost}
       position={position + 1}
-      what={sets === null ? null : whatOf(t, entry, 'sets')}
+      inSets={sets !== null}
       addedSet={entry.addedSet}
       current={entry.key === selection.current}
       selected={selectedKeys.has(entry.key)}
@@ -402,6 +404,19 @@ export function EditorRail({
       onSplit={split}
       drag={drag}
     />
+  );
+
+  /** Сетка миниатюр группы — один listbox на группу документа или набора. */
+  const thumbList = (label: string, pages: readonly AssembledPage[], start: number): ReactNode => (
+    <ul
+      className="thumbs"
+      role="listbox"
+      aria-multiselectable="true"
+      aria-orientation="horizontal"
+      aria-label={label}
+    >
+      {pages.map((entry, offset) => thumbOf(entry, start + offset))}
+    </ul>
   );
 
   /** S1, S3 M3.6: группа набора — заголовок с живым счётчиком, сетка или зона дропа. */
@@ -440,15 +455,7 @@ export function EditorRail({
             </span>
           </div>
         ) : (
-          <ul
-            className="thumbs"
-            role="listbox"
-            aria-multiselectable="true"
-            aria-orientation="horizontal"
-            aria-label={pagesLabel}
-          >
-            {pages.map((entry, offset) => thumbOf(entry, start + offset))}
-          </ul>
+          thumbList(pagesLabel, pages, start)
         )}
       </section>
     );
@@ -523,17 +530,11 @@ export function EditorRail({
           />
           <span className="doc-group__count">{t('editor.doc.count', { count: doc.count })}</span>
         </div>
-        <ul
-          className="thumbs"
-          role="listbox"
-          aria-multiselectable="true"
-          aria-orientation="horizontal"
-          aria-label={t('editor.doc.pagesLabel', { number: index + 1 })}
-        >
-          {order
-            .slice(doc.start, doc.start + doc.count)
-            .map((entry, offset) => thumbOf(entry, doc.start + offset))}
-        </ul>
+        {thumbList(
+          t('editor.doc.pagesLabel', { number: index + 1 }),
+          order.slice(doc.start, doc.start + doc.count),
+          doc.start,
+        )}
       </section>
     ));
   }

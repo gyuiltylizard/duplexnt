@@ -119,10 +119,16 @@ export function dividerAfterMove(
   target: number,
 ): number {
   const moving = new Set(keys);
-  const fromFronts = visible.slice(0, divider).filter((key) => moving.has(key)).length;
   const all = visible.filter((key) => moving.has(key)).length;
-  return divider - fromFronts + (target < divider ? all : 0);
+  return divider - movedFromFronts(visible, divider, moving) + (target < divider ? all : 0);
 }
+
+/** Сколько из переносимых страниц стояло в группе лиц (до границы). */
+const movedFromFronts = (
+  visible: readonly string[],
+  divider: number,
+  moving: ReadonlySet<string>,
+): number => visible.slice(0, divider).filter((key) => moving.has(key)).length;
 
 /**
  * Перенос `keys` через границу наборов без страницы-цели (M3.6, KTD8): бросок на разделитель
@@ -144,8 +150,7 @@ export function movedAcross(
     return null;
   }
   const rest = visible.filter((key) => !moving.has(key));
-  const fromFronts = visible.slice(0, divider).filter((key) => moving.has(key)).length;
-  const at = divider - fromFronts;
+  const at = divider - movedFromFronts(visible, divider, moving);
   const order = [...rest.slice(0, at), ...group, ...rest.slice(at)];
   const next = side === 'fronts' ? at + group.length : at;
   if (sameList(order, visible) && next === divider) {

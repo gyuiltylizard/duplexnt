@@ -1,9 +1,10 @@
 import { memo, type DragEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { pageImageUrl, type PageAngle } from '@shared';
+import { pageImageUrl, type AssembledPage, type PageAngle } from '@shared';
 import type { TFunction } from 'i18next';
 import { useImageLoad } from '../components/useImageLoad';
 import type { DropSide } from '../state/edits';
+import { whatOf } from '../state/page-text';
 
 /** Как выбрали миниатюру: клик, Shift — диапазон, Ctrl — по одной (handoff M3, S4). */
 export type PickMode = 'single' | 'range' | 'toggle';
@@ -39,7 +40,9 @@ function thumbLabelOf(
   t: TFunction,
   page: {
     readonly lost: boolean;
-    readonly what: string | null;
+    readonly inSets: boolean;
+    readonly side: AssembledPage['side'];
+    readonly sheet: number | null;
     readonly addedSet: number | null;
     readonly position: number;
   },
@@ -47,8 +50,12 @@ function thumbLabelOf(
   if (page.lost) {
     return t('thumb.lostLabel', { number: page.position });
   }
-  if (page.what !== null) {
-    return t('thumb.setLabel', { number: page.position, what: page.what });
+  if (page.inSets) {
+    const { side, sheet, addedSet } = page;
+    return t('thumb.setLabel', {
+      number: page.position,
+      what: whatOf(t, { side, sheet, addedSet }, 'sets'),
+    });
   }
   if (page.addedSet !== null) {
     return t('thumb.addedLabel', { number: page.position, set: page.addedSet });
@@ -69,10 +76,12 @@ export const EditorThumb = memo(function EditorThumb({
   sessionId,
   pageKey,
   backsOrigin,
+  side,
+  sheet,
   angle,
   lost,
   position,
-  what,
+  inSets,
   addedSet,
   current,
   selected,
@@ -89,13 +98,16 @@ export const EditorThumb = memo(function EditorThumb({
   readonly pageKey: string;
   /** Страница прохода оборотов — тег «об» по происхождению, в любой группе (R11). */
   readonly backsOrigin: boolean;
+  /** Сторона и номер по режиму (R11) — подпись карточки в режиме наборов. */
+  readonly side: AssembledPage['side'];
+  readonly sheet: number | null;
   /** Угол страницы из ядра (KTD-4): только отображение, файлы не меняются. */
   readonly angle: PageAngle;
   readonly lost: boolean;
   /** Номер по порядку в ленте, с единицы — сквозной через документы и группы. */
   readonly position: number;
-  /** Режим наборов: «что это за страница» теми же словами, что ДЕТАЛИ (KTD9); иначе `null`. */
-  readonly what: string | null;
+  /** Режим наборов: подпись — «что это за страница» теми же словами, что ДЕТАЛИ (KTD9). */
+  readonly inSets: boolean;
   /** Номер добавленного набора от 1 (KTD-4) — тег «Д{{set}}»; `null` — лицо или оборот. */
   readonly addedSet: number | null;
   /** Текущая — её показывает превью; точка входа клавиатуры (роуминг `tabindex`). */
@@ -181,7 +193,7 @@ export const EditorThumb = memo(function EditorThumb({
     classes.push('thumb--dragging');
   }
 
-  const base = thumbLabelOf(t, { lost, what, addedSet, position });
+  const base = thumbLabelOf(t, { lost, inSets, side, sheet, addedSet, position });
   const label = angle === 0 ? base : `${base}, ${t('thumb.angle', { angle })}`;
 
   return (
