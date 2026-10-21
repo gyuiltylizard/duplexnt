@@ -227,6 +227,7 @@ export function createCommands(context: CommandContext): Commands {
       stopPass: withoutRequest(() => done(() => service.stopPass())),
       acceptPass: withoutRequest(() => done(() => service.acceptPass())),
       declineBacks: withoutRequest(() => done(() => service.declineBacks())),
+      assemble: withoutRequest(() => done(() => service.assemble())),
       setEdits: async (rawRequest) => {
         const request = parseInput(setEditsRequestSchema, rawRequest);
         return request.ok

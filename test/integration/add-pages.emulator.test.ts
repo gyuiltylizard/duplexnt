@@ -140,14 +140,32 @@ describe('«Добавить» — полный путь через эмулят
     expect(setsOf(service.snapshot())).toEqual([null, null, 1, null, 2, null, null]);
     expect(service.snapshot().assembly).toMatchObject({ hasEdits: true, orderEdited: true });
 
-    // AE11: PDF — страницы в порядке ленты, добавленные на своих местах.
+    // M3.6: до сборки документа сохранение отказывает — лента из двух наборов не документ.
     const folder = join(root, 'выход');
     await mkdir(folder, { recursive: true });
-    const saved = unwrap(
-      await service.saveDocuments(folder, { mode: 'single', names: ['Набор'], retry: false }),
+    const request = { mode: 'single', names: ['Набор'], retry: false } as const;
+    expect(await service.saveDocuments(folder, request)).toMatchObject({
+      ok: false,
+      error: { code: 'sessionConflict', details: { reason: 'notAssembled' } },
+    });
+    // Уравнять: лица F3 F1 A1 F2 A2 (5) против оборотов B2 B3 (2) — удалить A2 и перенести F2
+    // к оборотам (граница 3): F3 F1 A1 | F2 B2 B3.
+    unwrap(
+      await service.setEdits(
+        { ...manual, order: [F3, F1, A1, F2, A2, B2, B3], deleted: [A2], divider: 3 },
+        false,
+      ),
     );
+    expect(service.snapshot().assembly?.sets).toEqual({ fronts: 3, backs: 3, divider: 3 });
+    unwrap(await service.assemble());
+    // Запись: F3 F2 F1 B2 A1 B3; удалённая A2 — сразу за своим видимым предшественником F2.
+    expect(service.snapshot().session?.assembled).toEqual([F3, F2, A2, F1, B2, A1, B3]);
+    expect(keysOf(service.snapshot())).toEqual([F3, F2, F1, B2, A1, B3]);
+
+    // AE11: PDF — страницы в порядке ленты, добавленная на своём месте.
+    const saved = unwrap(await service.saveDocuments(folder, request));
     expect(saved.failed).toEqual([]);
-    expect(await pdfFixtures(join(folder, 'Набор.pdf'))).toEqual([3, 1, 7, 2, 8, 5, 6]);
+    expect(await pdfFixtures(join(folder, 'Набор.pdf'))).toEqual([3, 2, 1, 5, 7, 6]);
     expect(service.snapshot().session?.saved).toBe(true);
   });
 

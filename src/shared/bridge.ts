@@ -176,6 +176,12 @@ export interface BridgeCommands {
   /** «Обороты не нужны» (M2, KTD-6): durable-отметка, `flip` больше не показывается. */
   readonly declineBacks: { readonly request: NoRequest; readonly value: undefined };
   /**
+   * «Собрать документ» (M3.6, KTD5): запись сборки по чередованию уравненных наборов — одной
+   * записью журнала; отказы — конфликтами `notSeparate`, `setsUnequal`, `passRunning`,
+   * `passInterrupted`, `saving`, `noSession`. Не шаг undo: история редактора очищается.
+   */
+  readonly assemble: { readonly request: NoRequest; readonly value: undefined };
+  /**
    * Правки редактора и тумблер 180° (M3, KTD-3); исход — в снимке с номером из ответа. Во время
    * записи PDF и идущего прохода отклоняется конфликтом (KTD-9).
    */
@@ -218,6 +224,7 @@ export const BRIDGE_CHANNELS = {
   stopPass: 'duplexnt:stop-pass',
   acceptPass: 'duplexnt:accept-pass',
   declineBacks: 'duplexnt:decline-backs',
+  assemble: 'duplexnt:assemble',
   setEdits: 'duplexnt:set-edits',
   getSaveFolder: 'duplexnt:get-save-folder',
   chooseSaveFolder: 'duplexnt:choose-save-folder',

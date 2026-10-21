@@ -15,7 +15,14 @@ import {
   type SessionSnapshot,
   type StartPassRequest,
 } from '@shared';
-import { baseAssembly, baseKeysOf, editsContextOf } from '../scan/assembly';
+import {
+  autoDividerOf,
+  baseAssembly,
+  baseKeysOf,
+  editsContextOf,
+  frozenSequenceOf,
+} from '../scan/assembly';
+import { visibleKeysOf } from '../scan/edits';
 import { rebaseEdits } from '../scan/edits';
 import { isTempName, removeByPrefix, renameWithRetry, writeStreamAtomic } from './atomic-file';
 import {
@@ -201,6 +208,13 @@ export interface SessionStore {
   setEdits(edits: SessionEdits, rotate180: boolean): Promise<Result<void>>;
   /** «Обороты не нужны» (M2, KTD-6): durable-отметка, `flip` больше не показывается. */
   declineBacks(): Promise<Result<void>>;
+  /**
+   * «Собрать документ» (M3.6, R12, R13; KTD5): в режиме раздельных наборов с равными ненулевыми
+   * видимыми числами групп пишет запись сборки (R7), обнуляет порядок и границу, снимает
+   * «сохранено» — одним коммитом; повороты и удаления остаются. Отказы по порядку R13:
+   * `noSession`, `passRunning`, `passInterrupted`, `notSeparate`, `setsUnequal`.
+   */
+  assemble(): Promise<Result<void>>;
   /**
    * Набор сохранён в PDF (M2, R12); ставится после успешной записи файла. С `expectedRevision`
    * отметка ставится, только если журнал не менялся с момента снятия ревизии: правка во время
@@ -852,6 +866,42 @@ export function createSessionStore(
             : journal;
         // Вывод не меняется (оборотов и не было) — отметка о сохранении остаётся.
         return commit({ ...trimmed, backsDeclined: true }, 'must');
+      }),
+
+    assemble: () =>
+      mutating(async () => {
+        if (journal === null || isVacant(journal)) {
+          return conflict('noSession');
+        }
+        if (runningSegmentOf(journal) !== null) {
+          return conflict('passRunning');
+        }
+        const last = journal.passes.at(-1);
+        if (last !== undefined && passStateOf(last) === 'interrupted') {
+          return conflict('passInterrupted');
+        }
+        const base = baseAssembly(passSnapshotsOf(journal, NOTHING_LOST), journal.assembled);
+        const auto = autoDividerOf(base, journal.edits);
+        if (auto === null) {
+          return conflict('notSeparate');
+        }
+        const keys = baseKeysOf(base);
+        const divider = journal.edits.divider ?? auto;
+        const visible = visibleKeysOf(keys, journal.edits).length;
+        if (divider === 0 || divider * 2 !== visible) {
+          return conflict('setsUnequal');
+        }
+        // Запись — решение пользователя (амендмент 2026-10-19): расстановка фиксируется, порядок
+        // и граница больше не нужны; сохранённый PDF (если был) устарел.
+        return commit(
+          {
+            ...journal,
+            assembled: frozenSequenceOf(keys, journal.edits, divider),
+            edits: { ...journal.edits, order: [], divider: null },
+            saved: false,
+          },
+          'must',
+        );
       }),
 
     markSaved: (expectedRevision) =>
