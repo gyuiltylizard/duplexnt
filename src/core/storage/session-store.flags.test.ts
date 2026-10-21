@@ -173,6 +173,7 @@ describe('хранилище сессии: правки редактора (M3, 
     deleted: ['p02-s01-0002'],
     cuts: [2],
     names: ['', 'Договор'],
+    divider: null,
   };
 
   async function twoPasses() {
@@ -284,6 +285,21 @@ describe('хранилище сессии: правки редактора (M3, 
     expect(store.snapshot()?.edits).toEqual(EMPTY_EDITS);
   });
 
+  it('граница наборов (M3.6, R1) пишется в журнал и читается дословно; новая сессия её не наследует', async () => {
+    const { store, accept, journalOnDisk } = await twoPasses();
+    const divided: SessionEdits = { ...EMPTY_EDITS, divider: 1 };
+
+    ok(await store.setEdits(divided, false));
+    expect(store.snapshot()).toMatchObject({ edits: divided, assembled: null });
+    expect(await journalOnDisk()).toMatchObject({ edits: divided, assembled: null });
+
+    ok(await store.closeSession());
+    ok(await store.beginPass(ORIGIN, null));
+    await accept(1, 1);
+
+    expect(store.snapshot()).toMatchObject({ edits: EMPTY_EDITS, assembled: null });
+  });
+
   it('досканирование вставило оборот в середину — разрез переехал вслед; «Остановить» вернул его (KTD-10)', async () => {
     const { store, accept, journalOnDisk } = await setup();
     ok(await store.beginPass(ORIGIN, null));
@@ -317,6 +333,7 @@ describe('хранилище сессии: правки редактора (M3, 
           deleted: [],
           cuts: [0, 2],
           names: ['Пусто', 'Начало', 'Конец'],
+          divider: null,
         },
         false,
       ),
@@ -328,6 +345,7 @@ describe('хранилище сессии: правки редактора (M3, 
       deleted: [],
       cuts: [2],
       names: ['Начало', 'Конец'],
+      divider: null,
     };
     expect(store.snapshot()?.edits).toEqual(expected);
     expect((await journalOnDisk()).edits).toEqual(expected);
@@ -573,6 +591,7 @@ describe('хранилище сессии: роль прохода и добав
       deleted: [],
       cuts: [1],
       names: ['', 'Акт'],
+      divider: null,
     };
     ok(await store.setEdits(edits, false));
     const keysBefore = visibleKeys(store);

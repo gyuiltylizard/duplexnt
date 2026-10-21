@@ -253,6 +253,7 @@ describe('снимок и проход', () => {
       deleted: ['p02-s01-0001'],
       cuts: [1],
       names: ['', 'Договор'],
+      divider: null,
     };
 
     expect(await handlers.setEdits({ edits, rotate180: true })).toEqual(ok({ seq: 7 }));

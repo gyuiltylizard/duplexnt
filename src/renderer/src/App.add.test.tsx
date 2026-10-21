@@ -39,6 +39,7 @@ describe('M3.5: посадка добавленного набора (KTD-7; han
         backsDeclined: false,
         saved: false,
         edits: EMPTY_EDITS,
+        assembled: null,
         passes: [
           pass(1, 'fronts', 3),
           pass(2, 'backs', 3),

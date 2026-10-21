@@ -57,6 +57,7 @@ export function makeSnapshot(
     backsDeclined: false,
     saved: false,
     edits: EMPTY_EDITS,
+    assembled: null,
     passes,
     ...sessionOverrides,
   };

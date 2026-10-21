@@ -38,6 +38,7 @@ describe('каркас приложения', () => {
           backsDeclined: false,
           saved: false,
           edits: EMPTY_EDITS,
+          assembled: null,
           passes: [
             {
               number: 1,
@@ -68,6 +69,7 @@ describe('каркас приложения', () => {
           backsDeclined: false,
           saved: false,
           edits: EMPTY_EDITS,
+          assembled: null,
           passes: [
             {
               number: 1,
@@ -114,6 +116,7 @@ describe('каркас приложения', () => {
           backsDeclined: false,
           saved: false,
           edits: EMPTY_EDITS,
+          assembled: null,
           passes: [
             {
               number: 1,
@@ -143,6 +146,7 @@ describe('каркас приложения', () => {
           backsDeclined: true,
           saved: false,
           edits: EMPTY_EDITS,
+          assembled: null,
           passes: [
             {
               number: 1,
@@ -265,6 +269,7 @@ describe('каркас приложения', () => {
           backsDeclined: false,
           saved: false,
           edits: EMPTY_EDITS,
+          assembled: null,
           passes: [
             {
               number: 1,
@@ -305,6 +310,7 @@ describe('каркас приложения', () => {
           backsDeclined: false,
           saved: false,
           edits: EMPTY_EDITS,
+          assembled: null,
           passes: [
             {
               number: 1,
@@ -343,6 +349,7 @@ describe('каркас приложения', () => {
           backsDeclined: false,
           saved: false,
           edits: EMPTY_EDITS,
+          assembled: null,
           passes: [
             {
               number: 1,
@@ -376,6 +383,7 @@ describe('каркас приложения', () => {
         backsDeclined: false,
         saved: false,
         edits: EMPTY_EDITS,
+        assembled: null,
         passes: [
           {
             number: 1,
@@ -466,6 +474,7 @@ describe('каркас приложения', () => {
           backsDeclined: false,
           saved: false,
           edits: EMPTY_EDITS,
+          assembled: null,
           passes: [
             {
               number: 1,
@@ -508,6 +517,7 @@ describe('каркас приложения', () => {
         backsDeclined: false,
         saved: false,
         edits: EMPTY_EDITS,
+        assembled: null,
         passes: [
           {
             number: 1,
@@ -539,6 +549,7 @@ describe('каркас приложения', () => {
         backsDeclined: false,
         saved: false,
         edits: EMPTY_EDITS,
+        assembled: null,
         passes: [
           {
             number: 1,
@@ -612,6 +623,7 @@ describe('каркас приложения', () => {
         backsDeclined: false,
         saved: false,
         edits: EMPTY_EDITS,
+        assembled: null,
         passes: [
           {
             number: 1,
@@ -633,6 +645,7 @@ describe('каркас приложения', () => {
         backsDeclined: true,
         saved: false,
         edits: EMPTY_EDITS,
+        assembled: null,
         passes: flip.session?.passes ?? [],
       },
     });
@@ -677,6 +690,7 @@ describe('каркас приложения', () => {
         backsDeclined: false,
         saved: false,
         edits: EMPTY_EDITS,
+        assembled: null,
         passes: [
           {
             number: 1,
@@ -698,6 +712,7 @@ describe('каркас приложения', () => {
         backsDeclined: false,
         saved: false,
         edits: EMPTY_EDITS,
+        assembled: null,
         passes: [
           ...(flip.session?.passes ?? []),
           {
@@ -754,6 +769,7 @@ describe('каркас приложения', () => {
           backsDeclined: false,
           saved: false,
           edits: EMPTY_EDITS,
+          assembled: null,
           passes: [
             {
               number: 1,
@@ -800,6 +816,7 @@ describe('каркас приложения', () => {
           backsDeclined: false,
           saved: false,
           edits: EMPTY_EDITS,
+          assembled: null,
           passes: [
             {
               number: 1,

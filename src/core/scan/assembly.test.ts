@@ -37,6 +37,7 @@ const sessionOf = (
   backsDeclined: false,
   saved: false,
   edits: EMPTY_EDITS,
+  assembled: null,
   passes,
   ...extra,
 });
@@ -233,6 +234,7 @@ describe('сборка: правки поверх автопорядка (M3, U2
         deleted: ['p01-s01-0002'],
         cuts: [1],
         names: ['Счёт', 'Акт'],
+        divider: null,
       },
     });
     const assembly = assembleSession(session);
@@ -289,6 +291,7 @@ describe('сборка: правки поверх автопорядка (M3, U2
         deleted: ['p09-s01-0002'],
         cuts: [],
         names: [''],
+        divider: null,
       },
     });
     const assembly = assembleSession(session);

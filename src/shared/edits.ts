@@ -20,6 +20,13 @@ export interface SessionEdits {
   readonly cuts: readonly number[];
   /** Имена документов, ровно `cuts.length + 1`; пустая строка — имя по умолчанию. */
   readonly names: readonly string[];
+  /**
+   * Граница наборов в режиме раздельных наборов (M3.6; ADR 0004, амендмент 2026-10-19): позиция
+   * в видимой ленте, перед которой начинается набор оборотов; 0 и «все страницы» допустимы.
+   * `null` — авто: число видимых страниц набора лиц по базовому порядку; вне режима — всегда
+   * `null`. Перенос через разделитель задаёт её явно, «Вернуть» сбрасывает, сборка обнуляет.
+   */
+  readonly divider: number | null;
 }
 
 /** Правок нет: автосортировка, без поворотов и удалений, один документ с именем по умолчанию. */
@@ -29,6 +36,7 @@ export const EMPTY_EDITS: SessionEdits = {
   deleted: [],
   cuts: [],
   names: [''],
+  divider: null,
 };
 
 /** Списки равны поэлементно. */
@@ -47,6 +55,7 @@ export function sameEdits(left: SessionEdits, right: SessionEdits): boolean {
     sameList(left.deleted, right.deleted) &&
     sameList(left.cuts, right.cuts) &&
     sameList(left.names, right.names) &&
+    left.divider === right.divider &&
     leftAngles.length === Object.keys(right.rotations).length &&
     leftAngles.every(([key, angle]) => right.rotations[key] === angle)
   );

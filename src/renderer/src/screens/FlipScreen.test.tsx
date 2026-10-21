@@ -37,6 +37,7 @@ function makeSnapshot(fronts: number): Snapshot {
       backsDeclined: false,
       saved: false,
       edits: EMPTY_EDITS,
+      assembled: null,
       passes: [
         {
           number: 1,

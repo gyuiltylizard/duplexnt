@@ -181,6 +181,7 @@ describe('хранилище сессии: пустая сессия равна 
     const journal: Journal = {
       version: JOURNAL_VERSION,
       edits: EMPTY_EDITS,
+      assembled: null,
       sessionId: SESSION,
       nextPass: 2,
       passes: [
@@ -252,6 +253,7 @@ describe('хранилище сессии: потолки счётчиков', (
   const journalWith = (overrides: Partial<Journal>, pageCount = 0, nextSegment = 2): Journal => ({
     version: JOURNAL_VERSION,
     edits: EMPTY_EDITS,
+    assembled: null,
     sessionId: SESSION,
     nextPass: 2,
     passes: [
@@ -354,6 +356,7 @@ describe('хранилище сессии: нечитаемый журнал, к
   const JOURNAL: Journal = {
     version: JOURNAL_VERSION,
     edits: EMPTY_EDITS,
+    assembled: null,
     sessionId: SESSION,
     nextPass: 2,
     passes: [

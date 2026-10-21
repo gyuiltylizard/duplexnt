@@ -84,7 +84,13 @@ export function normalizeEdits(autoKeys: readonly string[], edits: SessionEdits)
   const order = unique(edits.order, isAlive);
   const deleted = unique(edits.deleted, isAlive);
   const length = visibleKeysOf(autoKeys, { ...edits, order, deleted }).length;
-  return { order, rotations, deleted, ...normalizeCuts(edits.cuts, edits.names, length) };
+  return {
+    order,
+    rotations,
+    deleted,
+    ...normalizeCuts(edits.cuts, edits.names, length),
+    divider: edits.divider,
+  };
 }
 
 /**

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { EMPTY_EDITS } from '@shared';
 import {
   JOURNAL_VERSION,
+  newJournal,
   nextKindOf,
   pagesOf,
   parseJournal,
@@ -49,6 +50,7 @@ const JOURNAL: Journal = {
   backsDeclined: false,
   saved: false,
   edits: EMPTY_EDITS,
+  assembled: null,
 };
 
 // Правки M3 во всех полях: перенос, поворот, удаление, разрез с именем второго документа.
@@ -60,7 +62,15 @@ const EDITED: Journal = {
     deleted: ['p01-s01-0003'],
     cuts: [5],
     names: ['', 'Договор'],
+    divider: null,
   },
+};
+
+// Сессия M3.6: граница наборов задана переносом, затем документ собран — запись сборки есть.
+const ASSEMBLED: Journal = {
+  ...JOURNAL,
+  edits: { ...EMPTY_EDITS, divider: 2, deleted: ['p01-s01-0003'] },
+  assembled: ['p01-s01-0001', 'p01-s03-0001', 'p01-s01-0002', 'p01-s01-0003'],
 };
 
 function omit<T extends object, K extends keyof T>(value: T, ...keys: K[]): Omit<T, K> {
@@ -84,8 +94,15 @@ const passAt = (number: number, pageCount: number, extra: Partial<JournalPass> =
 const v3PassAt = (number: number, pageCount: number, extra: object = {}) =>
   omit({ ...passAt(number, pageCount), ...extra }, 'kind', 'after');
 
+// Журнал версии 4 (M3.5): тот же состав без записи сборки и границы наборов.
+const V4_JOURNAL = {
+  ...omit(JOURNAL, 'assembled'),
+  version: 4,
+  edits: omit(EMPTY_EDITS, 'divider'),
+};
+
 // Журнал версии 3 (M3): тот же состав, роль прохода — по позиции.
-const V3_JOURNAL = { ...JOURNAL, version: 3, passes: [V3_PASS] };
+const V3_JOURNAL = { ...V4_JOURNAL, version: 3, passes: [V3_PASS] };
 
 // Журнал версии 2 (M2): тот же состав без правок редактора.
 const V2_JOURNAL = { ...omit(V3_JOURNAL, 'edits'), version: 2 };
@@ -116,12 +133,23 @@ describe('журнал: запись и чтение', () => {
   });
 });
 
-describe('журнал: чтение прежних версий (M2, R13; M3, R2; M3.5, R1)', () => {
+describe('журнал: чтение прежних версий (M2, R13; M3, R2; M3.5, R1; M3.6, R1)', () => {
   const v3RolesOf = (passes: object[]) => {
     const parsed = parse({ ...V3_JOURNAL, nextPass: 9, passes });
     expect(parsed.kind).toBe('ok');
     return parsed.kind === 'ok' ? rolesOfPasses(parsed.value.passes) : [];
   };
+
+  it('журнал v4 читается: сборки нет, граница наборов авто; версия в памяти — текущая', () => {
+    expect(parse(V4_JOURNAL)).toEqual({ kind: 'ok', value: JOURNAL });
+  });
+
+  it('журнал v4 с записью сборки или границей — ошибка схемы: они есть только в v5', () => {
+    const schema = { kind: 'unreadable', reason: 'schema' };
+
+    expect(parse({ ...V4_JOURNAL, assembled: null })).toEqual(schema);
+    expect(parse({ ...V4_JOURNAL, edits: EMPTY_EDITS })).toEqual(schema);
+  });
 
   it('журнал v3 читается: роль — по позиции среди проходов, якоря нет', () => {
     expect(parse(V3_JOURNAL)).toEqual({ kind: 'ok', value: JOURNAL });
@@ -166,7 +194,7 @@ describe('журнал: чтение прежних версий (M2, R13; M3, R
     expect(parse(V2_JOURNAL)).toEqual({ kind: 'ok', value: JOURNAL });
   });
 
-  it('журнал v1 читается цепочкой v1 → v2 → v3 → v4 с дефолтами всех новых полей', () => {
+  it('журнал v1 читается цепочкой v1 → v2 → v3 → v4 → v5 с дефолтами всех новых полей', () => {
     expect(parse(V1_JOURNAL)).toEqual({ kind: 'ok', value: JOURNAL });
   });
 
@@ -209,7 +237,7 @@ describe('журнал: чтение прежних версий (M2, R13; M3, R
 
 describe('журнал: версия (KTD-35)', () => {
   it('маркер версии новее понятного — несовместимость, что бы ни лежало рядом', () => {
-    expect(parse({ ...JOURNAL, version: 5 })).toEqual({
+    expect(parse({ ...JOURNAL, version: 6 })).toEqual({
       kind: 'incompatible',
       reason: 'newerVersion',
     });
@@ -239,10 +267,48 @@ describe('журнал: версия (KTD-35)', () => {
     });
   });
 
-  it('в журнале нет выводимого: порядок сборки схемой не принимается', () => {
-    expect(parse({ ...JOURNAL, assemblyOrder: ['p01-s01-0001'] })).toEqual({
+  it('в журнале нет выводимого: отчёт пар схемой не принимается', () => {
+    // Запись сборки — решение пользователя, а не производное (амендмент 2026-10-19): она в
+    // журнале есть. Числа пар и листы без оборота выводятся из проходов — их в журнале нет.
+    expect(parse({ ...JOURNAL, pairs: 3 })).toEqual({
       kind: 'incompatible',
       reason: 'unknownField',
+    });
+  });
+});
+
+describe('журнал: запись сборки и граница наборов (M3.6; амендмент ADR 0004 от 2026-10-19)', () => {
+  it('запись сборки и граница записываются и читаются дословно', () => {
+    expect(parseJournal(serializeVersioned(ASSEMBLED))).toEqual({ kind: 'ok', value: ASSEMBLED });
+  });
+
+  it('граница наборов — целое от нуля или null; ноль допустим (группа без видимых страниц)', () => {
+    const schema = { kind: 'unreadable', reason: 'schema' };
+    const withDivider = (divider: unknown) =>
+      parse({ ...JOURNAL, edits: { ...EMPTY_EDITS, divider } });
+
+    expect(withDivider(0)).toMatchObject({ kind: 'ok' });
+    expect(withDivider(30)).toMatchObject({ kind: 'ok' });
+    expect(withDivider(-1)).toEqual(schema);
+    expect(withDivider(1.5)).toEqual(schema);
+    expect(withDivider('2')).toEqual(schema);
+  });
+
+  it('запись сборки — ключи страниц без повторов; пустая запись допустима', () => {
+    const schema = { kind: 'unreadable', reason: 'schema' };
+    const withAssembled = (assembled: unknown) => parse({ ...JOURNAL, assembled });
+
+    expect(withAssembled([])).toMatchObject({ kind: 'ok' });
+    expect(withAssembled(['p01-s01-0001', 'p01-s01-0001'])).toEqual(schema);
+    expect(withAssembled(['лист 1'])).toEqual(schema);
+    expect(withAssembled('p01-s01-0001')).toEqual(schema);
+  });
+
+  it('новый журнал начинает без записи сборки и с границей авто', () => {
+    expect(newJournal('a1b2c3d4e5f60718')).toMatchObject({
+      version: JOURNAL_VERSION,
+      assembled: null,
+      edits: EMPTY_EDITS,
     });
   });
 });

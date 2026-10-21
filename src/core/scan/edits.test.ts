@@ -135,6 +135,7 @@ describe('правки: канонический вид', () => {
       deleted: ['e'],
       cuts: [2],
       names: ['B', 'D'],
+      divider: null,
     });
   });
 

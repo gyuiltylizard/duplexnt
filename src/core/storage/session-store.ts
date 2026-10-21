@@ -531,6 +531,7 @@ export function createSessionStore(
         saved: journal.saved,
         passes: passSnapshotsOf(journal, lost),
         edits: journal.edits,
+        assembled: journal.assembled,
       };
     },
 
@@ -563,7 +564,14 @@ export function createSessionStore(
           journal === null || (isVacant(journal) && journal.deletions.length === 0)
             ? newJournal(newSessionId())
             : isVacant(journal)
-              ? { ...journal, passes: [], backsDeclined: false, saved: false, edits: EMPTY_EDITS }
+              ? {
+                  ...journal,
+                  passes: [],
+                  backsDeclined: false,
+                  saved: false,
+                  edits: EMPTY_EDITS,
+                  assembled: null,
+                }
               : journal;
         const number = base.nextPass;
         if (number > MAX_PASS_NUMBER) {

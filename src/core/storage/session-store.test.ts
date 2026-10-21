@@ -65,6 +65,7 @@ describe('хранилище сессии: проход', () => {
         },
       ],
       edits: EMPTY_EDITS,
+      assembled: null,
     });
   });
 

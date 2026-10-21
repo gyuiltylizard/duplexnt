@@ -39,6 +39,7 @@ const sessionOf = (
   backsDeclined: false,
   saved: false,
   edits: EMPTY_EDITS,
+  assembled: null,
   passes,
   ...extra,
 });
