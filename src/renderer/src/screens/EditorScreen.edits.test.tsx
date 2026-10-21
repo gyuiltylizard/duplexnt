@@ -707,7 +707,7 @@ describe('editor M3: пустой редактор и инспектор', () =>
     ).toBeDefined();
   });
 
-  it('S13: несовпадение пар и ручной порядок — янтарные пункты', () => {
+  it('S13: раздельные наборы и ручной порядок — янтарные пункты', () => {
     stubApi();
     renderEditor(
       nextSnapshot(twoPass(2), {
@@ -715,7 +715,9 @@ describe('editor M3: пустой редактор и инспектор', () =>
       }),
     );
 
-    const pairs = screen.getByText('Пар «лицо + оборот»: 2 из 3').closest('li');
+    const pairs = screen
+      .getByText('Наборы не уравнены: лицевых 3, оборотных 2 — не хватает 1 оборота')
+      .closest('li');
     expect(pairs?.className).toContain('check--warning');
     const order = screen.getByText('Порядок правили вручную — автосортировка отключена');
     expect(order.closest('li')?.className).toContain('check--warning');

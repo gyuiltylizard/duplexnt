@@ -98,7 +98,7 @@ describe('два прохода через эмулятор (M2)', () => {
     ).toBe(true);
 
     const snapshot = service.snapshot();
-    expect(snapshot.assembly?.report).toMatchObject({ pairs: 3, mismatch: false });
+    expect(snapshot.assembly?.report).toMatchObject({ mode: 'pairs', backs: 3, mismatch: false });
     expect(snapshot.assembly?.order.map((page) => `${page.sheet ?? '?'}${page.side}`)).toEqual([
       '1front',
       '1back',
@@ -167,9 +167,6 @@ describe('два прохода через эмулятор (M2)', () => {
       groups: { fronts: 3, backs: 2, divider: 3 },
       fronts: 3,
       backs: 2,
-      pairs: 2,
-      unpairedSheets: [1],
-      extraBacks: 0,
       mismatch: true,
     });
     // Обороты пришли от последнего листа (6, затем 5) — в наборе оборотов показаны 5, 6; первый
@@ -197,7 +194,8 @@ describe('два прохода через эмулятор (M2)', () => {
     expect(snapshot.assembly?.report).toMatchObject({
       mode: 'sets',
       groups: { fronts: 2, backs: 3, divider: 2 },
-      extraBacks: 1,
+      fronts: 2,
+      backs: 3,
       mismatch: true,
     });
     const last = snapshot.assembly?.order.at(-1);
@@ -223,8 +221,11 @@ describe('два прохода через эмулятор (M2)', () => {
     ]);
     expect(snapshot.canResume).toBe(true);
     expect(snapshot.canAccept).toBe(true);
-    // До приёмки сборка идёт по фактическим парам (KTD-8): один оборот — одна пара.
-    expect(snapshot.assembly?.report).toMatchObject({ pairs: 1, unpairedSheets: [1, 2] });
+    // До приёмки — раздельные наборы (M3.6, R4): один оборот в группе оборотов.
+    expect(snapshot.assembly?.report).toMatchObject({
+      mode: 'sets',
+      groups: { fronts: 3, backs: 1, divider: 3 },
+    });
 
     // «Досканировать остаток»: бумага из замятия вынута, остаток стопки — обратно в лоток.
     emulator.clearJam();
@@ -232,7 +233,7 @@ describe('два прохода через эмулятор (M2)', () => {
     expect(unwrap(await service.startPass(null))).toMatchObject({ end: 'completed', pages: 2 });
 
     snapshot = service.snapshot();
-    expect(snapshot.assembly?.report).toMatchObject({ pairs: 3, mismatch: false });
+    expect(snapshot.assembly?.report).toMatchObject({ mode: 'pairs', backs: 3, mismatch: false });
     await expectAssembledFixtures(root, snapshot, [1, 4, 2, 5, 3, 6]);
   });
 
@@ -244,8 +245,9 @@ describe('два прохода через эмулятор (M2)', () => {
     expect(await service.acceptPass()).toEqual({ ok: true, value: undefined });
 
     expect(service.snapshot().assembly?.report).toMatchObject({
-      pairs: 1,
-      unpairedSheets: [1, 2],
+      mode: 'sets',
+      fronts: 3,
+      backs: 1,
       backsState: 'accepted',
       mismatch: true,
     });

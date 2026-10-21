@@ -8,9 +8,6 @@ function report(overrides: Partial<AssemblyReport>): AssemblyReport {
     groups: null,
     fronts: 3,
     backs: 3,
-    pairs: 3,
-    unpairedSheets: [],
-    extraBacks: 0,
     backsState: 'completed',
     backsDeclined: false,
     mismatch: false,
@@ -25,7 +22,6 @@ const sets = (fronts: number, backs: number, extra: Partial<AssemblyReport> = {}
     groups: { fronts, backs, divider: fronts },
     fronts,
     backs,
-    pairs: Math.min(fronts, backs),
     mismatch: true,
     ...extra,
   });
@@ -34,11 +30,7 @@ describe('assemblyOutcome (M3.6, KTD7: по режиму)', () => {
   it.each([
     ['равные проходы', report({}), 'ok'],
     ['собрано', report({ mode: 'assembled' }), 'ok'],
-    [
-      'обороты не нужны',
-      report({ backs: 0, pairs: 0, backsState: null, backsDeclined: true }),
-      'frontsOnly',
-    ],
+    ['обороты не нужны', report({ backs: 0, backsState: null, backsDeclined: true }), 'frontsOnly'],
     ['принят коротким', sets(3, 1, { backsState: 'accepted' }), 'accepted'],
     ['принят длинным — всё равно accepted', sets(3, 5, { backsState: 'accepted' }), 'accepted'],
     ['наборы: оборотов меньше', sets(3, 2), 'fewer'],
@@ -60,7 +52,7 @@ describe('assemblyLanded (пауза merge, KTD-5)', () => {
     ['обороты не нужны', { backs: 0, backsState: null, backsDeclined: true }, true],
     ['обрыв оборотов', { backsState: 'interrupted', mismatch: true }, false],
     ['принят как есть — merge не повторяется', { backsState: 'accepted' }, false],
-    ['только лицевые', { backs: 0, pairs: 0, backsState: null }, false],
+    ['только лицевые', { backs: 0, backsState: null }, false],
   ] as const)('%s → %s', (_name, overrides, expected) => {
     expect(assemblyLanded(report(overrides))).toBe(expected);
   });

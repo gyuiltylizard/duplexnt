@@ -183,7 +183,6 @@ describe('модалка add в режиме наборов (M3.6, KTD11; handof
     sheet,
     angle: 0 as const,
     lost: false,
-    unpaired: false,
     addedSet,
   });
   // Лента f1 f2 f3 | b2 a1 b1: граница 3, добавленный набор в группе оборотов.

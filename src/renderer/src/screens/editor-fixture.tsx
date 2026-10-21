@@ -126,6 +126,7 @@ export function stubApi(overrides: Partial<Record<keyof Api, unknown>> = {}) {
   const api = {
     acceptPass: vi.fn(() => Promise.resolve(ok(undefined))),
     closeSession: vi.fn(() => Promise.resolve(ok(undefined))),
+    assemble: vi.fn(() => Promise.resolve(ok(undefined))),
     // Как ядро: результат команды несёт снимок, следующий за показанным (M3, ревью сессий 3–4).
     setEdits: vi.fn(() => Promise.resolve(ok({ seq: shownSeq + 1 }))),
     getSaveFolder: vi.fn(() => Promise.resolve(ok('C:\\Документы'))),
@@ -186,8 +187,10 @@ export const edits = (change: Partial<SessionEdits>): SessionEdits => ({
 
 /**
  * Снимок после того, как ядро приняло правки `state`: сессия несёт их, сборка — лента в явном
- * порядке без удалённых, углы, документы по разрезам, флаги. Упрощённое зеркало ядра (как
- * `assemblyOf`): нормализации нет — тест подаёт ровно то, что ушло в `setEdits`.
+ * порядке без удалённых, углы, документы по разрезам, флаги; в режиме наборов (M3.6) — группы
+ * по явной границе или по числу видимых страниц группы лиц, сторона и место — по позиции
+ * против границы. Упрощённое зеркало ядра (как `assemblyOf`): нормализации нет — тест подаёт
+ * ровно то, что ушло в `setEdits`.
  */
 export function applied(snapshot: Snapshot, state: EditState): Snapshot {
   const session = snapshot.session;
@@ -206,12 +209,25 @@ export function applied(snapshot: Snapshot, state: EditState): Snapshot {
   const explicit = state.edits.order.flatMap((key) => byKey.get(key) ?? []);
   const rest = auto.order.filter((entry) => !state.edits.order.includes(entry.key));
   const removed = new Set(state.edits.deleted);
-  const order = [...explicit, ...rest]
+  const ordered = [...explicit, ...rest]
     .filter((entry) => !removed.has(entry.key))
     .map((entry) => {
       const extra = state.edits.rotations[entry.key] ?? 0;
       return { ...entry, angle: ((entry.angle + extra) % 360) as typeof entry.angle };
     });
+  let sets = auto.sets;
+  let order = ordered;
+  if (auto.sets !== null) {
+    const frontKeys = new Set(auto.order.slice(0, auto.sets.divider).map((entry) => entry.key));
+    const divider =
+      state.edits.divider ?? ordered.filter((entry) => frontKeys.has(entry.key)).length;
+    sets = { fronts: divider, backs: ordered.length - divider, divider };
+    order = ordered.map((entry, index) =>
+      index < divider
+        ? { ...entry, side: 'front', sheet: index + 1 }
+        : { ...entry, side: 'back', sheet: index - divider + 1 },
+    );
+  }
   return {
     ...snapshot,
     seq: snapshot.seq + 1,
@@ -219,6 +235,8 @@ export function applied(snapshot: Snapshot, state: EditState): Snapshot {
     assembly: {
       ...auto,
       order,
+      sets,
+      report: { ...auto.report, groups: sets },
       documents: documentsOf(order.length, state.edits.cuts, state.edits.names),
       orderEdited: state.edits.order.length > 0,
       hasEdits: state.rotate180 || !sameEdits(state.edits, EMPTY_EDITS),

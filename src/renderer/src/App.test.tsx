@@ -90,9 +90,6 @@ describe('каркас приложения', () => {
             groups: null,
             fronts: 12,
             backs: 0,
-            pairs: 0,
-            unpairedSheets: [],
-            extraBacks: 0,
             backsState: null,
             backsDeclined: false,
             mismatch: false,
@@ -804,8 +801,8 @@ describe('каркас приложения', () => {
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Понятно' }));
     expect(screen.queryByRole('dialog')).toBeNull();
-    // Пометка непарного листа живёт в ленте и после закрытия модалки (S6).
-    expect(screen.getByTitle('У этого листа не нашлось пары')).toBeDefined();
+    // Лента осталась в режиме наборов — модалка объясняет, не меняет (M3.6).
+    expect(screen.getByRole('button', { name: 'Собрать документ' })).toBeDefined();
   });
 
   it('KTD-8: прерванный и не принятый проход оборотов модалку не зовёт — решение за плашкой', async () => {

@@ -60,7 +60,6 @@ describeLive('два прохода на живом сканере (AE2)', (host
       expect(report).toMatchObject({
         fronts: fronts.pages,
         backs: fronts.pages,
-        pairs: fronts.pages,
         mismatch: false,
       });
 

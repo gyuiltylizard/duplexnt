@@ -49,7 +49,6 @@ function placeAdded(
       key: page.key,
       angle: 0,
       lost: page.lost,
-      unpaired: false,
       addedSet: index + 1,
       group,
       ofBacks: false,
@@ -77,17 +76,10 @@ export function assemblyOf(session: SessionSnapshot): SessionAssembly {
   const n = fronts.length;
   const backAngle = backsPass?.rotate180 === true ? 180 : 0;
   const mode = modeOf(session);
-  const unpairedSheets =
-    backsPass === null
-      ? []
-      : Array.from({ length: Math.max(0, n - backs.length) }, (_, index) => index + 1);
   const report = {
     mode,
     fronts: n,
     backs: backs.length,
-    pairs: Math.min(n, backs.length),
-    unpairedSheets,
-    extraBacks: Math.max(0, backs.length - n),
     backsState: backsPass?.state ?? null,
     backsDeclined: session.backsDeclined,
     mismatch: mode === 'sets',
@@ -96,7 +88,6 @@ export function assemblyOf(session: SessionSnapshot): SessionAssembly {
     key: page.key,
     angle: 0,
     lost: page.lost,
-    unpaired: unpairedSheets.includes(page.number),
     addedSet: null,
     group,
     ofBacks: false,
@@ -105,7 +96,6 @@ export function assemblyOf(session: SessionSnapshot): SessionAssembly {
     key: page.key,
     angle: backAngle,
     lost: page.lost,
-    unpaired: false,
     addedSet: null,
     group,
     ofBacks: true,
@@ -132,7 +122,6 @@ export function assemblyOf(session: SessionSnapshot): SessionAssembly {
         key,
         angle: ofBacks ? backAngle : 0,
         lost: origin?.page.lost ?? false,
-        unpaired: false,
         addedSet: origin === undefined ? null : (addedIndex.get(origin.pass.number) ?? null),
         group: null,
         ofBacks,
@@ -201,13 +190,12 @@ export function assemblyOf(session: SessionSnapshot): SessionAssembly {
   }
 
   return {
-    order: placed.map(({ key, side, sheet, angle, lost, unpaired, addedSet }) => ({
+    order: placed.map(({ key, side, sheet, angle, lost, addedSet }) => ({
       key,
       side,
       sheet,
       angle,
       lost,
-      unpaired,
       addedSet,
     })),
     documents: [{ name: '', start: 0, count: placed.length }],

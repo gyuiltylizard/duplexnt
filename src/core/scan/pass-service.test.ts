@@ -551,10 +551,9 @@ describe('служба прохода: команды оборотов (M2, U3)'
     const service = await openPassService(root);
 
     expect(service.snapshot().assembly?.report).toMatchObject({
+      mode: 'sets',
       fronts: 3,
       backs: 2,
-      pairs: 2,
-      unpairedSheets: [1],
       mismatch: true,
     });
   });

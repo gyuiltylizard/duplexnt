@@ -83,7 +83,6 @@ describe('добавленный набор через эмулятор (M3.5, U
     expect(snapshot.assembly?.report).toMatchObject({
       fronts: 2,
       backs: 2,
-      pairs: 2,
       mismatch: false,
     });
     // Экран `scan` видел добавленный проход без «из M».

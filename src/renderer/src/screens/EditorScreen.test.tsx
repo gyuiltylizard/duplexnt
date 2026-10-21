@@ -63,21 +63,6 @@ describe('экран editor', () => {
     expect((options[5] as Element).textContent).toContain('6');
   });
 
-  it('S6: непарный лист несёт янтарную точку и aria-label «Лист N — без оборота»', () => {
-    stubApi();
-    renderEditor(twoPass(2));
-
-    const options = screen.getAllByRole('option');
-    // Обороты пришли от последнего листа: без оборота остался лист №1 (младший).
-    expect(options[0]?.getAttribute('aria-label')).toBe('Лист 1 — без оборота');
-    expect(
-      (options[0] as Element).querySelector('[title="У этого листа не нашлось пары"]'),
-    ).not.toBeNull();
-    // Парные листы точки не несут.
-    expect(options[1]?.getAttribute('aria-label')).toBe('Страница 2');
-    expect(screen.getAllByTitle('У этого листа не нашлось пары').length).toBe(1);
-  });
-
   it('S7: тумблер поворота виден при проходе оборотов и шлёт правку с текущими правками (M3)', () => {
     const api = stubApi();
     renderEditor(twoPass());

@@ -14,7 +14,6 @@ const page = (overrides: Partial<AssembledPage>): AssembledPage => ({
   sheet: 3,
   angle: 0,
   lost: false,
-  unpaired: false,
   addedSet: null,
   ...overrides,
 });

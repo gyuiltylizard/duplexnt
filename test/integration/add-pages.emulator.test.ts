@@ -92,8 +92,6 @@ describe('«Добавить» — полный путь через эмулят
       mode: 'sets',
       fronts: 3,
       backs: 2,
-      pairs: 2,
-      unpairedSheets: [1],
       mismatch: true,
     });
     expect(keysOf(first.snapshot())).toEqual([F1, F2, F3, B2, B3]);
@@ -105,9 +103,12 @@ describe('«Добавить» — полный путь через эмулят
     });
     expect(keysOf(first.snapshot())).toEqual([F1, A1, F2, F3, B2, B3]);
     expect(setsOf(first.snapshot())).toEqual([null, 1, null, null, null, null]);
-    // Отчёт пар добавление не меняет: лист №1 остаётся непарным (KTD-7 M3).
+    // Режим не меняется: набор в группе лиц, счётчики живые, числа проходов прежние (R10).
     expect(first.snapshot().assembly?.report).toMatchObject({
-      unpairedSheets: [1],
+      mode: 'sets',
+      groups: { fronts: 4, backs: 2, divider: 4 },
+      fronts: 3,
+      backs: 2,
       mismatch: true,
     });
     expect(first.snapshot().assembly).toMatchObject({ hasEdits: false, orderEdited: false });
@@ -189,7 +190,7 @@ describe('«Добавить» — полный путь через эмулят
       backsDeclined: true,
       mismatch: false,
     });
-    expect(snapshot.assembly?.order.every((page) => page.angle === 0 && !page.unpaired)).toBe(true);
+    expect(snapshot.assembly?.order.every((page) => page.angle === 0)).toBe(true);
     expect(snapshot.session?.passes.map((pass) => pass.kind)).toEqual(['fronts', 'added']);
   });
 

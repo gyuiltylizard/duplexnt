@@ -33,14 +33,7 @@ describe('сборка: interleave и пары (KTD-4)', () => {
     expect(backKeyOfSheet(3)).toBe('p02-s01-0001');
     expect(backKeyOfSheet(2)).toBe('p02-s01-0002');
     expect(backKeyOfSheet(1)).toBe('p02-s01-0003');
-    expect(report).toMatchObject({
-      fronts: 3,
-      backs: 3,
-      pairs: 3,
-      unpairedSheets: [],
-      extraBacks: 0,
-      mismatch: false,
-    });
+    expect(report).toMatchObject({ mode: 'pairs', fronts: 3, backs: 3, mismatch: false });
   });
 
   // С M3.6 неравные числа при остановленном проходе оборотов — режим раздельных наборов
@@ -53,19 +46,13 @@ describe('сборка: interleave и пары (KTD-4)', () => {
     expect(order.find((page) => page.side === 'back' && page.sheet === 3)?.key).toBe(
       'p02-s01-0001',
     );
-    expect(report).toMatchObject({
-      mode: 'pairs',
-      pairs: 2,
-      unpairedSheets: [1],
-      extraBacks: 0,
-      mismatch: false,
-    });
+    expect(report).toMatchObject({ mode: 'pairs', fronts: 3, backs: 2, mismatch: false });
   });
 
-  it('оборотов не хватает на три: непарные — младшие листы по возрастанию (отчёт по проходам)', () => {
-    const session = sessionOf([passOf(1, 5), passOf(2, 2)]);
+  it('оборотов не хватает на три: непарные — младшие листы (проход идёт)', () => {
+    const session = sessionOf([passOf(1, 5), passOf(2, 2, { state: 'running' })]);
 
-    expect(assembleSession(session).report.unpairedSheets).toEqual([1, 2, 3]);
+    expect(shape(session)).toEqual(['1л', '2л', '3л', '4л', '4о', '5л', '5о']);
   });
 
   it('оборотов больше (двойной захват, проход идёт): лишние — в конце, не выброшены', () => {
@@ -75,7 +62,7 @@ describe('сборка: interleave и пары (KTD-4)', () => {
     expect(shape(session)).toEqual(['1л', '1о', '2л', '2о', '?о']);
     // Лишний оборот — последняя страница прохода оборотов, лист неизвестен.
     expect(order.at(-1)).toMatchObject({ key: 'p02-s01-0003', side: 'back', sheet: null });
-    expect(report).toMatchObject({ pairs: 2, unpairedSheets: [], extraBacks: 1, mismatch: false });
+    expect(report).toMatchObject({ mode: 'pairs', fronts: 2, backs: 3, mismatch: false });
   });
 
   it('«обороты не нужны»: только лицевые, несовпадения нет', () => {
@@ -96,12 +83,7 @@ describe('сборка: interleave и пары (KTD-4)', () => {
     const { report } = assembleSession(session);
 
     expect(shape(session)).toEqual(['1л', '2л', '3л', '1о']);
-    expect(report).toMatchObject({
-      mode: 'sets',
-      backsState: 'accepted',
-      unpairedSheets: [1, 2],
-      pairs: 1,
-    });
+    expect(report).toMatchObject({ mode: 'sets', backsState: 'accepted', fronts: 3, backs: 1 });
   });
 
   it('один лист двусторонне: 1л,1о', () => {
@@ -112,13 +94,11 @@ describe('сборка: interleave и пары (KTD-4)', () => {
     expect(assembleSession(sessionOf([])).report).toMatchObject({
       fronts: 0,
       backs: 0,
-      pairs: 0,
       mismatch: false,
     });
     expect(assembleSession(sessionOf([passOf(1, 2)])).report).toMatchObject({
       fronts: 2,
       backs: 0,
-      unpairedSheets: [],
       mismatch: false,
     });
   });
@@ -129,7 +109,7 @@ describe('сборка: роль прохода и флаг поворота', (
     const session = sessionOf([passOf(1, 2), passOf(3, 2, { rotate180: true })]);
     const { order, report } = assembleSession(session);
 
-    expect(report.pairs).toBe(2);
+    expect(report).toMatchObject({ mode: 'pairs', backs: 2 });
     expect(order.filter((page) => page.side === 'back').map((page) => page.key)).toEqual([
       'p03-s01-0002',
       'p03-s01-0001',
@@ -244,18 +224,6 @@ describe('сборка: правки поверх автопорядка (M3, U2
       ...assembleSession(plain).report,
       groups: { fronts: 3, backs: 0, divider: 3 },
     });
-    expect(assembleSession(edited).report.unpairedSheets).toEqual([1, 2]);
-  });
-
-  it('непарность — признак страницы: листы без оборота помечены и после переноса', () => {
-    const session = sessionOf([passOf(1, 3), passOf(2, 1)], {
-      edits: { ...EMPTY_EDITS, order: ['p01-s01-0002', 'p01-s01-0001'] },
-    });
-    const flagged = assembleSession(session)
-      .order.filter((page) => page.unpaired)
-      .map((page) => page.key);
-
-    expect(flagged).toEqual(['p01-s01-0002', 'p01-s01-0001']);
   });
 
   it('правки с мёртвыми ключами отбрасываются при сборке', () => {
@@ -379,11 +347,10 @@ describe('сборка: добавленные наборы по якорям (M
     expect(report).toMatchObject({
       fronts: 2,
       backs: 0,
-      pairs: 0,
       mismatch: false,
       backsState: null,
     });
-    expect(order.every((page) => page.angle === 0 && !page.unpaired)).toBe(true);
+    expect(order.every((page) => page.angle === 0)).toBe(true);
 
     // Флаг поворота на добавленном проходе роли не играет.
     const flagged = sessionOf([passOf(1, 2), addedOf(2, 1, null, { rotate180: true })], {
@@ -401,7 +368,6 @@ describe('сборка: добавленные наборы по якорям (M
       groups: { fronts: 4, backs: 2, divider: 4 },
     });
     expect(shape(added)).toEqual(['1л', 'Д1.1', '3л', '4л', '1о', '2о']);
-    expect(assembleSession(added).order[0]).toMatchObject({ unpaired: true });
   });
 
   it('каждая страница — ровно один раз и при добавленных наборах', () => {

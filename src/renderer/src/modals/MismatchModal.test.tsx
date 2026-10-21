@@ -4,15 +4,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../i18n';
 import { MismatchModal } from './MismatchModal';
 
-function report(overrides: Partial<AssemblyReport>): AssemblyReport {
+/** Режим раздельных наборов (M3.6): проходы не сошлись, группы — по числам проходов. */
+function report(
+  fronts: number,
+  backs: number,
+  overrides: Partial<AssemblyReport> = {},
+): AssemblyReport {
   return {
     mode: 'sets',
-    groups: { fronts: 12, backs: 11, divider: 12 },
-    fronts: 12,
-    backs: 11,
-    pairs: 11,
-    unpairedSheets: [1],
-    extraBacks: 0,
+    groups: { fronts, backs, divider: fronts },
+    fronts,
+    backs,
     backsState: 'completed',
     backsDeclined: false,
     mismatch: true,
@@ -20,19 +22,22 @@ function report(overrides: Partial<AssemblyReport>): AssemblyReport {
   };
 }
 
+const text = (): string => document.getElementById('mismatch-text')?.textContent ?? '';
+
 afterEach(cleanup);
 
-describe('модалка mismatch (M3.5, S8: честный Copy трёх исходов)', () => {
-  it('оборотов меньше: фактические числа, лист не назван, отсылка к «+ Добавить»; одно действие «Понятно»', () => {
+describe('модалка mismatch (M3.6, S6: три исхода про режим наборов)', () => {
+  it('оборотов меньше: числа проходов, режим объяснён, три шага, лист не назван; одно действие «Понятно»', () => {
     const onClose = vi.fn();
-    render(<MismatchModal report={report({})} onClose={onClose} />);
+    render(<MismatchModal report={report(12, 11)} onClose={onClose} />);
 
     expect(screen.getByRole('dialog')).toBeDefined();
+    expect(screen.getByText('НЕ СХОДЯТСЯ ПРОХОДЫ')).toBeDefined();
     expect(screen.getByText('В первом проходе 12 листов, во втором — 11')).toBeDefined();
-    const text = document.getElementById('mismatch-text')?.textContent ?? '';
-    expect(text).toContain('Какой именно лист остался без оборота, приложение не знает');
-    expect(text).toContain('Нужен оборот — добавьте его кнопкой «+ Добавить».');
-    expect(text).not.toMatch(/лист №/u);
+    expect(text()).toContain('Документ пока не собран: лица и обороты лежат отдельными наборами');
+    expect(text()).toContain('досканируйте недостающий кнопкой «+ Добавить»');
+    expect(text()).toContain('нажмите «Собрать документ»');
+    expect(text()).not.toMatch(/лист №/u);
 
     const buttons = screen.getAllByRole('button');
     expect(buttons.length).toBe(1);
@@ -40,66 +45,34 @@ describe('модалка mismatch (M3.5, S8: честный Copy трёх исх
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('оборотов больше: текст про двойной захват, конец набора и «+ Добавить» для лица', () => {
-    render(
-      <MismatchModal
-        report={report({ backs: 13, pairs: 12, unpairedSheets: [], extraBacks: 1 })}
-        onClose={vi.fn()}
-      />,
-    );
+  it('оборотов больше: текст про двойной захват, лишний оборот в наборе и «Собрать документ»', () => {
+    render(<MismatchModal report={report(12, 13)} onClose={vi.fn()} />);
 
     expect(
       screen.getByText('Во втором проходе страниц больше, чем листов: 13 против 12'),
     ).toBeDefined();
-    const text = document.getElementById('mismatch-text')?.textContent ?? '';
-    expect(text).toContain('лишние лежат в конце набора');
-    expect(text).toContain('Нужно лицо — добавьте его кнопкой «+ Добавить».');
+    expect(text()).toContain('Найдите лишний оборот в наборе и удалите его');
+    expect(text()).toContain('нажмите «Собрать документ»');
   });
 
-  it('проход принят коротким: свой заголовок, листы без пары не перечисляются', () => {
-    render(
-      <MismatchModal
-        report={report({
-          backs: 7,
-          pairs: 7,
-          unpairedSheets: [1, 2, 3, 4, 5],
-          backsState: 'accepted',
-        })}
-        onClose={vi.fn()}
-      />,
-    );
+  it('проход принят коротким: свой заголовок, про недостающие обороты', () => {
+    render(<MismatchModal report={report(12, 7, { backsState: 'accepted' })} onClose={vi.fn()} />);
 
     expect(screen.getByText('Проход оборотов остановлен: 7 из 12')).toBeDefined();
-    const text = document.getElementById('mismatch-text')?.textContent ?? '';
-    expect(text).toContain('Листы без пары помечены в ленте');
-    expect(text).toContain('Нужны обороты — добавьте их кнопкой «+ Добавить».');
-    expect(text).not.toMatch(/№/u);
+    expect(text()).toContain('Досканируйте недостающие обороты кнопкой «+ Добавить»');
+    expect(text()).not.toMatch(/№/u);
   });
 
-  it('принят длинным (лишние обороты, непарных лиц нет): текст без листов без пары и без «+ Добавить»', () => {
-    render(
-      <MismatchModal
-        report={report({
-          backs: 5,
-          fronts: 3,
-          pairs: 3,
-          unpairedSheets: [],
-          extraBacks: 2,
-          backsState: 'accepted',
-        })}
-        onClose={vi.fn()}
-      />,
-    );
+  it('принят длинным (лишние обороты): текст про лишние, без недостающих', () => {
+    render(<MismatchModal report={report(3, 5, { backsState: 'accepted' })} onClose={vi.fn()} />);
 
     expect(screen.getByText('Проход оборотов остановлен: 5 из 3')).toBeDefined();
-    const text = document.getElementById('mismatch-text')?.textContent ?? '';
-    expect(text).toContain('лишние обороты лежат в конце набора');
-    expect(text).not.toContain('без пары');
-    expect(text).not.toContain('Добавить');
+    expect(text()).toContain('лишние обороты — в наборе оборотов');
+    expect(text()).not.toContain('недостающие');
   });
 
   it('начальный фокус — на «Понятно»', () => {
-    render(<MismatchModal report={report({})} onClose={vi.fn()} />);
+    render(<MismatchModal report={report(12, 11)} onClose={vi.fn()} />);
 
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Понятно' }));
   });

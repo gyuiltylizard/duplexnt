@@ -70,6 +70,12 @@
   line-height: var(--leading-none);
 }
 
+/* S5 M3.6: «Собрать документ» недоступна — как недоступная «+ Добавить». */
+.editor-screen__assemble:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: default;
+}
+
 .editor-screen__toolbar-center {
   display: flex;
   align-items: center;
@@ -99,6 +105,19 @@
   white-space: nowrap;
   font: var(--font-weight-regular) var(--font-size-s) / var(--leading-snug) var(--font-family-mono);
   color: var(--color-text-subtle);
+}
+
+/* S4 M3.6: тулбар режима наборов — точка и живые счётчики по центру. */
+.editor-screen__toolbar-center--sets {
+  gap: var(--space-4);
+}
+
+.editor-screen__sets-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--font-weight-medium) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
+  color: var(--color-text-secondary);
 }
 
 .editor-screen__split {
@@ -280,6 +299,100 @@
   color: var(--color-text-faint);
 }
 
+/* — S1 M3.6: группа набора — как группа документа без имени и пилюли — */
+
+.set-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding-bottom: var(--space-8);
+}
+
+.set-group__header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  padding: var(--space-2) var(--space-3);
+}
+
+.set-group__title {
+  margin: 0;
+  font: var(--font-weight-semibold) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
+  color: var(--color-text-primary);
+}
+
+.set-group__count {
+  white-space: nowrap;
+  font: var(--font-weight-regular) var(--font-size-xs) / var(--leading-none) var(--font-family-mono);
+  color: var(--color-text-faint);
+}
+
+/* — S2 M3.6: разделитель наборов — пунктир с подсказкой; цель дропа — */
+
+.set-divider {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-5) 0;
+}
+
+.set-divider__rule {
+  flex: 1;
+  height: 0;
+  border-top: var(--border-width-dashed) dashed var(--color-border-strong);
+}
+
+.set-divider__hint {
+  flex: none;
+  white-space: nowrap;
+  font: var(--font-weight-regular) var(--font-size-xs) / var(--leading-none) var(--font-family-mono);
+  color: var(--color-text-hint);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+/* Маркер дропа — горизонтальная линия над или под разделителем, как `.thumb__drop`, но лёжа. */
+.set-divider--drop-above::before,
+.set-divider--drop-below::after {
+  content: '';
+  position: absolute;
+  left: var(--space-2);
+  right: var(--space-2);
+  height: var(--border-width-thick);
+  border-radius: var(--radius-xs);
+  background: var(--color-accent);
+  pointer-events: none;
+}
+
+.set-divider--drop-above::before {
+  top: 0;
+}
+
+.set-divider--drop-below::after {
+  bottom: 0;
+}
+
+/* — S3 M3.6: пустая группа — зона дропа вместо сетки — */
+
+.set-group__drop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--size-thumb);
+  padding: var(--space-6);
+  border: var(--border-width-dashed) dashed var(--color-border-strong);
+  border-radius: var(--radius-l);
+  color: var(--color-text-hint);
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-snug) var(--font-family-sans);
+  text-align: center;
+}
+
+.set-group__drop--active {
+  border-color: var(--color-accent);
+  background: var(--color-bg-selected);
+}
+
 .rail__footer {
   flex: none;
   padding: var(--space-5) var(--space-6);
@@ -396,11 +509,6 @@
 /* S5 M3.5: тег набора «Д1» — форма тега «об», цвет набора. */
 .thumb__tag--added {
   color: var(--color-pass-3);
-}
-
-/* S6: янтарная точка непарного листа. */
-.thumb__flag {
-  flex: none;
 }
 
 /* S4 M3: угол — только отображение, без анимации (KTD-4). Рамка карточки остаётся портретной,

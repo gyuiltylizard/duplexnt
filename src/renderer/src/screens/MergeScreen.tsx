@@ -6,9 +6,11 @@ import { useFocusWhen } from '../components/useFocusWhen';
 import { assemblyOutcome } from '../state/assembly-outcome';
 import './merge-screen.css';
 
-// Экран `merge` (план M2, U9; UI_SPEC раздел 5; handoff M2, S4): процессная пауза без органов
-// управления, уходит сам по таймеру App (KTD-5). Диаграмма иллюстративна, статусная строка —
-// фактический результат сборки и первой сообщает о несовпадении.
+// Экран `merge` (план M2, U9; UI_SPEC раздел 5; handoff M2, S4; M3.6, S7): процессная пауза без
+// органов управления, уходит сам по таймеру App (KTD-5). Диаграмма иллюстративна, статусная
+// строка — фактический результат сборки и первой сообщает о несовпадении. При несовпадении
+// (режим раздельных наборов) ряда «документ» нет: лица и обороты лежат отдельными наборами,
+// документ соберут в редакторе (R21).
 
 /** Пауза `merge` (KTD-5, UI_SPEC раздел 9). */
 export const MERGE_PAUSE_MS = 1600;
@@ -25,17 +27,18 @@ export interface MergeScreenProps {
 
 /** Статусная строка: исход — общей классификацией, тот же, что увидит `mismatch` (KTD-8). */
 function statusText(t: TFunction, report: AssemblyReport): string {
+  const { fronts, backs } = report;
   switch (assemblyOutcome(report)) {
     case 'frontsOnly':
-      return t('merge.status.frontsOnly', { count: report.fronts });
+      return t('merge.status.frontsOnly', { count: fronts });
     case 'accepted':
-      return t('merge.status.accepted', { pairs: report.pairs, fronts: report.fronts });
+      return t('merge.status.accepted', { fronts, backs });
     case 'fewer':
-      return t('merge.status.fewer', { fronts: report.fronts, backs: report.backs });
+      return t('merge.status.fewer', { fronts, backs });
     case 'extra':
-      return t('merge.status.extra', { count: report.extraBacks });
+      return t('merge.status.extra', { count: backs - fronts });
     case 'ok':
-      return t('merge.status.ok', { pairs: report.pairs });
+      return t('merge.status.ok', { count: Math.min(fronts, backs) });
   }
 }
 
@@ -97,24 +100,27 @@ export function MergeScreen({ assembly }: MergeScreenProps): ReactNode {
             side="back"
           />
         )}
-        <div className="merge-screen__row merge-screen__row--document">
-          <div className="merge-screen__row-label merge-screen__row-label--strong">
-            {t('merge.rowDocument')}
+        {/* S7 M3.6: при несовпадении документа ещё нет — ряд не рисуется. */}
+        {report.mode !== 'sets' && (
+          <div className="merge-screen__row merge-screen__row--document">
+            <div className="merge-screen__row-label merge-screen__row-label--strong">
+              {t('merge.rowDocument')}
+            </div>
+            {/* Ряд «документ» — из настоящего порядка сборки, а не повтора правила KTD-4. */}
+            <div className="merge-screen__cells merge-screen__cells--document">
+              {assembly.order.slice(0, DOC_CELLS_MAX).map((page) => (
+                <span
+                  key={page.key}
+                  className={
+                    page.side === 'back'
+                      ? 'merge-screen__doc-cell merge-screen__doc-cell--back'
+                      : 'merge-screen__doc-cell'
+                  }
+                />
+              ))}
+            </div>
           </div>
-          {/* Ряд «документ» — из настоящего порядка сборки, а не повтора правила KTD-4. */}
-          <div className="merge-screen__cells merge-screen__cells--document">
-            {assembly.order.slice(0, DOC_CELLS_MAX).map((page) => (
-              <span
-                key={page.key}
-                className={
-                  page.side === 'back'
-                    ? 'merge-screen__doc-cell merge-screen__doc-cell--back'
-                    : 'merge-screen__doc-cell'
-                }
-              />
-            ))}
-          </div>
-        </div>
+        )}
       </div>
 
       <footer className="merge-screen__footer">

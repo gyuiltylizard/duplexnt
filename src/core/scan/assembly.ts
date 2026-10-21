@@ -61,10 +61,7 @@ interface BasePage {
 export interface BaseAssembly {
   readonly mode: AssemblyMode;
   readonly pages: readonly BasePage[];
-  readonly report: Pick<
-    AssemblyReport,
-    'fronts' | 'backs' | 'pairs' | 'unpairedSheets' | 'extraBacks' | 'backsState'
-  >;
+  readonly report: Pick<AssemblyReport, 'fronts' | 'backs' | 'backsState'>;
   readonly rotateBacks: boolean;
   /** Номер добавленного набора по ключу страницы (от 1); у лиц и оборотов записи нет. */
   readonly addedSetOf: ReadonlyMap<string, number>;
@@ -91,20 +88,11 @@ export function modeOf(
 
 /** Отчёт о проходах — один для всех режимов: правки и режим на числа проходов не влияют (KTD-7). */
 function passReport(passes: readonly PassSnapshot[]): BaseAssembly['report'] {
-  const { fronts: frontsPass, backs: backsPass } = rolesOf(passes);
-  const fronts = frontsPass?.pages ?? [];
-  const backs = backsPass?.pages ?? [];
-  const unpairedSheets =
-    backs.length === 0
-      ? []
-      : fronts.slice(0, Math.max(0, fronts.length - backs.length)).map((page) => page.number);
+  const { fronts, backs } = rolesOf(passes);
   return {
-    fronts: fronts.length,
-    backs: backs.length,
-    pairs: Math.min(fronts.length, backs.length),
-    unpairedSheets,
-    extraBacks: Math.max(0, backs.length - fronts.length),
-    backsState: backsPass?.state ?? null,
+    fronts: fronts?.pages.length ?? 0,
+    backs: backs?.pages.length ?? 0,
+    backsState: backs?.state ?? null,
   };
 }
 
@@ -408,7 +396,6 @@ export function assembleSession(session: SessionSnapshot): SessionAssembly {
   );
   const visible = visibleKeysOf(baseKeys, edits);
   const divider = autoDivider === null ? null : (edits.divider ?? autoDivider);
-  const unpaired = new Set(base.report.unpairedSheets);
   // Режим «собрано»: сторона и лист — по позиции в видимом чередовании записи (R11): удалённые
   // позиций не занимают, ключи вне записи — без листа.
   const hidden = new Set(edits.deleted);
@@ -442,7 +429,6 @@ export function assembleSession(session: SessionSnapshot): SessionAssembly {
         ...placed,
         angle: pageAngle(edits.rotations[key], page.ofBacks && base.rotateBacks),
         lost: page.lost,
-        unpaired: page.side === 'front' && page.sheet !== null && unpaired.has(page.sheet),
         addedSet: base.addedSetOf.get(key) ?? null,
       },
     ];

@@ -302,6 +302,7 @@ describe('M3.5: посадка добавленного набора (KTD-7; han
     expect(within(dialog).getByText('В первом проходе 3 листа, во втором — 2')).toBeDefined();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Понятно' }));
     expect(screen.queryByRole('dialog')).toBeNull();
-    expect(screen.getByText('стр. 1 из 6')).toBeDefined();
+    // Набор без якоря встал в конец — в группу оборотов: 3 против 3, лента в режиме наборов.
+    expect(screen.getByText('Наборы уравнены — соберите документ')).toBeDefined();
   });
 });
