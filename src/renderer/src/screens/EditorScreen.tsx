@@ -13,13 +13,11 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  sameList,
   type AssembledDocument,
   type AssembledPage,
   type BlankSummary,
   type DomainError,
   type PassKind,
-  type SaveDocumentsReport,
   type SessionEdits,
   type SessionSnapshot,
   type Snapshot,
@@ -65,10 +63,13 @@ import { EditorInspector } from './EditorInspector';
 import { EditorPassBanner } from './EditorPassBanner';
 import { EditorPreview } from './EditorPreview';
 import { docNameId, EditorRail, focusThumb } from './EditorRail';
+import { EditorRailFooter } from './EditorRailFooter';
 import { EditorStatusBar } from './EditorStatusBar';
 import { EditorToolbar } from './EditorToolbar';
 import type { PickMode } from './EditorThumb';
 import { useEditorEdits } from './useEditorEdits';
+import { SAVE_TOAST_MS, useEditorSaving } from './useEditorSaving';
+import { useLateHidden } from './useLateHidden';
 import './editor-screen.css';
 
 // Экран `editor` (план M1, U24; M2, U9; M3, U7–U8; UI_SPEC раздел 6; handoff M3, S1–S15):
@@ -110,12 +111,6 @@ export interface EditorScreenProps {
    */
   readonly onToast: (text: string, durationMs?: number, action?: ToastAction) => void;
 }
-
-/** Тосты сохранения и отказов — 6 с (UI_SPEC раздел 8). */
-const SAVE_TOAST_MS = 6000;
-
-/** «Сохранено … — можно закладывать новые листы» после «Сначала сохранить текущий» (S17). */
-const THEN_NEW_TOAST_MS = 3600;
 
 /**
  * `saveThenNew` — `save`, открытая из `newscan` («Сначала сохранить текущий»): после полного
@@ -637,34 +632,16 @@ export function EditorScreen({
     edits.edit({ edits: edits.current.edits, rotate180: event.target.checked }, []);
   };
 
-  // Закрытие сессии без модалки: пустая сессия и «Сначала сохранить текущий» после записи
-  // (`saved` — текст тоста сохранения). Отказ и молчание моста — тостом: сессия цела (S17), а
-  // после записи человек должен узнать и то, что файлы сохранены.
-  const closeSession = (saved?: string): void => {
-    const failed = (reason: string): void => {
-      onToast(
-        saved === undefined
-          ? t('toast.closeFailed', { error: reason })
-          : t('toast.savedCloseFailed', { saved, error: reason }),
-        SAVE_TOAST_MS,
-      );
-    };
-    window.api.closeSession().then(
-      (result) => {
-        if (!result.ok) {
-          failed(errorTextInline(t, result.error));
-          return;
-        }
-        if (saved !== undefined) {
-          onToast(t('toast.savedThenNew', { saved }), THEN_NEW_TOAST_MS);
-        }
-      },
-      (error: unknown) => {
-        console.error('[renderer] закрытие сессии не ответило', error);
-        failed(t('toast.closeNoResponse'));
-      },
-    );
-  };
+  // Сохранение и закрытие сессии (S16–S18) — хук; модалка `save` закрывается до тоста.
+  const { closeSession, renameDocuments, saved } = useEditorSaving({
+    edits,
+    withEdits,
+    thenNew: modal === 'saveThenNew',
+    onSaved: () => {
+      setModal(null);
+    },
+    onToast,
+  });
 
   // «Новое сканирование»: сессия без страниц — ни ленты, ни удалённых — закрывается без
   // вопросов, иначе модалка `newscan` (S17).
@@ -675,65 +652,6 @@ export function EditorScreen({
       return;
     }
     setModal('newscan');
-  };
-
-  // Имена, тронутые в модалке `save`, — в документы одним шагом undo, до записи пакета (S16).
-  // Только тронутые: нетронутые строки показывают живые имена, откатывать ими нечего.
-  const renameDocuments = (next: ReadonlyMap<number, string>): Promise<boolean> => {
-    const target = [...next].reduce(
-      (state, [index, name]) => renamed(state, index, name),
-      edits.current.edits,
-    );
-    if (target === edits.current.edits) {
-      return Promise.resolve(true);
-    }
-    return new Promise((resolve) => {
-      const sent = edits.edit(withEdits(target), [], {
-        onSuccess: () => {
-          resolve(true);
-        },
-        onFailure: () => {
-          resolve(false);
-        },
-      });
-      if (!sent) {
-        resolve(false);
-      }
-    });
-  };
-
-  // «Открыть папку» из тоста «Сохранено» (M3.5, KTD-9): команда без входа — папку последнего
-  // пакета помнит ядро, путь от renderer не принимается; отказ — тостом ошибки.
-  const openSaveFolder = (): void => {
-    window.api.openSaveFolder().then(
-      (result) => {
-        if (!result.ok) {
-          onToast(
-            t('toast.openFolderFailed', { error: errorTextInline(t, result.error) }),
-            SAVE_TOAST_MS,
-          );
-        }
-      },
-      (error: unknown) => {
-        console.error('[renderer] открытие папки не ответило', error);
-      },
-    );
-  };
-
-  // Пакет записан целиком: тост 6 с с кнопкой «Открыть папку» (S18 M3, пересмотр M3.5 S10:
-  // «Новое сканирование» есть в тулбаре). После «Сначала сохранить текущий» — сразу закрытие.
-  const saved = (report: SaveDocumentsReport): void => {
-    setModal(null);
-    const [only] = report.written;
-    const text =
-      report.written.length === 1 && only !== undefined
-        ? t('toast.saved', { file: only.fileName, folder: report.folder })
-        : t('toast.savedMany', { count: report.written.length, folder: report.folder });
-    if (modal === 'saveThenNew') {
-      closeSession(text);
-      return;
-    }
-    onToast(text, SAVE_TOAST_MS, { label: t('toast.openFolder'), onClick: openSaveFolder });
   };
 
   // «+ Добавить» (S1 M3.5, R12): недоступна при записи, правке в полёте и прерванном последнем
@@ -802,47 +720,19 @@ export function EditorScreen({
       },
     );
   };
-  // Поздние оценки (S13 M4, KTD6): снимок спрятал показанную страницу вердиктом — не правкой
-  // (`notBlank` не менялся), не Ctrl+Z и не сборкой наборов, о которой сказал тост сборки, — тост
-  // один раз на снимок; при включённом переключателе ничего не исчезает. Корректировка при
-  // рендере, тост — эффектом по номеру события.
-  const hiddenKeys = useMemo(
-    () => order.filter((entry) => entry.blank === 'hidden').map((entry) => entry.key),
-    [order],
-  );
+  // Поздние оценки (S13 M4, KTD6): снимок спрятал показанную страницу вердиктом — тост; о
+  // скрытых после сборки наборов уже сказал тост сборки.
   const { notBlank } = session.edits;
-  const [seen, setSeen] = useState(() => ({
-    hidden: hiddenKeys,
+  useLateHidden({
+    order,
     notBlank,
     mode,
-    event: 0,
-    count: 0,
-  }));
-  if (
-    !sameList(seen.hidden, hiddenKeys) ||
-    !sameList(seen.notBlank, notBlank) ||
-    seen.mode !== mode
-  ) {
-    const known = new Set(seen.hidden);
-    const fresh = hiddenKeys.filter((key) => !known.has(key)).length;
-    const announced = seen.mode === 'sets' && mode === 'assembled' && assembledHidden > 0;
-    const late = fresh > 0 && !reveal && !announced && sameList(seen.notBlank, notBlank);
-    setSeen({
-      hidden: hiddenKeys,
-      notBlank,
-      mode,
-      event: late ? seen.event + 1 : seen.event,
-      count: late ? fresh : seen.count,
-    });
-  }
-  const announceHidden = useEffectEvent((count: number) => {
-    onToast(t('toast.blankHidden', { count }));
+    reveal,
+    announced: assembledHidden > 0,
+    onHidden: (count) => {
+      onToast(t('toast.blankHidden', { count }));
+    },
   });
-  useEffect(() => {
-    if (seen.event > 0) {
-      announceHidden(seen.count);
-    }
-  }, [seen.event, seen.count]);
 
   /** Номер страницы в показанной ленте; у скрытой — номер её показанного лица (слева). */
   const numberOf = (key: string): number => {
@@ -893,45 +783,6 @@ export function EditorScreen({
       setSelection(collapsed(selection));
     }
   };
-
-  // Переключатель «добавить пустые» (S5 M4, R18): режим «Скрывать», проход оборотов, вне режима
-  // наборов; без найденных — недоступен с подписью «не найдено» или «оцениваются…». Подвал —
-  // свой компонент в U7; до него строки живут здесь.
-  const blankToggle = session.blankMode === 'hide' && sets === null && (
-    <label
-      className={blank.found > 0 ? 'toggle-row' : 'toggle-row toggle-row--disabled'}
-      title={
-        blank.found > 0
-          ? t(reveal ? 'editor.blank.toggleTitle.on' : 'editor.blank.toggleTitle.off')
-          : t(
-              blank.pending > 0
-                ? 'editor.blank.toggleTitle.scoring'
-                : 'editor.blank.toggleTitle.none',
-            )
-      }
-    >
-      <span className="toggle">
-        <input
-          ref={blankToggleRef}
-          className="toggle__input"
-          type="checkbox"
-          checked={reveal}
-          disabled={blank.found === 0}
-          aria-label={t('editor.blank.toggleLabel')}
-          onChange={(event) => {
-            setReveal(event.target.checked);
-          }}
-        />
-        <span className="toggle__track" aria-hidden="true" />
-      </span>
-      <span className="toggle-row__label">{t('editor.blank.toggle')}</span>
-      <span className="toggle-row__count">
-        {blank.found > 0
-          ? t(reveal ? 'editor.blank.shown' : 'editor.blank.hidden', { count: blank.hidden })
-          : t(blank.pending > 0 ? 'editor.blank.scoring' : 'editor.blank.none')}
-      </span>
-    </label>
-  );
 
   return (
     <main className="editor-screen">
@@ -990,24 +841,20 @@ export function EditorScreen({
           onMove={move}
           onMoveAcross={moveAcross}
           footer={
-            backsPass !== null && (
-              <footer className="rail__footer">
-                {blankToggle}
-                <label className="toggle-row" title={t('editor.rotateBacksTitle')}>
-                  <span className="toggle">
-                    <input
-                      className="toggle__input"
-                      type="checkbox"
-                      checked={backsPass.rotate180}
-                      disabled={saving}
-                      onChange={setRotate}
-                    />
-                    <span className="toggle__track" aria-hidden="true" />
-                  </span>
-                  <span className="toggle-row__label">{t('editor.rotateBacks')}</span>
-                </label>
-              </footer>
-            )
+            // S4–S5 M4: переключатель «добавить пустые» и тумблер 180° — у прохода оборотов.
+            <EditorRailFooter
+              blank={blank}
+              blankMode={session.blankMode}
+              inSets={sets !== null}
+              reveal={reveal}
+              toggleRef={blankToggleRef}
+              onReveal={setReveal}
+              rotate={
+                backsPass === null
+                  ? null
+                  : { checked: backsPass.rotate180, disabled: saving, onChange: setRotate }
+              }
+            />
           }
         />
 
