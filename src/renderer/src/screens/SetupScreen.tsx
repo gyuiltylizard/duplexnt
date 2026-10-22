@@ -1,8 +1,11 @@
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  BLANK_MODES,
+  DEFAULT_BLANK_MODE,
   DEFAULT_SCAN_PARAMS,
   resolveScanParams,
+  type BlankMode,
   type DomainError,
   type ScanOptions,
   type ScanParams,
@@ -18,7 +21,9 @@ import './setup-screen.css';
 // Экран `setup` (план M1, U22; UI_SPEC раздел 2; handoff U19, S1–S6): строка устройства с
 // состояниями запомненного сканера, параметры из capabilities, запуск прохода. С M2 вернулись
 // полные тексты макета (план M2, U8): сценарий двух проходов и колонка «Как это работает».
-// Строки «Пустые обороты» и «Авто» по-прежнему отсутствуют (R14).
+// Строка «Авто» по-прежнему отсутствует (R14). Ряд «Пустые обороты» (M4, R1) — настройка
+// приложения, не устройства: доступен и без сканера, значения — словарь `BLANK_MODES`, а не
+// capabilities.
 
 export interface SetupScreenProps {
   readonly snapshot: Snapshot;
@@ -84,6 +89,19 @@ export function SetupScreen({
       },
       (error: unknown) => {
         console.error('[renderer] параметры не отправлены', error);
+      },
+    );
+  };
+
+  const sendBlankMode = (mode: BlankMode): void => {
+    window.api.setBlankMode(mode).then(
+      (result) => {
+        if (!result.ok) {
+          console.error('[renderer] режим пустых оборотов не принят', result.error);
+        }
+      },
+      (error: unknown) => {
+        console.error('[renderer] режим пустых оборотов не отправлен', error);
       },
     );
   };
@@ -296,6 +314,17 @@ export function SetupScreen({
               }}
             />
           </div>
+          <div className="param-row">
+            <div className="param-row__label">{t('setup.params.blank')}</div>
+            <Segments
+              label={t('setup.params.blank')}
+              values={BLANK_MODES}
+              selected={snapshot.blankMode}
+              format={(value) => t(`setup.params.blankMode.${value}`)}
+              titleOf={(value) => t(`setup.params.blankModeHint.${value}`)}
+              onSelect={sendBlankMode}
+            />
+          </div>
 
           <div className="params__footer">
             <button
@@ -304,6 +333,7 @@ export function SetupScreen({
               disabled={!enabled}
               onClick={() => {
                 sendParams(resolveScanParams(null, shown.options));
+                sendBlankMode(DEFAULT_BLANK_MODE);
               }}
             >
               {t('setup.params.reset')}

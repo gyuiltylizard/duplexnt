@@ -3,6 +3,7 @@ import {
   fail,
   ok,
   type AssembledPage,
+  type BlankMode,
   type DomainError,
   sessionConflict,
   type PassKind,
@@ -94,6 +95,8 @@ export interface PassService {
   /** Сканер подключён явным действием пользователя: запоминается, параметры сверяются (KTD-13). */
   useScanner(connected: ConnectedScanner): Promise<Result<void>>;
   setParams(params: ScanParams): Promise<Result<void>>;
+  /** Режим пустых оборотов (M4, R1): настройка приложения; принимается и без сканера. */
+  setBlankMode(mode: BlankMode): Promise<Result<void>>;
   /**
    * Новый проход или досканирование прерванного. Возвращается, когда задание закрыто. Отказ —
    * проход не начался или не оставил ни страницы, ни сессии.
@@ -449,6 +452,7 @@ export function createPassService(
       canAccept: run === null && last?.state === 'interrupted',
       storage: { incompatible: store.incompatible, unsaved: store.unsaved() },
       notices,
+      blankMode: settings.get().blankMode,
     };
   }
 
@@ -546,7 +550,7 @@ export function createPassService(
       }
       const begun = current.resumed
         ? await store.resumePass()
-        : await store.beginPass(origin, current.request);
+        : await store.beginPass(origin, current.request, settings.get().blankMode);
       if (!begun.ok) {
         return begun;
       }
@@ -755,6 +759,13 @@ export function createPassService(
       notify();
       await settings.setParams(params);
       return ok(undefined);
+    },
+
+    async setBlankMode(mode) {
+      // Не параметр устройства: сканер не нужен, по capabilities не сверяется (KTD1).
+      const saved = await settings.setBlankMode(mode);
+      notify();
+      return saved;
     },
 
     startPass,

@@ -182,6 +182,7 @@ describe('хранилище сессии: пустая сессия равна 
       version: JOURNAL_VERSION,
       edits: EMPTY_EDITS,
       assembled: null,
+      blankMode: 'keep',
       sessionId: SESSION,
       nextPass: 2,
       passes: [
@@ -254,6 +255,7 @@ describe('хранилище сессии: потолки счётчиков', (
     version: JOURNAL_VERSION,
     edits: EMPTY_EDITS,
     assembled: null,
+    blankMode: 'keep',
     sessionId: SESSION,
     nextPass: 2,
     passes: [
@@ -354,6 +356,7 @@ describe('хранилище сессии: миниатюры отброшенн
 
 describe('хранилище сессии: нечитаемый журнал, который сверка не сохранила в стороне', () => {
   const JOURNAL: Journal = {
+    blankMode: 'keep',
     version: JOURNAL_VERSION,
     edits: EMPTY_EDITS,
     assembled: null,

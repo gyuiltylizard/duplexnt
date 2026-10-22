@@ -57,6 +57,7 @@ export function makeSnapshot(
     saved: false,
     edits: EMPTY_EDITS,
     assembled: null,
+    blankMode: 'keep',
     passes,
     ...sessionOverrides,
   };
@@ -68,6 +69,7 @@ export function makeSnapshot(
     canAccept: false,
     storage: { incompatible: false, unsaved: false },
     notices: [],
+    blankMode: 'hide',
     ...overrides,
     session,
     assembly: overrides.assembly === undefined ? assemblyOf(session) : overrides.assembly,

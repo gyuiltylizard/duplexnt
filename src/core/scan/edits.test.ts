@@ -138,6 +138,7 @@ describe('правки: канонический вид', () => {
       cuts: [2],
       names: ['B', 'D'],
       divider: null,
+      notBlank: [],
     });
   });
 
@@ -486,5 +487,33 @@ describe('правки: ручной порядок при новых ключа
 
       expect(rebaseEdits(PAIRS, after, given)).toEqual(given);
     });
+  });
+});
+
+describe('правки: пометки «не пустая» (M4, U3)', () => {
+  it('нормализация: мёртвые ключи и повторы вычищены, порядок ключей — как у EMPTY_EDITS', () => {
+    const normalized = normalizeEdits(AUTO, edits({ notBlank: ['x', 'b', 'b', 'e'] }));
+
+    expect(normalized.notBlank).toEqual(['b', 'e']);
+    expect(Object.keys(normalized)).toEqual(Object.keys(EMPTY_EDITS));
+  });
+
+  it('удалённая страница пометку сохраняет: Ctrl+Z удаления вернёт её непустой', () => {
+    expect(normalizeEdits(AUTO, edits({ deleted: ['b'], notBlank: ['b'] })).notBlank).toEqual([
+      'b',
+    ]);
+  });
+
+  it('перебазирование при смене ленты пометки не трогает', () => {
+    const rebased = rebaseEdits(AUTO, ['a', 'b', 'n', 'c', 'd', 'e'], edits({ notBlank: ['c'] }));
+
+    expect(rebased.notBlank).toEqual(['c']);
+  });
+
+  it('одна пометка — уже правка: «Вернуть» есть что откатывать; sameEdits её различает', () => {
+    expect(hasEdits(edits({ notBlank: ['a'] }), false)).toBe(true);
+    expect(hasEdits(EMPTY_EDITS, false)).toBe(false);
+    expect(sameEdits(edits({ notBlank: ['a'] }), EMPTY_EDITS)).toBe(false);
+    expect(sameEdits(edits({ notBlank: ['a'] }), edits({ notBlank: ['a'] }))).toBe(true);
   });
 });

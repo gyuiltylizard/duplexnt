@@ -38,6 +38,8 @@ export {
   type Unsubscribe,
 } from './bridge';
 
+export { BLANK_MODES, DEFAULT_BLANK_MODE, type BlankMode } from './blank';
+
 export type { DiscoveredScanner, DiscoveryState } from './discovery';
 
 export {

@@ -40,12 +40,30 @@ export const editsV4Schema = z
   .refine(namesMatchCuts);
 
 /**
- * Текущая форма правок (M3.6; амендмент 2026-10-19): к полям v4 — граница наборов `divider`,
+ * Поля правок версии 5 (M3.6; амендмент 2026-10-19): к полям v4 — граница наборов `divider`,
  * целое от нуля или `null` (авто). Ноль и значение за концом ленты схема пропускает: границу
  * прижимает и обнуляет вне режима нормализация, как разрезы.
  */
+const editsV5FieldsOf = (maxItems: number) => ({
+  ...editsV4FieldsOf(maxItems),
+  divider: z.number().int().min(0).nullable(),
+});
+
+/** Правки журнала версии 5: без пометок «не пустая» — только для чтения прежних файлов. */
+export const editsV5Schema = z
+  .strictObject(editsV5FieldsOf(Number.POSITIVE_INFINITY))
+  .refine(namesMatchCuts);
+
+/**
+ * Текущая форма правок (M4; амендмент 2026-10-22): к полям v5 — `notBlank`, ключи страниц,
+ * принятых пользователем непустыми. Повторы и мёртвые ключи схема пропускает: их вычищает
+ * нормализация.
+ */
 export function editsSchemaOf(maxItems = Number.POSITIVE_INFINITY) {
   return z
-    .strictObject({ ...editsV4FieldsOf(maxItems), divider: z.number().int().min(0).nullable() })
+    .strictObject({
+      ...editsV5FieldsOf(maxItems),
+      notBlank: z.array(pageKeySchema).max(maxItems).readonly(),
+    })
     .refine(namesMatchCuts);
 }

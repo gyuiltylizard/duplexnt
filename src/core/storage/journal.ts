@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  BLANK_MODES,
   EMPTY_EDITS,
   PASS_KINDS,
   passesByKind,
@@ -8,7 +9,7 @@ import {
   type PassState,
 } from '@shared';
 import { scanParamsSchema } from '../escl/scan-settings';
-import { editsSchemaOf, editsV4Schema, pageKeySchema } from './edits-schema';
+import { editsSchemaOf, editsV4Schema, editsV5Schema, pageKeySchema } from './edits-schema';
 import {
   MAX_PAGE_INDEX,
   MAX_PASS_NUMBER,
@@ -29,8 +30,10 @@ import { parseVersioned, type VersionedParse } from './versioned-file';
 // - «страница потеряна» — запись есть, файла нет: это видно по диску, а не по журналу.
 // Запись сборки (`assembled`, M3.6) — не выводимое, а решение пользователя: порядок листов при
 // несовпадении проходов из проходов не следует (амендмент 2026-10-19).
+// Оценки детектора пустых страниц (M4) — выводимое: в журнале их нет, схема их не принимает;
+// режим сессии `blankMode` и пометки `edits.notBlank` — решения (амендмент 2026-10-22).
 
-export const JOURNAL_VERSION = 5;
+export const JOURNAL_VERSION = 6;
 
 const segmentSchema = z.strictObject({
   number: z.number().int().min(1).max(MAX_SEGMENT_NUMBER),
@@ -170,13 +173,27 @@ const journalV4Fields = { ...journalV3Fields, passes: z.array(passSchema) };
 // наборов в правках. `assembled` — зафиксированная командой «Собрать документ» последовательность
 // ключей (в том числе удалённых на момент сборки) или `null` («не собрано»); мёртвые ключи из
 // неё вычищает нормализация, а не схема.
+const journalV5Fields = {
+  ...journalV4Fields,
+  edits: editsV5Schema,
+  assembled: z.array(pageKeySchema).readonly().nullable(),
+};
+
+// Журнал версии 6 (M4; амендмент ADR 0004 от 2026-10-22): режим пустых оборотов на сессии и
+// пометки «не пустая» в правках. Оценок детектора в журнале нет — они производное.
 export const journalSchema = z
   .strictObject({
     version: z.literal(JOURNAL_VERSION),
-    ...journalV4Fields,
+    ...journalV5Fields,
     edits: editsSchema,
-    assembled: z.array(pageKeySchema).readonly().nullable(),
+    blankMode: z.enum(BLANK_MODES),
   })
+  .refine(countersHold)
+  .refine(rolesHold)
+  .refine(assembledUnique);
+
+const journalV5Schema = z
+  .strictObject({ version: z.literal(5), ...journalV5Fields })
   .refine(countersHold)
   .refine(rolesHold)
   .refine(assembledUnique);
@@ -208,11 +225,20 @@ export type PassOrigin = NonNullable<JournalPass['origin']>;
 type JournalV2 = z.infer<typeof journalV2Schema>;
 type JournalV3 = z.infer<typeof journalV3Schema>;
 type JournalV4 = z.infer<typeof journalV4Schema>;
+type JournalV5 = z.infer<typeof journalV5Schema>;
 
-/** Чтение v4: не собрано, граница наборов авто (M3.6, R1). */
-const upgradeToV5 = (journal: JournalV4): Journal => ({
+/** Чтение v5: режим «оставлять» — старые сессии ничего не скрывают; пометок нет (M4, R2, R8). */
+const upgradeToV6 = (journal: JournalV5): Journal => ({
   ...journal,
   version: JOURNAL_VERSION,
+  edits: { ...journal.edits, notBlank: [] },
+  blankMode: 'keep',
+});
+
+/** Чтение v4: не собрано, граница наборов авто (M3.6, R1). */
+const upgradeToV5 = (journal: JournalV4): JournalV5 => ({
+  ...journal,
+  version: 5,
   edits: { ...journal.edits, divider: null },
   assembled: null,
 });
@@ -249,7 +275,7 @@ const upgradeToV2 = (journal: z.infer<typeof journalV1Schema>): JournalV2 => ({
 });
 
 /**
- * Разбор журнала: текущая версия, затем прежние цепочкой дефолтов (v1 → v2 → v3 → v4 → v5).
+ * Разбор журнала: текущая версия, затем прежние цепочкой дефолтов (v1 → … → v5 → v6).
  * Несовместимость (маркер новее, неизвестное поле) решается по текущей схеме и прежние не
  * пробует: файл с неизвестным полем несовместим при любой версии.
  */
@@ -258,21 +284,28 @@ export function parseJournal(bytes: Uint8Array): VersionedParse<Journal> {
   if (current.kind !== 'unreadable') {
     return current;
   }
+  const v5 = parseVersioned(bytes, journalV5Schema, JOURNAL_VERSION);
+  if (v5.kind === 'ok') {
+    return { kind: 'ok', value: upgradeToV6(v5.value) };
+  }
   const v4 = parseVersioned(bytes, journalV4Schema, JOURNAL_VERSION);
   if (v4.kind === 'ok') {
-    return { kind: 'ok', value: upgradeToV5(v4.value) };
+    return { kind: 'ok', value: upgradeToV6(upgradeToV5(v4.value)) };
   }
   const v3 = parseVersioned(bytes, journalV3Schema, JOURNAL_VERSION);
   if (v3.kind === 'ok') {
-    return { kind: 'ok', value: upgradeToV5(upgradeToV4(v3.value)) };
+    return { kind: 'ok', value: upgradeToV6(upgradeToV5(upgradeToV4(v3.value))) };
   }
   const v2 = parseVersioned(bytes, journalV2Schema, JOURNAL_VERSION);
   if (v2.kind === 'ok') {
-    return { kind: 'ok', value: upgradeToV5(upgradeToV4(upgradeToV3(v2.value))) };
+    return { kind: 'ok', value: upgradeToV6(upgradeToV5(upgradeToV4(upgradeToV3(v2.value)))) };
   }
   const v1 = parseVersioned(bytes, journalV1Schema, JOURNAL_VERSION);
   return v1.kind === 'ok'
-    ? { kind: 'ok', value: upgradeToV5(upgradeToV4(upgradeToV3(upgradeToV2(v1.value)))) }
+    ? {
+        kind: 'ok',
+        value: upgradeToV6(upgradeToV5(upgradeToV4(upgradeToV3(upgradeToV2(v1.value))))),
+      }
     : current;
 }
 
@@ -287,6 +320,8 @@ export function newJournal(sessionId: string): Journal {
     saved: false,
     edits: EMPTY_EDITS,
     assembled: null,
+    // Пересобранный сверкой журнал тоже начинается отсюда: параметры неизвестны — не скрываем.
+    blankMode: 'keep',
   };
 }
 

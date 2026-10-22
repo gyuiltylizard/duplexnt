@@ -5,6 +5,7 @@
 //
 // В снимке нет абсолютных путей и адресов заданий (KTD-39): страница адресуется ключом.
 
+import type { BlankMode } from './blank';
 import type { SessionEdits } from './edits';
 import type { DomainError } from './errors';
 import type { ScanOptions, ScanParams } from './scan-params';
@@ -99,6 +100,11 @@ export interface SessionSnapshot {
    * Режим сессии из неё выводит ядро, renderer читает его из отчёта сборки.
    */
   readonly assembled: readonly string[] | null;
+  /**
+   * Режим пустых оборотов сессии (M4; ADR 0004, амендмент 2026-10-22): заморожен при старте
+   * первого прохода, в редакторе не меняется; сессии журнала v5 — «оставлять».
+   */
+  readonly blankMode: BlankMode;
 }
 
 /** Угол страницы при показе и в PDF по часовой стрелке (M3, KTD-4). */
@@ -312,4 +318,9 @@ export interface Snapshot {
   };
   /** Уведомления запуска; читаются без сброса, интерфейс показывает их один раз сам. */
   readonly notices: readonly StartupNotice[];
+  /**
+   * Режим пустых оборотов из настроек (M4, R1) — для ряда «Пустые обороты» в `setup`. Режим
+   * текущей сессии — в `session.blankMode`: он заморожен и может отличаться.
+   */
+  readonly blankMode: BlankMode;
 }

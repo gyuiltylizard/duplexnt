@@ -27,6 +27,12 @@ export interface SessionEdits {
    * `null`. Перенос через разделитель задаёт её явно, «Вернуть» сбрасывает, сборка обнуляет.
    */
   readonly divider: number | null;
+  /**
+   * Страницы, принятые пользователем непустыми (M4; ADR 0004, амендмент 2026-10-22): снимают
+   * любой флаг детектора. Обычная правка — шаг undo, плашка, «Вернуть» снимает. Обратной пометки
+   * «считать пустой» нет: лишнее удаляется.
+   */
+  readonly notBlank: readonly string[];
 }
 
 /** Правок нет: автосортировка, без поворотов и удалений, один документ с именем по умолчанию. */
@@ -37,6 +43,7 @@ export const EMPTY_EDITS: SessionEdits = {
   cuts: [],
   names: [''],
   divider: null,
+  notBlank: [],
 };
 
 /** Списки равны поэлементно. */
@@ -56,6 +63,7 @@ export function sameEdits(left: SessionEdits, right: SessionEdits): boolean {
     sameList(left.cuts, right.cuts) &&
     sameList(left.names, right.names) &&
     left.divider === right.divider &&
+    sameList(left.notBlank, right.notBlank) &&
     leftAngles.length === Object.keys(right.rotations).length &&
     leftAngles.every(([key, angle]) => right.rotations[key] === angle)
   );

@@ -174,6 +174,7 @@ describe('хранилище сессии: правки редактора (M3, 
     cuts: [2],
     names: ['', 'Договор'],
     divider: null,
+    notBlank: [],
   };
 
   async function twoPasses() {
@@ -375,6 +376,7 @@ describe('хранилище сессии: правки редактора (M3, 
           cuts: [0, 2],
           names: ['Пусто', 'Начало', 'Конец'],
           divider: null,
+          notBlank: [],
         },
         false,
       ),
@@ -387,6 +389,7 @@ describe('хранилище сессии: правки редактора (M3, 
       cuts: [2],
       names: ['Начало', 'Конец'],
       divider: null,
+      notBlank: [],
     };
     expect(store.snapshot()?.edits).toEqual(expected);
     expect((await journalOnDisk()).edits).toEqual(expected);
@@ -633,6 +636,7 @@ describe('хранилище сессии: роль прохода и добав
       cuts: [1],
       names: ['', 'Акт'],
       divider: null,
+      notBlank: [],
     };
     ok(await store.setEdits(edits, false));
     const keysBefore = visibleKeys(store);
@@ -738,5 +742,71 @@ describe('хранилище сессии: политика запуска planP
       ok: false,
       error: { code: 'sessionConflict', details: { reason: 'passRunning' } },
     });
+  });
+});
+
+describe('хранилище сессии: режим пустых оборотов (M4, U3; ADR 0004, амендмент 2026-10-22)', () => {
+  it('замораживается при первом проходе, второй проход его не меняет, переживает запись', async () => {
+    const { store, accept, journalOnDisk } = await setup();
+    ok(await store.beginPass(ORIGIN, null, 'hide'));
+    await accept(1, 2);
+    ok(await store.endSegment('completed'));
+    ok(await store.beginPass(ORIGIN, null, 'keep'));
+    await accept(3, 4);
+    ok(await store.endSegment('completed'));
+
+    expect(store.snapshot()?.blankMode).toBe('hide');
+    expect((await journalOnDisk()).blankMode).toBe('hide');
+  });
+
+  it('без аргумента — «оставлять»; новая сессия после закрытия замораживает заново', async () => {
+    const { store, accept } = await setup();
+    ok(await store.beginPass(ORIGIN, null));
+    await accept(1, 1);
+    ok(await store.endSegment('completed'));
+    expect(store.snapshot()?.blankMode).toBe('keep');
+    ok(await store.closeSession());
+
+    ok(await store.beginPass(ORIGIN, null, 'mark'));
+    await accept(1, 1);
+    ok(await store.endSegment('completed'));
+    expect(store.snapshot()?.blankMode).toBe('mark');
+  });
+
+  it('проход без страниц сессию не открывает: следующий проход замораживает режим заново', async () => {
+    const { store, accept, journalOnDisk } = await setup();
+    ok(await store.beginPass(ORIGIN, null, 'hide'));
+    ok(await store.endSegment('completed'));
+    expect(store.snapshot()).toBeNull();
+
+    ok(await store.beginPass(ORIGIN, null, 'mark'));
+    await accept(1, 1);
+    ok(await store.endSegment('completed'));
+    expect(store.snapshot()?.blankMode).toBe('mark');
+    expect((await journalOnDisk()).blankMode).toBe('mark');
+  });
+
+  it('пометки «не пустая» пишутся в журнал и читаются дословно; мёртвые и повторные ключи вычищены', async () => {
+    const { store, accept, journalOnDisk } = await setup();
+    ok(await store.beginPass(ORIGIN, null, 'hide'));
+    await accept(1, 2);
+    ok(await store.endSegment('completed'));
+    ok(await store.beginPass(ORIGIN, null));
+    await accept(3, 4);
+    ok(await store.endSegment('completed'));
+
+    ok(
+      await store.setEdits(
+        { ...EMPTY_EDITS, notBlank: ['p02-s01-0002', 'p02-s01-0002', 'p09-s01-0001'] },
+        false,
+      ),
+    );
+
+    expect(store.snapshot()?.edits.notBlank).toEqual(['p02-s01-0002']);
+    expect((await journalOnDisk()).edits.notBlank).toEqual(['p02-s01-0002']);
+    // Та же пометка повторно — не правка: «сохранено» не снимается.
+    ok(await store.markSaved());
+    ok(await store.setEdits({ ...EMPTY_EDITS, notBlank: ['p02-s01-0002'] }, false));
+    expect(store.snapshot()?.saved).toBe(true);
   });
 });

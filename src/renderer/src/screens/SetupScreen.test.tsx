@@ -23,6 +23,7 @@ const READY: ScannerState = { kind: 'ready', scanner: INFO, options: OPTIONS, pa
 
 function makeSnapshot(scanner: ScannerState): Snapshot {
   return {
+    blankMode: 'hide',
     seq: 1,
     scanner,
     session: null,
@@ -38,9 +39,10 @@ function makeSnapshot(scanner: ScannerState): Snapshot {
 function stubApi() {
   const setScanParams = vi.fn(() => Promise.resolve(ok(undefined)));
   const recheckScanner = vi.fn(() => Promise.resolve(ok(undefined)));
-  const api = { setScanParams, recheckScanner } as unknown as Api;
+  const setBlankMode = vi.fn(() => Promise.resolve(ok(undefined)));
+  const api = { setScanParams, recheckScanner, setBlankMode } as unknown as Api;
   vi.stubGlobal('api', api);
-  return { setScanParams, recheckScanner };
+  return { setScanParams, recheckScanner, setBlankMode };
 }
 
 function renderSetup(
@@ -127,8 +129,13 @@ describe('SetupScreen', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Сменить' }));
     expect(onOpenDevice).toHaveBeenCalledTimes(1);
 
+    // Ряд «Пустые обороты» — настройка приложения, не устройства: доступен и без сканера (M4).
+    const blank = screen.getByRole('radiogroup', { name: 'Пустые обороты' });
+    expect(blank.getAttribute('aria-disabled')).toBeNull();
     for (const group of screen.getAllByRole('radiogroup')) {
-      expect(group.getAttribute('aria-disabled')).toBe('true');
+      if (group !== blank) {
+        expect(group.getAttribute('aria-disabled')).toBe('true');
+      }
     }
   });
 
@@ -183,6 +190,44 @@ describe('SetupScreen', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Сбросить параметры' }));
     expect(setScanParams).toHaveBeenCalledExactlyOnceWith(PARAMS);
+  });
+
+  it('ряд «Пустые обороты» показывает режим из снимка, клик шлёт команду, доступен без сканера (M4, R1)', () => {
+    const { setBlankMode, setScanParams } = stubApi();
+    const { view } = renderSetup({ kind: 'none' });
+
+    const group = screen.getByRole('radiogroup', { name: 'Пустые обороты' });
+    expect(group.getAttribute('aria-disabled')).toBeNull();
+    expect(
+      within(group).getByRole('radio', { name: 'Скрывать' }).getAttribute('aria-checked'),
+    ).toBe('true');
+    expect(within(group).getByRole('radio', { name: 'Помечать' }).getAttribute('title')).toBe(
+      'останутся, но с меткой',
+    );
+
+    fireEvent.click(within(group).getByRole('radio', { name: 'Оставлять' }));
+    expect(setBlankMode).toHaveBeenCalledExactlyOnceWith('keep');
+    expect(setScanParams).not.toHaveBeenCalled();
+
+    view.rerender(
+      <SetupScreen
+        snapshot={{ ...makeSnapshot({ kind: 'none' }), blankMode: 'keep' }}
+        launchFailure={null}
+        onStart={vi.fn()}
+        onOpenDevice={vi.fn()}
+      />,
+    );
+    expect(
+      within(group).getByRole('radio', { name: 'Оставлять' }).getAttribute('aria-checked'),
+    ).toBe('true');
+  });
+
+  it('«Сбросить параметры» возвращает и режим пустых оборотов к «Скрывать» (M4, R1)', () => {
+    const { setBlankMode } = stubApi();
+    renderSetup(READY, { snapshot: { ...makeSnapshot(READY), blankMode: 'mark' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Сбросить параметры' }));
+    expect(setBlankMode).toHaveBeenCalledExactlyOnceWith('hide');
   });
 
   it('отказ «нет бумаги» — плашка-предупреждение текстом кода, без префикса', () => {

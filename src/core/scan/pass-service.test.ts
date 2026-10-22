@@ -78,6 +78,7 @@ describe('служба прохода без сканера', () => {
       canAccept: false,
       storage: { incompatible: false, unsaved: false },
       notices: [],
+      blankMode: 'hide',
     });
   });
 
@@ -579,6 +580,7 @@ describe('служба прохода: правки редактора (M3, U3)'
     cuts: [1],
     names: ['', 'Договор'],
     divider: null,
+    notBlank: [],
   };
 
   it('правка видна в снимке и сборке, снимает «сохранено» и переживает перезапуск службы (AE1)', async () => {
@@ -854,6 +856,7 @@ describe('служба прохода: пакетное сохранение (M3
         cuts: [1],
         names: ['', ''],
         divider: null,
+        notBlank: [],
       },
       false,
     );
@@ -1062,5 +1065,20 @@ describe('служба прохода: пакетное сохранение (M3
       fail('sessionConflict', { reason: 'noSession' }),
     );
     expect(service.sessionId()).toBeNull();
+  });
+});
+
+describe('служба прохода: режим пустых оборотов (M4, U3)', () => {
+  it('принимается без сканера, уходит в снимок и помнится между открытиями службы', async () => {
+    const root = await makeTempDataRoot();
+    const service = await openPassService(root);
+    const seqBefore = service.snapshot().seq;
+
+    expect(service.snapshot().blankMode).toBe('hide');
+    expect(await service.setBlankMode('keep')).toEqual({ ok: true, value: undefined });
+    expect(service.snapshot().blankMode).toBe('keep');
+    expect(service.snapshot().seq).toBeGreaterThan(seqBefore);
+
+    expect((await openPassService(root)).snapshot().blankMode).toBe('keep');
   });
 });

@@ -27,7 +27,7 @@ async function seedSession(root: string, fronts: number, backs: number): Promise
   await writeFile(
     layout.journalFile,
     JSON.stringify({
-      version: 5,
+      version: 6,
       sessionId: SESSION,
       nextPass: 3,
       passes: passes.map((pass) => ({
@@ -45,6 +45,7 @@ async function seedSession(root: string, fronts: number, backs: number): Promise
       saved: false,
       edits: EMPTY_EDITS,
       assembled: null,
+      blankMode: 'keep',
     }),
   );
   for (const pass of passes) {

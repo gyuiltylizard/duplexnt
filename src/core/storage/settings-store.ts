@@ -1,7 +1,10 @@
 import { z } from 'zod';
 import {
+  BLANK_MODES,
+  DEFAULT_BLANK_MODE,
   fail,
   ok,
+  type BlankMode,
   type DomainError,
   type Result,
   type ScanParams,
@@ -36,7 +39,11 @@ import {
 // Версия 2 (M3, решение автора на приёмке): папка сохранения помнится между запусками. Файл
 // версии 1 читается и поднимается до 2; переписывается только при следующей записи.
 
-export const SETTINGS_VERSION = 2;
+//
+// Версия 3 (M4, R1): режим пустых оборотов помнится между запусками; файлы версий 1 и 2
+// читаются с режимом по умолчанию и переписываются только при следующей записи.
+
+export const SETTINGS_VERSION = 3;
 
 const settingsV1Schema = z.strictObject({
   version: z.literal(1),
@@ -46,31 +53,48 @@ const settingsV1Schema = z.strictObject({
   params: scanParamsSchema.nullable(),
 });
 
-const settingsSchema = settingsV1Schema.extend({
-  version: z.literal(SETTINGS_VERSION),
+const settingsV2Schema = settingsV1Schema.extend({
+  version: z.literal(2),
   /** Папка, выбранная последней в модалке `save`; `null` — не выбирали, «Документы». */
   saveFolder: z.string().min(1).nullable(),
+});
+
+const settingsSchema = settingsV2Schema.extend({
+  version: z.literal(SETTINGS_VERSION),
+  /** Режим пустых оборотов, выбранный последним (M4, R1); решение приложения, не устройства. */
+  blankMode: z.enum(BLANK_MODES),
 });
 
 export interface Settings {
   readonly scanner: StoredScanner | null;
   readonly params: ScanParams | null;
   readonly saveFolder: string | null;
+  readonly blankMode: BlankMode;
 }
 
-/** Разбор файла настроек: версия 1 поднимается до 2 без папки. */
+/** Разбор файла настроек: версия 1 поднимается до 2 без папки, версия 2 — до 3 с режимом по умолчанию. */
 function parseSettings(bytes: Uint8Array): VersionedRead<Settings> {
-  if (readVersionMarker(bytes) === 1) {
+  const marker = readVersionMarker(bytes);
+  if (marker === 1) {
     const v1 = parseVersioned(bytes, settingsV1Schema, 1);
-    return v1.kind === 'ok' ? { kind: 'ok', value: { ...v1.value, saveFolder: null } } : v1;
+    return v1.kind === 'ok'
+      ? { kind: 'ok', value: { ...v1.value, saveFolder: null, blankMode: DEFAULT_BLANK_MODE } }
+      : v1;
+  }
+  if (marker === 2) {
+    const v2 = parseVersioned(bytes, settingsV2Schema, 2);
+    return v2.kind === 'ok'
+      ? { kind: 'ok', value: { ...v2.value, blankMode: DEFAULT_BLANK_MODE } }
+      : v2;
   }
   return parseVersioned(bytes, settingsSchema, SETTINGS_VERSION);
 }
 
-const settingsOf = ({ scanner, params, saveFolder }: Settings): Settings => ({
+const settingsOf = ({ scanner, params, saveFolder, blankMode }: Settings): Settings => ({
   scanner,
   params,
   saveFolder,
+  blankMode,
 });
 
 export interface SettingsStore {
@@ -83,6 +107,8 @@ export interface SettingsStore {
    */
   rememberScanner(scanner: StoredScanner): Promise<Result<void>>;
   setParams(params: ScanParams): Promise<Result<void>>;
+  /** Режим пустых оборотов (M4, R1): помнится между запусками. */
+  setBlankMode(mode: BlankMode): Promise<Result<void>>;
   /** Папка, выбранная в модалке `save` (M3): предлагается при следующем запуске. */
   rememberSaveFolder(folder: string): Promise<Result<void>>;
 }
@@ -95,7 +121,12 @@ export async function openSettingsStore(
   const io = ioOf(options);
   const { fs } = io;
 
-  let settings: Settings = { scanner: null, params: null, saveFolder: null };
+  let settings: Settings = {
+    scanner: null,
+    params: null,
+    saveFolder: null,
+    blankMode: DEFAULT_BLANK_MODE,
+  };
   let notice: SettingsStore['notice'] = null;
   const readSettings = async (): Promise<VersionedRead<Settings>> => {
     try {
@@ -152,6 +183,7 @@ export async function openSettingsStore(
     get: () => settings,
     rememberScanner: (scanner) => update({ scanner }),
     setParams: (params) => update({ params }),
+    setBlankMode: (blankMode) => update({ blankMode }),
     rememberSaveFolder: (saveFolder) => update({ saveFolder }),
   };
 }

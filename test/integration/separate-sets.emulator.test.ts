@@ -440,7 +440,7 @@ describe('раздельные наборы — полный путь через
     expect(snapshot.assembly?.documents).toEqual([{ name: '', start: 0, count: 5 }]);
     const journal = await journalOnDisk(root);
     expect(journal).toMatchObject({
-      version: 5,
+      version: 6,
       assembled: null,
       edits: { divider: null, cuts: [], names: [''] },
     });

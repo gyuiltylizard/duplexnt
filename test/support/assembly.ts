@@ -54,6 +54,7 @@ export const sessionOf = (
   saved: false,
   edits: EMPTY_EDITS,
   assembled: null,
+  blankMode: 'keep',
   passes,
   ...extra,
 });

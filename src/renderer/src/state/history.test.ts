@@ -186,6 +186,7 @@ describe('подпись ленты и состояние снимка', () => {
     saved: false,
     edits: EMPTY_EDITS,
     assembled: null,
+    blankMode: 'keep',
     passes: [pass(1, ['f1', 'f2']), pass(2, ['b1', 'b2'])],
     ...extra,
   });

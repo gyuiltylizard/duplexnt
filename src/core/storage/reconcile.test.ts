@@ -51,7 +51,7 @@ const pass = (number: number, segments: ReturnType<typeof segment>[], extra: obj
   ...extra,
 });
 const journalOf = (passes: ReturnType<typeof pass>[], extra: object = {}) => ({
-  version: 5,
+  version: 6,
   sessionId: SESSION,
   nextPass: passes.length + 1,
   passes,
@@ -60,6 +60,7 @@ const journalOf = (passes: ReturnType<typeof pass>[], extra: object = {}) => ({
   saved: false,
   edits: EMPTY_EDITS,
   assembled: null as readonly string[] | null,
+  blankMode: 'keep' as const,
   ...extra,
 });
 function omit<T extends object, K extends keyof T>(value: T, ...keys: K[]): Omit<T, K> {
@@ -71,9 +72,9 @@ function omit<T extends object, K extends keyof T>(value: T, ...keys: K[]): Omit
 
 /** Журнал версии 4 (M3.5): тот же состав без записи сборки и границы наборов. */
 const journalV4Of = (passes: ReturnType<typeof pass>[], extra: object = {}) => ({
-  ...omit(journalOf(passes, extra), 'assembled'),
+  ...omit(journalOf(passes, extra), 'assembled', 'blankMode'),
   version: 4,
-  edits: omit(EMPTY_EDITS, 'divider'),
+  edits: omit(EMPTY_EDITS, 'divider', 'notBlank'),
 });
 
 /** Журнал версии 3 (M3): тот же состав, роль прохода — по позиции, якоря нет. */
@@ -154,7 +155,7 @@ describe('сверка при запуске: таблица плана', () => 
 
   it('маркер версии новее понятного → ничего не трогается; режим отказа (AE9)', async () => {
     const { root } = await seed(
-      { ...journalOf([pass(1, [segment(1, 'running', 2)])]), version: 6 },
+      { ...journalOf([pass(1, [segment(1, 'running', 2)])]), version: 7 },
       [...pagesOfFirstSegment(3)],
     );
     const before = await dirSnapshot(root);
@@ -184,7 +185,7 @@ describe('сверка при запуске: таблица плана', () => 
     expect(session).toMatchObject({ backsDeclined: false, saved: false });
     expect(session?.passes[0]).toMatchObject({ rotate180: false, kind: 'fronts', after: null });
     const journal = await journalOnDisk(layout);
-    expect(journal.version).toBe(5);
+    expect(journal.version).toBe(6);
     expect(journal).toMatchObject({
       backsDeclined: false,
       saved: false,
@@ -209,7 +210,7 @@ describe('сверка при запуске: таблица плана', () => 
 
     expect(session).toMatchObject({ saved: true, edits: EMPTY_EDITS });
     const journal = await journalOnDisk(layout);
-    expect(journal).toMatchObject({ version: 5, saved: true, edits: EMPTY_EDITS });
+    expect(journal).toMatchObject({ version: 6, saved: true, edits: EMPTY_EDITS });
 
     const before = await dirSnapshot(root);
     await reconciled(root);
@@ -226,7 +227,7 @@ describe('сверка при запуске: таблица плана', () => 
 
     expect(session).toMatchObject({ saved: true, edits: EMPTY_EDITS, assembled: null });
     const journal = await journalOnDisk(layout);
-    expect(journal).toMatchObject({ version: 5, saved: true, edits: EMPTY_EDITS, assembled: null });
+    expect(journal).toMatchObject({ version: 6, saved: true, edits: EMPTY_EDITS, assembled: null });
 
     const before = await dirSnapshot(root);
     await reconciled(root);
@@ -252,7 +253,7 @@ describe('сверка при запуске: таблица плана', () => 
       [3, 'added', null],
     ]);
     const journal = await journalOnDisk(layout);
-    expect(journal.version).toBe(5);
+    expect(journal.version).toBe(6);
     expect(rolesOf(journal.passes)).toEqual(rolesOf(session?.passes ?? []));
     expect(journal.passes[1]).toMatchObject({ rotate180: true });
 
@@ -306,6 +307,7 @@ describe('сверка при запуске: таблица плана', () => 
       cuts: [1],
       names: ['', 'Оборот'],
       divider: null,
+      notBlank: [],
     };
     const { root } = await seed(
       journalOf([pass(1, [segment(1, 'completed', 1)]), pass(2, [segment(1, 'completed', 1)])], {
@@ -338,6 +340,7 @@ describe('сверка при запуске: таблица плана', () => 
           cuts: [],
           names: ['Договор'],
           divider: null,
+          notBlank: [],
         },
       }),
       pagesOfFirstSegment(2),
@@ -352,6 +355,7 @@ describe('сверка при запуске: таблица плана', () => 
       cuts: [],
       names: ['Договор'],
       divider: null,
+      notBlank: [],
     };
     expect(session?.edits).toEqual(expected);
     expect((await journalOnDisk(layout)).edits).toEqual(expected);
@@ -383,7 +387,7 @@ describe('сверка при запуске: таблица плана', () => 
     const { root, layout } = await seed(
       {
         ...journalOf([pass(1, [segment(1, 'running', 1)])], { deletions: ['p01-s02-'] }),
-        version: 6,
+        version: 7,
       },
       [pageName(1, 1, 1), pageName(1, 2, 1)],
     );
@@ -464,6 +468,8 @@ describe('сверка при запуске: таблица плана', () => 
       const { notices, passes, keys, lost, store } = await reconciled(root);
 
       expect(notices).toContain('journalRebuilt');
+      // Пересобранный журнал — режим «оставлять»: параметры сессии неизвестны (M4, R8).
+      expect(store.snapshot()?.blankMode).toBe('keep');
       expect(passes.map((it) => [it.number, it.state, it.paramsKnown])).toEqual([
         [1, 'interrupted', false],
         [2, 'interrupted', false],
@@ -1129,4 +1135,28 @@ describe('сверка при запуске: сбой на каждом шаг�
     },
     120_000,
   );
+});
+
+describe('сверка при запуске: режим пустых оборотов (M4, R8)', () => {
+  it('журнал версии 5 переписывается текущей версией: режим «оставлять», пометок нет', async () => {
+    const { root, layout } = await seed(
+      {
+        ...omit(journalOf([pass(1, [segment(1, 'completed', 2)])], { saved: true }), 'blankMode'),
+        version: 5,
+        edits: omit(EMPTY_EDITS, 'notBlank'),
+      },
+      pagesOfFirstSegment(2),
+    );
+
+    const { session, notices } = await reconciled(root);
+
+    expect(notices).toEqual([]);
+    expect(session).toMatchObject({ saved: true, blankMode: 'keep', edits: EMPTY_EDITS });
+    const journal = await journalOnDisk(layout);
+    expect(journal).toMatchObject({ version: 6, blankMode: 'keep', edits: EMPTY_EDITS });
+
+    const before = await dirSnapshot(root);
+    await reconciled(root);
+    expect(await dirSnapshot(root)).toEqual(before);
+  });
 });
