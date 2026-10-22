@@ -3,9 +3,9 @@ import { readdirSync } from 'node:fs';
 import * as http from 'node:http';
 import * as https from 'node:https';
 import type { AddressInfo } from 'node:net';
-import { ET_3850, fixturePath, readFixture } from '../support/fixtures.ts';
+import { ET_3850, fixturePath, readFixture, scanFixture } from '../support/fixtures.ts';
 import { createSelfSignedCert } from '../support/self-signed-cert.ts';
-import { scenarioOf, type Scenario } from './scenarios.ts';
+import { scenarioOf, type Scenario, type TrayEntry } from './scenarios.ts';
 
 // Эмулятор сканера eSCL (план M1, U9): устройство для тестов и ручного смоука без бумаги.
 // Говорит по настоящему HTTP(S) на loopback, отдаёт фикстуры репозитория и ведёт задание
@@ -41,8 +41,8 @@ interface Job {
   lastAccessAt: number;
   notReadyLeft: number;
   transferring: boolean;
-  /** Остаток лотка этого задания — номера фикстур (M2, U4); `null` — общий лоток `sheets`. */
-  trayLeft: number[] | null;
+  /** Остаток лотка этого задания — листы (M2, U4; имена сканов — M4); `null` — общий лоток `sheets`. */
+  trayLeft: TrayEntry[] | null;
 }
 
 export interface EmulatorExchange {
@@ -89,7 +89,7 @@ export interface Emulator {
    * Перезарядка лотка (M2, U4): кладёт содержимое для следующего задания, НЕ сбрасывая ни
    * сценарий, ни список заданий — брошенные задания остаются видны. Только при `trays`.
    */
-  reloadTray(tray: readonly number[]): void;
+  reloadTray(tray: readonly TrayEntry[]): void;
   /** «Бумагу вынули»: состояние замятия снято. */
   clearJam(): void;
   close(): Promise<void>;
@@ -112,6 +112,30 @@ function pageFixtures(): Buffer[] {
   return cachedPages;
 }
 
+// Настоящие сканы ET-3850 (M4, U1) читаются по имени при первом обращении и держатся в памяти.
+const cachedScans = new Map<string, Buffer>();
+
+function scanBody(name: string): Buffer {
+  let body = cachedScans.get(name);
+  if (body === undefined) {
+    body = scanFixture(name);
+    cachedScans.set(name, body);
+  }
+  return body;
+}
+
+/** Лотки сценария с проверкой имён сканов: неизвестное имя — ошибка при загрузке, не при подаче. */
+function traysOf(trays: readonly (readonly TrayEntry[])[]): TrayEntry[][] {
+  for (const tray of trays) {
+    for (const entry of tray) {
+      if (typeof entry === 'string') {
+        scanBody(entry);
+      }
+    }
+  }
+  return trays.map((tray) => [...tray]);
+}
+
 export async function startEmulator(options: EmulatorOptions = {}): Promise<Emulator> {
   const basePath = '/eSCL';
   const collection = `${basePath}/ScanJobs`;
@@ -120,7 +144,7 @@ export async function startEmulator(options: EmulatorOptions = {}): Promise<Emul
   const pages = pageFixtures();
 
   let scenario = scenarioOf(options.scenario);
-  let trayQueue = (scenario.trays ?? []).map((tray) => [...tray]);
+  let trayQueue = traysOf(scenario.trays ?? []);
   let sheetsUsed = 0;
   let faultFired = false;
   let busyPostsLeft = scenario.busyPosts;
@@ -417,8 +441,9 @@ export async function startEmulator(options: EmulatorOptions = {}): Promise<Emul
         socket.once('close', done);
       });
 
-    // Лист считается поданным; из лотка задания уходит очередная фикстура (M2, U4).
-    const fixtureNumber = job.trayLeft === null ? sheet : (job.trayLeft.shift() ?? sheet);
+    // Лист считается поданным; из лотка задания уходит очередной лист (M2, U4): номер
+    // синтетической страницы или имя настоящего скана (M4, U1).
+    const entry: TrayEntry = job.trayLeft === null ? sheet : (job.trayLeft.shift() ?? sheet);
     sheetsUsed += 1;
     job.transferring = true;
     try {
@@ -430,7 +455,10 @@ export async function startEmulator(options: EmulatorOptions = {}): Promise<Emul
         }
       }
 
-      const body = pages[(fixtureNumber - 1) % pages.length] ?? Buffer.alloc(0);
+      const body =
+        typeof entry === 'string'
+          ? scanBody(entry)
+          : (pages[(entry - 1) % pages.length] ?? Buffer.alloc(0));
       const half = body.subarray(0, Math.floor(body.byteLength / 2));
       const chunkedHead = (): void => {
         exchange.status = 200;
@@ -570,7 +598,7 @@ export async function startEmulator(options: EmulatorOptions = {}): Promise<Emul
     receivedSettings,
     load(next = {}) {
       scenario = scenarioOf(next);
-      trayQueue = (scenario.trays ?? []).map((tray) => [...tray]);
+      trayQueue = traysOf(scenario.trays ?? []);
       sheetsUsed = 0;
       faultFired = false;
       busyPostsLeft = scenario.busyPosts;
@@ -582,7 +610,7 @@ export async function startEmulator(options: EmulatorOptions = {}): Promise<Emul
       if (scenario.trays === null) {
         throw new Error('reloadTray — только при сценарии с лотками по заданиям (trays)');
       }
-      trayQueue.push([...tray]);
+      trayQueue.push(...traysOf([tray]));
     },
     clearJam() {
       jam = false;
