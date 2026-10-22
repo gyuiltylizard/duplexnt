@@ -37,3 +37,59 @@ export interface BlankSummary {
   /** Страниц прохода оборотов без оценки при режиме ≠ «Оставлять»; запись ждёт нуля. */
   readonly pending: number;
 }
+
+/** Что нужно знать о странице, чтобы поставить флаг (R10, KTD9). */
+export interface BlankFlagInput {
+  /** Режим сессии. */
+  readonly mode: BlankMode;
+  /** Страница прохода оборотов — по роли прохода, не по позиции. */
+  readonly ofBacks: boolean;
+  /** Файла нет: не оценивается, не пуста и оценки не ждёт. */
+  readonly lost: boolean;
+  /** Вердикт детектора; `undefined` — ещё не пришёл. */
+  readonly verdict: boolean | undefined;
+  /** Пользователь пометил «это не пустая страница» (`edits.notBlank`). */
+  readonly notBlank: boolean;
+  /** Лента в режиме раздельных наборов: скрытие не действует, только метка. */
+  readonly inSets: boolean;
+}
+
+/**
+ * Флаг страницы или «ждёт оценки» — одно правило на ядро и зеркало renderer'а (R10, KTD4, KTD9):
+ * при «Оставлять», у лиц, добавленных и потерянных флага нет; пометка «не пустая» снимает и
+ * флаг, и ожидание — решение пользователя важнее оценки; без вердикта — ожидание; «Скрывать»
+ * в режиме наборов даёт метку, не скрытие.
+ */
+export function blankFlagOf(page: BlankFlagInput): BlankFlag | 'pending' {
+  if (page.mode === 'keep' || !page.ofBacks || page.lost || page.notBlank) {
+    return null;
+  }
+  if (page.verdict === undefined) {
+    return 'pending';
+  }
+  if (!page.verdict) {
+    return null;
+  }
+  return page.mode === 'hide' && !page.inSets ? 'hidden' : 'marked';
+}
+
+/** Сводка по флагам видимой ленты: найдено (скрытые и помеченные), скрыто, ждут. */
+export function blankSummaryOf(
+  mode: BlankMode,
+  flags: readonly (BlankFlag | 'pending')[],
+): BlankSummary {
+  let found = 0;
+  let hidden = 0;
+  let pending = 0;
+  for (const flag of flags) {
+    if (flag === 'pending') {
+      pending += 1;
+    } else if (flag !== null) {
+      found += 1;
+      if (flag === 'hidden') {
+        hidden += 1;
+      }
+    }
+  }
+  return { mode, found, hidden, pending };
+}

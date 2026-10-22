@@ -40,9 +40,12 @@ export {
 
 export {
   BLANK_MODES,
+  blankFlagOf,
+  blankSummaryOf,
   DEFAULT_BLANK_MODE,
   NO_VERDICTS,
   type BlankFlag,
+  type BlankFlagInput,
   type BlankMode,
   type BlankSummary,
   type BlankVerdicts,

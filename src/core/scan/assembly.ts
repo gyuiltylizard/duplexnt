@@ -1,4 +1,6 @@
 import {
+  blankFlagOf,
+  blankSummaryOf,
   NO_VERDICTS,
   passesByKind,
   type AssembledPage,
@@ -443,29 +445,22 @@ export function assembleSession(
       .map((key, index) => [key, index]),
   );
 
+  // Флаг пустого оборота — общее правило с зеркалом renderer'а (`blankFlagOf`); ожидание
+  // считается в сводку, в ленте такая страница обычная.
   const { blankMode } = session;
   const notBlank = new Set(edits.notBlank);
-  let blankFound = 0;
-  let blankHidden = 0;
-  let blankPending = 0;
-  const blankFlagOf = (page: BasePage): BlankFlag => {
-    if (blankMode === 'keep' || !page.ofBacks || page.lost) {
-      return null;
-    }
-    const verdict = blank.get(page.key);
-    if (verdict === undefined) {
-      blankPending += 1;
-      return null;
-    }
-    if (!verdict || notBlank.has(page.key)) {
-      return null;
-    }
-    blankFound += 1;
-    if (blankMode === 'hide' && sets === null) {
-      blankHidden += 1;
-      return 'hidden';
-    }
-    return 'marked';
+  const blankFlags: (BlankFlag | 'pending')[] = [];
+  const flagOf = (page: BasePage): BlankFlag => {
+    const flag = blankFlagOf({
+      mode: blankMode,
+      ofBacks: page.ofBacks,
+      lost: page.lost,
+      verdict: blank.get(page.key),
+      notBlank: notBlank.has(page.key),
+      inSets: sets !== null,
+    });
+    blankFlags.push(flag);
+    return flag === 'pending' ? null : flag;
   };
 
   const order: AssembledPage[] = visible.flatMap((key, index) => {
@@ -493,7 +488,7 @@ export function assembleSession(
         angle: pageAngle(edits.rotations[key], page.ofBacks && base.rotateBacks),
         lost: page.lost,
         addedSet: base.addedSetOf.get(key) ?? null,
-        blank: blankFlagOf(page),
+        blank: flagOf(page),
       },
     ];
   });
@@ -512,6 +507,6 @@ export function assembleSession(
       backsDeclined: session.backsDeclined,
       mismatch: base.mode === 'sets',
     },
-    blank: { mode: blankMode, found: blankFound, hidden: blankHidden, pending: blankPending },
+    blank: blankSummaryOf(blankMode, blankFlags),
   };
 }

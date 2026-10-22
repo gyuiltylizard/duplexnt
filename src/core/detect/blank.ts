@@ -1,4 +1,5 @@
 import sharp from 'sharp';
+import { hasJpegMarkers } from '../escl/jpeg-markers';
 import { decodePixelLimit } from '../storage/thumbnails';
 
 // Детектор пустых страниц (план M4, U2, KTD2; спека → «Пустые обороты»): доля «чернильных»
@@ -27,7 +28,7 @@ export const MARGIN_RATIO = 0.04;
 /** Белое бумаги — яркость, ниже которой лежит эта доля пикселей обрезанной области. */
 export const PAPER_WHITE_PERCENTILE = 0.9;
 
-/** «Чернильный» пиксель темнее белого бумаги хотя бы на столько уровней из 255. */
+/** «Чернильный» пиксель темнее белого бумаги больше чем на столько уровней из 255. */
 export const INK_DELTA = 40;
 
 /** Порог доли чернильных пикселей: ниже — пусто. Ориентир до калибровки. */
@@ -83,18 +84,6 @@ export function inkRatioOf({ data, width, height }: GrayImage): number {
 /** Вердикт по доле: `null` (не оценена или сбой) — не пусто. */
 export function isBlank(ratio: number | null): boolean {
   return ratio !== null && ratio < BLANK_THRESHOLD;
-}
-
-// Тот же признак, что у миниатюр и приёма страницы: начало `SOI`, конец `EOI`.
-function hasJpegMarkers(bytes: Uint8Array): boolean {
-  const { byteLength: length } = bytes;
-  return (
-    length >= 4 &&
-    bytes[0] === 0xff &&
-    bytes[1] === 0xd8 &&
-    bytes[length - 2] === 0xff &&
-    bytes[length - 1] === 0xd9
-  );
 }
 
 /**

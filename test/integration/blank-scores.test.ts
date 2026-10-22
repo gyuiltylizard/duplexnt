@@ -215,6 +215,31 @@ describe('оценки пустых страниц: детектор, карта
     expect(calls).toEqual([]);
   });
 
+  it('временный сбой чтения страницы — вердикт «не пусто» до перезапуска, кэша нет: следующее открытие оценит заново', async () => {
+    const { store, layout, blankDir } = await sessionWith([BLANK()]);
+    const failing: BlankScoreSource = {
+      pageInfo: (key) => store.pageInfo(key),
+      readPage: () =>
+        Promise.resolve({
+          ok: false,
+          error: { code: 'storageFailed', details: { reason: 'EBUSY' } },
+        }),
+    };
+    const { detector, calls } = counting();
+
+    const scores = createBlankScores(layout.derivedDir, failing, detector);
+    expect(await scores.ensure(B1)).toBe(true);
+
+    expect(verdictsOf(scores)).toEqual({ [B1]: false });
+    expect(calls).toEqual([]);
+    expect(await readdir(blankDir).catch(() => [])).toEqual([]);
+    // «Перезапуск»: чтение снова работает — страница оценивается по-настоящему.
+    const again = createBlankScores(layout.derivedDir, store, detector);
+    expect(await again.ensure(B1)).toBe(true);
+    expect(verdictsOf(again)).toEqual({ [B1]: true });
+    expect(calls).toHaveLength(1);
+  });
+
   it('страница, отброшенная пока шла оценка, вердикта не получает и в кэше не остаётся', async () => {
     const { store, layout, blankDir } = await sessionWith([BLANK()]);
     let asked = 0;

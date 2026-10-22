@@ -350,10 +350,10 @@ describe('зеркало с флагами пустых оборотов про�
 
   it.each<[string, SessionSnapshot]>([
     [
-      'пары: пометка «не пустая» и удаление',
+      'пары: пометка «не пустая» (с вердиктом и без), удаление',
       sessionOf(pairs, {
         blankMode: 'hide',
-        edits: { ...EMPTY_EDITS, notBlank: [B1], deleted: [B3] },
+        edits: { ...EMPTY_EDITS, notBlank: [B1, B3], deleted: [B2] },
       }),
     ],
     [

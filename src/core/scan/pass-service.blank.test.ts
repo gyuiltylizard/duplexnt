@@ -231,6 +231,26 @@ describe('служба прохода: оценки пустых оборото�
     });
   });
 
+  it('детектор бросил исключение — сбой оценки: не пусто, не ждёт, в кэше null, снимок без необработанного отказа', async () => {
+    const root = await makeTempDataRoot();
+    await seedSession(root, 1, 1, 'hide');
+    const service = await openPassService(root, {
+      blankDetector: () => Promise.reject(new Error('детектор упал')),
+    });
+    await until(() => service.snapshot().assembly?.blank.pending === 0);
+
+    expect(service.snapshot().assembly?.blank).toEqual({
+      mode: 'hide',
+      found: 0,
+      hidden: 0,
+      pending: 0,
+    });
+    expect(JSON.parse(await readFile(join(blankDir(root), `${B(1)}.json`), 'utf8'))).toEqual({
+      v: BLANK_DETECTOR_VERSION,
+      ratio: null,
+    });
+  });
+
   it('запись при незавершённых оценках — blankPending с числом, файлов нет; после — PDF без скрытых', async () => {
     const root = await makeTempDataRoot();
     const folder = await folderIn(root);

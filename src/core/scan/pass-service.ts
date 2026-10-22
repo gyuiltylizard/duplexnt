@@ -2,7 +2,6 @@ import { setTimeout as delay } from 'node:timers/promises';
 import {
   fail,
   ok,
-  passesByKind,
   type AssembledPage,
   type BlankMode,
   type DomainError,
@@ -60,6 +59,7 @@ import { ioOf, storageFailure } from '../storage/storage-fs';
 import { pagePixelLimit } from '../storage/thumbnails';
 import { openUnclosedJobs, type UnclosedJobs } from '../storage/unclosed-jobs';
 import { assembleSession } from './assembly';
+import { blankRefusal, pagesToScore, shownSpansOf } from './blank-flow';
 
 // Служба прохода (план M1, U17): связывает клиент сканера, хранилище сессии, настройки и
 // незакрытые задания в один сценарий и выдаёт снимок, из которого интерфейс выводит экран
@@ -271,27 +271,24 @@ export function createPassService(
   };
 
   // Оценка пустых страниц — только страницы прохода оборотов при режиме сессии ≠ «Оставлять»
-  // (KTD3, KTD9); приход вердикта — новый снимок. Потерянные не оцениваются.
+  // (`pagesToScore`, KTD3, KTD9); приход вердикта — новый снимок. Оценка не бросает (сбой —
+  // вердикт «не пусто»), но фоновая цепочка всё равно не остаётся без обработчика: иначе
+  // необработанный отказ в main.
   const detectBlank = (key: string): void => {
-    void blank.ensure(key).then((changed) => {
-      if (changed) {
-        notify();
-      }
-    });
+    blank.ensure(key).then(
+      (changed) => {
+        if (changed) {
+          notify();
+        }
+      },
+      () => undefined,
+    );
   };
   const detectsBlank = (kind: PassKind): boolean =>
     kind === 'backs' && store.snapshot()?.blankMode !== 'keep';
   // При открытии: страницы оборотов без кэша считаются в фоне, лента до них — с `pending`.
-  {
-    const session = store.snapshot();
-    const backs = passesByKind(session?.passes ?? [], (pass) => pass.pages.length > 0).backs;
-    if (backs !== null && detectsBlank(backs.kind)) {
-      for (const page of backs.pages) {
-        if (!page.lost) {
-          detectBlank(page.key);
-        }
-      }
-    }
+  for (const page of pagesToScore(store.snapshot())) {
+    detectBlank(page.key);
   }
 
   // Запомненные параметры — для рядов настройки, пока сканер не подтверждён (S2–S4).
@@ -391,34 +388,23 @@ export function createPassService(
     if (report.mode === 'sets') {
       return conflict('notAssembled');
     }
-    // Оценки ещё идут: файл без них молча унёс бы пустые обороты в документ (M4, KTD4).
-    if (blanks.pending > 0) {
-      return { ok: false, error: sessionConflict('blankPending', { pending: blanks.pending }) };
-    }
     if (order.length === 0) {
       return conflict('nothingToSave');
     }
     // «Один файл» не смотрит на границы (R15): разрезы и имена в журнале остаются. Скрытые
     // пустые обороты в файл не идут (M4, R10): документы режутся по полной ленте, пишутся без них.
-    const shown = (pages: readonly AssembledPage[]): AssembledPage[] =>
-      pages.filter((page) => page.blank !== 'hidden');
-    const spans = (
+    const spans = shownSpansOf(
       request.mode === 'single'
         ? [order]
-        : documents.map((doc) => order.slice(doc.start, doc.start + doc.count))
-    ).map(shown);
+        : documents.map((doc) => order.slice(doc.start, doc.start + doc.count)),
+    );
     if (request.names.length !== spans.length) {
       return fail('invalidInput', { field: 'names', problem: 'count' });
     }
-    if (spans.every((span) => span.length === 0)) {
-      return conflict('nothingToSave');
-    }
-    const emptyDocuments = spans.flatMap((span, index) => (span.length === 0 ? [index + 1] : []));
-    if (emptyDocuments.length > 0) {
-      return {
-        ok: false,
-        error: sessionConflict('documentBlank', { documents: emptyDocuments.join(',') }),
-      };
+    // Оценки ещё идут или документ из одних скрытых — отказ до записи (M4, KTD4).
+    const refusedByBlank = blankRefusal(blanks, spans);
+    if (refusedByBlank !== null) {
+      return refusedByBlank;
     }
 
     // Новый пакет забывает прежний незавершённый: повтор относится только к последнему.
@@ -959,11 +945,7 @@ export async function openPassService(
     options.blankDetector ?? blankRatio,
     options,
   );
-  const session = store.snapshot();
-  if (session !== null && session.blankMode !== 'keep') {
-    const backs = passesByKind(session.passes, (pass) => pass.pages.length > 0).backs;
-    await blank.load((backs?.pages ?? []).map((page) => page.key));
-  }
+  await blank.load(pagesToScore(store.snapshot()).map((page) => page.key));
   return createPassService(
     {
       store,

@@ -1,10 +1,13 @@
 import {
+  blankFlagOf,
+  blankSummaryOf,
   EMPTY_EDITS,
   NO_VERDICTS,
   sameEdits,
   type AssembledDocument,
   type AssembledPage,
   type AssemblyMode,
+  type BlankFlag,
   type BlankSummary,
   type BlankVerdicts,
   type PassSnapshot,
@@ -46,9 +49,8 @@ interface MirrorPage extends Omit<AssembledPage, 'side' | 'sheet' | 'blank'> {
 }
 
 /**
- * Флаги пустых оборотов поверх ленты — как ядро (M4, R10, KTD4, KTD9): только страницы прохода
- * оборотов, не потерянные, при режиме ≠ «Оставлять»; без вердикта — ожидание; пометка «не
- * пустая» снимает флаг; в режиме наборов «Скрывать» даёт метку, не скрытие.
+ * Флаги пустых оборотов поверх ленты — тем же правилом `blankFlagOf`, что и ядро (M4, R10,
+ * KTD4, KTD9); зеркало добавляет только сторону по проходу (`ofBacks`) и режим наборов.
  */
 function withBlankFlags(
   session: SessionSnapshot,
@@ -56,31 +58,21 @@ function withBlankFlags(
   sets: SetsLayout | null,
   blank: BlankVerdicts,
 ): { readonly order: AssembledPage[]; readonly summary: BlankSummary } {
-  const mode = session.blankMode;
   const notBlank = new Set(session.edits.notBlank);
-  let found = 0;
-  let hidden = 0;
-  let pending = 0;
+  const flags: (BlankFlag | 'pending')[] = [];
   const order = pages.map(({ ofBacks, ...page }): AssembledPage => {
-    if (mode === 'keep' || !ofBacks || page.lost) {
-      return { ...page, blank: null };
-    }
-    const verdict = blank.get(page.key);
-    if (verdict === undefined) {
-      pending += 1;
-      return { ...page, blank: null };
-    }
-    if (!verdict || notBlank.has(page.key)) {
-      return { ...page, blank: null };
-    }
-    found += 1;
-    if (mode === 'hide' && sets === null) {
-      hidden += 1;
-      return { ...page, blank: 'hidden' };
-    }
-    return { ...page, blank: 'marked' };
+    const flag = blankFlagOf({
+      mode: session.blankMode,
+      ofBacks,
+      lost: page.lost,
+      verdict: blank.get(page.key),
+      notBlank: notBlank.has(page.key),
+      inSets: sets !== null,
+    });
+    flags.push(flag);
+    return { ...page, blank: flag === 'pending' ? null : flag };
   });
-  return { order, summary: { mode, found, hidden, pending } };
+  return { order, summary: blankSummaryOf(session.blankMode, flags) };
 }
 
 /** Блоки добавленных наборов — по якорю, без якоря в конец; группа — группа якоря. */

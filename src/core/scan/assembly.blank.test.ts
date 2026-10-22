@@ -93,6 +93,14 @@ describe('сборка: флаги пустых оборотов (M4, R10)', () 
     expect(assembly.hasEdits).toBe(true);
   });
 
+  it('пометка «не пустая» без вердикта: страница не ждёт оценки — решение пользователя важнее', () => {
+    const session = pairs('hide', { edits: { ...EMPTY_EDITS, notBlank: [B(1)] } });
+
+    const assembly = assembleSession(session, verdictsOf([], [B(2), B(3)]));
+    expect(assembly.order.every((page) => page.blank === null)).toBe(true);
+    expect(assembly.blank).toEqual({ mode: 'hide', found: 0, hidden: 0, pending: 0 });
+  });
+
   it('режим раздельных наборов: «Скрывать» даёт метку, не скрытие; «Помечать» — метку', () => {
     const sets = (mode: BlankMode) => sessionOf([passOf(1, 3), passOf(2, 2)], { blankMode: mode });
     const verdicts = verdictsOf([B(1)], [B(2)]);

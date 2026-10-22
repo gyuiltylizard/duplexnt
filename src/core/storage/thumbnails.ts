@@ -2,6 +2,7 @@ import { join } from 'node:path';
 import sharp from 'sharp';
 import { fail, ok, type Result } from '@shared';
 import type { InputCaps } from '../escl/capabilities';
+import { hasJpegMarkers } from '../escl/jpeg-markers';
 import { REGION_UNITS_PER_INCH } from '../escl/region';
 import { writeFileAtomic } from './atomic-file';
 import { pageFileName, thumbsDirIn } from './layout';
@@ -77,18 +78,6 @@ export interface Thumbnails {
 type FailureReason = 'notJpeg' | 'tooLarge' | 'decode';
 const failed = (reason: FailureReason): Result<never> => fail('thumbnailFailed', { reason });
 const UNAVAILABLE = fail('pageUnavailable', { reason: 'unknown' });
-
-// Тот же признак, что при получении страницы (./../escl/scan-job.ts): начало `SOI`, конец `EOI`.
-function hasJpegMarkers(bytes: Uint8Array): boolean {
-  const { byteLength: length } = bytes;
-  return (
-    length >= 4 &&
-    bytes[0] === 0xff &&
-    bytes[1] === 0xd8 &&
-    bytes[length - 2] === 0xff &&
-    bytes[length - 1] === 0xd9
-  );
-}
 
 async function render(source: Uint8Array, pixelLimit: number): Promise<Result<Uint8Array>> {
   if (!hasJpegMarkers(source)) {

@@ -93,18 +93,31 @@ export function createBlankScores(
     }
   }
 
+  /** Доля от детектора; его исключение — тоже сбой оценки, `null` (R6), а не зависший `pending`. */
+  async function ratioOf(bytes: Uint8Array, info: PageInfo): Promise<number | null> {
+    try {
+      return await detector(bytes, info.pixelLimit);
+    } catch {
+      return null;
+    }
+  }
+
   async function detect(key: string, info: PageInfo, file: string): Promise<boolean> {
     const page = await source.readPage(key);
-    const ratio = page.ok ? await detector(page.value, info.pixelLimit) : null;
-    // Кэш — по возможности: вердикт действует и тогда, когда записать его не удалось.
+    const ratio = page.ok ? await ratioOf(page.value, info) : null;
+    // Кэш — по возможности: вердикт действует и тогда, когда записать его не удалось. Сбой
+    // чтения страницы (не потеря — её отсеивает `alive`) может быть временным: вердикт «не
+    // пусто» действует до перезапуска, но в кэш не пишется — следующее открытие оценит заново.
     const encoded = new TextEncoder().encode(JSON.stringify({ v: BLANK_DETECTOR_VERSION, ratio }));
-    const cached = await fs
-      .mkdir(blankDirIn(derivedDir, info.sessionId))
-      .then(() => writeFileAtomic(file, encoded, io))
-      .then(
-        () => true,
-        () => false,
-      );
+    const cached = page.ok
+      ? await fs
+          .mkdir(blankDirIn(derivedDir, info.sessionId))
+          .then(() => writeFileAtomic(file, encoded, io))
+          .then(
+            () => true,
+            () => false,
+          )
+      : false;
     // Пока страница оценивалась, её могли отбросить («Остановить», «Новая пачка»): такой
     // вердикт не действует и в кэше не остаётся.
     if (!alive(key, info)) {
