@@ -72,7 +72,7 @@ export function relocate(
   if (right !== undefined) {
     return right;
   }
-  return [...order.slice(0, at)].reverse().find((key) => visible.has(key)) ?? null;
+  return order.slice(0, at).findLast((key) => visible.has(key)) ?? null;
 }
 
 /**

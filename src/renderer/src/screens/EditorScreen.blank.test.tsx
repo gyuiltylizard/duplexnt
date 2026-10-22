@@ -475,4 +475,17 @@ describe('пустые обороты в редакторе (M4)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
     expect(onAdd).toHaveBeenCalledWith(B3);
   });
+
+  it('S16: номер «после стр. N» — по показанной ленте и при скрытых перед текущей (упрощение M4)', () => {
+    stubApi();
+    const onAdd = vi.fn();
+    renderEditor({ ...blankSnapshot(), scanner: READY }, { onAdd });
+    // Показанная лента F1, F2, B2, F3: F3 — четвёртая (в полной — пятая).
+    fireEvent.click(option(3));
+    fireEvent.click(screen.getByRole('button', { name: 'Добавить' }));
+    fireEvent.click(screen.getByRole('radio', { name: /После текущей страницы/u }));
+    expect(screen.getByText(/после стр\. 4 \(лицо листа 3\)/u)).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
+    expect(onAdd).toHaveBeenCalledWith(B1);
+  });
 });

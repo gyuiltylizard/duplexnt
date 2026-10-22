@@ -1,6 +1,6 @@
 import type { ChangeEvent, ReactNode, RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { BlankMode, BlankSummary } from '@shared';
+import type { BlankSummary } from '@shared';
 
 // Подвал ленты (handoff M4, S4–S6; R18): постоянное место трёх строк под миниатюрами — панель
 // выделения (при выделении больше одной страницы), переключатель «добавить пустые» со
@@ -26,10 +26,8 @@ export interface RailSelection {
 export interface EditorRailFooterProps {
   /** Панель выделения; `null` — выделена одна страница или ни одной. */
   readonly selection: RailSelection | null;
-  /** Сводка пустых оборотов из снимка: найдено, скрыто, ждут оценки. */
+  /** Сводка пустых оборотов из снимка: режим сессии, найдено, скрыто, ждут оценки. */
   readonly blank: BlankSummary;
-  /** Режим пустых оборотов сессии: переключатель — только при «Скрывать». */
-  readonly blankMode: BlankMode;
   /** Режим раздельных наборов: скрытых нет, переключателя тоже (S5). */
   readonly inSets: boolean;
   /** Скрытые показаны (R13) — состояние экрана. */
@@ -44,7 +42,6 @@ export interface EditorRailFooterProps {
 export function EditorRailFooter({
   selection,
   blank,
-  blankMode,
   inSets,
   reveal,
   toggleRef,
@@ -82,7 +79,7 @@ export function EditorRailFooter({
           </div>
         </div>
       )}
-      {rotate !== null && blankMode === 'hide' && !inSets && (
+      {rotate !== null && blank.mode === 'hide' && !inSets && (
         <label
           className={found ? 'toggle-row' : 'toggle-row toggle-row--disabled'}
           title={

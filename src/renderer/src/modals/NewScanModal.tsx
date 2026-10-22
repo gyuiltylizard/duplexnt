@@ -87,18 +87,17 @@ export function NewScanModal({
     );
   };
 
-  // Лента пуста без удалённых — одни скрытые (S7 M4): про Ctrl+Z говорить нечего.
-  const text = [
+  // Лента пуста: текст про удалённые, если они есть, — одни скрытые (S7 M4) про Ctrl+Z не
+  // говорят; иначе — состояние набора и отдельно удалённые. Скрытые — всегда последним.
+  const parts: (string | null)[] =
     kind === 'empty'
-      ? deleted > 0
-        ? t('newScan.text.empty', { count: deleted })
-        : null
-      : t(`newScan.text.${kind}`, { count: total }),
-    kind !== 'empty' && deleted > 0 ? t('newScan.text.deleted', { count: deleted }) : null,
-    hidden > 0 ? t('newScan.text.blankHidden', { count: hidden }) : null,
-  ]
-    .filter((part) => part !== null)
-    .join(' ');
+      ? [deleted > 0 ? t('newScan.text.empty', { count: deleted }) : null]
+      : [
+          t(`newScan.text.${kind}`, { count: total }),
+          deleted > 0 ? t('newScan.text.deleted', { count: deleted }) : null,
+        ];
+  parts.push(hidden > 0 ? t('newScan.text.blankHidden', { count: hidden }) : null);
+  const text = parts.filter((part) => part !== null).join(' ');
 
   let status: ReactNode;
   if (closing) {

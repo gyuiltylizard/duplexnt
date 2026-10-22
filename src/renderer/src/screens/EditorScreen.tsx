@@ -66,6 +66,7 @@ import { EditorRailFooter } from './EditorRailFooter';
 import { EditorStatusBar } from './EditorStatusBar';
 import { EditorToolbar } from './EditorToolbar';
 import type { PickMode } from './EditorThumb';
+import { useEditorAssemble } from './useEditorAssemble';
 import { useEditorEdits } from './useEditorEdits';
 import { SAVE_TOAST_MS, useEditorSaving } from './useEditorSaving';
 import { useLateHidden } from './useLateHidden';
@@ -188,11 +189,11 @@ export function EditorScreen({
   );
   // Что уйдёт в файл и что сотрёт «Новое сканирование» (S14–S15 M4): лента без скрытых
   // независимо от переключателя — он только показывает, в файл не добавляет (R13).
-  const fileShown = useMemo(() => shownOf(order, false), [order]);
+  const fileShown = useMemo(() => (reveal ? shownOf(order, false) : shown), [order, reveal, shown]);
   const fileTotal = fileShown.length;
   const fileDocuments = useMemo(
-    () => shownDocumentsOf(documents, order, fileShown),
-    [documents, order, fileShown],
+    () => (reveal ? shownDocumentsOf(documents, order, fileShown) : shownDocuments),
+    [documents, order, fileShown, reveal, shownDocuments],
   );
   /** Ключи с хвостами скрытых (R12) — пока скрытые не показаны; иначе буквально. */
   const withTails = (keys: readonly string[]): readonly string[] =>
@@ -212,8 +213,13 @@ export function EditorScreen({
   const [modal, setModal] = useState<EditorModal | null>(null);
   /** Идёт запись пакета (модалка `save`): правки заблокированы (KTD-9). */
   const [saving, setSaving] = useState(false);
-  /** «Собрать документ» в полёте (M3.6, KTD5): правки заблокированы, как при записи. */
-  const [assembling, setAssembling] = useState(false);
+  // «Собрать документ» (M3.6, KTD5): пока в полёте — правки заблокированы, как при записи.
+  const {
+    assembling,
+    assembledHidden,
+    focusAfterRef: focusAfterAssembleRef,
+    assemble: runAssemble,
+  } = useEditorAssemble({ blank, onToast });
   const locked = saving || assembling;
 
   // Правки недоступны на время записи и сборки (KTD-9): правка внутри круга команды легла бы
@@ -284,9 +290,6 @@ export function EditorScreen({
   const focusKey = useRef<string | null>(initialCurrent);
   const focusAfterEdit = useRef(false);
   const focusName = useRef<number | null>(null);
-  // После «Собрать документ» фокус — на карточке текущей (S13 M3.6): кнопка тулбара уходит
-  // вместе с режимом, а карточки перемонтируются в группы документов.
-  const focusAfterAssemble = useRef(false);
   // S7 M4: все показанные страницы скрыты — фокус на переключателе «добавить пустые», один раз
   // на вход в это состояние.
   const blankToggleRef = useRef<HTMLInputElement>(null);
@@ -313,8 +316,8 @@ export function EditorScreen({
       focusAfterEdit.current = false;
       key = selection.current;
     }
-    if (key === null && focusAfterAssemble.current && mode === 'assembled') {
-      focusAfterAssemble.current = false;
+    if (key === null && focusAfterAssembleRef.current && mode === 'assembled') {
+      focusAfterAssembleRef.current = false;
       key = selection.current;
     }
     if (key !== null) {
@@ -538,6 +541,16 @@ export function EditorScreen({
     }
   };
 
+  // Клик по документу в списке ДОКУМЕНТЫ: текущей становится его первая показанная страница;
+  // документ из одних скрытых показать нечем.
+  const pickDocument = (index: number): void => {
+    const target = shownDocuments[index];
+    const first = target === undefined || target.count === 0 ? undefined : shownKeys[target.start];
+    if (first !== undefined) {
+      setSelection(single(first));
+    }
+  };
+
   // Имя документа (S3): фиксация по Enter или уходу фокуса, один шаг; без изменений — ничего.
   const rename = (docIndex: number, name: string): boolean => {
     const next = renamed(edits.current.edits, docIndex, name);
@@ -553,14 +566,14 @@ export function EditorScreen({
     if (result === null) {
       return;
     }
-    const moved = result.edits.order === edits.current.edits.order ? [] : keys;
+    const reordered = result.edits.order === edits.current.edits.order ? [] : keys;
     editBoundary(
       result.edits,
       result.document,
       () => {
         onToast(t('toast.docCreated', { count: selection.keys.length }));
       },
-      moved,
+      reordered,
     );
   };
 
@@ -698,48 +711,11 @@ export function EditorScreen({
     assembleBlock === undefined || sets === null
       ? undefined
       : assembleBlockText(t, assembleBlock, sets);
-  // После сборки в режиме «Скрывать» скрытые уходят из ленты — число входит в тост сборки (S13
-  // M4), один тост вместо двух; сводка — из последнего показанного снимка.
-  const blankRef = useRef(blank);
-  useLayoutEffect(() => {
-    blankRef.current = blank;
-  });
-  const [assembledHidden, setAssembledHidden] = useState(0);
   const assemble = (): void => {
     if (assembling || assembleBlock !== undefined || sets === null) {
       return;
     }
-    setAssembling(true);
-    const sheets = sets.fronts;
-    // Напрямую, не через `edit()` (KTD5): сборка — не правка и не шаг undo; снимок придёт сам.
-    window.api.assemble().then(
-      (result) => {
-        setAssembling(false);
-        if (result.ok) {
-          focusAfterAssemble.current = true;
-          const hidden = blankRef.current.hidden;
-          setAssembledHidden(hidden);
-          onToast(
-            hidden > 0
-              ? t('toast.assembledBlank', {
-                  sheets: t('toast.sheets', { count: sheets }),
-                  count: hidden,
-                })
-              : t('toast.assembled', { count: sheets }),
-          );
-          return;
-        }
-        onToast(
-          t('toast.assembleFailed', { error: errorTextInline(t, result.error) }),
-          SAVE_TOAST_MS,
-        );
-      },
-      (error: unknown) => {
-        setAssembling(false);
-        console.error('[renderer] сборка не ответила', error);
-        onToast(t('toast.assembleNoResponse'), SAVE_TOAST_MS);
-      },
-    );
+    runAssemble(sets.fronts);
   };
   // Поздние оценки (S13 M4, KTD6): снимок спрятал показанную страницу вердиктом — тост; о
   // скрытых после сборки наборов уже сказал тост сборки.
@@ -874,7 +850,6 @@ export function EditorScreen({
                   : null
               }
               blank={blank}
-              blankMode={session.blankMode}
               inSets={sets !== null}
               reveal={reveal}
               toggleRef={blankToggleRef}
@@ -900,18 +875,15 @@ export function EditorScreen({
           {currentEntry === undefined ? (
             // S10: все страницы удалены — подсказка, как вернуть; S7 M4: все показанные скрыты —
             // подсказка про переключатель.
-            fullTotal === 0 ? (
+            (fullTotal === 0 || allHidden) && (
               <div className="stage__empty">
-                <h2 className="stage__empty-title">{t('editor.empty.title')}</h2>
-                <p className="stage__empty-text">{t('editor.empty.text')}</p>
+                <h2 className="stage__empty-title">
+                  {t(allHidden ? 'editor.empty.blankTitle' : 'editor.empty.title')}
+                </h2>
+                <p className="stage__empty-text">
+                  {t(allHidden ? 'editor.empty.blankText' : 'editor.empty.text')}
+                </p>
               </div>
-            ) : (
-              allHidden && (
-                <div className="stage__empty">
-                  <h2 className="stage__empty-title">{t('editor.empty.blankTitle')}</h2>
-                  <p className="stage__empty-text">{t('editor.empty.blankText')}</p>
-                </div>
-              )
             )
           ) : (
             <div className="preview">
@@ -959,14 +931,7 @@ export function EditorScreen({
             frontsOnly={backsPass === null}
             notBlank={currentEntry !== undefined && notBlank.includes(currentEntry.key)}
             locked={locked}
-            onPickDocument={(index) => {
-              const target = shownDocuments[index];
-              const first =
-                target === undefined || target.count === 0 ? undefined : shownKeys[target.start];
-              if (first !== undefined) {
-                setSelection(single(first));
-              }
-            }}
+            onPickDocument={pickDocument}
             onNotBlank={markNotBlank}
             onRevert={() => {
               setModal('revert');

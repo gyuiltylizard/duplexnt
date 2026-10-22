@@ -78,7 +78,12 @@ export function anchorsOf(
   const current =
     entry === undefined
       ? null
-      : { key: input.after ?? entry.key, page: index + 1, label: whatOf(t, entry, input.mode) };
+      : {
+          key: input.after ?? entry.key,
+          // Номер — по показанной ленте, как у миниатюр (M4, R11); `index` — позиция в полной.
+          page: numberOf(entry.key),
+          label: whatOf(t, entry, input.mode),
+        };
   if (sets !== null) {
     const inFronts = index < sets.divider;
     const end = inFronts ? sets.divider - 1 : input.visible.length - 1;

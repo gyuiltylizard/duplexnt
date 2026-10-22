@@ -94,6 +94,46 @@ function PairsCheck({
  * человека), «Помечать» — галочка; в режиме наборов при «Скрывать» — считаются, скроются после
  * сборки.
  */
+/** S10 M4: факт «Содержимое» — только у пустых по оценке и у помеченных вручную. */
+function contentText(t: TFunction, entry: AssembledPage, notBlank: boolean): string | null {
+  if (notBlank) {
+    return t('inspector.fact.contentNotBlank');
+  }
+  if (entry.blank === 'hidden') {
+    return t('inspector.fact.contentHidden');
+  }
+  return entry.blank === 'marked' ? t('inspector.fact.contentMarked') : null;
+}
+
+/**
+ * S9 M4: текст секции «ПУСТОЙ ОБОРОТ» — по тому, что будет со страницей: считается в наборах
+ * до сборки, скрыта, в файле с меткой; обычная страница — секции нет.
+ */
+function blankNoteText(t: TFunction, entry: AssembledPage, inSets: boolean): string | null {
+  if (entry.blank === null) {
+    return null;
+  }
+  if (inSets) {
+    return t('inspector.blank.sets');
+  }
+  return t(entry.blank === 'hidden' ? 'inspector.blank.hidden' : 'inspector.blank.marked');
+}
+
+/** Строка документа в списке ДОКУМЕНТЫ: «только пустые — скрыты», «стр. N» или «N стр. · M–K». */
+function docMetaText(t: TFunction, document: ShownDocument): string {
+  if (document.count === 0) {
+    return t('inspector.docMetaBlank');
+  }
+  if (document.count === 1) {
+    return t('inspector.docMetaOnePage', { from: document.start + 1 });
+  }
+  return t('inspector.docMeta', {
+    count: document.count,
+    from: document.start + 1,
+    to: document.start + document.count,
+  });
+}
+
 function BlankCheck({
   t,
   blank,
@@ -165,14 +205,7 @@ function Details({
   const title = t('inspector.title', { page: position, what: whatOf(t, entry, mode) });
   const note = noteOf(t, entry, mode, frontsOnly);
   const back = entry.side === 'back';
-  // S10 M4: факт «Содержимое» — только у пустых по оценке и у помеченных вручную.
-  const content = notBlank
-    ? t('inspector.fact.contentNotBlank')
-    : entry.blank === 'hidden'
-      ? t('inspector.fact.contentHidden')
-      : entry.blank === 'marked'
-        ? t('inspector.fact.contentMarked')
-        : null;
+  const content = contentText(t, entry, notBlank);
 
   let facts: ReactNode;
   if (mode === 'sets' && sets !== null) {
@@ -315,16 +348,7 @@ export function EditorInspector({
   const listed = assembly.order.length === 0 ? [] : documents;
   const { report, sets } = assembly;
   const inSets = report.mode === 'sets';
-  // S9 M4: текст секции — по тому, что будет со страницей: скрыта, в файле с меткой, считается
-  // в наборах до сборки.
-  const blankNote =
-    entry?.blank === undefined || entry.blank === null
-      ? null
-      : inSets
-        ? t('inspector.blank.sets')
-        : entry.blank === 'hidden'
-          ? t('inspector.blank.hidden')
-          : t('inspector.blank.marked');
+  const blankNote = entry === undefined ? null : blankNoteText(t, entry, inSets);
 
   return (
     <aside className="inspector" aria-label={t('inspector.label')} onMouseDown={onMouseDown}>
@@ -399,17 +423,7 @@ export function EditorInspector({
                       </span>
                       <span className="doc-list__text">
                         <span className="doc-list__name">{names[index]}</span>
-                        <span className="doc-list__meta">
-                          {document.count === 0
-                            ? t('inspector.docMetaBlank')
-                            : document.count === 1
-                              ? t('inspector.docMetaOnePage', { from: document.start + 1 })
-                              : t('inspector.docMeta', {
-                                  count: document.count,
-                                  from: document.start + 1,
-                                  to: document.start + document.count,
-                                })}
-                        </span>
+                        <span className="doc-list__meta">{docMetaText(t, document)}</span>
                       </span>
                     </button>
                   </li>
