@@ -173,6 +173,7 @@ describe('хранилище сессии: правки редактора (M3, 
     deleted: ['p02-s01-0002'],
     cuts: [2],
     names: ['', 'Договор'],
+    divider: null,
   };
 
   async function twoPasses() {
@@ -284,26 +285,82 @@ describe('хранилище сессии: правки редактора (M3, 
     expect(store.snapshot()?.edits).toEqual(EMPTY_EDITS);
   });
 
-  it('досканирование вставило оборот в середину — разрез переехал вслед; «Остановить» вернул его (KTD-10)', async () => {
+  it('граница наборов (M3.6, R1) пишется в журнал и читается дословно; новая сессия её не наследует', async () => {
+    // Проходы 2/1 — режим раздельных наборов; при равных граница обнулилась бы нормализацией.
+    const { store, accept, journalOnDisk } = await setup();
+    ok(await store.beginPass(ORIGIN, null));
+    await accept(1, 2);
+    ok(await store.endSegment('completed'));
+    ok(await store.beginPass(ORIGIN, null));
+    await accept(3, 3);
+    ok(await store.endSegment('completed'));
+    const divided: SessionEdits = { ...EMPTY_EDITS, divider: 1 };
+
+    ok(await store.setEdits(divided, false));
+    expect(store.snapshot()).toMatchObject({ edits: divided, assembled: null });
+    expect(await journalOnDisk()).toMatchObject({ edits: divided, assembled: null });
+
+    ok(await store.closeSession());
+    ok(await store.beginPass(ORIGIN, null));
+    await accept(1, 1);
+
+    expect(store.snapshot()).toMatchObject({ edits: EMPTY_EDITS, assembled: null });
+  });
+
+  it('досканирование при явном порядке: новый оборот — в группу оборотов, не к лицам (ревью M3.6, #1)', async () => {
+    const { store, accept } = await setup();
+    ok(await store.beginPass(ORIGIN, null));
+    await accept(1, 3);
+    ok(await store.endSegment('completed'));
+    ok(await store.beginPass(ORIGIN, null));
+    await accept(4, 4);
+    ok(await store.endSegment('interrupted'));
+    // Лица переставлены вручную: f2 f1 f3 | b1 — порядок явный.
+    const swapped = ['p01-s01-0002', 'p01-s01-0001', 'p01-s01-0003', 'p02-s01-0001'];
+    ok(await store.setEdits({ ...EMPTY_EDITS, order: swapped }, false));
+
+    ok(await store.resumePass());
+    await accept(5, 5);
+    ok(await store.endSegment('completed'));
+
+    // Пока проход шёл, ключ встал за соседом по проходу — в начало группы оборотов; лица целы.
+    const session = store.snapshot();
+    assert(session !== null);
+    const assembly = assembleSession(session);
+    expect(assembly.order.map((page) => page.key)).toEqual([
+      'p01-s01-0002',
+      'p01-s01-0001',
+      'p01-s01-0003',
+      'p02-s02-0001',
+      'p02-s01-0001',
+    ]);
+    expect(assembly.sets).toEqual({ fronts: 3, backs: 2, divider: 3 });
+  });
+
+  it('досканирование вставило оборот — граница наборов переехала вслед; «Остановить» вернул её (KTD-10; M3.6, R9)', async () => {
     const { store, accept, journalOnDisk } = await setup();
     ok(await store.beginPass(ORIGIN, null));
     await accept(1, 3);
     ok(await store.endSegment('completed'));
-    // Обороты прерваны на первом: пришёл оборот листа 3. Лента f1 f2 f3 b1, разрез перед f3.
+    // Обороты прерваны на первом: пришёл оборот листа 3. Раздельные наборы: лента f1 f2 f3 | b1;
+    // разрезы в этом режиме не живут — вместо них граница; b1 перенесён к лицам (граница 4).
     ok(await store.beginPass(ORIGIN, null));
     await accept(4, 4);
     ok(await store.endSegment('interrupted'));
-    ok(await store.setEdits({ ...EMPTY_EDITS, cuts: [2], names: ['', 'Третий'] }, false));
+    ok(
+      await store.setEdits({ ...EMPTY_EDITS, cuts: [2], names: ['', 'Третий'], divider: 4 }, false),
+    );
+    expect(store.snapshot()?.edits).toEqual({ ...EMPTY_EDITS, divider: 4 });
 
     ok(await store.resumePass());
     await accept(5, 5);
 
-    // Оборот листа 2 лёг между f2 и f3: разрез остался перед f3.
-    expect(store.snapshot()?.edits).toMatchObject({ cuts: [3], names: ['', 'Третий'] });
-    expect((await journalOnDisk()).edits.cuts).toEqual([3]);
+    // Оборот листа 2 лёг в начало группы оборотов: f1 f2 f3 b2 b1 — граница в конце осталась в конце.
+    expect(store.snapshot()?.edits).toMatchObject({ divider: 5 });
+    expect((await journalOnDisk()).edits.divider).toBe(5);
 
     ok(await store.discardSegment());
-    expect(store.snapshot()?.edits).toMatchObject({ cuts: [2], names: ['', 'Третий'] });
+    expect(store.snapshot()?.edits).toMatchObject({ divider: 4 });
   });
 
   it('правка нормализуется перед записью: разрез перед первой позицией снят, мёртвый ключ вычищен', async () => {
@@ -317,6 +374,7 @@ describe('хранилище сессии: правки редактора (M3, 
           deleted: [],
           cuts: [0, 2],
           names: ['Пусто', 'Начало', 'Конец'],
+          divider: null,
         },
         false,
       ),
@@ -328,6 +386,7 @@ describe('хранилище сессии: правки редактора (M3, 
       deleted: [],
       cuts: [2],
       names: ['Начало', 'Конец'],
+      divider: null,
     };
     expect(store.snapshot()?.edits).toEqual(expected);
     expect((await journalOnDisk()).edits).toEqual(expected);
@@ -573,6 +632,7 @@ describe('хранилище сессии: роль прохода и добав
       deleted: [],
       cuts: [1],
       names: ['', 'Акт'],
+      divider: null,
     };
     ok(await store.setEdits(edits, false));
     const keysBefore = visibleKeys(store);

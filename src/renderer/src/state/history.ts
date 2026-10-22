@@ -45,15 +45,17 @@ export function editStateOf(session: SessionSnapshot): EditState {
 }
 
 /**
- * Подпись ленты: сессия и состав проходов — ключи страниц и состояние. Правки её не меняют
- * (удаление — пометка, тумблер — не состав); досканирование, «Остановить», приёмка прерванного
- * прохода и новая сессия — меняют.
+ * Подпись ленты: сессия, состав проходов — ключи страниц и состояние — и запись сборки (M3.6,
+ * KTD5). Правки её не меняют (удаление — пометка, тумблер — не состав); досканирование,
+ * «Остановить», приёмка прерванного прохода, «Собрать документ» и новая сессия — меняют: шаги
+ * стека позиционные, и после сборки старый шаг положил бы границу не на ту страницу (R14).
  */
 export function tapeOf(session: SessionSnapshot): string {
   const passes = session.passes.map(
     (pass) => `${pass.state}:${pass.pages.map((page) => page.key).join(',')}`,
   );
-  return `${session.id}|${passes.join('|')}`;
+  const assembled = session.assembled === null ? '' : `|assembled:${session.assembled.join(',')}`;
+  return `${session.id}|${passes.join('|')}${assembled}`;
 }
 
 export const emptyHistory = (tape: string): EditHistory => ({ tape, past: [], future: [] });

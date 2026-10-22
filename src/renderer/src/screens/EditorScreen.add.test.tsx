@@ -294,22 +294,7 @@ describe('добавленный набор в ленте и инспектор�
     ).toBeDefined();
   });
 
-  it('подсказка про «+ Добавить» в пункте пар — при несовпадении без добавленного набора', () => {
-    stubApi();
-    renderEditor(twoPass(2));
-
-    const check = screen.getByText(/Пар «лицо \+ оборот»: 2 из 3/).closest('.check');
-    if (!(check instanceof HTMLElement)) {
-      throw new Error('пункт пар вне списка проверок');
-    }
-    expect(check.className).toBe('check check--warning');
-    expect(within(check).getByText(/Пропущенный лист можно досканировать/).className).toBe(
-      'check__hint',
-    );
-    expect(screen.getByTitle('У этого листа не нашлось пары')).toBeDefined();
-  });
-
-  it('подсказка снята, когда в сессии есть добавленный набор; точка непарного остаётся', () => {
+  it('M3.6: добавленный набор в группе якоря входит в её счётчик; подсказка ПРОВЕРКИ про перенос', () => {
     stubApi();
     renderEditor(
       makeSnapshot([
@@ -324,28 +309,19 @@ describe('добавленный набор в ленте и инспектор�
       ]),
     );
 
-    expect(screen.getByText(/Пар «лицо \+ оборот»: 2 из 3/)).toBeDefined();
-    expect(screen.queryByText(/Пропущенный лист можно досканировать/)).toBeNull();
-    expect(screen.getByTitle('У этого листа не нашлось пары')).toBeDefined();
-  });
-
-  it('подсказки нет, пока проход оборотов прерван и не принят — решает плашка', () => {
-    stubApi();
-    renderEditor(
-      makeSnapshot(
-        [
-          makePass({ pages: pages(3) }),
-          makePass({
-            number: 2,
-            kind: 'backs',
-            state: 'interrupted',
-            pages: pages(2, 1, 'p02-s01'),
-          }),
-        ],
-        { canAccept: true },
-      ),
+    // Набор встал за лицом 1 — в группе лиц: 4 против 2.
+    const check = screen
+      .getByText('Наборы не уравнены: лицевых 4, оборотных 2 — не хватает 2 оборотов')
+      .closest('.check');
+    if (!(check instanceof HTMLElement)) {
+      throw new Error('пункт наборов вне списка проверок');
+    }
+    expect(check.className).toBe('check check--warning');
+    expect(within(check).getByText(/перенесите страницы через границу/).className).toBe(
+      'check__hint',
     );
-
-    expect(screen.queryByText(/Пропущенный лист можно досканировать/)).toBeNull();
+    expect(screen.getByRole('status', { name: '' }).textContent).toBe(
+      'Проходы не сошлись: лицевых 4, оборотных 2',
+    );
   });
 });

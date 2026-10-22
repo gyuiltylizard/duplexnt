@@ -10,8 +10,14 @@ import {
   type RefObject,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import { MAX_DOCUMENT_NAME_LENGTH, type AssembledDocument, type AssembledPage } from '@shared';
-import type { DropSide } from '../state/edits';
+import {
+  MAX_DOCUMENT_NAME_LENGTH,
+  type AssembledDocument,
+  type AssembledPage,
+  type PassKind,
+  type SetsLayout,
+} from '@shared';
+import type { DropSide, SetSide } from '../state/edits';
 import { single, type Selection } from '../state/selection';
 import { toneOf } from '../state/page-text';
 import {
@@ -22,9 +28,12 @@ import {
   type ThumbDrag,
 } from './EditorThumb';
 
-// Лента редактора (план M3, U7–U8; handoff M3, S2–S7): панель мультивыделения, группы по
-// документам с разделителем «✕» и полем имени, миниатюры с split-баром и перетаскиванием.
-// Решает только «что и куда» — сами правки строит и шлёт экран (жесты `state/edits.ts`, KTD-8).
+// Лента редактора (план M3, U7–U8; handoff M3, S2–S7; M3.6, S1–S3): панель мультивыделения,
+// группы по документам с разделителем «✕» и полем имени, миниатюры с split-баром и
+// перетаскиванием. В режиме раздельных наборов (`sets !== null`) вместо групп документов — две
+// группы «Лицевые стороны» и «Оборотные стороны» с живыми счётчиками и разделителем-целью дропа;
+// разрезов, имён и «Выделить в документ» нет (KTD8: `documentsEditable`). Решает только «что и
+// куда» — сами правки строит и шлёт экран (жесты `state/edits.ts`, KTD-8).
 
 /**
  * Тип данных перетаскивания — свой: с `text/plain` бросок на поле имени вставил бы в него
@@ -35,10 +44,17 @@ const DRAG_TYPE = 'application/x-duplexnt-pages';
 /** id поля имени документа `docIndex` (с нуля): подпись группы и фокус после границы. */
 export const docNameId = (docIndex: number): string => `doc-name-${String(docIndex)}`;
 
-interface Drop {
-  readonly key: string;
-  readonly side: DropSide;
-}
+/** id заголовка группы набора — подпись её listbox. */
+const setTitleId = (side: SetSide): string => `set-${side}-title`;
+
+/**
+ * Куда ляжет бросок: перед/после миниатюры (маркер на ней), на разделитель наборов (верх — в
+ * конец лиц, низ — в начало оборотов) или в зону пустой группы (M3.6, S2–S3).
+ */
+type Drop =
+  | { readonly kind: 'thumb'; readonly key: string; readonly side: DropSide }
+  | { readonly kind: 'divider'; readonly side: SetSide }
+  | { readonly kind: 'group'; readonly side: SetSide };
 
 /**
  * Поле имени документа (S3): ввод локален, фиксация — по Enter или уходу фокуса одним
@@ -135,6 +151,10 @@ export interface EditorRailProps {
   readonly sessionId: string;
   readonly order: readonly AssembledPage[];
   readonly documents: readonly AssembledDocument[];
+  /** Группы ленты в режиме раздельных наборов (M3.6, R17); `null` — группы документов. */
+  readonly sets: SetsLayout | null;
+  /** Происхождение страницы по ключу — тег «об» по проходу, не по группе (R11). */
+  readonly origins: ReadonlyMap<string, PassKind>;
   /** Имена по умолчанию — плейсхолдеры полей имени (S3). */
   readonly defaultNames: readonly string[];
   readonly selection: Selection;
@@ -156,6 +176,8 @@ export interface EditorRailProps {
   /** Имя документа (с нуля); `false` — команда не ушла. */
   readonly onRename: (docIndex: number, name: string) => boolean;
   readonly onMove: (keys: readonly string[], target: string, side: DropSide) => void;
+  /** Бросок на разделитель наборов или в пустую группу: в конец лиц / в начало оборотов (KTD8). */
+  readonly onMoveAcross: (keys: readonly string[], side: SetSide) => void;
   /** Низ ленты — тумблер 180° (S15). */
   readonly footer: ReactNode;
 }
@@ -164,6 +186,8 @@ export function EditorRail({
   sessionId,
   order,
   documents,
+  sets,
+  origins,
   defaultNames,
   selection,
   locked,
@@ -178,6 +202,7 @@ export function EditorRail({
   onUnsplit,
   onRename,
   onMove,
+  onMoveAcross,
   footer,
 }: EditorRailProps): ReactNode {
   const { t } = useTranslation();
@@ -192,6 +217,8 @@ export function EditorRail({
   const multi = selection.keys.length > 1;
   // Правки доступны сейчас: нет записи и команды в полёте — можно тянуть, split-бар виден.
   const editable = !locked && !busy;
+  // Разрезы, имена и «Выделить в документ» — только вне режима наборов (M3.6, KTD8).
+  const documentsEditable = sets === null;
   // Split-бар уступает выделению (M3.5, KTD-10): пока зажат Ctrl/Shift или выделено больше
   // одной страницы, бара нет — клик по верхнему краю миниатюры с модификатором выделяет.
   // Клавиши слушает окно: фокус в момент нажатия может быть где угодно.
@@ -276,8 +303,8 @@ export function EditorRail({
         event.dataTransfer.dropEffect = 'move';
         const rect = event.currentTarget.getBoundingClientRect();
         const side: DropSide = event.clientX < rect.left + rect.width / 2 ? 'before' : 'after';
-        if (drop?.key !== key || drop.side !== side) {
-          setDrop({ key, side });
+        if (drop?.kind !== 'thumb' || drop.key !== key || drop.side !== side) {
+          setDrop({ kind: 'thumb', key, side });
         }
       },
     };
@@ -300,6 +327,25 @@ export function EditorRail({
     [],
   );
 
+  // Цели дропа без страницы (M3.6, S2–S3): разделитель — половина по `clientY`, зона пустой
+  // группы — целиком. Порядок ленты не меняется, меняется граница (`movedAcross`).
+  const acceptDrop = (event: DragEvent<HTMLElement>, next: Drop): void => {
+    if (dragged === null) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = 'move';
+    if (drop?.kind !== next.kind || drop.side !== next.side) {
+      setDrop(next);
+    }
+  };
+  const dividerDragOver = (event: DragEvent<HTMLElement>): void => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const side: SetSide = event.clientY < rect.top + rect.height / 2 ? 'fronts' : 'backs';
+    acceptDrop(event, { kind: 'divider', side });
+  };
+
   // Зазоры между миниатюрами: бросок туда ложится на последний показанный маркер.
   const scrollDragOver = (event: DragEvent<HTMLElement>): void => {
     if (dragged !== null && drop !== null) {
@@ -318,22 +364,184 @@ export function EditorRail({
       return;
     }
     event.preventDefault();
-    if (drop !== null) {
+    if (drop?.kind === 'thumb') {
       onMove(dragged, drop.key, drop.side);
+    } else if (drop !== null) {
+      onMoveAcross(dragged, drop.side);
     }
     finishDrag();
   };
 
   const splitKind = (position: number): SplitKind =>
-    position === 0 || !editable || multi || modifierHeld
+    position === 0 || !documentsEditable || !editable || multi || modifierHeld
       ? null
       : starts.has(position)
         ? 'remove'
         : 'add';
 
+  /** Миниатюра страницы `entry` на позиции `position` ленты (с нуля) — одна на оба вида групп. */
+  const thumbOf = (entry: AssembledPage, position: number): ReactNode => (
+    <EditorThumb
+      key={entry.key}
+      sessionId={sessionId}
+      pageKey={entry.key}
+      backsOrigin={origins.get(entry.key) === 'backs'}
+      side={entry.side}
+      sheet={entry.sheet}
+      angle={entry.angle}
+      lost={entry.lost}
+      position={position + 1}
+      inSets={sets !== null}
+      addedSet={entry.addedSet}
+      current={entry.key === selection.current}
+      selected={selectedKeys.has(entry.key)}
+      multi={multi && selectedKeys.has(entry.key)}
+      draggable={editable}
+      dragging={draggedKeys.has(entry.key)}
+      drop={drop?.kind === 'thumb' && drop.key === entry.key ? drop.side : null}
+      split={splitKind(position)}
+      onPick={onPick}
+      onSplit={split}
+      drag={drag}
+    />
+  );
+
+  /** Сетка миниатюр группы — один listbox на группу документа или набора. */
+  const thumbList = (label: string, pages: readonly AssembledPage[], start: number): ReactNode => (
+    <ul
+      className="thumbs"
+      role="listbox"
+      aria-multiselectable="true"
+      aria-orientation="horizontal"
+      aria-label={label}
+    >
+      {pages.map((entry, offset) => thumbOf(entry, start + offset))}
+    </ul>
+  );
+
+  /** S1, S3 M3.6: группа набора — заголовок с живым счётчиком, сетка или зона дропа. */
+  const setGroup = (side: SetSide, start: number, pages: readonly AssembledPage[]): ReactNode => {
+    const titleId = setTitleId(side);
+    const pagesLabel = t(side === 'fronts' ? 'editor.sets.frontsPages' : 'editor.sets.backsPages');
+    const empty = pages.length === 0;
+    const active = drop?.kind === 'group' && drop.side === side;
+    return (
+      <section
+        className={`set-group set-group--${side}${empty ? ' set-group--empty' : ''}`}
+        aria-labelledby={titleId}
+      >
+        <div className="set-group__header">
+          <h2 id={titleId} className="set-group__title">
+            {t(side === 'fronts' ? 'editor.sets.fronts' : 'editor.sets.backs')}
+          </h2>
+          <span
+            className="set-group__count"
+            aria-label={t('editor.sets.countLabel', { count: pages.length })}
+          >
+            {t('editor.sets.count', { count: pages.length })}
+          </span>
+        </div>
+        {empty ? (
+          <div
+            className={active ? 'set-group__drop set-group__drop--active' : 'set-group__drop'}
+            role="listbox"
+            aria-label={pagesLabel}
+            onDragOver={(event) => {
+              acceptDrop(event, { kind: 'group', side });
+            }}
+          >
+            <span className="set-group__drop-text">
+              {t(side === 'fronts' ? 'editor.sets.dropFronts' : 'editor.sets.dropBacks')}
+            </span>
+          </div>
+        ) : (
+          thumbList(pagesLabel, pages, start)
+        )}
+      </section>
+    );
+  };
+
+  let groups: ReactNode;
+  if (total === 0) {
+    groups = <p className="rail__empty">{t('editor.empty.rail')}</p>;
+  } else if (sets !== null) {
+    // S1–S2 M3.6: две группы по границе и разделитель между ними — цель дропа с маркером над
+    // (в конец лиц) или под (в начало оборотов); сам разделитель не фокусируемый.
+    const dividerClass =
+      drop?.kind === 'divider'
+        ? `set-divider set-divider--drop-${drop.side === 'fronts' ? 'above' : 'below'}`
+        : 'set-divider';
+    groups = (
+      <>
+        {setGroup('fronts', 0, order.slice(0, sets.divider))}
+        <div
+          className={dividerClass}
+          role="separator"
+          aria-label={t('editor.sets.dividerLabel')}
+          onDragOver={dividerDragOver}
+        >
+          <span className="set-divider__rule" aria-hidden="true" />
+          <span className="set-divider__hint">{t('editor.sets.divider')}</span>
+          <span className="set-divider__rule" aria-hidden="true" />
+        </div>
+        {setGroup('backs', sets.divider, order.slice(sets.divider))}
+      </>
+    );
+  } else {
+    // S2: группа на документ, в каждой свой listbox; номер миниатюры — сквозной. Ключ —
+    // первая страница документа: черновик имени едет с документом, а не с номером.
+    groups = documents.map((doc, index) => (
+      <section
+        key={order[doc.start]?.key ?? index}
+        className={`doc-group ${toneOf(index)}`}
+        aria-labelledby={docNameId(index)}
+      >
+        {index > 0 && (
+          <div className="doc-group__divider">
+            <span className="doc-group__pill">{t('editor.doc.newPill')}</span>
+            <span className="doc-group__rule" aria-hidden="true" />
+            <button
+              type="button"
+              className="doc-group__unsplit"
+              title={t('editor.doc.unsplit')}
+              aria-label={t('editor.doc.unsplitLabel', { number: index + 1 })}
+              disabled={locked}
+              onClick={() => {
+                onUnsplit(index, true);
+              }}
+            >
+              ✕
+            </button>
+          </div>
+        )}
+        <div className="doc-group__header">
+          <span className="doc-badge" aria-hidden="true">
+            {index + 1}
+          </span>
+          <DocName
+            key={order[doc.start]?.key ?? index}
+            index={index}
+            value={doc.name}
+            placeholder={defaultNames[index] ?? ''}
+            disabled={locked}
+            busy={busy}
+            onCommit={onRename}
+            onEnter={focusCurrent}
+          />
+          <span className="doc-group__count">{t('editor.doc.count', { count: doc.count })}</span>
+        </div>
+        {thumbList(
+          t('editor.doc.pagesLabel', { number: index + 1 }),
+          order.slice(doc.start, doc.start + doc.count),
+          doc.start,
+        )}
+      </section>
+    ));
+  }
+
   return (
     <aside className="rail" aria-label={t('editor.railLabel')} ref={railRef} onKeyDown={onKeyDown}>
-      {/* S5: панель мультивыделения. */}
+      {/* S5: панель мультивыделения; «Выделить в документ» — только вне режима наборов. */}
       {multi && (
         <div className="rail__top">
           <div className="rail__selection" role="region" aria-label={t('editor.selection.label')}>
@@ -341,14 +549,16 @@ export function EditorRail({
               {t('editor.selection.text', { count: selection.keys.length })}
             </p>
             <div className="rail__selection-actions">
-              <button
-                type="button"
-                className="rail__selection-group"
-                disabled={locked}
-                onClick={onGroup}
-              >
-                {t('editor.selection.group')}
-              </button>
+              {documentsEditable && (
+                <button
+                  type="button"
+                  className="rail__selection-group"
+                  disabled={locked}
+                  onClick={onGroup}
+                >
+                  {t('editor.selection.group')}
+                </button>
+              )}
               <button type="button" className="rail__selection-clear" onClick={onClearSelection}>
                 {t('editor.selection.clear')}
               </button>
@@ -363,91 +573,7 @@ export function EditorRail({
         onDrop={scrollDrop}
         onDragEnd={finishDrag}
       >
-        {total === 0 ? (
-          <p className="rail__empty">{t('editor.empty.rail')}</p>
-        ) : (
-          // S2: группа на документ, в каждой свой listbox; номер миниатюры — сквозной. Ключ —
-          // первая страница документа: черновик имени едет с документом, а не с номером.
-          documents.map((doc, index) => (
-            <section
-              key={order[doc.start]?.key ?? index}
-              className={`doc-group ${toneOf(index)}`}
-              aria-labelledby={docNameId(index)}
-            >
-              {index > 0 && (
-                <div className="doc-group__divider">
-                  <span className="doc-group__pill">{t('editor.doc.newPill')}</span>
-                  <span className="doc-group__rule" aria-hidden="true" />
-                  <button
-                    type="button"
-                    className="doc-group__unsplit"
-                    title={t('editor.doc.unsplit')}
-                    aria-label={t('editor.doc.unsplitLabel', { number: index + 1 })}
-                    disabled={locked}
-                    onClick={() => {
-                      onUnsplit(index, true);
-                    }}
-                  >
-                    ✕
-                  </button>
-                </div>
-              )}
-              <div className="doc-group__header">
-                <span className="doc-badge" aria-hidden="true">
-                  {index + 1}
-                </span>
-                <DocName
-                  key={order[doc.start]?.key ?? index}
-                  index={index}
-                  value={doc.name}
-                  placeholder={defaultNames[index] ?? ''}
-                  disabled={locked}
-                  busy={busy}
-                  onCommit={onRename}
-                  onEnter={focusCurrent}
-                />
-                <span className="doc-group__count">
-                  {t('editor.doc.count', { count: doc.count })}
-                </span>
-              </div>
-              <ul
-                className="thumbs"
-                role="listbox"
-                aria-multiselectable="true"
-                aria-orientation="horizontal"
-                aria-label={t('editor.doc.pagesLabel', { number: index + 1 })}
-              >
-                {order.slice(doc.start, doc.start + doc.count).map((entry, offset) => {
-                  const position = doc.start + offset;
-                  return (
-                    <EditorThumb
-                      key={entry.key}
-                      sessionId={sessionId}
-                      pageKey={entry.key}
-                      side={entry.side}
-                      sheet={entry.sheet}
-                      angle={entry.angle}
-                      lost={entry.lost}
-                      position={position + 1}
-                      unpaired={entry.unpaired}
-                      addedSet={entry.addedSet}
-                      current={entry.key === selection.current}
-                      selected={selectedKeys.has(entry.key)}
-                      multi={multi && selectedKeys.has(entry.key)}
-                      draggable={editable}
-                      dragging={draggedKeys.has(entry.key)}
-                      drop={drop?.key === entry.key ? drop.side : null}
-                      split={splitKind(position)}
-                      onPick={onPick}
-                      onSplit={split}
-                      drag={drag}
-                    />
-                  );
-                })}
-              </ul>
-            </section>
-          ))
-        )}
+        {groups}
       </div>
       {footer}
     </aside>

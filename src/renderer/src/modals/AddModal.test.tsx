@@ -1,8 +1,8 @@
 import type { ScannerState } from '@shared';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import '../i18n';
-import { AddModal, type AddModalProps } from './AddModal';
+import { i18n } from '../i18n';
+import { AddModal, anchorsOf, type AddModalProps } from './AddModal';
 
 // Модалка `add` (план M3.5, U6; handoff M3.5, S2): карточки, место, сводка с якорем, строка
 // сканера, «Начать скан» с якорем из видимой ленты (KTD-8), клавиатура радиогрупп.
@@ -24,7 +24,8 @@ function renderModal(props: Partial<AddModalProps> = {}) {
     <AddModal
       scanner={READY}
       current={CURRENT}
-      documentEnd={DOC_END}
+      end={DOC_END}
+      endKind="document"
       onStart={onStart}
       onClose={onClose}
       {...props}
@@ -87,7 +88,7 @@ describe('модалка add: выбор и сводка', () => {
   });
 
   it('пустая лента: «После текущей» недоступна с причиной, выбран конец, сводка — «в конец ленты»', () => {
-    renderModal({ current: null, documentEnd: null });
+    renderModal({ current: null, end: null });
 
     const after = radio('После текущей страницы');
     expect(after.getAttribute('aria-disabled')).toBe('true');
@@ -99,7 +100,7 @@ describe('модалка add: выбор и сводка', () => {
   });
 
   it('стрелки переводят выбор и фокус в радиогруппе; недоступный сегмент пропускается', () => {
-    renderModal({ current: null, documentEnd: null });
+    renderModal({ current: null, end: null });
 
     const sheets = radio(/Односторонние листы/);
     sheets.focus();
@@ -142,7 +143,7 @@ describe('модалка add: запуск и отмена', () => {
     expect(first.onStart).toHaveBeenCalledExactlyOnceWith('p01-s01-0005');
     cleanup();
 
-    const second = renderModal({ current: null, documentEnd: null });
+    const second = renderModal({ current: null, end: null });
     fireEvent.click(start());
     expect(second.onStart).toHaveBeenCalledExactlyOnceWith(null);
   });
@@ -166,5 +167,106 @@ describe('модалка add: запуск и отмена', () => {
     expect(document.activeElement).toBe(radio(/Один лист/));
     fireEvent.keyDown(radio(/Один лист/), { key: 'Tab', shiftKey: true });
     expect(document.activeElement).toBe(button);
+  });
+});
+
+describe('модалка add в режиме наборов (M3.6, KTD11; handoff S10)', () => {
+  const t = i18n.t.bind(i18n);
+  const entry = (
+    key: string,
+    side: 'front' | 'back',
+    sheet: number,
+    addedSet: number | null = null,
+  ) => ({
+    key,
+    side,
+    sheet,
+    angle: 0 as const,
+    lost: false,
+    addedSet,
+  });
+  // Лента f1 f2 f3 | b2 a1 b1: граница 3, добавленный набор в группе оборотов.
+  const visible = ['f1', 'f2', 'f3', 'b2', 'a1', 'b1'];
+  const sets = { fronts: 3, backs: 3, divider: 3 };
+  const document = { name: '', start: 0, count: 6 };
+
+  it('anchorsOf: «В конец» — последняя видимая страница группы текущей, подпись — группа', () => {
+    expect(
+      anchorsOf(t, {
+        entry: entry('f2', 'front', 2),
+        index: 1,
+        document,
+        documentName: 'Скан',
+        visible,
+        mode: 'sets',
+        sets,
+      }),
+    ).toEqual({
+      current: { key: 'f2', page: 2, label: 'лицевая, 2-я в наборе лиц' },
+      end: { key: 'f3', page: 3, label: 'лиц' },
+      endKind: 'set',
+    });
+    expect(
+      anchorsOf(t, {
+        entry: entry('a1', 'back', 2, 1),
+        index: 4,
+        document,
+        documentName: 'Скан',
+        visible,
+        mode: 'sets',
+        sets,
+      }),
+    ).toEqual({
+      current: { key: 'a1', page: 5, label: 'добавленный набор 1, в наборе оборотов' },
+      end: { key: 'b1', page: 6, label: 'оборотов' },
+      endKind: 'set',
+    });
+  });
+
+  it('anchorsOf: пустая группа текущей невозможна, а пустая лента — оба якоря null', () => {
+    expect(
+      anchorsOf(t, {
+        entry: undefined,
+        index: -1,
+        document: { name: '', start: 0, count: 0 },
+        documentName: '',
+        visible: [],
+        mode: 'sets',
+        sets: { fronts: 0, backs: 0, divider: 0 },
+      }),
+    ).toEqual({ current: null, end: null, endKind: 'set' });
+  });
+
+  it('anchorsOf: режим пар и собрано — конец документа, как в M3.5', () => {
+    expect(
+      anchorsOf(t, {
+        entry: entry('f2', 'front', 2),
+        index: 1,
+        document: { name: 'Акт', start: 0, count: 2 },
+        documentName: 'Акт',
+        visible: ['f1', 'f2', 'f3'],
+        mode: 'assembled',
+        sets: null,
+      }),
+    ).toEqual({
+      current: { key: 'f2', page: 2, label: 'лицо листа 2' },
+      end: { key: 'f2', page: 2, label: 'Акт' },
+      endKind: 'document',
+    });
+  });
+
+  it('сегмент «В конец набора», сводка называет группу и последнюю страницу; якорь — её ключ', () => {
+    const { onStart } = renderModal({
+      current: { key: 'b2', page: 4, label: 'оборотная, 1-я в наборе оборотов' },
+      end: { key: 'b1', page: 6, label: 'оборотов' },
+      endKind: 'set',
+    });
+
+    expect(summary()).toBe('Один проход · после стр. 4 (оборотная, 1-я в наборе оборотов)');
+    expect(screen.queryByRole('radio', { name: 'В конец документа' })).toBeNull();
+    fireEvent.click(radio('В конец набора'));
+    expect(summary()).toBe('Один проход · в конец набора оборотов, после стр. 6');
+    fireEvent.click(start());
+    expect(onStart).toHaveBeenCalledExactlyOnceWith('b1');
   });
 });

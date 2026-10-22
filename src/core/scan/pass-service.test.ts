@@ -551,10 +551,9 @@ describe('служба прохода: команды оборотов (M2, U3)'
     const service = await openPassService(root);
 
     expect(service.snapshot().assembly?.report).toMatchObject({
+      mode: 'sets',
       fronts: 3,
       backs: 2,
-      pairs: 2,
-      unpairedSheets: [1],
       mismatch: true,
     });
   });
@@ -579,6 +578,7 @@ describe('служба прохода: правки редактора (M3, U3)'
     deleted: ['p02-s01-0002'],
     cuts: [1],
     names: ['', 'Договор'],
+    divider: null,
   };
 
   it('правка видна в снимке и сборке, снимает «сохранено» и переживает перезапуск службы (AE1)', async () => {
@@ -853,6 +853,7 @@ describe('служба прохода: пакетное сохранение (M3
         deleted: ['p01-s01-0002'],
         cuts: [1],
         names: ['', ''],
+        divider: null,
       },
       false,
     );

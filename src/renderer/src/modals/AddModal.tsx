@@ -1,6 +1,12 @@
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { AssembledDocument, AssembledPage, ScannerState } from '@shared';
+import type {
+  AssembledDocument,
+  AssembledPage,
+  AssemblyMode,
+  ScannerState,
+  SetsLayout,
+} from '@shared';
 import type { TFunction } from 'i18next';
 import { Modal } from '../components/Modal';
 import { rovingRadioKeyDown, Segments } from '../components/Segments';
@@ -15,26 +21,36 @@ import './add-modal.css';
 // листов приложение не знает); место даёт якорь (KTD-8) — его выбирает экран из видимой ленты и
 // называет сводка. «Начать скан» всегда закрывает модалку (KTD-6): экран уйдёт на `scan` раньше,
 // чем ядро начнёт задание, а отказ придёт тостом. Начальный фокус — «Отмена»: запуск — действие
-// с бумагой в лотке, случайный Enter его начинать не должен.
+// с бумагой в лотке, случайный Enter его начинать не должен. В режиме раздельных наборов (M3.6,
+// KTD11; handoff S10) «В конец документа» становится «В конец набора»: якорь — последняя видимая
+// страница группы текущей, сводка называет группу.
 
 /** Страница-якорь из видимой ленты: ключ, номер в ленте и как её назвать в сводке. */
 export interface AddAnchor {
   readonly key: string;
   readonly page: number;
-  /** Текущая — «лицо листа 4» (теми же словами, что ДЕТАЛИ); конец документа — его имя. */
+  /**
+   * Текущая — «лицо листа 4» (теми же словами, что ДЕТАЛИ); конец документа — его имя; конец
+   * набора — группа («лиц» / «оборотов»).
+   */
   readonly label: string;
 }
+
+/** Куда ведёт второй сегмент места: в конец документа текущей или в конец её набора. */
+export type AddEndKind = 'document' | 'set';
 
 export interface AddAnchors {
   /** Текущая страница; `null` — лента пуста («После текущей страницы» недоступна). */
   readonly current: AddAnchor | null;
-  /** Конец документа текущей: его последняя видимая страница; `null` — лента пуста. */
-  readonly documentEnd: AddAnchor | null;
+  /** Конец документа или набора текущей: его последняя видимая страница; `null` — лента пуста. */
+  readonly end: AddAnchor | null;
+  readonly endKind: AddEndKind;
 }
 
 /**
  * Якоря из видимой ленты (KTD-8): текущая — та, что в превью; конец документа — последняя
- * видимая страница документа текущей, имя — как в тулбаре. Пустая лента — оба `null`.
+ * видимая страница документа текущей, имя — как в тулбаре; в режиме наборов (`sets`) — конец
+ * группы текущей (KTD11). Пустая лента — оба `null`.
  */
 export function anchorsOf(
   t: TFunction,
@@ -45,16 +61,39 @@ export function anchorsOf(
     readonly document: AssembledDocument | undefined;
     readonly documentName: string;
     readonly visible: readonly string[];
+    readonly mode: AssemblyMode;
+    /** Группы ленты в режиме наборов; `null` — пары или собрано. */
+    readonly sets: SetsLayout | null;
   },
 ): AddAnchors {
-  const { entry, index, document } = input;
+  const { entry, index, document, sets } = input;
+  const current =
+    entry === undefined
+      ? null
+      : { key: entry.key, page: index + 1, label: whatOf(t, entry, input.mode) };
+  if (sets !== null) {
+    const inFronts = index < sets.divider;
+    const end = inFronts ? sets.divider - 1 : input.visible.length - 1;
+    const endKey = input.visible[end];
+    return {
+      current,
+      end:
+        endKey === undefined
+          ? null
+          : {
+              key: endKey,
+              page: end + 1,
+              label: t(inFronts ? 'add.summary.groupFronts' : 'add.summary.groupBacks'),
+            },
+      endKind: 'set',
+    };
+  }
   const end = document === undefined ? -1 : document.start + document.count - 1;
   const endKey = input.visible[end];
   return {
-    current:
-      entry === undefined ? null : { key: entry.key, page: index + 1, label: whatOf(t, entry) },
-    documentEnd:
-      endKey === undefined ? null : { key: endKey, page: end + 1, label: input.documentName },
+    current,
+    end: endKey === undefined ? null : { key: endKey, page: end + 1, label: input.documentName },
+    endKind: 'document',
   };
 }
 
@@ -74,7 +113,8 @@ const PLACES: readonly Place[] = ['end', 'after'];
 export function AddModal({
   scanner,
   current,
-  documentEnd,
+  end,
+  endKind,
   onStart,
   onClose,
 }: AddModalProps): ReactNode {
@@ -87,16 +127,18 @@ export function AddModal({
   let placeText: string;
   if (place === 'after' && current !== null) {
     placeText = t('add.summary.after', { page: current.page, what: current.label });
-  } else if (documentEnd === null) {
+  } else if (end === null) {
     placeText = t('add.summary.endEmpty');
+  } else if (endKind === 'set') {
+    placeText = t('add.summary.setEnd', { group: end.label, page: end.page });
   } else {
-    placeText = t('add.summary.end', { name: documentEnd.label, page: documentEnd.page });
+    placeText = t('add.summary.end', { name: end.label, page: end.page });
   }
   const summary = t('add.summary.join', { kind: t(`add.summary.${kind}`), place: placeText });
 
   const start = (): void => {
     // Якорь — в момент нажатия (KTD-8): текущая, последняя страница документа или `null`.
-    const after = place === 'after' && current !== null ? current.key : (documentEnd?.key ?? null);
+    const after = place === 'after' && current !== null ? current.key : (end?.key ?? null);
     onClose();
     onStart(after);
   };
@@ -154,7 +196,9 @@ export function AddModal({
             labelledBy="add-place-kicker"
             values={PLACES}
             selected={place}
-            format={(value) => t(`add.place.${value}`)}
+            format={(value) =>
+              value === 'end' && endKind === 'set' ? t('add.place.setEnd') : t(`add.place.${value}`)
+            }
             disabledReason={(value) =>
               value === 'after' && current === null ? t('add.place.afterNone') : undefined
             }

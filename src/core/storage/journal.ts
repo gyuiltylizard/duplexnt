@@ -8,7 +8,7 @@ import {
   type PassState,
 } from '@shared';
 import { scanParamsSchema } from '../escl/scan-settings';
-import { editsSchemaOf, pageKeySchema } from './edits-schema';
+import { editsSchemaOf, editsV4Schema, pageKeySchema } from './edits-schema';
 import {
   MAX_PAGE_INDEX,
   MAX_PASS_NUMBER,
@@ -27,8 +27,10 @@ import { parseVersioned, type VersionedParse } from './versioned-file';
 // - состояние прохода — это состояние его последнего сегмента и признак «принят как есть»;
 // - страницы сегмента — номера с 1 по `pageCount`; ключ и имя файла выводятся из номеров;
 // - «страница потеряна» — запись есть, файла нет: это видно по диску, а не по журналу.
+// Запись сборки (`assembled`, M3.6) — не выводимое, а решение пользователя: порядок листов при
+// несовпадении проходов из проходов не следует (амендмент 2026-10-19).
 
-export const JOURNAL_VERSION = 4;
+export const JOURNAL_VERSION = 5;
 
 const segmentSchema = z.strictObject({
   number: z.number().int().min(1).max(MAX_SEGMENT_NUMBER),
@@ -140,6 +142,10 @@ const rolesHold = (journal: {
 
 const editsSchema = editsSchemaOf();
 
+/** Ключи записи сборки не повторяются: страница в ленте ровно один раз. */
+const assembledUnique = (journal: { readonly assembled: readonly string[] | null }): boolean =>
+  journal.assembled === null || new Set(journal.assembled).size === journal.assembled.length;
+
 // Журнал версии 2 (M2): без правок редактора. Чтение прежних версий обязательно, запись —
 // всегда текущей.
 const journalV2Fields = {
@@ -155,14 +161,28 @@ const journalV2Fields = {
 };
 
 // Журнал версии 3 (M3): правки редактора, роль прохода — по позиции.
-const journalV3Fields = { ...journalV2Fields, edits: editsSchema };
+const journalV3Fields = { ...journalV2Fields, edits: editsV4Schema };
 
+// Журнал версии 4 (M3.5): роль прохода и якорь записаны явно.
+const journalV4Fields = { ...journalV3Fields, passes: z.array(passSchema) };
+
+// Журнал версии 5 (M3.6; амендмент ADR 0004 от 2026-10-19): запись сборки на сессии и граница
+// наборов в правках. `assembled` — зафиксированная командой «Собрать документ» последовательность
+// ключей (в том числе удалённых на момент сборки) или `null` («не собрано»); мёртвые ключи из
+// неё вычищает нормализация, а не схема.
 export const journalSchema = z
   .strictObject({
     version: z.literal(JOURNAL_VERSION),
-    ...journalV3Fields,
-    passes: z.array(passSchema),
+    ...journalV4Fields,
+    edits: editsSchema,
+    assembled: z.array(pageKeySchema).readonly().nullable(),
   })
+  .refine(countersHold)
+  .refine(rolesHold)
+  .refine(assembledUnique);
+
+const journalV4Schema = z
+  .strictObject({ version: z.literal(4), ...journalV4Fields })
   .refine(countersHold)
   .refine(rolesHold);
 
@@ -187,13 +207,22 @@ export type PassOrigin = NonNullable<JournalPass['origin']>;
 
 type JournalV2 = z.infer<typeof journalV2Schema>;
 type JournalV3 = z.infer<typeof journalV3Schema>;
+type JournalV4 = z.infer<typeof journalV4Schema>;
+
+/** Чтение v4: не собрано, граница наборов авто (M3.6, R1). */
+const upgradeToV5 = (journal: JournalV4): Journal => ({
+  ...journal,
+  version: JOURNAL_VERSION,
+  edits: { ...journal.edits, divider: null },
+  assembled: null,
+});
 
 /**
  * Роль по позиции (чтение v3): первый проход со страницами — лицевые, второй — обороты,
  * остальные — добавленные. Пустой проход получает роль, которую занял бы следующий со
  * страницами: роли у него всё равно нет, а схема считает только проходы со страницами.
  */
-const upgradeToV4 = (journal: JournalV3): Journal => {
+const upgradeToV4 = (journal: JournalV3): JournalV4 => {
   let rank = 0;
   const passes = journal.passes.map((pass) => {
     const kind: PassKind = (['fronts', 'backs'] as const)[rank] ?? 'added';
@@ -202,7 +231,7 @@ const upgradeToV4 = (journal: JournalV3): Journal => {
     }
     return { ...pass, kind, after: null };
   });
-  return { ...journal, version: JOURNAL_VERSION, passes };
+  return { ...journal, version: 4, passes };
 };
 
 const upgradeToV3 = (journal: JournalV2): JournalV3 => ({
@@ -220,7 +249,7 @@ const upgradeToV2 = (journal: z.infer<typeof journalV1Schema>): JournalV2 => ({
 });
 
 /**
- * Разбор журнала: текущая версия, затем прежние цепочкой дефолтов (v1 → v2 → v3 → v4).
+ * Разбор журнала: текущая версия, затем прежние цепочкой дефолтов (v1 → v2 → v3 → v4 → v5).
  * Несовместимость (маркер новее, неизвестное поле) решается по текущей схеме и прежние не
  * пробует: файл с неизвестным полем несовместим при любой версии.
  */
@@ -229,17 +258,21 @@ export function parseJournal(bytes: Uint8Array): VersionedParse<Journal> {
   if (current.kind !== 'unreadable') {
     return current;
   }
+  const v4 = parseVersioned(bytes, journalV4Schema, JOURNAL_VERSION);
+  if (v4.kind === 'ok') {
+    return { kind: 'ok', value: upgradeToV5(v4.value) };
+  }
   const v3 = parseVersioned(bytes, journalV3Schema, JOURNAL_VERSION);
   if (v3.kind === 'ok') {
-    return { kind: 'ok', value: upgradeToV4(v3.value) };
+    return { kind: 'ok', value: upgradeToV5(upgradeToV4(v3.value)) };
   }
   const v2 = parseVersioned(bytes, journalV2Schema, JOURNAL_VERSION);
   if (v2.kind === 'ok') {
-    return { kind: 'ok', value: upgradeToV4(upgradeToV3(v2.value)) };
+    return { kind: 'ok', value: upgradeToV5(upgradeToV4(upgradeToV3(v2.value))) };
   }
   const v1 = parseVersioned(bytes, journalV1Schema, JOURNAL_VERSION);
   return v1.kind === 'ok'
-    ? { kind: 'ok', value: upgradeToV4(upgradeToV3(upgradeToV2(v1.value))) }
+    ? { kind: 'ok', value: upgradeToV5(upgradeToV4(upgradeToV3(upgradeToV2(v1.value)))) }
     : current;
 }
 
@@ -253,6 +286,7 @@ export function newJournal(sessionId: string): Journal {
     backsDeclined: false,
     saved: false,
     edits: EMPTY_EDITS,
+    assembled: null,
   };
 }
 

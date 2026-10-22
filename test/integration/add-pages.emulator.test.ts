@@ -87,25 +87,28 @@ describe('«Добавить» — полный путь через эмулят
       trays: [[1, 2, 3], [6, 5], [7], [8]],
     });
     await scanned(first, 3, 2);
+    // Раздельные наборы (M3.6): лица, затем обороты обратным порядком подачи.
     expect(first.snapshot().assembly?.report).toMatchObject({
+      mode: 'sets',
       fronts: 3,
       backs: 2,
-      pairs: 2,
-      unpairedSheets: [1],
       mismatch: true,
     });
-    expect(keysOf(first.snapshot())).toEqual([F1, F2, B2, F3, B3]);
+    expect(keysOf(first.snapshot())).toEqual([F1, F2, F3, B2, B3]);
 
-    // AE1: текущая — лицо непарного листа; набор из одной страницы встаёт сразу за ним.
+    // AE1: текущая — лицо первого листа; набор из одной страницы встаёт сразу за ним, в группе лиц.
     expect(unwrap(await first.startPass({ kind: 'added', after: F1 }))).toMatchObject({
       end: 'completed',
       pages: 1,
     });
-    expect(keysOf(first.snapshot())).toEqual([F1, A1, F2, B2, F3, B3]);
+    expect(keysOf(first.snapshot())).toEqual([F1, A1, F2, F3, B2, B3]);
     expect(setsOf(first.snapshot())).toEqual([null, 1, null, null, null, null]);
-    // Отчёт пар добавление не меняет: лист №1 остаётся непарным (KTD-7 M3).
+    // Режим не меняется: набор в группе лиц, счётчики живые, числа проходов прежние (R10).
     expect(first.snapshot().assembly?.report).toMatchObject({
-      unpairedSheets: [1],
+      mode: 'sets',
+      groups: { fronts: 4, backs: 2, divider: 4 },
+      fronts: 3,
+      backs: 2,
       mismatch: true,
     });
     expect(first.snapshot().assembly).toMatchObject({ hasEdits: false, orderEdited: false });
@@ -118,7 +121,7 @@ describe('«Добавить» — полный путь через эмулят
       [2, 'backs', null],
       [3, 'added', F1],
     ]);
-    expect(keysOf(service.snapshot())).toEqual([F1, A1, F2, B2, F3, B3]);
+    expect(keysOf(service.snapshot())).toEqual([F1, A1, F2, F3, B2, B3]);
 
     // AE3: ручной порядок — третий лист в начало; затем добавление после лица 2.
     const manual: SessionEdits = { ...EMPTY_EDITS, order: [F3, F1, A1, F2, B2, B3] };
@@ -138,14 +141,32 @@ describe('«Добавить» — полный путь через эмулят
     expect(setsOf(service.snapshot())).toEqual([null, null, 1, null, 2, null, null]);
     expect(service.snapshot().assembly).toMatchObject({ hasEdits: true, orderEdited: true });
 
-    // AE11: PDF — страницы в порядке ленты, добавленные на своих местах.
+    // M3.6: до сборки документа сохранение отказывает — лента из двух наборов не документ.
     const folder = join(root, 'выход');
     await mkdir(folder, { recursive: true });
-    const saved = unwrap(
-      await service.saveDocuments(folder, { mode: 'single', names: ['Набор'], retry: false }),
+    const request = { mode: 'single', names: ['Набор'], retry: false } as const;
+    expect(await service.saveDocuments(folder, request)).toMatchObject({
+      ok: false,
+      error: { code: 'sessionConflict', details: { reason: 'notAssembled' } },
+    });
+    // Уравнять: лица F3 F1 A1 F2 A2 (5) против оборотов B2 B3 (2) — удалить A2 и перенести F2
+    // к оборотам (граница 3): F3 F1 A1 | F2 B2 B3.
+    unwrap(
+      await service.setEdits(
+        { ...manual, order: [F3, F1, A1, F2, A2, B2, B3], deleted: [A2], divider: 3 },
+        false,
+      ),
     );
+    expect(service.snapshot().assembly?.sets).toEqual({ fronts: 3, backs: 3, divider: 3 });
+    unwrap(await service.assemble());
+    // Запись: F3 F2 F1 B2 A1 B3; удалённая A2 — сразу за своим видимым предшественником F2.
+    expect(service.snapshot().session?.assembled).toEqual([F3, F2, A2, F1, B2, A1, B3]);
+    expect(keysOf(service.snapshot())).toEqual([F3, F2, F1, B2, A1, B3]);
+
+    // AE11: PDF — страницы в порядке ленты, добавленная на своём месте.
+    const saved = unwrap(await service.saveDocuments(folder, request));
     expect(saved.failed).toEqual([]);
-    expect(await pdfFixtures(join(folder, 'Набор.pdf'))).toEqual([3, 1, 7, 2, 8, 5, 6]);
+    expect(await pdfFixtures(join(folder, 'Набор.pdf'))).toEqual([3, 2, 1, 5, 7, 6]);
     expect(service.snapshot().session?.saved).toBe(true);
   });
 
@@ -169,7 +190,7 @@ describe('«Добавить» — полный путь через эмулят
       backsDeclined: true,
       mismatch: false,
     });
-    expect(snapshot.assembly?.order.every((page) => page.angle === 0 && !page.unpaired)).toBe(true);
+    expect(snapshot.assembly?.order.every((page) => page.angle === 0)).toBe(true);
     expect(snapshot.session?.passes.map((pass) => pass.kind)).toEqual(['fronts', 'added']);
   });
 

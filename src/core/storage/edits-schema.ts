@@ -15,20 +15,37 @@ const isNonDecreasing = (values: readonly number[]): boolean =>
   values.every((value, index) => index === 0 || value >= (values[index - 1] ?? 0));
 
 /**
- * `maxItems` — потолок длины каждой коллекции: мост ставит его против мусора на входе, журнал —
- * нет (большая сессия пользователя не должна стать нечитаемой).
+ * Поля правок версии 4 (M3–M3.5). `maxItems` — потолок длины каждой коллекции: мост ставит его
+ * против мусора на входе, журнал — нет (большая сессия пользователя не должна стать нечитаемой).
+ */
+const editsV4FieldsOf = (maxItems: number) => ({
+  order: z.array(pageKeySchema).max(maxItems).readonly(),
+  rotations: z
+    .record(pageKeySchema, z.literal(EDIT_ANGLES))
+    .refine((rotations) => Object.keys(rotations).length <= maxItems)
+    .readonly(),
+  deleted: z.array(pageKeySchema).max(maxItems).readonly(),
+  cuts: z.array(z.number().int().min(0)).max(maxItems).readonly(),
+  names: z.array(z.string().max(MAX_DOCUMENT_NAME_LENGTH)).max(maxItems).readonly(),
+});
+
+const namesMatchCuts = (edits: {
+  readonly cuts: readonly number[];
+  readonly names: readonly string[];
+}): boolean => edits.names.length === edits.cuts.length + 1 && isNonDecreasing(edits.cuts);
+
+/** Правки журнала версии 4: без границы наборов — только для чтения прежних файлов. */
+export const editsV4Schema = z
+  .strictObject(editsV4FieldsOf(Number.POSITIVE_INFINITY))
+  .refine(namesMatchCuts);
+
+/**
+ * Текущая форма правок (M3.6; амендмент 2026-10-19): к полям v4 — граница наборов `divider`,
+ * целое от нуля или `null` (авто). Ноль и значение за концом ленты схема пропускает: границу
+ * прижимает и обнуляет вне режима нормализация, как разрезы.
  */
 export function editsSchemaOf(maxItems = Number.POSITIVE_INFINITY) {
   return z
-    .strictObject({
-      order: z.array(pageKeySchema).max(maxItems).readonly(),
-      rotations: z
-        .record(pageKeySchema, z.literal(EDIT_ANGLES))
-        .refine((rotations) => Object.keys(rotations).length <= maxItems)
-        .readonly(),
-      deleted: z.array(pageKeySchema).max(maxItems).readonly(),
-      cuts: z.array(z.number().int().min(0)).max(maxItems).readonly(),
-      names: z.array(z.string().max(MAX_DOCUMENT_NAME_LENGTH)).max(maxItems).readonly(),
-    })
-    .refine((edits) => edits.names.length === edits.cuts.length + 1 && isNonDecreasing(edits.cuts));
+    .strictObject({ ...editsV4FieldsOf(maxItems), divider: z.number().int().min(0).nullable() })
+    .refine(namesMatchCuts);
 }

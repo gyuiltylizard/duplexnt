@@ -15,8 +15,15 @@ import {
   type SessionSnapshot,
   type StartPassRequest,
 } from '@shared';
-import { autoKeysOf } from '../scan/assembly';
-import { rebaseEdits } from '../scan/edits';
+import {
+  autoDividerOf,
+  baseAssembly,
+  baseKeysOf,
+  editsContextOf,
+  frozenSequenceOf,
+  setsLayoutOf,
+} from '../scan/assembly';
+import { rebaseEdits, visibleKeysOf } from '../scan/edits';
 import { isTempName, removeByPrefix, renameWithRetry, writeStreamAtomic } from './atomic-file';
 import {
   JOURNAL_VERSION,
@@ -202,6 +209,13 @@ export interface SessionStore {
   /** «Обороты не нужны» (M2, KTD-6): durable-отметка, `flip` больше не показывается. */
   declineBacks(): Promise<Result<void>>;
   /**
+   * «Собрать документ» (M3.6, R12, R13; KTD5): в режиме раздельных наборов с равными ненулевыми
+   * видимыми числами групп пишет запись сборки (R7), обнуляет порядок и границу, снимает
+   * «сохранено» — одним коммитом; повороты и удаления остаются. Отказы по порядку R13:
+   * `noSession`, `passRunning`, `passInterrupted`, `notSeparate`, `setsUnequal`.
+   */
+  assemble(): Promise<Result<void>>;
+  /**
    * Набор сохранён в PDF (M2, R12); ставится после успешной записи файла. С `expectedRevision`
    * отметка ставится, только если журнал не менялся с момента снятия ревизии: правка во время
    * сборки и записи уже сняла отметку, и затирать её устаревшим «сохранено» нельзя.
@@ -256,18 +270,40 @@ function passSnapshotsOf(journal: Journal, lost: ReadonlySet<string>): PassSnaps
 const NOTHING_LOST: ReadonlySet<string> = new Set();
 
 /**
- * Журнал с правками в каноническом виде против своих страниц (M3, KTD-3a, KTD-10). Если
- * состав страниц изменился относительно `previous` не через правку (досканирование, отброс
- * сегмента, сверка), разрезы переезжают вслед за страницами; правки исчезнувших ключей
+ * Журнал с правками в каноническом виде против своих страниц (M3, KTD-3a, KTD-10; M3.6, R8).
+ * Запись сборки чистится от исчезнувших ключей всегда — до раннего выхода. Если состав страниц
+ * изменился относительно `previous` не через правку (досканирование, отброс сегмента, сверка),
+ * разрезы и граница наборов переезжают вслед за страницами; правки исчезнувших ключей
  * вычищаются. Пустые правки уже канонические — на каждой странице прохода их не пересчитывают.
  */
 export function withRebasedEdits(previous: Journal | null, next: Journal): Journal {
-  if (sameEdits(next.edits, EMPTY_EDITS)) {
-    return next;
+  let cleaned = next;
+  if (next.assembled !== null) {
+    const alive = new Set(next.passes.flatMap((pass) => pagesOf(pass).map((page) => page.key)));
+    const assembled = next.assembled.filter((key) => alive.has(key));
+    if (assembled.length !== next.assembled.length) {
+      cleaned = { ...next, assembled };
+    }
   }
-  const before = previous === null ? null : autoKeysOf(passSnapshotsOf(previous, NOTHING_LOST));
-  const after = autoKeysOf(passSnapshotsOf(next, NOTHING_LOST));
-  return { ...next, edits: rebaseEdits(before, after, next.edits) };
+  if (sameEdits(cleaned.edits, EMPTY_EDITS)) {
+    return cleaned;
+  }
+  // Ключи «до» и «после» — по раскладке, в которой лента окажется после идущего прохода
+  // (`settled`): новый ключ встаёт в явный порядок за соседом по будущей группе. Контекст
+  // нормализации — по настоящему режиму (идёт проход — переходный).
+  const before =
+    previous === null
+      ? null
+      : baseKeysOf(baseAssembly(passSnapshotsOf(previous, NOTHING_LOST), previous.assembled, true));
+  const passes = passSnapshotsOf(cleaned, NOTHING_LOST);
+  const base = baseAssembly(passes, cleaned.assembled);
+  const edits = rebaseEdits(
+    before,
+    baseKeysOf(baseAssembly(passes, cleaned.assembled, true)),
+    cleaned.edits,
+    editsContextOf(base, passes, cleaned.edits),
+  );
+  return { ...cleaned, edits };
 }
 
 const isJournalFile = (name: string): boolean =>
@@ -531,6 +567,7 @@ export function createSessionStore(
         saved: journal.saved,
         passes: passSnapshotsOf(journal, lost),
         edits: journal.edits,
+        assembled: journal.assembled,
       };
     },
 
@@ -563,7 +600,14 @@ export function createSessionStore(
           journal === null || (isVacant(journal) && journal.deletions.length === 0)
             ? newJournal(newSessionId())
             : isVacant(journal)
-              ? { ...journal, passes: [], backsDeclined: false, saved: false, edits: EMPTY_EDITS }
+              ? {
+                  ...journal,
+                  passes: [],
+                  backsDeclined: false,
+                  saved: false,
+                  edits: EMPTY_EDITS,
+                  assembled: null,
+                }
               : journal;
         const number = base.nextPass;
         if (number > MAX_PASS_NUMBER) {
@@ -827,6 +871,41 @@ export function createSessionStore(
             : journal;
         // Вывод не меняется (оборотов и не было) — отметка о сохранении остаётся.
         return commit({ ...trimmed, backsDeclined: true }, 'must');
+      }),
+
+    assemble: () =>
+      mutating(async () => {
+        if (journal === null || isVacant(journal)) {
+          return conflict('noSession');
+        }
+        if (runningSegmentOf(journal) !== null) {
+          return conflict('passRunning');
+        }
+        const last = journal.passes.at(-1);
+        if (last !== undefined && passStateOf(last) === 'interrupted') {
+          return conflict('passInterrupted');
+        }
+        const base = baseAssembly(passSnapshotsOf(journal, NOTHING_LOST), journal.assembled);
+        const keys = baseKeysOf(base);
+        const visible = visibleKeysOf(keys, journal.edits);
+        const sets = setsLayoutOf(visible, journal.edits, autoDividerOf(base, journal.edits));
+        if (sets === null) {
+          return conflict('notSeparate');
+        }
+        if (sets.fronts === 0 || sets.fronts !== sets.backs) {
+          return conflict('setsUnequal');
+        }
+        // Запись — решение пользователя (амендмент 2026-10-19): расстановка фиксируется, порядок
+        // и граница больше не нужны; сохранённый PDF (если был) устарел.
+        return commit(
+          {
+            ...journal,
+            assembled: frozenSequenceOf(keys, journal.edits, sets.divider),
+            edits: { ...journal.edits, order: [], divider: null },
+            saved: false,
+          },
+          'must',
+        );
       }),
 
     markSaved: (expectedRevision) =>

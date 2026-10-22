@@ -4,6 +4,7 @@ import { pageImageUrl, type AssembledPage, type PageAngle } from '@shared';
 import type { TFunction } from 'i18next';
 import { useImageLoad } from '../components/useImageLoad';
 import type { DropSide } from '../state/edits';
+import { whatOf } from '../state/page-text';
 
 /** Как выбрали миниатюру: клик, Shift — диапазон, Ctrl — по одной (handoff M3, S4). */
 export type PickMode = 'single' | 'range' | 'toggle';
@@ -31,24 +32,30 @@ const modeOf = (event: ModifierKeys): PickMode =>
 export const pickModifierHeld = (event: ModifierKeys): boolean => modeOf(event) !== 'single';
 
 /**
- * Имя карточки для скринридера — по самому важному: потеря, непарность, добавленный набор
- * (у его страницы нет ни «лица», ни «оборота» — её называет набор, S5), иначе номер.
+ * Имя карточки для скринридера — по самому важному: потеря, затем режим наборов («Страница 15,
+ * оборотная, 3-я в наборе оборотов» — M3.6, S9), добавленный набор (у его страницы нет ни
+ * «лица», ни «оборота» — её называет набор, S5), иначе номер.
  */
 function thumbLabelOf(
   t: TFunction,
   page: {
     readonly lost: boolean;
-    readonly unpaired: boolean;
-    readonly addedSet: number | null;
+    readonly inSets: boolean;
+    readonly side: AssembledPage['side'];
     readonly sheet: number | null;
+    readonly addedSet: number | null;
     readonly position: number;
   },
 ): string {
   if (page.lost) {
     return t('thumb.lostLabel', { number: page.position });
   }
-  if (page.unpaired) {
-    return t('thumb.unpairedLabel', { number: page.sheet ?? page.position });
+  if (page.inSets) {
+    const { side, sheet, addedSet } = page;
+    return t('thumb.setLabel', {
+      number: page.position,
+      what: whatOf(t, { side, sheet, addedSet }, 'sets'),
+    });
   }
   if (page.addedSet !== null) {
     return t('thumb.addedLabel', { number: page.position, set: page.addedSet });
@@ -58,7 +65,7 @@ function thumbLabelOf(
 
 /**
  * Миниатюра в ленте: обычная, потерянная (S18 M1), строится или не построилась (S19 M1),
- * оборот с тегом «об», непарный лист с янтарной точкой (S6 M2), угол из ядра (S4 M3),
+ * страница прохода оборотов с тегом «об» (по происхождению — R11 M3.6), угол из ядра (S4 M3),
  * перетаскивание с маркером вставки (S6 M3), split-бар границы (S7 M3), страница
  * добавленного набора с тегом «Д1» (S5 M3.5).
  * Пропсы — примитивы, чтобы `memo` переживал новый снимок (объекты порядка пересоздаются
@@ -68,12 +75,13 @@ function thumbLabelOf(
 export const EditorThumb = memo(function EditorThumb({
   sessionId,
   pageKey,
+  backsOrigin,
   side,
   sheet,
   angle,
   lost,
   position,
-  unpaired,
+  inSets,
   addedSet,
   current,
   selected,
@@ -88,14 +96,18 @@ export const EditorThumb = memo(function EditorThumb({
 }: {
   readonly sessionId: string;
   readonly pageKey: string;
+  /** Страница прохода оборотов — тег «об» по происхождению, в любой группе (R11). */
+  readonly backsOrigin: boolean;
+  /** Сторона и номер по режиму (R11) — подпись карточки в режиме наборов. */
   readonly side: AssembledPage['side'];
   readonly sheet: number | null;
   /** Угол страницы из ядра (KTD-4): только отображение, файлы не меняются. */
   readonly angle: PageAngle;
   readonly lost: boolean;
-  /** Номер по порядку в ленте, с единицы — сквозной через документы. */
+  /** Номер по порядку в ленте, с единицы — сквозной через документы и группы. */
   readonly position: number;
-  readonly unpaired: boolean;
+  /** Режим наборов: подпись — «что это за страница» теми же словами, что ДЕТАЛИ (KTD9). */
+  readonly inSets: boolean;
   /** Номер добавленного набора от 1 (KTD-4) — тег «Д{{set}}»; `null` — лицо или оборот. */
   readonly addedSet: number | null;
   /** Текущая — её показывает превью; точка входа клавиатуры (роуминг `tabindex`). */
@@ -181,7 +193,7 @@ export const EditorThumb = memo(function EditorThumb({
     classes.push('thumb--dragging');
   }
 
-  const base = thumbLabelOf(t, { lost, unpaired, addedSet, sheet, position });
+  const base = thumbLabelOf(t, { lost, inSets, side, sheet, addedSet, position });
   const label = angle === 0 ? base : `${base}, ${t('thumb.angle', { angle })}`;
 
   return (
@@ -222,7 +234,7 @@ export const EditorThumb = memo(function EditorThumb({
       <div className="thumb__paper">{paper}</div>
       <div className="thumb__foot">
         <span className="thumb__num">{position}</span>
-        {side === 'back' && <span className="thumb__tag">{t('thumb.tagBacks')}</span>}
+        {backsOrigin && <span className="thumb__tag">{t('thumb.tagBacks')}</span>}
         {addedSet !== null && (
           <span
             className="thumb__tag thumb__tag--added"
@@ -230,13 +242,6 @@ export const EditorThumb = memo(function EditorThumb({
           >
             {t('thumb.tagAdded', { set: addedSet })}
           </span>
-        )}
-        {unpaired && (
-          <span
-            className="dot dot--warning thumb__flag"
-            title={t('thumb.unpairedTitle')}
-            aria-hidden="true"
-          />
         )}
       </div>
     </li>

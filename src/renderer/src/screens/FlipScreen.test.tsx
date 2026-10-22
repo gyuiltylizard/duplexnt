@@ -17,11 +17,10 @@ const PARAMS = { colorMode: 'Grayscale8', resolution: 300, paperSize: 'A4' } as 
 
 function report(fronts: number): AssemblyReport {
   return {
+    mode: 'pairs',
+    groups: null,
     fronts,
     backs: 0,
-    pairs: 0,
-    unpairedSheets: [],
-    extraBacks: 0,
     backsState: null,
     backsDeclined: false,
     mismatch: false,
@@ -37,6 +36,7 @@ function makeSnapshot(fronts: number): Snapshot {
       backsDeclined: false,
       saved: false,
       edits: EMPTY_EDITS,
+      assembled: null,
       passes: [
         {
           number: 1,

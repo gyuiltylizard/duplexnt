@@ -28,6 +28,7 @@ function makeSession(overrides: Partial<SessionSnapshot>): SessionSnapshot {
     backsDeclined: false,
     saved: false,
     edits: EMPTY_EDITS,
+    assembled: null,
     passes: [makePass({})],
     ...overrides,
   };

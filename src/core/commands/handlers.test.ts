@@ -55,6 +55,7 @@ function setup(
     stopPass: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
     acceptPass: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
     declineBacks: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
+    assemble: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
     setEdits: vi.fn((): Promise<Result<{ readonly seq: number }>> =>
       Promise.resolve(ok({ seq: 7 })),
     ),
@@ -144,6 +145,7 @@ describe('команды без входа', () => {
     'stopPass',
     'acceptPass',
     'declineBacks',
+    'assemble',
     'getSaveFolder',
     'chooseSaveFolder',
     'closeSession',
@@ -245,6 +247,23 @@ describe('снимок и проход', () => {
     );
   });
 
+  it('assemble зовёт службу; отказ доходит кодом; тело запроса схема отвергает (M3.6, U3)', async () => {
+    const { handlers, service } = setup();
+
+    expect(await handlers.assemble(undefined)).toEqual(ok(undefined));
+    expect(service.assemble).toHaveBeenCalledOnce();
+
+    service.assemble.mockResolvedValueOnce(fail('sessionConflict', { reason: 'setsUnequal' }));
+    expect(await handlers.assemble(undefined)).toEqual(
+      fail('sessionConflict', { reason: 'setsUnequal' }),
+    );
+    expect(await handlers.assemble({ divider: 2 })).toMatchObject({
+      ok: false,
+      error: { code: 'invalidInput' },
+    });
+    expect(service.assemble).toHaveBeenCalledTimes(2);
+  });
+
   it('setEdits: строгая схема, затем служба — правки и тумблер одним вызовом (M3, U3)', async () => {
     const { handlers, service } = setup();
     const edits: SessionEdits = {
@@ -253,6 +272,7 @@ describe('снимок и проход', () => {
       deleted: ['p02-s01-0001'],
       cuts: [1],
       names: ['', 'Договор'],
+      divider: null,
     };
 
     expect(await handlers.setEdits({ edits, rotate180: true })).toEqual(ok({ seq: 7 }));

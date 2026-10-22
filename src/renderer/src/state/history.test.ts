@@ -185,6 +185,7 @@ describe('подпись ленты и состояние снимка', () => {
     backsDeclined: false,
     saved: false,
     edits: EMPTY_EDITS,
+    assembled: null,
     passes: [pass(1, ['f1', 'f2']), pass(2, ['b1', 'b2'])],
     ...extra,
   });
@@ -198,6 +199,8 @@ describe('подпись ленты и состояние снимка', () => {
       session({ passes: [pass(1, ['f1', 'f2']), pass(2, ['b1', 'b2'], { rotate180: true })] }),
     ],
     ['отметка «сохранено»', session({ saved: true })],
+    // Граница наборов — правка, как разрез: историю не чистит (M3.6).
+    ['граница наборов', session({ edits: { ...EMPTY_EDITS, divider: 1 } })],
     [
       'потеря файла страницы',
       session({
@@ -228,6 +231,8 @@ describe('подпись ленты и состояние снимка', () => {
       session({ passes: [pass(1, ['f1', 'f2']), pass(2, ['b1', 'b2'], { state: 'accepted' })] }),
     ],
     ['новая сессия', session({ id: 'session.20261006-130000-dcba' })],
+    // M3.6 (R14, KTD5): «Собрать документ» пишет запись — стек после сборки пуст (AE4).
+    ['документ собран', session({ assembled: ['f1', 'b2', 'f2', 'b1'] })],
   ])('меняется: %s', (_name, changed) => {
     expect(tapeOf(changed)).not.toBe(tapeOf(BASE));
   });

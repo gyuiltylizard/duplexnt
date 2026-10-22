@@ -1,5 +1,5 @@
 import { EMPTY_EDITS, fail, ok, type Snapshot } from '@shared';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { StrictMode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import './i18n';
@@ -39,6 +39,7 @@ describe('M3.5: посадка добавленного набора (KTD-7; han
         backsDeclined: false,
         saved: false,
         edits: EMPTY_EDITS,
+        assembled: null,
         passes: [
           pass(1, 'fronts', 3),
           pass(2, 'backs', 3),
@@ -285,7 +286,7 @@ describe('M3.5: посадка добавленного набора (KTD-7; han
     },
   );
 
-  it('mismatch при добавленном наборе не показывается и после перезапуска (KTD-7)', async () => {
+  it('mismatch при добавленном наборе показывается и после перезапуска: режим активен (M3.6, R20)', async () => {
     const session = withAdded(1, 1).session;
     stubApi(
       makeSnapshot({
@@ -297,9 +298,11 @@ describe('M3.5: посадка добавленного набора (KTD-7; han
     );
     render(<App />);
 
-    expect(await screen.findByText('стр. 1 из 6')).toBeDefined();
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('В первом проходе 3 листа, во втором — 2')).toBeDefined();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Понятно' }));
     expect(screen.queryByRole('dialog')).toBeNull();
-    // Пометка непарного листа живёт в ленте: отчёт пар добавление не меняет (KTD-7 M3).
-    expect(screen.getByTitle('У этого листа не нашлось пары')).toBeDefined();
+    // Набор без якоря встал в конец — в группу оборотов: 3 против 3, лента в режиме наборов.
+    expect(screen.getByText('Наборы уравнены — соберите документ')).toBeDefined();
   });
 });

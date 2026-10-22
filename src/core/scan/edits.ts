@@ -14,7 +14,9 @@ import {
 //
 // Канонический вид: в `order`, `rotations` и `deleted` только ключи живых страниц, без
 // повторов; разрезы строго внутри видимой ленты и по возрастанию — пустых документов нет;
-// имён ровно на одно больше, чем разрезов. Нормализация идемпотентна.
+// имён ровно на одно больше, чем разрезов. В режиме раздельных наборов (M3.6, KTD3) разрезов и
+// имён нет — вместо них граница наборов `divider` в пределах ленты (0 и «все» допустимы),
+// `null` при равенстве авто; вне режима граница всегда `null`. Нормализация идемпотентна.
 
 function unique(keys: readonly string[], keep: (key: string) => boolean): string[] {
   const seen = new Set<string>();
@@ -71,8 +73,45 @@ export function normalizeCuts(
   return { cuts: kept.slice(1).map((doc) => doc.start), names: kept.map((doc) => doc.name) };
 }
 
-/** Канонический вид правок для сессии с автопорядком `autoKeys` (идемпотентно). */
-export function normalizeEdits(autoKeys: readonly string[], edits: SessionEdits): SessionEdits {
+/**
+ * Против чего нормализуются разрезы и граница (M3.6, R8): в режиме пар и «собрано» живут
+ * разрезы, граница — `null`; в режиме раздельных наборов — граница с авто-значением `auto`
+ * (число видимых лиц), разрезов нет; переходный — идёт проход оборотов: режим ленты «пары», но
+ * ни разрезы, ни граница не обрезаются до остановки прохода, иначе досканирование стирало бы
+ * расстановку, а запуск оборотов — разрезы.
+ */
+export type EditsContext =
+  | { readonly kind: 'pairs' }
+  | { readonly kind: 'sets'; readonly auto: number }
+  | { readonly kind: 'transit' };
+
+export const PAIRS_CONTEXT: EditsContext = { kind: 'pairs' };
+export const TRANSIT_CONTEXT: EditsContext = { kind: 'transit' };
+export const setsContext = (auto: number): EditsContext => ({ kind: 'sets', auto });
+
+/**
+ * Граница наборов внутри ленты длины `length` (KTD3): выход за края прижимается, равная
+ * автоматической `auto` — `null` (`auto` неизвестно в переходном состоянии — только прижатие).
+ * В отличие от разреза не схлопывается: группа без видимых страниц существует.
+ */
+function normalizeDivider(
+  divider: number | null,
+  auto: number | null,
+  length: number,
+): number | null {
+  if (divider === null) {
+    return null;
+  }
+  const clamped = Math.min(length, Math.max(0, Math.trunc(divider)));
+  return clamped === auto ? null : clamped;
+}
+
+/** Канонический вид правок для сессии с базовым порядком `autoKeys` в контексте режима (идемпотентно). */
+export function normalizeEdits(
+  autoKeys: readonly string[],
+  edits: SessionEdits,
+  context: EditsContext = PAIRS_CONTEXT,
+): SessionEdits {
   const alive = new Set(autoKeys);
   const isAlive = (key: string): boolean => alive.has(key);
   const rotations: Record<string, EditAngle> = {};
@@ -84,7 +123,27 @@ export function normalizeEdits(autoKeys: readonly string[], edits: SessionEdits)
   const order = unique(edits.order, isAlive);
   const deleted = unique(edits.deleted, isAlive);
   const length = visibleKeysOf(autoKeys, { ...edits, order, deleted }).length;
-  return { order, rotations, deleted, ...normalizeCuts(edits.cuts, edits.names, length) };
+  const base = { order, rotations, deleted };
+  switch (context.kind) {
+    case 'sets':
+      // «Равна авто» значит «та же граница» только при автопорядке: при явном порядке позиции и
+      // базовые группы расходятся, и схлопнутая к null граница пересчиталась бы по группам
+      // (ревью M3.6, #4).
+      return {
+        ...base,
+        cuts: [],
+        names: [''],
+        divider: normalizeDivider(edits.divider, order.length === 0 ? context.auto : null, length),
+      };
+    case 'transit':
+      return {
+        ...base,
+        ...normalizeCuts(edits.cuts, edits.names, length),
+        divider: normalizeDivider(edits.divider, null, length),
+      };
+    default:
+      return { ...base, ...normalizeCuts(edits.cuts, edits.names, length), divider: null };
+  }
 }
 
 /**
@@ -143,26 +202,30 @@ export function rebaseOrder(
 }
 
 /**
- * Правки после изменения сессии: если состав живых страниц поменялся (`beforeKeys` — автопорядок
- * до изменения; `null` — сравнивать не с чем), новые ключи встают в ручной порядок на своё место
- * (`rebaseOrder`), разрезы переносятся вслед за страницами; затем нормализация против нового
- * автопорядка. Правки с исчезнувшими ключами вычищаются здесь же.
+ * Правки после изменения сессии: если состав живых страниц поменялся (`beforeKeys` — базовый
+ * порядок до изменения; `null` — сравнивать не с чем), новые ключи встают в ручной порядок на
+ * своё место (`rebaseOrder`), разрезы и граница наборов переносятся вслед за страницами (граница
+ * — той же функцией, что разрезы: перед той же страницей, R9); затем нормализация против нового
+ * базового порядка в контексте режима (`context` — как у `normalizeEdits`). Правки с
+ * исчезнувшими ключами вычищаются здесь же.
  */
 export function rebaseEdits(
   beforeKeys: readonly string[] | null,
   afterKeys: readonly string[],
   edits: SessionEdits,
+  context: EditsContext = PAIRS_CONTEXT,
 ): SessionEdits {
   const changed = beforeKeys !== null && !sameList(beforeKeys, afterKeys);
   if (!changed) {
-    return normalizeEdits(afterKeys, edits);
+    return normalizeEdits(afterKeys, edits, context);
   }
   const rebased = { ...edits, order: rebaseOrder(beforeKeys, afterKeys, edits.order) };
-  const cuts =
-    edits.cuts.length > 0
-      ? remapCuts(visibleKeysOf(beforeKeys, edits), visibleKeysOf(afterKeys, rebased), edits.cuts)
-      : edits.cuts;
-  return normalizeEdits(afterKeys, { ...rebased, cuts });
+  const before = visibleKeysOf(beforeKeys, edits);
+  const after = visibleKeysOf(afterKeys, rebased);
+  const cuts = edits.cuts.length > 0 ? remapCuts(before, after, edits.cuts) : edits.cuts;
+  const divider =
+    edits.divider === null ? null : (remapCuts(before, after, [edits.divider])[0] ?? null);
+  return normalizeEdits(afterKeys, { ...rebased, cuts, divider }, context);
 }
 
 /** Документы ленты по разрезам (правки — уже в каноническом виде). */
@@ -187,6 +250,7 @@ export function hasEdits(edits: SessionEdits, rotateBacks: boolean): boolean {
     Object.keys(edits.rotations).length > 0 ||
     edits.deleted.length > 0 ||
     edits.cuts.length > 0 ||
-    edits.names.some((name) => name !== '')
+    edits.names.some((name) => name !== '') ||
+    edits.divider !== null
   );
 }

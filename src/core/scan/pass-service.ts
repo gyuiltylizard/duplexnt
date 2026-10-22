@@ -112,6 +112,12 @@ export interface PassService {
   /** «Обороты не нужны» (M2, KTD-6): durable-отметка, идемпотентно. */
   declineBacks(): Promise<Result<void>>;
   /**
+   * «Собрать документ» (M3.6, KTD5): отклоняется, пока пишется PDF (`saving`) и пока идёт
+   * проход (`passRunning`); остальные гарды — хранилище. Принятая и отклонённая команда шлёт
+   * снимок.
+   */
+  assemble(): Promise<Result<void>>;
+  /**
    * Правки редактора и тумблер 180° (M3, KTD-3). Отклоняется, пока пишется PDF (`saving`) и
    * пока идёт проход (`passRunning`) — KTD-9. Принятая команда всегда шлёт снимок; успех
    * возвращает его номер — по нему редактор узнаёт снимок со своим результатом.
@@ -344,7 +350,12 @@ export function createPassService(
     if (session === null) {
       return conflict('noSession');
     }
-    const { order, documents } = assembleSession(session);
+    const { order, documents, report } = assembleSession(session);
+    // Несобранный документ не сохраняется ни одним путём (M3.6, R16; KTD6): лента из двух
+    // наборов — ещё не документ.
+    if (report.mode === 'sets') {
+      return conflict('notAssembled');
+    }
     if (order.length === 0) {
       return conflict('nothingToSave');
     }
@@ -784,6 +795,19 @@ export function createPassService(
       const declined = await store.declineBacks();
       notify();
       return declined;
+    },
+
+    async assemble() {
+      // Запись PDF читает ленту по снимку: сборка посреди неё сделала бы файл неправдой (KTD-9).
+      if (saving) {
+        return conflict('saving');
+      }
+      if (run !== null) {
+        return conflict('passRunning');
+      }
+      const assembled = await store.assemble();
+      notify();
+      return assembled;
     },
 
     async setEdits(edits, rotate180) {

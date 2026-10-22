@@ -24,6 +24,7 @@ function renderModal(props: Partial<NewScanModalProps> = {}) {
       total={24}
       deleted={0}
       saved={false}
+      unassembled={false}
       onClose={onClose}
       onSaveFirst={onSaveFirst}
       {...props}
@@ -76,6 +77,26 @@ describe('модалка newscan: состояние набора', () => {
     expect(subtitle()).toContain(
       'Удалённые из ленты страницы (3 стр.) тоже будут стёрты — вернуть их будет нельзя.',
     );
+  });
+
+  it('M3.6, S11: режим наборов — «ДОКУМЕНТ НЕ СОБРАН», текст про наборы, без «Сначала сохранить»', () => {
+    stubApi();
+    renderModal({ unassembled: true, deleted: 2 });
+
+    expect(screen.getByText('ДОКУМЕНТ НЕ СОБРАН').className).toContain('kicker--warning');
+    expect(subtitle()).toBe(
+      'Лица и обороты лежат отдельными наборами — документ не собран и в файл не сохранён. Если начать новое сканирование, 24 стр. будут удалены с диска. Удалённые из ленты страницы (2 стр.) тоже будут стёрты — вернуть их будет нельзя.',
+    );
+    expect(fresh().textContent).toContain('Текущие 24 стр. будут удалены без сохранения');
+    expect(saveFirst()).toBeNull();
+  });
+
+  it('режим наборов при пустой ленте — «ДОКУМЕНТ ПУСТ»: удалённое важнее', () => {
+    stubApi();
+    renderModal({ unassembled: true, total: 0, deleted: 5 });
+
+    expect(screen.getByText('ДОКУМЕНТ ПУСТ')).toBeDefined();
+    expect(saveFirst()).toBeNull();
   });
 
   it('AE10: лента пуста — «ДОКУМЕНТ ПУСТ», про возвращаемые Ctrl+Z страницы, без сохранения', () => {

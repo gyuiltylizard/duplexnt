@@ -654,20 +654,21 @@ describe('editor M3: пустой редактор и инспектор', () =>
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
     fireEvent.click(toggle);
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
-    // Лист 1 — без оборота: обороты пришли от последнего листа.
-    expect(screen.getByRole('heading', { name: 'Стр. 1 — лицо листа 1' })).toBeDefined();
-    expect(screen.getByText('У этого листа нет оборота — проходы не сошлись.')).toBeDefined();
+    // Проходы 3/2 — раздельные наборы (M3.6, KTD9): лента 1л 2л 3л | 2о 1о, сторона и место —
+    // по набору, «Лист» до сборки не называется.
+    expect(
+      screen.getByRole('heading', { name: 'Стр. 1 — лицевая, 1-я в наборе лиц' }),
+    ).toBeDefined();
+    expect(screen.getByText(/После сборки эта страница станет лицом листа 1\./)).toBeDefined();
 
     // Состояние раскрытия переживает смену страницы.
-    fireEvent.click(option(2));
+    fireEvent.click(option(3));
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
-    expect(screen.getByRole('heading', { name: 'Стр. 3 — оборот листа 2' })).toBeDefined();
-    expect(screen.getByText('№2')).toBeDefined();
-    expect(screen.getByText('оборот')).toBeDefined();
-    expect(screen.getByText('0°')).toBeDefined();
     expect(
-      screen.getByText('Оборот листа 2: сопоставлен с лицом по позиции в проходе оборотов.'),
+      screen.getByRole('heading', { name: 'Стр. 4 — оборотная, 1-я в наборе оборотов' }),
     ).toBeDefined();
+    expect(screen.getByText('0°')).toBeDefined();
+    expect(screen.getByText(/станет оборотом листа 1\./)).toBeDefined();
   });
 
   it('S12: ДОКУМЕНТЫ — список с текущим, клик переводит на первую страницу документа', () => {
@@ -706,7 +707,7 @@ describe('editor M3: пустой редактор и инспектор', () =>
     ).toBeDefined();
   });
 
-  it('S13: несовпадение пар и ручной порядок — янтарные пункты', () => {
+  it('S13: раздельные наборы и ручной порядок — янтарные пункты', () => {
     stubApi();
     renderEditor(
       nextSnapshot(twoPass(2), {
@@ -714,7 +715,9 @@ describe('editor M3: пустой редактор и инспектор', () =>
       }),
     );
 
-    const pairs = screen.getByText('Пар «лицо + оборот»: 2 из 3').closest('li');
+    const pairs = screen
+      .getByText('Наборы не уравнены: лицевых 3, оборотных 2 — не хватает 1 оборота')
+      .closest('li');
     expect(pairs?.className).toContain('check--warning');
     const order = screen.getByText('Порядок правили вручную — автосортировка отключена');
     expect(order.closest('li')?.className).toContain('check--warning');

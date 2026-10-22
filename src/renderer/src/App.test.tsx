@@ -38,6 +38,7 @@ describe('каркас приложения', () => {
           backsDeclined: false,
           saved: false,
           edits: EMPTY_EDITS,
+          assembled: null,
           passes: [
             {
               number: 1,
@@ -68,6 +69,7 @@ describe('каркас приложения', () => {
           backsDeclined: false,
           saved: false,
           edits: EMPTY_EDITS,
+          assembled: null,
           passes: [
             {
               number: 1,
@@ -84,11 +86,10 @@ describe('каркас приложения', () => {
         assembly: {
           ...NO_EDITS_ASSEMBLY,
           report: {
+            mode: 'pairs',
+            groups: null,
             fronts: 12,
             backs: 0,
-            pairs: 0,
-            unpairedSheets: [],
-            extraBacks: 0,
             backsState: null,
             backsDeclined: false,
             mismatch: false,
@@ -114,6 +115,7 @@ describe('каркас приложения', () => {
           backsDeclined: false,
           saved: false,
           edits: EMPTY_EDITS,
+          assembled: null,
           passes: [
             {
               number: 1,
@@ -143,6 +145,7 @@ describe('каркас приложения', () => {
           backsDeclined: true,
           saved: false,
           edits: EMPTY_EDITS,
+          assembled: null,
           passes: [
             {
               number: 1,
@@ -265,6 +268,7 @@ describe('каркас приложения', () => {
           backsDeclined: false,
           saved: false,
           edits: EMPTY_EDITS,
+          assembled: null,
           passes: [
             {
               number: 1,
@@ -305,6 +309,7 @@ describe('каркас приложения', () => {
           backsDeclined: false,
           saved: false,
           edits: EMPTY_EDITS,
+          assembled: null,
           passes: [
             {
               number: 1,
@@ -343,6 +348,7 @@ describe('каркас приложения', () => {
           backsDeclined: false,
           saved: false,
           edits: EMPTY_EDITS,
+          assembled: null,
           passes: [
             {
               number: 1,
@@ -376,6 +382,7 @@ describe('каркас приложения', () => {
         backsDeclined: false,
         saved: false,
         edits: EMPTY_EDITS,
+        assembled: null,
         passes: [
           {
             number: 1,
@@ -466,6 +473,7 @@ describe('каркас приложения', () => {
           backsDeclined: false,
           saved: false,
           edits: EMPTY_EDITS,
+          assembled: null,
           passes: [
             {
               number: 1,
@@ -508,6 +516,7 @@ describe('каркас приложения', () => {
         backsDeclined: false,
         saved: false,
         edits: EMPTY_EDITS,
+        assembled: null,
         passes: [
           {
             number: 1,
@@ -539,6 +548,7 @@ describe('каркас приложения', () => {
         backsDeclined: false,
         saved: false,
         edits: EMPTY_EDITS,
+        assembled: null,
         passes: [
           {
             number: 1,
@@ -612,6 +622,7 @@ describe('каркас приложения', () => {
         backsDeclined: false,
         saved: false,
         edits: EMPTY_EDITS,
+        assembled: null,
         passes: [
           {
             number: 1,
@@ -633,6 +644,7 @@ describe('каркас приложения', () => {
         backsDeclined: true,
         saved: false,
         edits: EMPTY_EDITS,
+        assembled: null,
         passes: flip.session?.passes ?? [],
       },
     });
@@ -677,6 +689,7 @@ describe('каркас приложения', () => {
         backsDeclined: false,
         saved: false,
         edits: EMPTY_EDITS,
+        assembled: null,
         passes: [
           {
             number: 1,
@@ -698,6 +711,7 @@ describe('каркас приложения', () => {
         backsDeclined: false,
         saved: false,
         edits: EMPTY_EDITS,
+        assembled: null,
         passes: [
           ...(flip.session?.passes ?? []),
           {
@@ -754,6 +768,7 @@ describe('каркас приложения', () => {
           backsDeclined: false,
           saved: false,
           edits: EMPTY_EDITS,
+          assembled: null,
           passes: [
             {
               number: 1,
@@ -786,8 +801,8 @@ describe('каркас приложения', () => {
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Понятно' }));
     expect(screen.queryByRole('dialog')).toBeNull();
-    // Пометка непарного листа живёт в ленте и после закрытия модалки (S6).
-    expect(screen.getByTitle('У этого листа не нашлось пары')).toBeDefined();
+    // Лента осталась в режиме наборов — модалка объясняет, не меняет (M3.6).
+    expect(screen.getByRole('button', { name: 'Собрать документ' })).toBeDefined();
   });
 
   it('KTD-8: прерванный и не принятый проход оборотов модалку не зовёт — решение за плашкой', async () => {
@@ -800,6 +815,7 @@ describe('каркас приложения', () => {
           backsDeclined: false,
           saved: false,
           edits: EMPTY_EDITS,
+          assembled: null,
           passes: [
             {
               number: 1,

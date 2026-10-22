@@ -45,6 +45,7 @@ function running(pageCount: number, passPages: number, phase: PassProgress['phas
       backsDeclined: false,
       saved: false,
       edits: EMPTY_EDITS,
+      assembled: null,
       passes: [
         {
           number: 1,
@@ -90,6 +91,7 @@ describe('экран scan', () => {
         backsDeclined: false,
         saved: false,
         edits: EMPTY_EDITS,
+        assembled: null,
         passes: [
           {
             number: 1,
@@ -174,6 +176,7 @@ describe('экран scan', () => {
         backsDeclined: false,
         saved: false,
         edits: EMPTY_EDITS,
+        assembled: null,
         passes: [
           {
             number: 2,
@@ -280,6 +283,7 @@ describe('экран scan', () => {
         backsDeclined: false,
         saved: false,
         edits: EMPTY_EDITS,
+        assembled: null,
         passes: [
           {
             number: 1,
@@ -318,6 +322,7 @@ describe('экран scan', () => {
         backsDeclined: false,
         saved: false,
         edits: EMPTY_EDITS,
+        assembled: null,
         passes: [
           {
             number: 1,
@@ -378,6 +383,7 @@ describe('экран scan', () => {
         backsDeclined: false,
         saved: false,
         edits: EMPTY_EDITS,
+        assembled: null,
         passes: [
           {
             number: 1,

@@ -93,6 +93,12 @@ export const SESSION_CONFLICT_REASONS = [
   'batchStale',
   /** Пакета ещё не было: открывать нечего (M3.5, KTD-9). */
   'noBatch',
+  /** Собирать нечего: режим не «раздельные наборы» — проходы сошлись или документ уже собран (M3.6). */
+  'notSeparate',
+  /** Наборы не уравнены: видимые числа групп не равны или обе группы пусты (M3.6, R13). */
+  'setsUnequal',
+  /** Документ не собран: в режиме раздельных наборов сохранять нечего (M3.6, R16). */
+  'notAssembled',
 ] as const;
 
 export type SessionConflictReason = (typeof SESSION_CONFLICT_REASONS)[number];

@@ -16,6 +16,7 @@ import {
   type AssembledDocument,
   type AssembledPage,
   type DomainError,
+  type PassKind,
   type SaveDocumentsReport,
   type SessionEdits,
   type SessionSnapshot,
@@ -28,7 +29,9 @@ import { RevertModal } from '../modals/RevertModal';
 import { SaveModal } from '../modals/SaveModal';
 import {
   deleted,
+  dividerAfterMove,
   moved,
+  movedAcross,
   renamed,
   REVERTED,
   rotated,
@@ -37,8 +40,8 @@ import {
   withoutCut,
   type DropSide,
   type RotateDirection,
+  type SetSide,
 } from '../state/edits';
-import { mismatchDue } from '../state/assembly-outcome';
 import { toneOf } from '../state/page-text';
 import { errorTextInline } from '../state/error-text';
 import type { EditState } from '../state/history';
@@ -53,10 +56,13 @@ import {
   targetsOf,
   toggled,
 } from '../state/selection';
+import { assembleBlockOf, assembleBlockText } from '../state/assemble-block';
 import { EditorInspector } from './EditorInspector';
 import { EditorPassBanner } from './EditorPassBanner';
 import { EditorPreview } from './EditorPreview';
 import { docNameId, EditorRail, focusThumb } from './EditorRail';
+import { EditorStatusBar } from './EditorStatusBar';
+import { EditorToolbar } from './EditorToolbar';
 import type { PickMode } from './EditorThumb';
 import { useEditorEdits } from './useEditorEdits';
 import './editor-screen.css';
@@ -69,6 +75,10 @@ import './editor-screen.css';
 // «Вернуть» — один `setEdits` и один шаг undo (KTD-3); ленту считает только ядро (KTD-2).
 // Модалки `save`, `newscan`, `revert`, `add` — одна за раз (M3, U9; handoff M3, S14, S16, S17;
 // M3.5, S1–S2: «+ Добавить» с причинами недоступности, якорь — из видимой ленты, KTD-8).
+// Режим раздельных наборов (M3.6; handoff M3.6, S1–S5, S13): лента из двух групп по
+// `assembly.sets`, тулбар с живыми счётчиками и «Собрать документ» вместо «Сохранить»; перенос
+// через границу — правка порядка с явной границей (`dividerAfterMove`, `movedAcross`, KTD8);
+// сборка — команда `assemble` напрямую, не шаг undo (KTD5): запись сборки входит в подпись ленты.
 
 export interface EditorScreenProps {
   readonly snapshot: Snapshot;
@@ -93,8 +103,9 @@ export interface EditorScreenProps {
   readonly onToast: (text: string, durationMs?: number, action?: ToastAction) => void;
 }
 
-/** Тосты сохранения — 6 с (UI_SPEC раздел 8). */
+/** Тосты сохранения и отказов — 6 с (UI_SPEC раздел 8). */
 const SAVE_TOAST_MS = 6000;
+
 /** «Сохранено … — можно закладывать новые листы» после «Сначала сохранить текущий» (S17). */
 const THEN_NEW_TOAST_MS = 3600;
 
@@ -154,18 +165,33 @@ export function EditorScreen({
   const total = order.length;
   const visible = useMemo(() => order.map((entry) => entry.key), [order]);
   const positions = useMemo(() => new Map(visible.map((key, index) => [key, index])), [visible]);
+  // Режим сборки и группы — из ядра (M3.6, R10): renderer ничего не считает сам.
+  const mode = snapshot.assembly?.report.mode ?? 'pairs';
+  const sets = snapshot.assembly?.sets ?? null;
+  // Происхождение страницы — проход по ключу: тег «об» и факт «Откуда» (R11, R23).
+  const origins = useMemo(
+    () =>
+      new Map<string, PassKind>(
+        session.passes.flatMap((pass) => pass.pages.map((page) => [page.key, pass.kind] as const)),
+      ),
+    [session.passes],
+  );
 
   const [modal, setModal] = useState<EditorModal | null>(null);
   /** Идёт запись пакета (модалка `save`): правки заблокированы (KTD-9). */
   const [saving, setSaving] = useState(false);
+  /** «Собрать документ» в полёте (M3.6, KTD5): правки заблокированы, как при записи. */
+  const [assembling, setAssembling] = useState(false);
+  const locked = saving || assembling;
 
-  // Правки недоступны на время записи (KTD-9): ядро их всё равно отклонило бы.
+  // Правки недоступны на время записи и сборки (KTD-9): правка внутри круга команды легла бы
+  // поверх записи сборки устаревшим порядком (ревью M3.6, #6).
   const edits = useEditorEdits({
     seq: snapshot.seq,
     session,
     visible,
     initialCurrent,
-    locked: saving,
+    locked,
     // Правка не записалась — человек должен знать, что лента осталась прежней. Текст ошибки
     // длинный — показывается столько же, сколько ошибка сохранения.
     onFailed: (error) => {
@@ -221,6 +247,9 @@ export function EditorScreen({
   const focusKey = useRef<string | null>(initialCurrent);
   const focusAfterEdit = useRef(false);
   const focusName = useRef<number | null>(null);
+  // После «Собрать документ» фокус — на карточке текущей (S13 M3.6): кнопка тулбара уходит
+  // вместе с режимом, а карточки перемонтируются в группы документов.
+  const focusAfterAssemble = useRef(false);
   useEffect(() => {
     if (focusName.current !== null && !edits.busy) {
       const field = railRef.current?.querySelector<HTMLInputElement>(
@@ -234,6 +263,10 @@ export function EditorScreen({
     let key = focusKey.current;
     if (key === null && focusAfterEdit.current && !edits.busy) {
       focusAfterEdit.current = false;
+      key = selection.current;
+    }
+    if (key === null && focusAfterAssemble.current && mode === 'assembled') {
+      focusAfterAssemble.current = false;
       key = selection.current;
     }
     if (key !== null) {
@@ -358,13 +391,8 @@ export function EditorScreen({
     }
   };
 
-  // Перенос (S6): группа — с внутренним порядком ленты; бросок на исходное место — шага нет.
-  // После переноса выделены перенесённые страницы на новом месте, текущая — прежняя.
-  const move = (keys: readonly string[], target: string, side: DropSide): void => {
-    const next = moved(edits.current.edits, visible, keys, target, side);
-    if (next === null) {
-      return;
-    }
+  /** Перенос ушёл: выделены перенесённые страницы на новом месте, текущая — прежняя. */
+  const sendMove = (next: SessionEdits, keys: readonly string[]): void => {
     const current = selection.current;
     const fromRail = focusInRail();
     const sent = edits.edit(withEdits(next), keys, {
@@ -378,6 +406,40 @@ export function EditorScreen({
     // Миниатюра, сменившая группу, перемонтируется — фокус вернётся на текущую после снимка.
     if (sent && fromRail) {
       focusAfterEdit.current = true;
+    }
+  };
+
+  // Перенос (S6): группа — с внутренним порядком ленты; бросок на исходное место — шага нет.
+  // В режиме наборов (M3.6, KTD8) перенесённые берут группу страницы-цели: граница считается
+  // здесь и уходит тем же `setEdits`, что порядок, — один шаг undo. Крайняя страница, брошенная
+  // «через границу» рядом с собой, порядок не меняет, а группу — да: шлётся одна граница.
+  const move = (keys: readonly string[], target: string, side: DropSide): void => {
+    const targetIndex = positions.get(target);
+    if (targetIndex === undefined || keys.includes(target)) {
+      return;
+    }
+    const base = moved(edits.current.edits, visible, keys, target, side);
+    let next: SessionEdits | null = base;
+    if (sets !== null) {
+      const divider = dividerAfterMove(visible, sets.divider, keys, targetIndex);
+      if (base !== null || divider !== sets.divider) {
+        next = { ...(base ?? edits.current.edits), divider };
+      }
+    }
+    if (next !== null) {
+      sendMove(next, keys);
+    }
+  };
+
+  // Бросок на разделитель наборов или в пустую группу (S2–S3 M3.6): только граница, порядок —
+  // если выделение к ней не прилегало.
+  const moveAcross = (keys: readonly string[], side: SetSide): void => {
+    if (sets === null) {
+      return;
+    }
+    const next = movedAcross(edits.current.edits, visible, sets.divider, keys, side);
+    if (next !== null) {
+      sendMove(next, keys);
     }
   };
 
@@ -443,9 +505,9 @@ export function EditorScreen({
   };
 
   // Тулбар (S1): «+ Новый документ с этой страницы» — если текущая не первая и границы перед
-  // ней ещё нет.
+  // ней ещё нет; в режиме наборов документов нет (R17).
   const atDocStart = currentDoc?.start === currentIndex;
-  const canSplitHere = currentIndex > 0 && !atDocStart;
+  const canSplitHere = sets === null && currentIndex > 0 && !atDocStart;
 
   // Ctrl+Z, Ctrl+Y / Ctrl+Shift+Z, Delete — на всём экране, кроме текстовых полей и модалок
   // (handoff M3, Undo/Redo). Подписка — одна на монтирование: StrictMode её переживает.
@@ -600,13 +662,54 @@ export function EditorScreen({
 
   // «+ Добавить» (S1 M3.5, R12): недоступна при записи, правке в полёте и прерванном последнем
   // проходе — первая причина по порядку, в `title`; пустая лента — доступна (набор в конец).
+  const lastInterrupted = session.passes.at(-1)?.state === 'interrupted';
   const addDisabledReason = (
     [
       [saving, 'saving'],
       [edits.busy, 'busy'],
-      [session.passes.at(-1)?.state === 'interrupted', 'interrupted'],
+      [lastInterrupted, 'interrupted'],
     ] as const
   ).find(([on]) => on)?.[1];
+
+  // «Собрать документ» (S4–S5 M3.6, R19): доступна при равных ненулевых счётчиках групп и без
+  // причин по порядку таблицы; до ответа команды — недоступна, повторные клики игнорируются.
+  const assembleBlock = assembleBlockOf({
+    saving,
+    busy: edits.busy,
+    interrupted: lastInterrupted,
+    sets,
+  });
+  const assembleTitle =
+    assembleBlock === undefined || sets === null
+      ? undefined
+      : assembleBlockText(t, assembleBlock, sets);
+  const assemble = (): void => {
+    if (assembling || assembleBlock !== undefined || sets === null) {
+      return;
+    }
+    setAssembling(true);
+    const sheets = sets.fronts;
+    // Напрямую, не через `edit()` (KTD5): сборка — не правка и не шаг undo; снимок придёт сам.
+    window.api.assemble().then(
+      (result) => {
+        setAssembling(false);
+        if (result.ok) {
+          focusAfterAssemble.current = true;
+          onToast(t('toast.assembled', { count: sheets }));
+          return;
+        }
+        onToast(
+          t('toast.assembleFailed', { error: errorTextInline(t, result.error) }),
+          SAVE_TOAST_MS,
+        );
+      },
+      (error: unknown) => {
+        setAssembling(false);
+        console.error('[renderer] сборка не ответила', error);
+        onToast(t('toast.assembleNoResponse'), SAVE_TOAST_MS);
+      },
+    );
+  };
   // Якоря для модалки — только пока она открыта (KTD-8).
   const anchors =
     modal === 'add'
@@ -616,6 +719,8 @@ export function EditorScreen({
           document: currentDoc,
           documentName: currentDocument === null ? '' : (names[currentDocument] ?? ''),
           visible,
+          mode,
+          sets,
         })
       : null;
 
@@ -643,105 +748,43 @@ export function EditorScreen({
 
   return (
     <main className="editor-screen">
-      <header className="editor-screen__toolbar" onMouseDown={collapseOnSurfaceClick}>
-        <div className="editor-screen__toolbar-left">
-          <button type="button" className="btn btn--secondary" onClick={newScan}>
-            <span aria-hidden="true">↺</span> {t('editor.newScan')}
-          </button>
-          <button
-            type="button"
-            className="btn btn--secondary editor-screen__add"
-            disabled={addDisabledReason !== undefined}
-            title={
-              addDisabledReason === undefined
-                ? undefined
-                : t(`editor.addDisabled.${addDisabledReason}`)
-            }
-            onClick={() => {
-              setModal('add');
-            }}
-          >
-            <span className="editor-screen__add-plus" aria-hidden="true">
-              +
-            </span>{' '}
-            {t('editor.add')}
-          </button>
-        </div>
-        {/* S1: документ текущей страницы — тон, имя, позиция. */}
-        <div
-          className={
-            currentDocument === null
-              ? 'editor-screen__toolbar-center'
-              : `editor-screen__toolbar-center ${toneOf(currentDocument)}`
-          }
-        >
-          {currentDoc === undefined || currentDocument === null ? (
-            <span className="editor-screen__doc-title">{t('editor.noPages')}</span>
-          ) : (
-            <>
-              <span className="editor-screen__doc-mark" aria-hidden="true" />
-              <span className="editor-screen__doc-title">{names[currentDocument]}</span>
-              <span className="editor-screen__doc-pos">
-                {documents.length > 1
-                  ? t('editor.docPosition', {
-                      doc: currentDocument + 1,
-                      docs: documents.length,
-                      page: currentIndex - currentDoc.start + 1,
-                      pages: currentDoc.count,
-                    })
-                  : t('editor.pagePosition', { page: currentIndex + 1, pages: total })}
-              </span>
-              {canSplitHere && (
-                <button
-                  type="button"
-                  className="btn btn--tinted editor-screen__split"
-                  disabled={saving}
-                  onClick={() => {
-                    split(currentIndex);
-                  }}
-                >
-                  {t('editor.splitHere')}
-                </button>
-              )}
-            </>
-          )}
-        </div>
-        <div className="editor-screen__toolbar-right">
-          {/* S9 M2: точка несохранённого; скрыта, когда набор пуст или сохранён. */}
-          {!session.saved && total > 0 && (
-            <span
-              className="editor-screen__unsaved dot dot--warning"
-              role="status"
-              title={t('editor.unsaved')}
-            >
-              <span className="visually-hidden">{t('editor.unsaved')}</span>
-            </span>
-          )}
-          {/* S1: «Сохранить документ» при одном документе, «Сохранить N файлов» при нескольких;
-              пустая лента — сохранять нечего. */}
-          <button
-            type="button"
-            className="btn btn--primary btn--small"
-            disabled={total === 0}
-            onClick={() => {
-              setModal('save');
-            }}
-          >
-            {documents.length > 1
-              ? t('editor.saveFiles', { count: documents.length })
-              : t('editor.save')}
-          </button>
-        </div>
-      </header>
+      <EditorToolbar
+        total={total}
+        saved={session.saved}
+        documents={documents}
+        names={names}
+        currentIndex={currentIndex}
+        currentDocument={currentDocument}
+        sets={sets}
+        addDisabledReason={addDisabledReason}
+        assembleDisabled={assembleBlock !== undefined || assembling}
+        assembleTitle={assembleTitle}
+        canSplitHere={canSplitHere}
+        saving={saving}
+        onNewScan={newScan}
+        onAdd={() => {
+          setModal('add');
+        }}
+        onSplit={() => {
+          split(currentIndex);
+        }}
+        onAssemble={assemble}
+        onSave={() => {
+          setModal('save');
+        }}
+        onMouseDown={collapseOnSurfaceClick}
+      />
 
       <div className="editor-screen__body">
         <EditorRail
           sessionId={session.id}
           order={order}
           documents={documents}
+          sets={sets}
+          origins={origins}
           defaultNames={defaultNames}
           selection={selection}
-          locked={saving}
+          locked={locked}
           busy={edits.busy}
           railRef={railRef}
           onKeyDown={railKeyDown}
@@ -757,6 +800,7 @@ export function EditorScreen({
           onUnsplit={unsplit}
           onRename={rename}
           onMove={move}
+          onMoveAcross={moveAcross}
           footer={
             backsPass !== null && (
               <footer className="rail__footer">
@@ -811,88 +855,21 @@ export function EditorScreen({
               />
             </div>
           )}
-          <footer className="stage__statusbar">
-            <button
-              type="button"
-              className="btn btn--icon"
-              aria-label={t('editor.prev')}
-              disabled={total === 0}
-              aria-disabled={total > 0 && currentIndex <= 0 ? true : undefined}
-              onClick={() => {
-                selectAt(currentIndex - 1, false);
-              }}
-            >
-              ←
-            </button>
-            <div className="stage__counter">
-              {total === 0
-                ? t('editor.positionNone')
-                : t('editor.position', { current: currentIndex + 1, total })}
-            </div>
-            <button
-              type="button"
-              className="btn btn--icon"
-              aria-label={t('editor.next')}
-              disabled={total === 0}
-              aria-disabled={total > 0 && currentIndex >= total - 1 ? true : undefined}
-              onClick={() => {
-                selectAt(currentIndex + 1, false);
-              }}
-            >
-              →
-            </button>
-            <span className="stage__divider" aria-hidden="true" />
-            <button
-              type="button"
-              className="btn btn--icon stage__tool"
-              aria-label={rotateLeftLabel}
-              title={rotateLeftLabel}
-              disabled={total === 0 || saving}
-              onClick={() => {
-                rotate('ccw');
-              }}
-            >
-              ↺
-            </button>
-            <button
-              type="button"
-              className="btn btn--icon stage__tool"
-              aria-label={rotateLabel}
-              title={rotateLabel}
-              disabled={total === 0 || saving}
-              onClick={() => {
-                rotate('cw');
-              }}
-            >
-              ↻
-            </button>
-            <button
-              type="button"
-              className="btn btn--icon stage__tool stage__tool--danger"
-              aria-label={deleteLabel}
-              title={deleteLabel}
-              disabled={total === 0 || saving}
-              onClick={() => {
-                remove(false);
-              }}
-            >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 14 14"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.2"
-                strokeLinecap="round"
-                aria-hidden="true"
-              >
-                <path d="M2.5 3.6h9" />
-                <path d="M5.6 3.6V2.4h2.8v1.2" />
-                <path d="M3.7 3.6l.55 7.4h5.5l.55-7.4" />
-                <path d="M5.9 5.8v3M8.1 5.8v3" />
-              </svg>
-            </button>
-          </footer>
+          <EditorStatusBar
+            total={total}
+            currentIndex={currentIndex}
+            locked={locked}
+            rotateLabel={rotateLabel}
+            rotateLeftLabel={rotateLeftLabel}
+            deleteLabel={deleteLabel}
+            onStep={(delta) => {
+              selectAt(currentIndex + delta, false);
+            }}
+            onRotate={rotate}
+            onRemove={() => {
+              remove(false);
+            }}
+          />
         </section>
 
         {snapshot.assembly !== null && (
@@ -900,11 +877,11 @@ export function EditorScreen({
             assembly={snapshot.assembly}
             entry={currentEntry}
             position={currentIndex + 1}
+            origin={currentEntry === undefined ? null : (origins.get(currentEntry.key) ?? null)}
             currentDocument={currentDocument}
             names={names}
             frontsOnly={backsPass === null}
-            pairsHint={mismatchDue(snapshot.assembly.report, session.passes)}
-            locked={saving}
+            locked={locked}
             onPickDocument={(index) => {
               const first = visible[documents[index]?.start ?? -1];
               if (first !== undefined) {
@@ -942,6 +919,7 @@ export function EditorScreen({
           total={total}
           deleted={deletedCount}
           saved={session.saved}
+          unassembled={mode === 'sets'}
           onSaveFirst={() => {
             setModal('saveThenNew');
           }}
@@ -962,7 +940,8 @@ export function EditorScreen({
         <AddModal
           scanner={snapshot.scanner}
           current={anchors.current}
-          documentEnd={anchors.documentEnd}
+          end={anchors.end}
+          endKind={anchors.endKind}
           onStart={onAdd}
           onClose={() => {
             setModal(null);

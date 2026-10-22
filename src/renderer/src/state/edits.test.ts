@@ -1,6 +1,16 @@
 import { EMPTY_EDITS, type SessionEdits } from '@shared';
 import { describe, expect, it } from 'vitest';
-import { deleted, moved, renamed, rotated, separated, withCut, withoutCut } from './edits';
+import {
+  deleted,
+  dividerAfterMove,
+  moved,
+  movedAcross,
+  renamed,
+  rotated,
+  separated,
+  withCut,
+  withoutCut,
+} from './edits';
 
 // Табличные тесты жестов редактора (план M3, U6; KTD-8): здесь решается, в какой документ
 // попадёт страница после переноса и удаления, — молча сменить документ соседу нельзя (AE5).
@@ -64,6 +74,14 @@ describe('жесты: удаление', () => {
     const next = deleted(edits({ deleted: ['z'] }), TAPE, ['d', 'b', 'q']);
 
     expect(next.deleted).toEqual(['z', 'b', 'd']);
+  });
+
+  it('явная граница наборов сдвигается на удалённые левее неё, как разрез (M3.6, ревью #3)', () => {
+    // a b c | d e, граница 3.
+    expect(deleted(edits({ divider: 3 }), TAPE, ['a']).divider).toBe(2);
+    expect(deleted(edits({ divider: 3 }), TAPE, ['a', 'b']).divider).toBe(1);
+    expect(deleted(edits({ divider: 3 }), TAPE, ['d']).divider).toBe(3);
+    expect(deleted(edits({ divider: null }), TAPE, ['a']).divider).toBeNull();
   });
 
   it('удалять нечего — те же правки', () => {
@@ -282,5 +300,83 @@ describe('жесты: границы и имена', () => {
     ],
   ] as const)('«Выделить в документ»: %s', (_name, given, from, to, cuts, names, document) => {
     expect(separated(given, from, to, 5)).toEqual({ edits: { ...given, cuts, names }, document });
+  });
+});
+
+describe('жесты: граница наборов (M3.6, KTD8)', () => {
+  // Лента a b c | d e: граница 3 — «a», «b», «c» лица, «d», «e» обороты.
+  const DIVIDER = 3;
+
+  it.each([
+    ['лицо к обороту — в обороты: −1', ['a'], 4, 2],
+    ['оборот к лицу — в лица: +1', ['e'], 0, 4],
+    ['внутри группы лиц — без изменений', ['a'], 2, 3],
+    ['внутри группы оборотов — без изменений', ['e'], 3, 3],
+    ['двое из лиц через границу: −2', ['a', 'c'], 4, 1],
+    ['смешанное выделение к лицу — все в лица: 3 − 1 + 2', ['b', 'd'], 0, 4],
+    ['смешанное выделение к обороту — все в обороты: 3 − 1', ['b', 'd'], 4, 2],
+    ['невидимые ключи не считаются', ['a', 'zzz'], 4, 2],
+  ] as const)('%s', (_name, keys, target, expected) => {
+    expect(dividerAfterMove(TAPE, DIVIDER, keys, target)).toBe(expected);
+  });
+
+  it.each([
+    [
+      'первый оборот — в конец лиц: порядок тот же, граница +1',
+      ['d'],
+      'fronts',
+      ['a', 'b', 'c', 'd', 'e'],
+      4,
+    ],
+    [
+      'последнее лицо — в начало оборотов: порядок тот же, граница −1',
+      ['c'],
+      'backs',
+      ['a', 'b', 'c', 'd', 'e'],
+      2,
+    ],
+    [
+      'лицо не у границы — в начало оборотов: сначала к границе, затем граница',
+      ['a'],
+      'backs',
+      ['b', 'c', 'a', 'd', 'e'],
+      2,
+    ],
+    ['оборот не у границы — в конец лиц', ['e'], 'fronts', ['a', 'b', 'c', 'e', 'd'], 4],
+    [
+      'смешанное выделение — целиком к границе, в порядке ленты, группа по стороне',
+      ['a', 'e'],
+      'backs',
+      ['b', 'c', 'a', 'e', 'd'],
+      2,
+    ],
+    ['все лица — в обороты: граница 0', ['a', 'b', 'c'], 'backs', ['a', 'b', 'c', 'd', 'e'], 0],
+  ] as const)('movedAcross: %s', (_name, keys, side, order, divider) => {
+    expect(movedAcross(EMPTY_EDITS, TAPE, DIVIDER, keys, side)).toEqual({
+      ...EMPTY_EDITS,
+      order,
+      divider,
+    });
+  });
+
+  it('movedAcross: без изменений порядка и границы — null; пустое выделение — null', () => {
+    expect(movedAcross(EMPTY_EDITS, TAPE, DIVIDER, ['c'], 'fronts')).toBeNull();
+    expect(movedAcross(EMPTY_EDITS, TAPE, DIVIDER, ['d'], 'backs')).toBeNull();
+    expect(movedAcross(EMPTY_EDITS, TAPE, DIVIDER, ['zzz'], 'backs')).toBeNull();
+  });
+
+  it('movedAcross: пустая группа — в неё целиком (граница 0 или длина ленты)', () => {
+    // Все обороты: граница 0 — «a» в лица.
+    expect(movedAcross(EMPTY_EDITS, TAPE, 0, ['a'], 'fronts')).toEqual({
+      ...EMPTY_EDITS,
+      order: ['a', 'b', 'c', 'd', 'e'],
+      divider: 1,
+    });
+    // Все лица: граница 5 — «b» в обороты, встаёт в конец.
+    expect(movedAcross(EMPTY_EDITS, TAPE, 5, ['b'], 'backs')).toEqual({
+      ...EMPTY_EDITS,
+      order: ['a', 'c', 'd', 'e', 'b'],
+      divider: 4,
+    });
   });
 });
