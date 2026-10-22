@@ -216,10 +216,9 @@ export function EditorScreen({
   // «Собрать документ» (M3.6, KTD5): пока в полёте — правки заблокированы, как при записи.
   const {
     assembling,
-    assembledHidden,
     focusAfterRef: focusAfterAssembleRef,
     assemble: runAssemble,
-  } = useEditorAssemble({ blank, onToast });
+  } = useEditorAssemble({ mode, blank, onToast });
   const locked = saving || assembling;
 
   // Правки недоступны на время записи и сборки (KTD-9): правка внутри круга команды легла бы
@@ -722,12 +721,15 @@ export function EditorScreen({
   const { notBlank } = session.edits;
   useLateHidden({
     order,
-    notBlank,
     mode,
     reveal,
-    announced: assembledHidden > 0,
     onHidden: (count) => {
       onToast(t('toast.blankHidden', { count }));
+      // Спряталась карточка с фокусом — она размонтирована, фокус упал на body; текущая уже
+      // переехала (`pruned`) — вернуть фокус на неё, чтобы клавиатура не потерялась.
+      if (document.activeElement === document.body && selection.current !== null) {
+        focusThumb(railRef.current, selection.current);
+      }
     },
   });
 

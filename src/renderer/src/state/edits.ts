@@ -287,11 +287,13 @@ export function grouped(
   }
   const group = visible.filter((key) => grouping.has(key));
   const rest = visible.filter((key) => !grouping.has(key));
-  // Кусок встаёт перед страницей, стоявшей за первой выделенной: разрез на позиции `from`
-  // остаётся слева от куска, разрезы правее уезжают на длину куска — как `moved` «перед».
-  const cuts = cutsWithout(edits.cuts, positions).map((cut) =>
-    cut > from ? cut + group.length : cut,
-  );
+  // Кусок встаёт на позицию первой выделенной: разрез на этой позиции остаётся слева от куска,
+  // разрезы правее (по исходной ленте — и тот, что стоял сразу за первой выделенной) уезжают за
+  // кусок, как у `moved` «перед»; сдвиг на изъятые левее — как у `cutsWithout`.
+  const cuts = edits.cuts.map((cut) => {
+    const shifted = cut - positions.filter((index) => index < cut).length;
+    return cut > from ? shifted + group.length : shifted;
+  });
   const order = [...rest.slice(0, from), ...group, ...rest.slice(from)];
   return separated({ ...edits, order, cuts }, from, to, visible.length);
 }

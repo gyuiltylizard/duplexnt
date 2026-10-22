@@ -147,7 +147,9 @@ export function App(): ReactNode {
       !(launch?.kind === 'added' && launch.sessionId === session?.id)
     ) {
       setMergeHoldMs(transitionReport.backsDeclined ? MERGE_PAUSE_DECLINED_MS : MERGE_PAUSE_MS);
-      setMergeBlankWait(true);
+      // Ждать оценок есть смысл, когда они прячут страницы: в режиме наборов ничего не скрыто
+      // (R15), статус про пустые там не рисуется — держать экран нечем объяснить (ревью).
+      setMergeBlankWait(transitionReport.mode !== 'sets');
     }
   }
   const blankPending = snapshot?.assembly?.blank.pending ?? 0;

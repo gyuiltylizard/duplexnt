@@ -1,12 +1,13 @@
 import {
   EMPTY_EDITS,
+  ok,
   type BlankMode,
   type BlankVerdicts,
   type ScannerState,
   type SessionSnapshot,
   type Snapshot,
 } from '@shared';
-import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../i18n';
 import { assemblyWithEditsOf } from '../state/assembly-fixture';
@@ -188,8 +189,11 @@ describe('пустые обороты в редакторе (M4)', () => {
     ctrlZ();
     expect(lastSent(api).edits).toEqual(EMPTY_EDITS);
     await settle();
+    onToast.mockClear();
     rerender(applied(after, lastSent(api), VERDICTS));
     expect(keysShown()).toEqual([F1, F2, B2, F3]);
+    // Хвост вернулся в скрытые правкой, не вердиктом — тоста поздней оценки нет (ревью).
+    expect(onToast).not.toHaveBeenCalled();
   });
 
   it('R12/AE9: перенос листа 3 после листа 1 с хвостом даёт 1л, 1о, 3л, 3о', () => {
@@ -377,12 +381,16 @@ describe('пустые обороты в редакторе (M4)', () => {
     rerender(rotated);
     onToast.mockClear();
 
+    // Фокус — на карточке B3: после скрытия она размонтируется.
+    option(1).focus();
     const late = nextSnapshot(rotated, {
       assembly: () => assemblyWithEditsOf(sessionOf(rotated), VERDICTS),
     });
     rerender(late);
     expect(keysShown()).toEqual([F1, F2, B2, F3]);
     expect(selectedKeys()).toEqual([F2]);
+    // Фокус переехал вместе с текущей, а не упал на body (ревью).
+    expect(document.activeElement).toBe(option(1));
     expect(onToast).toHaveBeenCalledTimes(1);
     expect(onToast).toHaveBeenCalledWith(
       'Скрыт 1 пустой оборот — переключатель «добавить пустые» покажет его',
@@ -394,6 +402,64 @@ describe('пустые обороты в редакторе (M4)', () => {
     ctrlZ();
     expect(lastSent(api).edits).toEqual(EMPTY_EDITS);
   });
+
+  it.each([
+    ['снимок раньше ответа', 'snapshot-first'],
+    ['ответ раньше снимка', 'reply-first'],
+  ] as const)(
+    'S13: «Собрать документ» со скрытыми — один тост с числом скрытых, %s',
+    async (_name, order) => {
+      let resolve: (value: Awaited<ReturnType<typeof window.api.assemble>>) => void = () =>
+        undefined;
+      const assemble = vi.fn(
+        () =>
+          new Promise<Awaited<ReturnType<typeof window.api.assemble>>>((done) => {
+            resolve = done;
+          }),
+      );
+      stubApi({ assemble });
+      // Наборы уравнены добавленным листом: лица 3, обороты 2 + один добавленный; B1 — пустой.
+      const passes = [
+        makePass({ pages: pages(3) }),
+        makePass({ number: 2, kind: 'backs', pages: pages(2, 1, 'p02-s01') }),
+        makePass({ number: 3, kind: 'added', after: B1, pages: pages(1, 1, 'p03-s01') }),
+      ];
+      const sets = makeSnapshot(passes, {}, { blankMode: 'hide' }, VERDICTS);
+      const { onToast, rerender } = renderEditor(sets);
+      expect(sessionOf(sets).passes.length).toBe(3);
+      expect(sets.assembly?.report.mode).toBe('sets');
+      expect(sets.assembly?.blank).toMatchObject({ hidden: 0 });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Собрать документ' }));
+      const assembled = makeSnapshot(
+        passes,
+        {},
+        { blankMode: 'hide', assembled: [F1, B2, F2, B1, F3, 'p03-s01-0001'] },
+        VERDICTS,
+      );
+      expect(assembled.assembly?.blank).toMatchObject({ mode: 'hide', hidden: 1 });
+      const reply = async (): Promise<void> => {
+        await act(async () => {
+          resolve(ok(undefined));
+          await Promise.resolve();
+        });
+      };
+      if (order === 'snapshot-first') {
+        rerender(assembled);
+        expect(onToast).not.toHaveBeenCalled();
+        await reply();
+      } else {
+        await reply();
+        expect(onToast).not.toHaveBeenCalled();
+        rerender(assembled);
+      }
+      expect(onToast).toHaveBeenCalledTimes(1);
+      expect(onToast).toHaveBeenCalledWith('Документ собран: 3 листа — скрыт 1 пустой оборот');
+      // Повторный снимок того же состояния тоста не плодит.
+      rerender({ ...assembled, seq: assembled.seq + 1 });
+      expect(onToast).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it('S13: при включённом переключателе поздняя оценка ничего не прячет — тоста нет', () => {
     stubApi();
