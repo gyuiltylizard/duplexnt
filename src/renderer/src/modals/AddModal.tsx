@@ -64,13 +64,21 @@ export function anchorsOf(
     readonly mode: AssemblyMode;
     /** Группы ленты в режиме наборов; `null` — пары или собрано. */
     readonly sets: SetsLayout | null;
+    /**
+     * Ключ, после которого встанет набор при «После текущей» (M4, R12): последний скрытый
+     * оборот хвоста текущей; по умолчанию — сама текущая.
+     */
+    readonly after?: string | undefined;
+    /** Номер страницы в показанной ленте, с единицы (M4, R11); по умолчанию — позиция в `visible`. */
+    readonly numberOf?: (key: string) => number;
   },
 ): AddAnchors {
   const { entry, index, document, sets } = input;
+  const numberOf = input.numberOf ?? ((key: string): number => input.visible.indexOf(key) + 1);
   const current =
     entry === undefined
       ? null
-      : { key: entry.key, page: index + 1, label: whatOf(t, entry, input.mode) };
+      : { key: input.after ?? entry.key, page: index + 1, label: whatOf(t, entry, input.mode) };
   if (sets !== null) {
     const inFronts = index < sets.divider;
     const end = inFronts ? sets.divider - 1 : input.visible.length - 1;
@@ -82,7 +90,7 @@ export function anchorsOf(
           ? null
           : {
               key: endKey,
-              page: end + 1,
+              page: numberOf(endKey),
               label: t(inFronts ? 'add.summary.groupFronts' : 'add.summary.groupBacks'),
             },
       endKind: 'set',
@@ -92,7 +100,10 @@ export function anchorsOf(
   const endKey = input.visible[end];
   return {
     current,
-    end: endKey === undefined ? null : { key: endKey, page: end + 1, label: input.documentName },
+    end:
+      endKey === undefined
+        ? null
+        : { key: endKey, page: numberOf(endKey), label: input.documentName },
     endKind: 'document',
   };
 }

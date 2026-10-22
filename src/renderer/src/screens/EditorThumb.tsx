@@ -1,6 +1,6 @@
 import { memo, type DragEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { pageImageUrl, type AssembledPage, type PageAngle } from '@shared';
+import { pageImageUrl, type AssembledPage, type BlankFlag, type PageAngle } from '@shared';
 import type { TFunction } from 'i18next';
 import { useImageLoad } from '../components/useImageLoad';
 import type { DropSide } from '../state/edits';
@@ -67,7 +67,8 @@ function thumbLabelOf(
  * Миниатюра в ленте: обычная, потерянная (S18 M1), строится или не построилась (S19 M1),
  * страница прохода оборотов с тегом «об» (по происхождению — R11 M3.6), угол из ядра (S4 M3),
  * перетаскивание с маркером вставки (S6 M3), split-бар границы (S7 M3), страница
- * добавленного набора с тегом «Д1» (S5 M3.5).
+ * добавленного набора с тегом «Д1» (S5 M3.5), пустой оборот с меткой «ПУСТО» и скрытая,
+ * показанная переключателем, — пунктир и приглушённый лист (S2–S3 M4).
  * Пропсы — примитивы, чтобы `memo` переживал новый снимок (объекты порядка пересоздаются
  * десериализацией IPC): тумблер и отметка сохранения не перерисовывают всю ленту, смена
  * выделения — только затронутые карточки.
@@ -80,6 +81,7 @@ export const EditorThumb = memo(function EditorThumb({
   sheet,
   angle,
   lost,
+  blank,
   position,
   inSets,
   addedSet,
@@ -104,7 +106,9 @@ export const EditorThumb = memo(function EditorThumb({
   /** Угол страницы из ядра (KTD-4): только отображение, файлы не меняются. */
   readonly angle: PageAngle;
   readonly lost: boolean;
-  /** Номер по порядку в ленте, с единицы — сквозной через документы и группы. */
+  /** Пустой оборот из ядра (M4, R10): помечена или скрыта (показана переключателем). */
+  readonly blank: BlankFlag;
+  /** Номер по порядку в показанной ленте, с единицы — сквозной через документы и группы. */
   readonly position: number;
   /** Режим наборов: подпись — «что это за страница» теми же словами, что ДЕТАЛИ (KTD9). */
   readonly inSets: boolean;
@@ -177,8 +181,16 @@ export const EditorThumb = memo(function EditorThumb({
           onError={image.onError}
         />
         {image.state === 'loading' && <span className="skeleton skeleton--cover" />}
+        {blank !== null && (
+          <span className="thumb__blank" aria-hidden="true">
+            {t('thumb.blank')}
+          </span>
+        )}
       </>
     );
+  }
+  if (blank === 'hidden') {
+    classes.push('thumb--hidden');
   }
   if (current) {
     classes.push('thumb--selected');
@@ -194,7 +206,11 @@ export const EditorThumb = memo(function EditorThumb({
   }
 
   const base = thumbLabelOf(t, { lost, inSets, side, sheet, addedSet, position });
-  const label = angle === 0 ? base : `${base}, ${t('thumb.angle', { angle })}`;
+  const turned = angle === 0 ? base : `${base}, ${t('thumb.angle', { angle })}`;
+  const label =
+    blank === null
+      ? turned
+      : t(blank === 'hidden' ? 'thumb.blankHiddenLabel' : 'thumb.blankLabel', { label: turned });
 
   return (
     <li

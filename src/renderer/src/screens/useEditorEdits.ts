@@ -67,6 +67,7 @@ export function useEditorEdits({
   seq,
   session,
   visible,
+  order,
   initialCurrent,
   locked,
   onFailed,
@@ -74,8 +75,10 @@ export function useEditorEdits({
   /** Номер снимка: снимок с номером из ответа команды несёт её результат. */
   readonly seq: number;
   readonly session: SessionSnapshot;
-  /** Видимая лента — ключи в порядке снимка. */
+  /** Показанная лента — ключи в порядке снимка без скрытых пустых оборотов (M4, R11). */
   readonly visible: readonly string[];
+  /** Полная видимая лента: текущая, ставшая скрытой, переезжает по ней на ближайшую показанную. */
+  readonly order: readonly string[];
   /** Текущая при монтировании; `null` — первая в ленте (M3.5, S9: первая добавленная). */
   readonly initialCurrent: string | null;
   /** Правки недоступны (идёт запись, KTD-9): жесты игнорируются. */
@@ -110,7 +113,10 @@ export function useEditorEdits({
     }
   }
 
-  const selection = useMemo(() => pruned(storedSelection, visible), [storedSelection, visible]);
+  const selection = useMemo(
+    () => pruned(storedSelection, visible, order),
+    [storedSelection, visible, order],
+  );
 
   const send = (target: EditState, next: EditHistory, options: EditOptions = {}): void => {
     const id = Symbol('правка');

@@ -197,6 +197,18 @@ export function withoutCut(edits: SessionEdits, docIndex: number): SessionEdits 
   };
 }
 
+/**
+ * «Это не пустая страница» (M4, KTD5; handoff M4, S9): ключ входит в `notBlank` — любой флаг
+ * детектора снимается, страница возвращается в ленту и в файл. Обратной пометки нет: лишнее
+ * удаляется. Уже помеченная — без изменений (шага нет).
+ */
+export function markedNotBlank(edits: SessionEdits, key: string): SessionEdits {
+  if (edits.notBlank.includes(key)) {
+    return edits;
+  }
+  return { ...edits, notBlank: [...edits.notBlank, key] };
+}
+
 /** Имя документа `docIndex` (с нуля); пустая строка — имя по умолчанию. */
 export function renamed(edits: SessionEdits, docIndex: number, name: string): SessionEdits {
   if (docIndex < 0 || docIndex >= edits.names.length || edits.names[docIndex] === name) {

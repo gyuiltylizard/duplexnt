@@ -13,8 +13,10 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  sameList,
   type AssembledDocument,
   type AssembledPage,
+  type BlankSummary,
   type DomainError,
   type PassKind,
   type SaveDocumentsReport,
@@ -30,6 +32,7 @@ import { SaveModal } from '../modals/SaveModal';
 import {
   deleted,
   dividerAfterMove,
+  markedNotBlank,
   moved,
   movedAcross,
   renamed,
@@ -57,6 +60,7 @@ import {
   toggled,
 } from '../state/selection';
 import { assembleBlockOf, assembleBlockText } from '../state/assemble-block';
+import { shownDocumentsOf, shownOf, withHiddenTails } from '../state/shown';
 import { EditorInspector } from './EditorInspector';
 import { EditorPassBanner } from './EditorPassBanner';
 import { EditorPreview } from './EditorPreview';
@@ -79,6 +83,10 @@ import './editor-screen.css';
 // `assembly.sets`, тулбар с живыми счётчиками и «Собрать документ» вместо «Сохранить»; перенос
 // через границу — правка порядка с явной границей (`dividerAfterMove`, `movedAcross`, KTD8);
 // сборка — команда `assemble` напрямую, не шаг undo (KTD5): запись сборки входит в подпись ленты.
+// Пустые обороты (M4; handoff M4, S1–S13): экран живёт по показанной ленте — без скрытых, пока
+// переключатель «добавить пустые» выключен (состояние экрана, не правка); правки считаются по
+// полной ленте, скрытые хвосты едут за лицом (KTD4, R11–R13); «Это не пустая страница» —
+// правка `notBlank` (KTD5); поздние оценки прячут страницу с тостом (KTD6).
 
 export interface EditorScreenProps {
   readonly snapshot: Snapshot;
@@ -118,6 +126,7 @@ type EditorModal = 'save' | 'saveThenNew' | 'newscan' | 'revert' | 'add';
 /** Пустая лента без сборки: стабильные ссылки для мемоизации. */
 const NO_PAGES: readonly AssembledPage[] = [];
 const NO_DOCUMENTS: readonly AssembledDocument[] = [];
+const NO_BLANK: BlankSummary = { mode: 'keep', found: 0, hidden: 0, pending: 0 };
 
 /** Сегодняшняя дата для имени по умолчанию — локальная, не UTC (как имя файла в M2). */
 const todayStamp = (): string => new Intl.DateTimeFormat('sv-SE').format(new Date());
@@ -162,9 +171,30 @@ export function EditorScreen({
   // Лента и документы — готовыми из снимка (KTD-2): renderer ничего не пересчитывает.
   const order = snapshot.assembly?.order ?? NO_PAGES;
   const documents = snapshot.assembly?.documents ?? NO_DOCUMENTS;
-  const total = order.length;
+  const fullTotal = order.length;
   const visible = useMemo(() => order.map((entry) => entry.key), [order]);
   const positions = useMemo(() => new Map(visible.map((key, index) => [key, index])), [visible]);
+  const blank = snapshot.assembly?.blank ?? NO_BLANK;
+  // Показанная лента (M4, KTD4; handoff M4, S1–S3): без скрытых пустых оборотов, пока
+  // переключатель «добавить пустые» выключен. Переключатель — состояние экрана: не правка, не
+  // шаг undo, сбрасывается с перемонтированием (R13). Текущая, выделение, клавиатура, нумерация,
+  // счётчики и якоря — по показанной; правки — по полной (`visible`), позиции переводятся.
+  const [reveal, setReveal] = useState(false);
+  const shown = useMemo(() => shownOf(order, reveal), [order, reveal]);
+  const shownKeys = useMemo(() => shown.map((entry) => entry.key), [shown]);
+  const shownPositions = useMemo(
+    () => new Map(shownKeys.map((key, index) => [key, index])),
+    [shownKeys],
+  );
+  const total = shown.length;
+  const allHidden = total === 0 && fullTotal > 0;
+  const shownDocuments = useMemo(
+    () => shownDocumentsOf(documents, order, shown),
+    [documents, order, shown],
+  );
+  /** Ключи с хвостами скрытых (R12) — пока скрытые не показаны; иначе буквально. */
+  const withTails = (keys: readonly string[]): readonly string[] =>
+    reveal ? keys : withHiddenTails(keys, order);
   // Режим сборки и группы — из ядра (M3.6, R10): renderer ничего не считает сам.
   const mode = snapshot.assembly?.report.mode ?? 'pairs';
   const sets = snapshot.assembly?.sets ?? null;
@@ -189,7 +219,8 @@ export function EditorScreen({
   const edits = useEditorEdits({
     seq: snapshot.seq,
     session,
-    visible,
+    visible: shownKeys,
+    order: visible,
     initialCurrent,
     locked,
     // Правка не записалась — человек должен знать, что лента осталась прежней. Текст ошибки
@@ -204,8 +235,11 @@ export function EditorScreen({
     },
   });
   const { selection, setSelection } = edits;
-  const currentIndex = selection.current === null ? -1 : (positions.get(selection.current) ?? -1);
-  const currentEntry = order[currentIndex];
+  /** Позиция текущей в показанной ленте; `currentFull` — в полной (документы, правки). */
+  const currentIndex =
+    selection.current === null ? -1 : (shownPositions.get(selection.current) ?? -1);
+  const currentFull = selection.current === null ? -1 : (positions.get(selection.current) ?? -1);
+  const currentEntry = shown[currentIndex];
   const targets = targetsOf(selection);
   /** Новое состояние с текущим тумблером: большинство жестов его не трогает. */
   const withEdits = (next: SessionEdits): EditState => ({
@@ -215,12 +249,13 @@ export function EditorScreen({
 
   // Документ текущей страницы — по отрезкам сборки.
   const currentDocument =
-    currentIndex < 0
+    currentFull < 0
       ? null
       : documents.findIndex(
-          (doc) => currentIndex >= doc.start && currentIndex < doc.start + doc.count,
+          (doc) => currentFull >= doc.start && currentFull < doc.start + doc.count,
         );
   const currentDoc = currentDocument === null ? undefined : documents[currentDocument];
+  const currentShownDoc = currentDocument === null ? undefined : shownDocuments[currentDocument];
 
   // Имя по умолчанию: одиночный документ — «Скан ГГГГ-ММ-ДД», иначе «Документ N» (S3).
   const [today] = useState(todayStamp);
@@ -250,7 +285,18 @@ export function EditorScreen({
   // После «Собрать документ» фокус — на карточке текущей (S13 M3.6): кнопка тулбара уходит
   // вместе с режимом, а карточки перемонтируются в группы документов.
   const focusAfterAssemble = useRef(false);
+  // S7 M4: все показанные страницы скрыты — фокус на переключателе «добавить пустые», один раз
+  // на вход в это состояние.
+  const blankToggleRef = useRef<HTMLInputElement>(null);
+  const allHiddenFocused = useRef(false);
   useEffect(() => {
+    if (!allHidden) {
+      allHiddenFocused.current = false;
+    } else if (!allHiddenFocused.current) {
+      allHiddenFocused.current = true;
+      blankToggleRef.current?.focus();
+      return;
+    }
     if (focusName.current !== null && !edits.busy) {
       const field = railRef.current?.querySelector<HTMLInputElement>(
         `#${docNameId(focusName.current)}`,
@@ -277,9 +323,9 @@ export function EditorScreen({
 
   const focusInRail = (): boolean => railRef.current?.contains(document.activeElement) ?? false;
 
-  /** Ключ ленты по позиции, прижатой к краям. */
+  /** Ключ показанной ленты по позиции, прижатой к краям. */
   const keyAt = (index: number): string | undefined =>
-    visible[Math.min(Math.max(index, 0), total - 1)];
+    shownKeys[Math.min(Math.max(index, 0), total - 1)];
 
   const selectAt = (index: number, focus: boolean): void => {
     const key = keyAt(index);
@@ -298,9 +344,9 @@ export function EditorScreen({
     pickRef.current = (key, mode) => {
       setSelection(
         mode === 'range'
-          ? ranged(selection, key, visible)
+          ? ranged(selection, key, shownKeys)
           : mode === 'toggle'
-            ? toggled(selection, key, visible)
+            ? toggled(selection, key, shownKeys)
             : single(key),
       );
     };
@@ -324,7 +370,7 @@ export function EditorScreen({
     if (event.key === ' ' && ctrl) {
       event.preventDefault();
       if (selection.current !== null) {
-        const next = toggled(selection, selection.current, visible);
+        const next = toggled(selection, selection.current, shownKeys);
         setSelection(next);
         focusKey.current = next.current;
       }
@@ -356,7 +402,7 @@ export function EditorScreen({
       return;
     }
     // Shift — диапазон от якоря; без него выделение сжимается до новой текущей.
-    setSelection(event.shiftKey ? ranged(selection, key, visible) : single(key));
+    setSelection(event.shiftKey ? ranged(selection, key, shownKeys) : single(key));
     focusKey.current = key;
   };
 
@@ -369,20 +415,21 @@ export function EditorScreen({
   };
 
   // Удаление — пометка, без подтверждения: тост подсказывает Ctrl+Z (S9). Текущей после
-  // удаления становится страница, вставшая на место удалённой.
+  // удаления становится страница, вставшая на место удалённой. Скрытый хвост уходит вместе с
+  // лицом одним шагом (R12); тост и кнопка считают только показанные.
   const remove = (fromRail: boolean): void => {
     if (targets.length === 0) {
       return;
     }
-    const before = visible;
-    const removing = targets;
-    const sent = edits.edit(withEdits(deleted(edits.current.edits, before, removing)), removing, {
-      select: (after) => afterRemoval(before, removing, after),
+    const before = shownKeys;
+    const removing = withTails(targets);
+    const sent = edits.edit(withEdits(deleted(edits.current.edits, visible, removing)), removing, {
+      select: (after) => afterRemoval(before, targets, after),
       onSuccess: () => {
         onToast(
-          removing.length === 1
+          targets.length === 1
             ? t('toast.deletedOne')
-            : t('toast.deletedMany', { count: removing.length }),
+            : t('toast.deletedMany', { count: targets.length }),
         );
       },
     });
@@ -413,21 +460,25 @@ export function EditorScreen({
   // В режиме наборов (M3.6, KTD8) перенесённые берут группу страницы-цели: граница считается
   // здесь и уходит тем же `setEdits`, что порядок, — один шаг undo. Крайняя страница, брошенная
   // «через границу» рядом с собой, порядок не меняет, а группу — да: шлётся одна граница.
+  // Скрытые хвосты (R12 M4): едут за перенесёнными, а бросок «после» показанной страницы ложится
+  // за её хвостом — лист не разрывается.
   const move = (keys: readonly string[], target: string, side: DropSide): void => {
     const targetIndex = positions.get(target);
     if (targetIndex === undefined || keys.includes(target)) {
       return;
     }
-    const base = moved(edits.current.edits, visible, keys, target, side);
+    const moving = withTails(keys);
+    const anchor = side === 'after' ? (withTails([target]).at(-1) ?? target) : target;
+    const base = moved(edits.current.edits, visible, moving, anchor, side);
     let next: SessionEdits | null = base;
     if (sets !== null) {
-      const divider = dividerAfterMove(visible, sets.divider, keys, targetIndex);
+      const divider = dividerAfterMove(visible, sets.divider, moving, targetIndex);
       if (base !== null || divider !== sets.divider) {
         next = { ...(base ?? edits.current.edits), divider };
       }
     }
     if (next !== null) {
-      sendMove(next, keys);
+      sendMove(next, moving);
     }
   };
 
@@ -453,12 +504,18 @@ export function EditorScreen({
     });
   };
 
-  // Граница перед позицией ленты: split-бар, кнопка тулбара (S7, S1). Новый документ — тот,
-  // что начинается с этой позиции.
+  // Граница перед позицией показанной ленты: split-бар, кнопка тулбара (S7, S1). Разрез ложится
+  // перед показанной страницей в полной ленте — хвост предыдущей остаётся слева (R12 M4). Новый
+  // документ — тот, что начинается с этой позиции.
   const split = (position: number): void => {
-    const next = withCut(edits.current.edits, position, total);
+    const key = shownKeys[position];
+    const full = key === undefined ? undefined : positions.get(key);
+    if (full === undefined) {
+      return;
+    }
+    const next = withCut(edits.current.edits, full, fullTotal);
     if (next !== null) {
-      editBoundary(next, next.cuts.indexOf(position) + 1);
+      editBoundary(next, next.cuts.indexOf(full) + 1);
     }
   };
 
@@ -478,16 +535,35 @@ export function EditorScreen({
   };
 
   // «Выделить в документ» (S5): подряд — границы до и после куска одним шагом; иначе тост.
+  // Подряд — по полной ленте с хвостами скрытых (R12 M4); страницы не подряд — U7.
   const group = (): void => {
-    const range = contiguousRange(visible, selection.keys);
+    const range = contiguousRange(visible, withTails(selection.keys));
     if (range === null) {
       onToast(t('toast.notContiguous'));
       return;
     }
-    const result = separated(edits.current.edits, range.from, range.to, total);
+    const result = separated(edits.current.edits, range.from, range.to, fullTotal);
     editBoundary(result.edits, result.document, () => {
-      onToast(t('toast.docCreated', { count: range.to - range.from + 1 }));
+      onToast(t('toast.docCreated', { count: selection.keys.length }));
     });
+  };
+
+  // «Это не пустая страница» (S9 M4, KTD5): правка одним шагом — страница становится обычной,
+  // секция уходит, фокус на карточке текущей; обратного действия нет — Ctrl+Z или «Вернуть».
+  const markNotBlank = (): void => {
+    const key = selection.current;
+    if (key === null) {
+      return;
+    }
+    const sent = edits.edit(withEdits(markedNotBlank(edits.current.edits, key)), [key], {
+      select: () => single(key),
+      onSuccess: () => {
+        onToast(t('toast.notBlank'));
+      },
+    });
+    if (sent) {
+      focusAfterEdit.current = true;
+    }
   };
 
   // «Вернуть всё» (S14): пустые правки и выключенный тумблер одним шагом; Ctrl+Z вернёт всё.
@@ -505,8 +581,8 @@ export function EditorScreen({
   };
 
   // Тулбар (S1): «+ Новый документ с этой страницы» — если текущая не первая и границы перед
-  // ней ещё нет; в режиме наборов документов нет (R17).
-  const atDocStart = currentDoc?.start === currentIndex;
+  // ней ещё нет; в режиме наборов документов нет (R17). Начало документа — по показанной ленте.
+  const atDocStart = currentShownDoc?.start === currentIndex;
   const canSplitHere = sets === null && currentIndex > 0 && !atDocStart;
 
   // Ctrl+Z, Ctrl+Y / Ctrl+Shift+Z, Delete — на всём экране, кроме текстовых полей и модалок
@@ -594,7 +670,7 @@ export function EditorScreen({
   // вопросов, иначе модалка `newscan` (S17).
   const deletedCount = snapshot.assembly?.deleted ?? 0;
   const newScan = (): void => {
-    if (total === 0 && deletedCount === 0) {
+    if (fullTotal === 0 && deletedCount === 0) {
       closeSession();
       return;
     }
@@ -683,6 +759,13 @@ export function EditorScreen({
     assembleBlock === undefined || sets === null
       ? undefined
       : assembleBlockText(t, assembleBlock, sets);
+  // После сборки в режиме «Скрывать» скрытые уходят из ленты — число входит в тост сборки (S13
+  // M4), один тост вместо двух; сводка — из последнего показанного снимка.
+  const blankRef = useRef(blank);
+  useLayoutEffect(() => {
+    blankRef.current = blank;
+  });
+  const [assembledHidden, setAssembledHidden] = useState(0);
   const assemble = (): void => {
     if (assembling || assembleBlock !== undefined || sets === null) {
       return;
@@ -695,7 +778,16 @@ export function EditorScreen({
         setAssembling(false);
         if (result.ok) {
           focusAfterAssemble.current = true;
-          onToast(t('toast.assembled', { count: sheets }));
+          const hidden = blankRef.current.hidden;
+          setAssembledHidden(hidden);
+          onToast(
+            hidden > 0
+              ? t('toast.assembledBlank', {
+                  sheets: t('toast.sheets', { count: sheets }),
+                  count: hidden,
+                })
+              : t('toast.assembled', { count: sheets }),
+          );
           return;
         }
         onToast(
@@ -710,17 +802,73 @@ export function EditorScreen({
       },
     );
   };
-  // Якоря для модалки — только пока она открыта (KTD-8).
+  // Поздние оценки (S13 M4, KTD6): снимок спрятал показанную страницу вердиктом — не правкой
+  // (`notBlank` не менялся), не Ctrl+Z и не сборкой наборов, о которой сказал тост сборки, — тост
+  // один раз на снимок; при включённом переключателе ничего не исчезает. Корректировка при
+  // рендере, тост — эффектом по номеру события.
+  const hiddenKeys = useMemo(
+    () => order.filter((entry) => entry.blank === 'hidden').map((entry) => entry.key),
+    [order],
+  );
+  const { notBlank } = session.edits;
+  const [seen, setSeen] = useState(() => ({
+    hidden: hiddenKeys,
+    notBlank,
+    mode,
+    event: 0,
+    count: 0,
+  }));
+  if (
+    !sameList(seen.hidden, hiddenKeys) ||
+    !sameList(seen.notBlank, notBlank) ||
+    seen.mode !== mode
+  ) {
+    const known = new Set(seen.hidden);
+    const fresh = hiddenKeys.filter((key) => !known.has(key)).length;
+    const announced = seen.mode === 'sets' && mode === 'assembled' && assembledHidden > 0;
+    const late = fresh > 0 && !reveal && !announced && sameList(seen.notBlank, notBlank);
+    setSeen({
+      hidden: hiddenKeys,
+      notBlank,
+      mode,
+      event: late ? seen.event + 1 : seen.event,
+      count: late ? fresh : seen.count,
+    });
+  }
+  const announceHidden = useEffectEvent((count: number) => {
+    onToast(t('toast.blankHidden', { count }));
+  });
+  useEffect(() => {
+    if (seen.event > 0) {
+      announceHidden(seen.count);
+    }
+  }, [seen.event, seen.count]);
+
+  /** Номер страницы в показанной ленте; у скрытой — номер её показанного лица (слева). */
+  const numberOf = (key: string): number => {
+    for (let index = positions.get(key) ?? -1; index >= 0; index -= 1) {
+      const shownIndex = shownPositions.get(visible[index] ?? '');
+      if (shownIndex !== undefined) {
+        return shownIndex + 1;
+      }
+    }
+    return 0;
+  };
+
+  // Якоря для модалки — только пока она открыта (KTD-8). «После текущей» — за её скрытым хвостом
+  // (R12 M4), номера — по показанной ленте.
   const anchors =
     modal === 'add'
       ? anchorsOf(t, {
           entry: currentEntry,
-          index: currentIndex,
+          index: currentFull,
           document: currentDoc,
           documentName: currentDocument === null ? '' : (names[currentDocument] ?? ''),
           visible,
           mode,
           sets,
+          after: selection.current === null ? undefined : withTails([selection.current]).at(-1),
+          numberOf,
         })
       : null;
 
@@ -746,12 +894,51 @@ export function EditorScreen({
     }
   };
 
+  // Переключатель «добавить пустые» (S5 M4, R18): режим «Скрывать», проход оборотов, вне режима
+  // наборов; без найденных — недоступен с подписью «не найдено» или «оцениваются…». Подвал —
+  // свой компонент в U7; до него строки живут здесь.
+  const blankToggle = session.blankMode === 'hide' && sets === null && (
+    <label
+      className={blank.found > 0 ? 'toggle-row' : 'toggle-row toggle-row--disabled'}
+      title={
+        blank.found > 0
+          ? t(reveal ? 'editor.blank.toggleTitle.on' : 'editor.blank.toggleTitle.off')
+          : t(
+              blank.pending > 0
+                ? 'editor.blank.toggleTitle.scoring'
+                : 'editor.blank.toggleTitle.none',
+            )
+      }
+    >
+      <span className="toggle">
+        <input
+          ref={blankToggleRef}
+          className="toggle__input"
+          type="checkbox"
+          checked={reveal}
+          disabled={blank.found === 0}
+          aria-label={t('editor.blank.toggleLabel')}
+          onChange={(event) => {
+            setReveal(event.target.checked);
+          }}
+        />
+        <span className="toggle__track" aria-hidden="true" />
+      </span>
+      <span className="toggle-row__label">{t('editor.blank.toggle')}</span>
+      <span className="toggle-row__count">
+        {blank.found > 0
+          ? t(reveal ? 'editor.blank.shown' : 'editor.blank.hidden', { count: blank.hidden })
+          : t(blank.pending > 0 ? 'editor.blank.scoring' : 'editor.blank.none')}
+      </span>
+    </label>
+  );
+
   return (
     <main className="editor-screen">
       <EditorToolbar
         total={total}
         saved={session.saved}
-        documents={documents}
+        documents={shownDocuments}
         names={names}
         currentIndex={currentIndex}
         currentDocument={currentDocument}
@@ -778,8 +965,9 @@ export function EditorScreen({
       <div className="editor-screen__body">
         <EditorRail
           sessionId={session.id}
-          order={order}
-          documents={documents}
+          order={shown}
+          documents={shownDocuments}
+          allHidden={allHidden}
           sets={sets}
           origins={origins}
           defaultNames={defaultNames}
@@ -804,6 +992,7 @@ export function EditorScreen({
           footer={
             backsPass !== null && (
               <footer className="rail__footer">
+                {blankToggle}
                 <label className="toggle-row" title={t('editor.rotateBacksTitle')}>
                   <span className="toggle">
                     <input
@@ -832,12 +1021,20 @@ export function EditorScreen({
             onNewScan={newScan}
           />
           {currentEntry === undefined ? (
-            // S10: все страницы удалены — подсказка, как вернуть.
-            total === 0 && (
+            // S10: все страницы удалены — подсказка, как вернуть; S7 M4: все показанные скрыты —
+            // подсказка про переключатель.
+            fullTotal === 0 ? (
               <div className="stage__empty">
                 <h2 className="stage__empty-title">{t('editor.empty.title')}</h2>
                 <p className="stage__empty-text">{t('editor.empty.text')}</p>
               </div>
+            ) : (
+              allHidden && (
+                <div className="stage__empty">
+                  <h2 className="stage__empty-title">{t('editor.empty.blankTitle')}</h2>
+                  <p className="stage__empty-text">{t('editor.empty.blankText')}</p>
+                </div>
+              )
             )
           ) : (
             <div className="preview">
@@ -852,6 +1049,7 @@ export function EditorScreen({
                     : null
                 }
                 tone={toneOf(currentDocument ?? 0)}
+                blank={currentEntry.blank}
               />
             </div>
           )}
@@ -875,19 +1073,24 @@ export function EditorScreen({
         {snapshot.assembly !== null && (
           <EditorInspector
             assembly={snapshot.assembly}
+            documents={shownDocuments}
             entry={currentEntry}
             position={currentIndex + 1}
             origin={currentEntry === undefined ? null : (origins.get(currentEntry.key) ?? null)}
             currentDocument={currentDocument}
             names={names}
             frontsOnly={backsPass === null}
+            notBlank={currentEntry !== undefined && notBlank.includes(currentEntry.key)}
             locked={locked}
             onPickDocument={(index) => {
-              const first = visible[documents[index]?.start ?? -1];
+              const target = shownDocuments[index];
+              const first =
+                target === undefined || target.count === 0 ? undefined : shownKeys[target.start];
               if (first !== undefined) {
                 setSelection(single(first));
               }
             }}
+            onNotBlank={markNotBlank}
             onRevert={() => {
               setModal('revert');
             }}
@@ -901,7 +1104,7 @@ export function EditorScreen({
           documents={documents}
           defaultNames={defaultNames}
           singleDefault={t('editor.doc.defaultSingleName', { date: today })}
-          total={total}
+          total={fullTotal}
           onRename={renameDocuments}
           editsBusy={edits.busy}
           onWriting={setSaving}
@@ -916,7 +1119,7 @@ export function EditorScreen({
       )}
       {modal === 'newscan' && (
         <NewScanModal
-          total={total}
+          total={fullTotal}
           deleted={deletedCount}
           saved={session.saved}
           unassembled={mode === 'sets'}

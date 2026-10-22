@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   deleted,
   dividerAfterMove,
+  markedNotBlank,
   moved,
   movedAcross,
   renamed,
@@ -378,5 +379,19 @@ describe('жесты: граница наборов (M3.6, KTD8)', () => {
       order: ['a', 'c', 'd', 'e', 'b'],
       divider: 4,
     });
+  });
+});
+
+// M4 (KTD5; handoff M4, S9): пометка «это не пустая страница» — ключ в `notBlank`.
+describe('пометка «не пустая» (M4)', () => {
+  it('добавляет ключ в notBlank, остальное не трогает', () => {
+    const base = { ...EMPTY_EDITS, deleted: ['x'] };
+    expect(markedNotBlank(base, 'b')).toEqual({ ...base, notBlank: ['b'] });
+    expect(markedNotBlank({ ...base, notBlank: ['a'] }, 'b').notBlank).toEqual(['a', 'b']);
+  });
+
+  it('уже помеченная — без изменений (шага нет)', () => {
+    const base = { ...EMPTY_EDITS, notBlank: ['b'] };
+    expect(markedNotBlank(base, 'b')).toBe(base);
   });
 });

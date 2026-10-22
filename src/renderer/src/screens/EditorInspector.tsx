@@ -1,8 +1,16 @@
 import { useId, useState, type MouseEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { AssembledPage, AssemblyMode, PassKind, SessionAssembly, SetsLayout } from '@shared';
+import type {
+  AssembledPage,
+  AssemblyMode,
+  BlankSummary,
+  PassKind,
+  SessionAssembly,
+  SetsLayout,
+} from '@shared';
 import type { TFunction } from 'i18next';
 import { noteOf, toneOf, whatOf } from '../state/page-text';
+import type { ShownDocument } from '../state/shown';
 
 // Инспектор редактора (handoff M3, S11–S13; M3.5, S6–S7; M3.6, S8–S9): ДЕТАЛИ текущей страницы,
 // ДОКУМЕНТЫ В НАБОРЕ и ПРОВЕРКА, внизу — плашка правок S14 с «Вернуть». Только показ снимка:
@@ -10,7 +18,9 @@ import { noteOf, toneOf, whatOf } from '../state/page-text';
 // KTD-7). Страница добавленного набора — без «лица» и «листа»: факт «Набор» и своё пояснение.
 // До сборки (режим наборов) «Лист» не называется: факты «Набор», «Место», «Откуда» (R23);
 // заголовок и пояснение ДЕТАЛЕЙ — по режиму (KTD9), теми же словами, что подпись миниатюры и
-// сводка `add`.
+// сводка `add`. M4 (handoff M4, S9–S11): секция «ПУСТОЙ ОБОРОТ» с действием «Это не пустая
+// страница» у пустой текущей, факт «Содержимое» в ДЕТАЛЯХ, пункт ПРОВЕРКИ о пустых; список
+// документов — в координатах показанной ленты.
 
 /** Строка ПРОВЕРКИ: ✓ — всё хорошо, • — стоит взглянуть. */
 function Check({
@@ -78,6 +88,46 @@ function PairsCheck({
   );
 }
 
+/**
+ * Пункт ПРОВЕРКИ о пустых оборотах (M4, S11): при «Оставлять» пункта нет; оценка идёт — точка с
+ * приоритетом (сохранение недоступно); «Скрывать» — точка (состав файла изменился без участия
+ * человека), «Помечать» — галочка; в режиме наборов при «Скрывать» — считаются, скроются после
+ * сборки.
+ */
+function BlankCheck({
+  t,
+  blank,
+  inSets,
+}: {
+  readonly t: TFunction;
+  readonly blank: BlankSummary;
+  readonly inSets: boolean;
+}): ReactNode {
+  if (blank.mode === 'keep') {
+    return null;
+  }
+  if (blank.pending > 0) {
+    return <Check warning>{t('inspector.check.blankPending', { count: blank.pending })}</Check>;
+  }
+  if (blank.found === 0) {
+    return <Check warning={false}>{t('inspector.check.blankNone')}</Check>;
+  }
+  if (blank.mode === 'mark') {
+    return (
+      <Check warning={false}>{t('inspector.check.blankMarked', { count: blank.found })}</Check>
+    );
+  }
+  if (inSets) {
+    return <Check warning>{t('inspector.check.blankSets', { count: blank.found })}</Check>;
+  }
+  return (
+    <Check warning>
+      {t('inspector.check.blankHidden', { count: blank.hidden })}
+      <span className="check__hint">{t('inspector.check.blankHiddenHint')}</span>
+    </Check>
+  );
+}
+
 function Fact({ name, value }: { readonly name: string; readonly value: string }): ReactNode {
   return (
     <div className="facts__row">
@@ -94,6 +144,7 @@ function Details({
   sets,
   origin,
   frontsOnly,
+  notBlank,
   open,
   onToggle,
 }: {
@@ -103,6 +154,8 @@ function Details({
   readonly sets: SetsLayout | null;
   readonly origin: PassKind | null;
   readonly frontsOnly: boolean;
+  /** Страница помечена «не пустая» (M4, S10) — факт «Содержимое». */
+  readonly notBlank: boolean;
   readonly open: boolean;
   readonly onToggle: () => void;
 }): ReactNode {
@@ -112,6 +165,14 @@ function Details({
   const title = t('inspector.title', { page: position, what: whatOf(t, entry, mode) });
   const note = noteOf(t, entry, mode, frontsOnly);
   const back = entry.side === 'back';
+  // S10 M4: факт «Содержимое» — только у пустых по оценке и у помеченных вручную.
+  const content = notBlank
+    ? t('inspector.fact.contentNotBlank')
+    : entry.blank === 'hidden'
+      ? t('inspector.fact.contentHidden')
+      : entry.blank === 'marked'
+        ? t('inspector.fact.contentMarked')
+        : null;
 
   let facts: ReactNode;
   if (mode === 'sets' && sets !== null) {
@@ -189,6 +250,7 @@ function Details({
         <h2 className="details__title">{title}</h2>
         <dl className="facts">
           {facts}
+          {content !== null && <Fact name={t('inspector.fact.content')} value={content} />}
           <Fact
             name={t('inspector.fact.angle')}
             value={t('inspector.fact.angleValue', { angle: entry.angle })}
@@ -202,21 +264,26 @@ function Details({
 
 export function EditorInspector({
   assembly,
+  documents,
   entry,
   position,
   origin,
   currentDocument,
   names,
   frontsOnly,
+  notBlank,
   locked,
   onPickDocument,
+  onNotBlank,
   onMouseDown,
   onRevert,
 }: {
   readonly assembly: SessionAssembly;
+  /** Документы в координатах показанной ленты (M4, R11): счётчики и диапазоны — по показанным. */
+  readonly documents: readonly ShownDocument[];
   /** Текущая страница; `undefined` — лента пуста (S10: ДЕТАЛИ скрыты). */
   readonly entry: AssembledPage | undefined;
-  /** Номер текущей страницы в ленте, с единицы. */
+  /** Номер текущей страницы в показанной ленте, с единицы. */
   readonly position: number;
   /** Проход текущей страницы — факт «Откуда» до сборки (R23); `null` — ленты нет. */
   readonly origin: PassKind | null;
@@ -226,9 +293,13 @@ export function EditorInspector({
   readonly names: readonly string[];
   /** Прохода оборотов нет — набор односторонний. */
   readonly frontsOnly: boolean;
-  /** Идёт запись (KTD-9): «Вернуть» недоступна. */
+  /** Текущая помечена «не пустая» (M4, KTD5). */
+  readonly notBlank: boolean;
+  /** Идёт запись или правка в полёте (KTD-9): «Вернуть» и «Это не пустая страница» недоступны. */
   readonly locked: boolean;
   readonly onPickDocument: (document: number) => void;
+  /** «Это не пустая страница» (M4, S9) — пометка текущей одним шагом undo. */
+  readonly onNotBlank: () => void;
   /** Клик по поверхности инспектора — сжатие мультивыделения решает экран (M3.5, R21). */
   readonly onMouseDown?: (event: MouseEvent<HTMLElement>) => void;
   /** «Вернуть» — открыть подтверждение `revert`. */
@@ -240,9 +311,20 @@ export function EditorInspector({
   const [detailsOpen, setDetailsOpen] = useState(false);
   const docsId = useId();
   const checksId = useId();
-  const documents = assembly.order.length === 0 ? [] : assembly.documents;
+  const blankId = useId();
+  const listed = assembly.order.length === 0 ? [] : documents;
   const { report, sets } = assembly;
   const inSets = report.mode === 'sets';
+  // S9 M4: текст секции — по тому, что будет со страницей: скрыта, в файле с меткой, считается
+  // в наборах до сборки.
+  const blankNote =
+    entry?.blank === undefined || entry.blank === null
+      ? null
+      : inSets
+        ? t('inspector.blank.sets')
+        : entry.blank === 'hidden'
+          ? t('inspector.blank.hidden')
+          : t('inspector.blank.marked');
 
   return (
     <aside className="inspector" aria-label={t('inspector.label')} onMouseDown={onMouseDown}>
@@ -254,11 +336,32 @@ export function EditorInspector({
           sets={sets}
           origin={origin}
           frontsOnly={frontsOnly}
+          notBlank={notBlank}
           open={detailsOpen}
           onToggle={() => {
             setDetailsOpen((value) => !value);
           }}
         />
+      )}
+
+      {blankNote !== null && (
+        <section className="inspector__section inspector__section--blank" aria-labelledby={blankId}>
+          <div className="inspector__heading">
+            <h2 id={blankId} className="kicker">
+              {t('inspector.blank.kicker')}
+            </h2>
+          </div>
+          <p className="inspector__note">{blankNote}</p>
+          <button
+            type="button"
+            className="btn btn--tinted inspector__blank-action"
+            title={t('inspector.blank.actionTitle')}
+            disabled={locked}
+            onClick={onNotBlank}
+          >
+            {t('inspector.blank.action')}
+          </button>
+        </section>
       )}
 
       <section className="inspector__section" aria-labelledby={docsId}>
@@ -269,20 +372,20 @@ export function EditorInspector({
           {/* В режиме наборов документов ещё нет — счётчик не рисуется (R17). */}
           {!inSets && (
             <span className="inspector__meta">
-              {documents.length === 0
+              {listed.length === 0
                 ? t('inspector.docsNone')
-                : t('inspector.docsCount', { count: documents.length })}
+                : t('inspector.docsCount', { count: listed.length })}
             </span>
           )}
         </div>
         {inSets ? (
           <p className="inspector__note">{t('inspector.docsAfterAssemble')}</p>
         ) : (
-          documents.length > 0 && (
+          listed.length > 0 && (
             <>
               <ul className="doc-list">
-                {documents.map((document, index) => (
-                  <li key={document.start}>
+                {listed.map((document, index) => (
+                  <li key={index}>
                     <button
                       type="button"
                       className={`doc-list__item ${toneOf(index)}`}
@@ -297,13 +400,15 @@ export function EditorInspector({
                       <span className="doc-list__text">
                         <span className="doc-list__name">{names[index]}</span>
                         <span className="doc-list__meta">
-                          {document.count === 1
-                            ? t('inspector.docMetaOnePage', { from: document.start + 1 })
-                            : t('inspector.docMeta', {
-                                count: document.count,
-                                from: document.start + 1,
-                                to: document.start + document.count,
-                              })}
+                          {document.count === 0
+                            ? t('inspector.docMetaBlank')
+                            : document.count === 1
+                              ? t('inspector.docMetaOnePage', { from: document.start + 1 })
+                              : t('inspector.docMeta', {
+                                  count: document.count,
+                                  from: document.start + 1,
+                                  to: document.start + document.count,
+                                })}
                         </span>
                       </span>
                     </button>
@@ -311,8 +416,8 @@ export function EditorInspector({
                 ))}
               </ul>
               <p className="inspector__note">
-                {documents.length > 1
-                  ? t('inspector.docsNoteMany', { count: documents.length })
+                {listed.length > 1
+                  ? t('inspector.docsNoteMany', { count: listed.length })
                   : t('inspector.docsNoteOne')}
               </p>
             </>
@@ -326,6 +431,7 @@ export function EditorInspector({
         </h2>
         <ul className="checks">
           <PairsCheck t={t} assembly={assembly} />
+          <BlankCheck t={t} blank={assembly.blank} inSets={inSets} />
           <Check warning={assembly.orderEdited}>
             {assembly.orderEdited
               ? t('inspector.check.orderEdited')

@@ -12,13 +12,13 @@ import {
 import { useTranslation } from 'react-i18next';
 import {
   MAX_DOCUMENT_NAME_LENGTH,
-  type AssembledDocument,
   type AssembledPage,
   type PassKind,
   type SetsLayout,
 } from '@shared';
 import type { DropSide, SetSide } from '../state/edits';
 import { single, type Selection } from '../state/selection';
+import type { ShownDocument } from '../state/shown';
 import { toneOf } from '../state/page-text';
 import {
   EditorThumb,
@@ -33,7 +33,9 @@ import {
 // перетаскиванием. В режиме раздельных наборов (`sets !== null`) вместо групп документов — две
 // группы «Лицевые стороны» и «Оборотные стороны» с живыми счётчиками и разделителем-целью дропа;
 // разрезов, имён и «Выделить в документ» нет (KTD8: `documentsEditable`). Решает только «что и
-// куда» — сами правки строит и шлёт экран (жесты `state/edits.ts`, KTD-8).
+// куда» — сами правки строит и шлёт экран (жесты `state/edits.ts`, KTD-8). С M4 лента здесь —
+// показанная (без скрытых пустых оборотов, handoff M4, S1): позиции — её, документы — в её
+// координатах с номером из полной; документ из одних скрытых не рисуется.
 
 /**
  * Тип данных перетаскивания — свой: с `text/plain` бросок на поле имени вставил бы в него
@@ -149,8 +151,12 @@ export const focusThumb = (rail: HTMLElement | null, key: string): void => {
 
 export interface EditorRailProps {
   readonly sessionId: string;
+  /** Показанная лента (M4, R11). */
   readonly order: readonly AssembledPage[];
-  readonly documents: readonly AssembledDocument[];
+  /** Документы в координатах показанной ленты; `index` — номер в полной (имена, разрезы, тон). */
+  readonly documents: readonly ShownDocument[];
+  /** Лента пуста, потому что все страницы — скрытые пустые обороты (S7 M4). */
+  readonly allHidden: boolean;
   /** Группы ленты в режиме раздельных наборов (M3.6, R17); `null` — группы документов. */
   readonly sets: SetsLayout | null;
   /** Происхождение страницы по ключу — тег «об» по проходу, не по группе (R11). */
@@ -186,6 +192,7 @@ export function EditorRail({
   sessionId,
   order,
   documents,
+  allHidden,
   sets,
   origins,
   defaultNames,
@@ -242,7 +249,12 @@ export function EditorRail({
 
   // Позиция, перед которой стоит граница, → номер документа, который с неё начинается.
   const starts = useMemo(
-    () => new Map(documents.slice(1).map((doc, index) => [doc.start, index + 1])),
+    () =>
+      new Map(
+        documents
+          .filter((doc) => doc.index > 0 && doc.count > 0)
+          .map((doc) => [doc.start, doc.index]),
+      ),
     [documents],
   );
 
@@ -390,6 +402,7 @@ export function EditorRail({
       sheet={entry.sheet}
       angle={entry.angle}
       lost={entry.lost}
+      blank={entry.blank}
       position={position + 1}
       inSets={sets !== null}
       addedSet={entry.addedSet}
@@ -463,7 +476,9 @@ export function EditorRail({
 
   let groups: ReactNode;
   if (total === 0) {
-    groups = <p className="rail__empty">{t('editor.empty.rail')}</p>;
+    groups = (
+      <p className="rail__empty">{t(allHidden ? 'editor.empty.railBlank' : 'editor.empty.rail')}</p>
+    );
   } else if (sets !== null) {
     // S1–S2 M3.6: две группы по границе и разделитель между ними — цель дропа с маркером над
     // (в конец лиц) или под (в начало оборотов); сам разделитель не фокусируемый.
@@ -490,53 +505,55 @@ export function EditorRail({
   } else {
     // S2: группа на документ, в каждой свой listbox; номер миниатюры — сквозной. Ключ —
     // первая страница документа: черновик имени едет с документом, а не с номером.
-    groups = documents.map((doc, index) => (
-      <section
-        key={order[doc.start]?.key ?? index}
-        className={`doc-group ${toneOf(index)}`}
-        aria-labelledby={docNameId(index)}
-      >
-        {index > 0 && (
-          <div className="doc-group__divider">
-            <span className="doc-group__pill">{t('editor.doc.newPill')}</span>
-            <span className="doc-group__rule" aria-hidden="true" />
-            <button
-              type="button"
-              className="doc-group__unsplit"
-              title={t('editor.doc.unsplit')}
-              aria-label={t('editor.doc.unsplitLabel', { number: index + 1 })}
+    groups = documents
+      .filter((doc) => doc.count > 0)
+      .map(({ index, ...doc }) => (
+        <section
+          key={order[doc.start]?.key ?? index}
+          className={`doc-group ${toneOf(index)}`}
+          aria-labelledby={docNameId(index)}
+        >
+          {index > 0 && (
+            <div className="doc-group__divider">
+              <span className="doc-group__pill">{t('editor.doc.newPill')}</span>
+              <span className="doc-group__rule" aria-hidden="true" />
+              <button
+                type="button"
+                className="doc-group__unsplit"
+                title={t('editor.doc.unsplit')}
+                aria-label={t('editor.doc.unsplitLabel', { number: index + 1 })}
+                disabled={locked}
+                onClick={() => {
+                  onUnsplit(index, true);
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          )}
+          <div className="doc-group__header">
+            <span className="doc-badge" aria-hidden="true">
+              {index + 1}
+            </span>
+            <DocName
+              key={order[doc.start]?.key ?? index}
+              index={index}
+              value={doc.name}
+              placeholder={defaultNames[index] ?? ''}
               disabled={locked}
-              onClick={() => {
-                onUnsplit(index, true);
-              }}
-            >
-              ✕
-            </button>
+              busy={busy}
+              onCommit={onRename}
+              onEnter={focusCurrent}
+            />
+            <span className="doc-group__count">{t('editor.doc.count', { count: doc.count })}</span>
           </div>
-        )}
-        <div className="doc-group__header">
-          <span className="doc-badge" aria-hidden="true">
-            {index + 1}
-          </span>
-          <DocName
-            key={order[doc.start]?.key ?? index}
-            index={index}
-            value={doc.name}
-            placeholder={defaultNames[index] ?? ''}
-            disabled={locked}
-            busy={busy}
-            onCommit={onRename}
-            onEnter={focusCurrent}
-          />
-          <span className="doc-group__count">{t('editor.doc.count', { count: doc.count })}</span>
-        </div>
-        {thumbList(
-          t('editor.doc.pagesLabel', { number: index + 1 }),
-          order.slice(doc.start, doc.start + doc.count),
-          doc.start,
-        )}
-      </section>
-    ));
+          {thumbList(
+            t('editor.doc.pagesLabel', { number: index + 1 }),
+            order.slice(doc.start, doc.start + doc.count),
+            doc.start,
+          )}
+        </section>
+      ));
   }
 
   return (
