@@ -38,7 +38,15 @@ export {
   type Unsubscribe,
 } from './bridge';
 
-export { BLANK_MODES, DEFAULT_BLANK_MODE, type BlankMode } from './blank';
+export {
+  BLANK_MODES,
+  DEFAULT_BLANK_MODE,
+  NO_VERDICTS,
+  type BlankFlag,
+  type BlankMode,
+  type BlankSummary,
+  type BlankVerdicts,
+} from './blank';
 
 export type { DiscoveredScanner, DiscoveryState } from './discovery';
 

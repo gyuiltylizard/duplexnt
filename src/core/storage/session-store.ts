@@ -44,6 +44,8 @@ import {
   type PassOrigin,
 } from './journal';
 import {
+  BLANK_FILE,
+  blankDirOf,
   closingDirOf,
   derivedDirOf,
   JOURNAL_FILE_NAME,
@@ -548,8 +550,12 @@ export function createSessionStore(
   async function removeMarked(sessionId: string, prefix: string): Promise<void> {
     try {
       const report = await removeByPrefix(layout.pagesDir, prefix, PAGE_FILE, io);
-      // Миниатюры отброшенных страниц — производное: чистятся по возможности.
+      // Миниатюры и оценки пустых страниц отброшенных страниц — производное: чистятся по
+      // возможности.
       await removeByPrefix(thumbsDirOf(layout, sessionId), prefix, PAGE_FILE, io).catch(
+        () => undefined,
+      );
+      await removeByPrefix(blankDirOf(layout, sessionId), prefix, BLANK_FILE, io).catch(
         () => undefined,
       );
       if (report.failed.length === 0 && journal !== null) {

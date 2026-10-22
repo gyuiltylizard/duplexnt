@@ -184,6 +184,7 @@ describe('модалка add в режиме наборов (M3.6, KTD11; handof
     angle: 0 as const,
     lost: false,
     addedSet,
+    blank: null,
   });
   // Лента f1 f2 f3 | b2 a1 b1: граница 3, добавленный набор в группе оборотов.
   const visible = ['f1', 'f2', 'f3', 'b2', 'a1', 'b1'];

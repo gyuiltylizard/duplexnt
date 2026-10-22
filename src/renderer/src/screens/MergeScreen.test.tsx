@@ -2,6 +2,7 @@ import type { AssembledPage, AssemblyReport, SessionAssembly } from '@shared';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import '../i18n';
+import { NO_BLANK } from '../state/assembly-fixture';
 import { MergeScreen } from './MergeScreen';
 
 function report(overrides: Partial<AssemblyReport>): AssemblyReport {
@@ -34,7 +35,15 @@ function assemblyFor(assemblyReport: AssemblyReport): SessionAssembly {
   let key = 0;
   const push = (side: AssembledPage['side'], sheet: number | null): void => {
     key += 1;
-    order.push({ key: `k${String(key)}`, side, sheet, angle: 0, lost: false, addedSet: null });
+    order.push({
+      key: `k${String(key)}`,
+      side,
+      sheet,
+      angle: 0,
+      lost: false,
+      addedSet: null,
+      blank: null,
+    });
   };
   if (assemblyReport.mode === 'sets') {
     for (let index = 0; index < assemblyReport.fronts; index += 1) {
@@ -59,6 +68,7 @@ function assemblyFor(assemblyReport: AssemblyReport): SessionAssembly {
     hasEdits: false,
     deleted: 0,
     report: assemblyReport,
+    blank: NO_BLANK,
   };
 }
 

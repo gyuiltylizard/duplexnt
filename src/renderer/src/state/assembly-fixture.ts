@@ -1,15 +1,21 @@
 import {
   EMPTY_EDITS,
+  NO_VERDICTS,
   sameEdits,
   type AssembledDocument,
   type AssembledPage,
   type AssemblyMode,
+  type BlankSummary,
+  type BlankVerdicts,
   type PassSnapshot,
   type SessionAssembly,
   type SessionSnapshot,
   type SetsLayout,
 } from '@shared';
 import { rolesOf } from './screen';
+
+/** Сводка пустых оборотов без оценок и при «Оставлять» (M4). */
+export const NO_BLANK: BlankSummary = { mode: 'keep', found: 0, hidden: 0, pending: 0 };
 
 /** Пустая лента без правок: основа для снимков, где важен только отчёт. */
 export const NO_EDITS_ASSEMBLY: Omit<SessionAssembly, 'report'> = {
@@ -19,6 +25,7 @@ export const NO_EDITS_ASSEMBLY: Omit<SessionAssembly, 'report'> = {
   orderEdited: false,
   hasEdits: false,
   deleted: 0,
+  blank: NO_BLANK,
 };
 
 /** Режим сборки без правок (M3.6, R4): как считает ядро, с идущим проходом оборотов — пары. */
@@ -33,9 +40,47 @@ function modeOf(session: SessionSnapshot): AssemblyMode {
   return backs.pages.length === (fronts?.pages.length ?? 0) ? 'pairs' : 'sets';
 }
 
-interface MirrorPage extends Omit<AssembledPage, 'side' | 'sheet'> {
+interface MirrorPage extends Omit<AssembledPage, 'side' | 'sheet' | 'blank'> {
   readonly group: 'fronts' | 'backs' | null;
   readonly ofBacks: boolean;
+}
+
+/**
+ * Флаги пустых оборотов поверх ленты — как ядро (M4, R10, KTD4, KTD9): только страницы прохода
+ * оборотов, не потерянные, при режиме ≠ «Оставлять»; без вердикта — ожидание; пометка «не
+ * пустая» снимает флаг; в режиме наборов «Скрывать» даёт метку, не скрытие.
+ */
+function withBlankFlags(
+  session: SessionSnapshot,
+  pages: readonly (AssembledPage & Pick<MirrorPage, 'ofBacks'>)[],
+  sets: SetsLayout | null,
+  blank: BlankVerdicts,
+): { readonly order: AssembledPage[]; readonly summary: BlankSummary } {
+  const mode = session.blankMode;
+  const notBlank = new Set(session.edits.notBlank);
+  let found = 0;
+  let hidden = 0;
+  let pending = 0;
+  const order = pages.map(({ ofBacks, ...page }): AssembledPage => {
+    if (mode === 'keep' || !ofBacks || page.lost) {
+      return { ...page, blank: null };
+    }
+    const verdict = blank.get(page.key);
+    if (verdict === undefined) {
+      pending += 1;
+      return { ...page, blank: null };
+    }
+    if (!verdict || notBlank.has(page.key)) {
+      return { ...page, blank: null };
+    }
+    found += 1;
+    if (mode === 'hide' && sets === null) {
+      hidden += 1;
+      return { ...page, blank: 'hidden' };
+    }
+    return { ...page, blank: 'marked' };
+  });
+  return { order, summary: { mode, found, hidden, pending } };
 }
 
 /** Блоки добавленных наборов — по якорю, без якоря в конец; группа — группа якоря. */
@@ -71,7 +116,10 @@ function placeAdded(
  * renderer'у границей слоёв; расхождение ловит табличный тест
  * `test/guards/assembly-fixture.test.ts` на одних данных.
  */
-export function assemblyOf(session: SessionSnapshot): SessionAssembly {
+export function assemblyOf(
+  session: SessionSnapshot,
+  blank: BlankVerdicts = NO_VERDICTS,
+): SessionAssembly {
   const { fronts: frontsPass, backs: backsPass, added } = rolesOf(session.passes);
   const fronts = frontsPass?.pages ?? [];
   const backs = backsPass?.pages ?? [];
@@ -191,21 +239,30 @@ export function assemblyOf(session: SessionSnapshot): SessionAssembly {
     }));
   }
 
-  return {
-    order: placed.map(({ key, side, sheet, angle, lost, addedSet }) => ({
+  const flagged = withBlankFlags(
+    session,
+    placed.map(({ key, side, sheet, angle, lost, addedSet, ofBacks }) => ({
       key,
       side,
       sheet,
       angle,
       lost,
       addedSet,
+      blank: null,
+      ofBacks,
     })),
+    sets,
+    blank,
+  );
+  return {
+    order: flagged.order,
     documents: [{ name: '', start: 0, count: placed.length }],
     sets,
     orderEdited: false,
     hasEdits: backAngle !== 0,
     deleted: 0,
     report: { ...report, groups: sets },
+    blank: flagged.summary,
   };
 }
 
@@ -217,9 +274,18 @@ export function assemblyOf(session: SessionSnapshot): SessionAssembly {
  * позиции; после сборки — лист по позиции среди не удалённых ключей записи; разрезы в режиме
  * наборов не живут. Расхождение с ядром ловит `test/guards/assembly-fixture.test.ts`.
  */
-export function assemblyWithEditsOf(session: SessionSnapshot): SessionAssembly {
+export function assemblyWithEditsOf(
+  session: SessionSnapshot,
+  blank: BlankVerdicts = NO_VERDICTS,
+): SessionAssembly {
   const auto = assemblyOf(session);
   const { edits } = session;
+  // Сторона по проходу — для флага пустого оборота: страница прохода оборотов и после правок она же.
+  const backsKeys = new Set(
+    session.passes
+      .filter((pass) => pass.kind === 'backs')
+      .flatMap((pass) => pass.pages.map((page) => page.key)),
+  );
   const byKey = new Map(auto.order.map((entry) => [entry.key, entry]));
   const explicit = edits.order.flatMap((key) => byKey.get(key) ?? []);
   const placed = new Set(explicit.map((entry) => entry.key));
@@ -264,9 +330,16 @@ export function assemblyWithEditsOf(session: SessionSnapshot): SessionAssembly {
   }
   const alive = new Set(auto.order.map((entry) => entry.key));
   const deleted = edits.deleted.filter((key) => alive.has(key)).length;
+  const flagged = withBlankFlags(
+    session,
+    order.map((entry) => ({ ...entry, ofBacks: backsKeys.has(entry.key) })),
+    sets,
+    blank,
+  );
   return {
     ...auto,
-    order,
+    order: flagged.order,
+    blank: flagged.summary,
     sets,
     report: { ...auto.report, groups: sets },
     documents:

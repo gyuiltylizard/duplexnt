@@ -15,6 +15,7 @@ import { pageFixtureNumberOf, pdfImageStreams } from '../support/fixtures';
 import { journalOnDisk, rolesOf } from '../support/session-store';
 import { makeTempDataRoot } from '../support/temp-data-root';
 import { unwrap } from '../support/result';
+import { untilScored } from '../support/until';
 
 // «Добавить» — полный путь на настоящей цепочке (план M3.5, U8): эмулятор с лотками по заданиям
 // → служба с намерением → журнал v4 с ролью и якорем → сборка по якорям → правки поверх →
@@ -164,6 +165,7 @@ describe('«Добавить» — полный путь через эмулят
     expect(keysOf(service.snapshot())).toEqual([F3, F2, F1, B2, A1, B3]);
 
     // AE11: PDF — страницы в порядке ленты, добавленная на своём месте.
+    await untilScored(() => service.snapshot());
     const saved = unwrap(await service.saveDocuments(folder, request));
     expect(saved.failed).toEqual([]);
     expect(await pdfFixtures(join(folder, 'Набор.pdf'))).toEqual([3, 2, 1, 5, 7, 6]);

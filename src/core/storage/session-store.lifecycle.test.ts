@@ -421,3 +421,23 @@ describe('хранилище сессии: нечитаемый журнал, к
     expect(store.snapshot()?.passes[0]?.state).toBe('interrupted');
   });
 });
+
+describe('хранилище сессии: оценки пустых страниц отброшенного сегмента (M4, R7)', () => {
+  it('удаление сегмента чистит его оценки и не трогает остальные', async () => {
+    const { store, layout, accept } = await setup();
+    ok(await store.beginPass(ORIGIN, null));
+    await accept(1, 1);
+    ok(await store.endSegment('interrupted'));
+    ok(await store.resumePass());
+    await accept(2, 3);
+    const blank = join(layout.derivedDir, SESSION, 'blank');
+    await mkdir(blank, { recursive: true });
+    for (const name of ['p01-s01-0001.json', 'p01-s02-0001.json', 'p01-s02-0002.json']) {
+      await writeFile(join(blank, name), '{"v":1,"ratio":0}');
+    }
+
+    ok(await store.discardSegment());
+
+    expect(await readdir(blank)).toEqual(['p01-s01-0001.json']);
+  });
+});

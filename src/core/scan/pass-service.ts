@@ -2,6 +2,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import {
   fail,
   ok,
+  passesByKind,
   type AssembledPage,
   type BlankMode,
   type DomainError,
@@ -34,11 +35,14 @@ import {
   type ScanJobLimits,
 } from '../escl/scan-job';
 import { buildScanSettings, DEFAULT_SCAN_PARAMS, resolveScanParams } from '../escl/scan-settings';
+import { blankRatio, type BlankDetector } from '../detect/blank';
 import { parseStatus } from '../escl/status';
 import { createTransport, type ScannerTransport } from '../escl/transport';
 import { assemblePdf, type PdfPageInput } from '../pdf/assemble';
 import { writeBatch } from '../pdf/save-batch';
+import { createBlankScores, type BlankScores } from '../storage/blank-scores';
 import type { PassOrigin } from '../storage/journal';
+import { layoutOf } from '../storage/layout';
 import { openSessionStore } from '../storage/reconcile';
 import type { PageInfo, SessionStore, SessionStoreOptions } from '../storage/session-store';
 import {
@@ -84,6 +88,8 @@ export interface PassServiceOptions extends SessionStoreOptions {
   readonly clock?: ScanJobClock;
   /** Снимок изменился; `seq` — его номер. */
   readonly onChange?: (seq: number) => void;
+  /** Детектор пустых страниц (M4, KTD3); по умолчанию — настоящий на `sharp`. */
+  readonly blankDetector?: BlankDetector;
 }
 
 export interface PassService {
@@ -176,6 +182,8 @@ interface Dependencies {
   readonly settings: SettingsStore;
   readonly unclosedJobs: UnclosedJobs;
   readonly notices: readonly StartupNotice[];
+  /** Оценки пустых страниц (M4, KTD3): кэш уже прочитан при открытии. */
+  readonly blank: BlankScores;
 }
 
 type ScannerSlot =
@@ -236,7 +244,7 @@ function unsupportedField(
 }
 
 export function createPassService(
-  { store, settings, unclosedJobs, notices }: Dependencies,
+  { store, settings, unclosedJobs, notices, blank }: Dependencies,
   options: PassServiceOptions = {},
 ): PassService {
   const jobLimits: ScanJobLimits = { ...SCAN_JOB_LIMITS, ...options.jobLimits };
@@ -261,6 +269,30 @@ export function createPassService(
     seq += 1;
     options.onChange?.(seq);
   };
+
+  // Оценка пустых страниц — только страницы прохода оборотов при режиме сессии ≠ «Оставлять»
+  // (KTD3, KTD9); приход вердикта — новый снимок. Потерянные не оцениваются.
+  const detectBlank = (key: string): void => {
+    void blank.ensure(key).then((changed) => {
+      if (changed) {
+        notify();
+      }
+    });
+  };
+  const detectsBlank = (kind: PassKind): boolean =>
+    kind === 'backs' && store.snapshot()?.blankMode !== 'keep';
+  // При открытии: страницы оборотов без кэша считаются в фоне, лента до них — с `pending`.
+  {
+    const session = store.snapshot();
+    const backs = passesByKind(session?.passes ?? [], (pass) => pass.pages.length > 0).backs;
+    if (backs !== null && detectsBlank(backs.kind)) {
+      for (const page of backs.pages) {
+        if (!page.lost) {
+          detectBlank(page.key);
+        }
+      }
+    }
+  }
 
   // Запомненные параметры — для рядов настройки, пока сканер не подтверждён (S2–S4).
   const rememberedParams = (): ScanParams => settings.get().params ?? DEFAULT_SCAN_PARAMS;
@@ -353,22 +385,40 @@ export function createPassService(
     if (session === null) {
       return conflict('noSession');
     }
-    const { order, documents, report } = assembleSession(session);
+    const { order, documents, report, blank: blanks } = assembleSession(session, blank.verdicts());
     // Несобранный документ не сохраняется ни одним путём (M3.6, R16; KTD6): лента из двух
     // наборов — ещё не документ.
     if (report.mode === 'sets') {
       return conflict('notAssembled');
     }
+    // Оценки ещё идут: файл без них молча унёс бы пустые обороты в документ (M4, KTD4).
+    if (blanks.pending > 0) {
+      return { ok: false, error: sessionConflict('blankPending', { pending: blanks.pending }) };
+    }
     if (order.length === 0) {
       return conflict('nothingToSave');
     }
-    // «Один файл» не смотрит на границы (R15): разрезы и имена в журнале остаются.
-    const spans =
+    // «Один файл» не смотрит на границы (R15): разрезы и имена в журнале остаются. Скрытые
+    // пустые обороты в файл не идут (M4, R10): документы режутся по полной ленте, пишутся без них.
+    const shown = (pages: readonly AssembledPage[]): AssembledPage[] =>
+      pages.filter((page) => page.blank !== 'hidden');
+    const spans = (
       request.mode === 'single'
         ? [order]
-        : documents.map((doc) => order.slice(doc.start, doc.start + doc.count));
+        : documents.map((doc) => order.slice(doc.start, doc.start + doc.count))
+    ).map(shown);
     if (request.names.length !== spans.length) {
       return fail('invalidInput', { field: 'names', problem: 'count' });
+    }
+    if (spans.every((span) => span.length === 0)) {
+      return conflict('nothingToSave');
+    }
+    const emptyDocuments = spans.flatMap((span, index) => (span.length === 0 ? [index + 1] : []));
+    if (emptyDocuments.length > 0) {
+      return {
+        ok: false,
+        error: sessionConflict('documentBlank', { documents: emptyDocuments.join(',') }),
+      };
     }
 
     // Новый пакет забывает прежний незавершённый: повтор относится только к последнему.
@@ -436,7 +486,7 @@ export function createPassService(
       seq,
       scanner: scannerState(),
       session,
-      assembly: session === null ? null : assembleSession(session),
+      assembly: session === null ? null : assembleSession(session, blank.verdicts()),
       pass:
         run === null
           ? null
@@ -568,9 +618,12 @@ export function createPassService(
         limits: jobLimits,
         ...(options.clock === undefined ? {} : { clock: options.clock }),
         sink: async ({ body }) => {
-          await store.acceptPage(body);
+          const accepted = await store.acceptPage(body);
           current.pages += 1;
           notify();
+          if (detectsBlank(current.kind)) {
+            detectBlank(accepted.key);
+          }
         },
         onPhase: (phase) => {
           // «Остановить» уже нажато: фаза остаётся «останавливаем», пока задание не закрыто.
@@ -680,6 +733,8 @@ export function createPassService(
     run = current;
     current.done = runPass(current, connected, origin).finally(() => {
       run = null;
+      // «Остановить» и «Новая пачка» по пустому остатку отбросили страницы: их вердикты — тоже.
+      blank.prune();
       notify();
     });
     notify();
@@ -861,6 +916,7 @@ export function createPassService(
       if (closed.ok) {
         // Незавершённый пакет принадлежал закрытой сессии: повтор не допишет новую в её папку.
         pendingBatch = null;
+        blank.prune();
       }
       notify();
       return closed;
@@ -895,12 +951,26 @@ export async function openPassService(
   const { store, notices } = await openSessionStore(dataRoot, options);
   const settings = await openSettingsStore(dataRoot, options);
   const unclosedJobs = await openUnclosedJobs(dataRoot, options);
+  // Кэш оценок страниц оборотов читается до первого снимка (KTD3): лента после перезапуска
+  // сразу с флагами, без детектора. Режим «Оставлять» оценок не имеет.
+  const blank = createBlankScores(
+    layoutOf(dataRoot).derivedDir,
+    store,
+    options.blankDetector ?? blankRatio,
+    options,
+  );
+  const session = store.snapshot();
+  if (session !== null && session.blankMode !== 'keep') {
+    const backs = passesByKind(session.passes, (pass) => pass.pages.length > 0).backs;
+    await blank.load((backs?.pages ?? []).map((page) => page.key));
+  }
   return createPassService(
     {
       store,
       settings,
       unclosedJobs,
       notices: settings.notice === null ? notices : [...notices, settings.notice],
+      blank,
     },
     options,
   );

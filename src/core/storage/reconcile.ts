@@ -21,6 +21,8 @@ import {
   parsePageFileName,
   segmentPrefix,
   thumbsDirOf,
+  BLANK_FILE,
+  blankDirOf,
 } from './layout';
 import {
   createSessionStore,
@@ -253,6 +255,7 @@ export async function reconcileSession(
     for (const prefix of journal.deletions) {
       const report = await attempt(removeByPrefix(layout.pagesDir, prefix, PAGE_FILE, io));
       await attempt(removeByPrefix(thumbsDirOf(layout, journal.sessionId), prefix, PAGE_FILE, io));
+      await attempt(removeByPrefix(blankDirOf(layout, journal.sessionId), prefix, BLANK_FILE, io));
       if (report === undefined || report.failed.length > 0) {
         deletions.push(prefix);
       }

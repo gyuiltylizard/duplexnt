@@ -1160,3 +1160,23 @@ describe('сверка при запуске: режим пустых оборо
     expect(await dirSnapshot(root)).toEqual(before);
   });
 });
+
+describe('сверка при запуске: оценки пустых страниц отброшенного сегмента (M4, R7)', () => {
+  it('доведённое удаление сегмента чистит и его оценки', async () => {
+    const { root, layout } = await seed(
+      journalOf([pass(1, [segment(1, 'interrupted', 1)], { nextSegment: 3 })], {
+        deletions: ['p01-s02-'],
+      }),
+      [pageName(1, 1, 1), pageName(1, 2, 1)],
+    );
+    const blank = join(layout.derivedDir, SESSION, 'blank');
+    await mkdir(blank, { recursive: true });
+    for (const name of ['p01-s01-0001.json', 'p01-s02-0001.json', 'p01-s02-0002.json']) {
+      await writeFile(join(blank, name), '{"v":1,"ratio":0}');
+    }
+
+    await reconciled(root);
+
+    expect(await readdir(blank)).toEqual(['p01-s01-0001.json']);
+  });
+});

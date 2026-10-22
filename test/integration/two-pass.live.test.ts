@@ -7,6 +7,7 @@ import { openPassService } from '../../src/core/scan/pass-service';
 import { describeLive, probeLive, startPassWhenPaper } from '../support/live-device';
 import { makeTempDataRoot } from '../support/temp-data-root';
 import { unwrap } from '../support/result';
+import { untilScored } from '../support/until';
 
 // Двухпроходный прогон на живом устройстве (план M2, U10; AE2 — выход вехи): двусторонняя
 // пачка пронумерованных листов (spikes/make-twopass-pdf.mjs, 12 листов) → два прохода через
@@ -70,6 +71,7 @@ describeLive('два прохода на живом сканере (AE2)', (host
       const outDir = resolve('temp');
       await mkdir(outDir, { recursive: true });
       const saveOne = async (name: string): Promise<string> => {
+        await untilScored(() => service.snapshot());
         const saved = unwrap(
           await service.saveDocuments(outDir, { mode: 'single', names: [name], retry: false }),
         );

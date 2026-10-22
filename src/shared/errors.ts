@@ -99,12 +99,19 @@ export const SESSION_CONFLICT_REASONS = [
   'setsUnequal',
   /** Документ не собран: в режиме раздельных наборов сохранять нечего (M3.6, R16). */
   'notAssembled',
+  /** Оценки пустых оборотов ещё идут: сколько — в `pending`; запись ждёт их (M4, KTD4). */
+  'blankPending',
+  /** Документ целиком из скрытых пустых оборотов: номера — в `documents` (M4, KTD4). */
+  'documentBlank',
 ] as const;
 
 export type SessionConflictReason = (typeof SESSION_CONFLICT_REASONS)[number];
 
-export function sessionConflict(reason: SessionConflictReason): DomainError {
-  return { code: 'sessionConflict', details: { reason } };
+export function sessionConflict(
+  reason: SessionConflictReason,
+  details: ErrorDetails = {},
+): DomainError {
+  return { code: 'sessionConflict', details: { ...details, reason } };
 }
 
 /** Детали — для диагностики и подстановок в текст; только то, что переживает structured clone. */

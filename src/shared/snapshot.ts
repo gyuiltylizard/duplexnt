@@ -5,7 +5,7 @@
 //
 // В снимке нет абсолютных путей и адресов заданий (KTD-39): страница адресуется ключом.
 
-import type { BlankMode } from './blank';
+import type { BlankFlag, BlankMode, BlankSummary } from './blank';
 import type { SessionEdits } from './edits';
 import type { DomainError } from './errors';
 import type { ScanOptions, ScanParams } from './scan-params';
@@ -148,6 +148,11 @@ export interface AssembledPage {
    * исчезает только до первой страницы.
    */
   readonly addedSet: number | null;
+  /**
+   * Пустой оборот (M4, R10): скрыта, помечена или обычная. Считается ядром по оценке детектора,
+   * режиму сессии, пометке «не пустая» и режиму сборки; в журнал не пишется.
+   */
+  readonly blank: BlankFlag;
 }
 
 /** Документ ленты: отрезок `order` от `start` длиной `count` (M3, R10). */
@@ -198,6 +203,8 @@ export interface SessionAssembly {
   readonly deleted: number;
   /** Отчёт о сканировании — по проходам, правки на него не влияют (M3, KTD-7). */
   readonly report: AssemblyReport;
+  /** Пустые обороты видимой ленты (M4, KTD4): режим, найдено, скрыто, ждут оценки. */
+  readonly blank: BlankSummary;
 }
 
 /** Что сверка при запуске нашла и о чём интерфейс сообщает один раз. */
