@@ -3,7 +3,6 @@ import {
   NO_SELECTION,
   afterRemoval,
   collapsed,
-  contiguousRange,
   pruned,
   ranged,
   selectionOf,
@@ -116,18 +115,6 @@ describe('выделение после изменения ленты', () => {
     // Шаг про имя или границу: страниц нет — выделение не трогать.
     expect(selectionOf([], TAPE)).toBeNull();
     expect(selectionOf(['q'], TAPE)).toBeNull();
-  });
-});
-
-describe('«Выделить в документ»: только подряд', () => {
-  it.each([
-    ['подряд в любом порядке', ['d', 'b', 'c'], { from: 1, to: 3 }],
-    ['одна страница', ['c'], { from: 2, to: 2 }],
-    ['с дыркой', ['a', 'c'], null],
-    ['пусто', [], null],
-    ['чужие ключи не считаются', ['b', 'q', 'c'], { from: 1, to: 2 }],
-  ])('%s', (_name, keys, expected) => {
-    expect(contiguousRange(TAPE, keys)).toEqual(expected);
   });
 });
 

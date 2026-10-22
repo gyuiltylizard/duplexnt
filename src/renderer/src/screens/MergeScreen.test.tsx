@@ -1,4 +1,4 @@
-import type { AssembledPage, AssemblyReport, SessionAssembly } from '@shared';
+import type { AssembledPage, AssemblyReport, BlankSummary, SessionAssembly } from '@shared';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import '../i18n';
@@ -30,7 +30,10 @@ const sets = (fronts: number, backs: number, extra: Partial<AssemblyReport> = {}
   });
 
 /** Порядок под отчёт — как его строит ядро: пары чередованием, наборы — лица, затем обороты. */
-function assemblyFor(assemblyReport: AssemblyReport): SessionAssembly {
+function assemblyFor(
+  assemblyReport: AssemblyReport,
+  blank: BlankSummary = NO_BLANK,
+): SessionAssembly {
   const order: AssembledPage[] = [];
   let key = 0;
   const push = (side: AssembledPage['side'], sheet: number | null): void => {
@@ -68,12 +71,12 @@ function assemblyFor(assemblyReport: AssemblyReport): SessionAssembly {
     hasEdits: false,
     deleted: 0,
     report: assemblyReport,
-    blank: NO_BLANK,
+    blank,
   };
 }
 
-function renderMerge(assemblyReport: AssemblyReport) {
-  return render(<MergeScreen assembly={assemblyFor(assemblyReport)} />);
+function renderMerge(assemblyReport: AssemblyReport, blank?: BlankSummary) {
+  return render(<MergeScreen assembly={assemblyFor(assemblyReport, blank)} />);
 }
 
 afterEach(cleanup);
@@ -141,6 +144,53 @@ describe('экран merge', () => {
     expect(screen.queryByText(/Порядок восстановлен/)).toBeNull();
     expect(view.container.querySelector('.merge-screen__cell--back')).toBeNull();
     expect(view.container.querySelector('.merge-screen__doc-cell--back')).toBeNull();
+  });
+
+  it.each([
+    [
+      '«Скрывать» — найденные',
+      { mode: 'hide', found: 3, hidden: 3, pending: 0 },
+      'совпало пар: 7 · пустых оборотов: 3',
+    ],
+    [
+      '«Помечать» — найденные',
+      { mode: 'mark', found: 2, hidden: 0, pending: 0 },
+      'совпало пар: 7 · пустых оборотов: 2',
+    ],
+    [
+      'ничего не найдено',
+      { mode: 'hide', found: 0, hidden: 0, pending: 0 },
+      'совпало пар: 7 · пустых оборотов: нет',
+    ],
+    [
+      'оценки ещё идут',
+      { mode: 'hide', found: 1, hidden: 1, pending: 4 },
+      'совпало пар: 7 · ищем пустые обороты…',
+    ],
+  ] as const)('M4, S12: статус несёт пустые обороты — %s', (_name, blank, expected) => {
+    renderMerge(report({ fronts: 7, backs: 7 }), blank);
+
+    expect(screen.getByRole('status').textContent).toBe(expected);
+  });
+
+  it('M4: «Оставлять», «Обороты не нужны» и режим наборов — без пустых в статусе', () => {
+    renderMerge(report({ fronts: 7, backs: 7 }));
+    expect(screen.getByRole('status').textContent).toBe('совпало пар: 7');
+    cleanup();
+
+    renderMerge(report({ backs: 0, backsState: null, backsDeclined: true }), {
+      mode: 'hide',
+      found: 0,
+      hidden: 0,
+      pending: 0,
+    });
+    expect(screen.getByRole('status').textContent).toBe('обороты не нужны · страниц: 12');
+    cleanup();
+
+    renderMerge(sets(12, 11), { mode: 'hide', found: 2, hidden: 0, pending: 0 });
+    expect(screen.getByRole('status').textContent).toBe(
+      'не сошлось: лицевых 12, оборотов 11 — документ соберёте в редакторе',
+    );
   });
 
   it('органов управления нет, фокус — на контейнере экрана', () => {

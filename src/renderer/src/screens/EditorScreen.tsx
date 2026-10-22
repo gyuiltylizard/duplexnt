@@ -30,13 +30,13 @@ import { SaveModal } from '../modals/SaveModal';
 import {
   deleted,
   dividerAfterMove,
+  grouped,
   markedNotBlank,
   moved,
   movedAcross,
   renamed,
   REVERTED,
   rotated,
-  separated,
   withCut,
   withoutCut,
   type DropSide,
@@ -50,7 +50,6 @@ import { rolesOf } from '../state/screen';
 import {
   afterRemoval,
   collapsed,
-  contiguousRange,
   ranged,
   selectionOf,
   single,
@@ -186,6 +185,14 @@ export function EditorScreen({
   const shownDocuments = useMemo(
     () => shownDocumentsOf(documents, order, shown),
     [documents, order, shown],
+  );
+  // Что уйдёт в файл и что сотрёт «Новое сканирование» (S14–S15 M4): лента без скрытых
+  // независимо от переключателя — он только показывает, в файл не добавляет (R13).
+  const fileShown = useMemo(() => shownOf(order, false), [order]);
+  const fileTotal = fileShown.length;
+  const fileDocuments = useMemo(
+    () => shownDocumentsOf(documents, order, fileShown),
+    [documents, order, fileShown],
   );
   /** Ключи с хвостами скрытых (R12) — пока скрытые не показаны; иначе буквально. */
   const withTails = (keys: readonly string[]): readonly string[] =>
@@ -489,9 +496,17 @@ export function EditorScreen({
     }
   };
 
-  /** После постановки границы — фокус в поле имени нового документа (номер с нуля). */
-  const editBoundary = (next: SessionEdits, docIndex: number, onSuccess?: () => void): void => {
-    edits.edit(withEdits(next), [], {
+  /**
+   * После постановки границы — фокус в поле имени нового документа (номер с нуля); `keys` —
+   * страницы, которые выделит Ctrl+Z (группировка не подряд переносит их).
+   */
+  const editBoundary = (
+    next: SessionEdits,
+    docIndex: number,
+    onSuccess?: () => void,
+    keys: readonly string[] = [],
+  ): void => {
+    edits.edit(withEdits(next), keys, {
       onSuccess: () => {
         focusName.current = docIndex;
         onSuccess?.();
@@ -529,18 +544,24 @@ export function EditorScreen({
     return next !== edits.current.edits && edits.edit(withEdits(next), []);
   };
 
-  // «Выделить в документ» (S5): подряд — границы до и после куска одним шагом; иначе тост.
-  // Подряд — по полной ленте с хвостами скрытых (R12 M4); страницы не подряд — U7.
+  // «Выделить в документ» (S6 M4, KTD7): подряд — границы до и после куска одним шагом; не
+  // подряд — выделенные встают на место первой и получают границы, тоже одним шагом (перенос:
+  // Ctrl+Z выделит их). Подряд — по полной ленте с хвостами скрытых (R12 M4).
   const group = (): void => {
-    const range = contiguousRange(visible, withTails(selection.keys));
-    if (range === null) {
-      onToast(t('toast.notContiguous'));
+    const keys = withTails(selection.keys);
+    const result = grouped(edits.current.edits, visible, keys);
+    if (result === null) {
       return;
     }
-    const result = separated(edits.current.edits, range.from, range.to, fullTotal);
-    editBoundary(result.edits, result.document, () => {
-      onToast(t('toast.docCreated', { count: selection.keys.length }));
-    });
+    const moved = result.edits.order === edits.current.edits.order ? [] : keys;
+    editBoundary(
+      result.edits,
+      result.document,
+      () => {
+        onToast(t('toast.docCreated', { count: selection.keys.length }));
+      },
+      moved,
+    );
   };
 
   // «Это не пустая страница» (S9 M4, KTD5): правка одним шагом — страница становится обычной,
@@ -829,20 +850,29 @@ export function EditorScreen({
           onKeyDown={railKeyDown}
           onPick={pick}
           onSelect={setSelection}
-          onClearSelection={() => {
-            // Панель исчезнет вместе с кнопкой — фокус переходит на текущую страницу.
-            setSelection(collapsed(selection));
-            focusKey.current = selection.current;
-          }}
-          onGroup={group}
           onSplit={split}
           onUnsplit={unsplit}
           onRename={rename}
           onMove={move}
           onMoveAcross={moveAcross}
           footer={
-            // S4–S5 M4: переключатель «добавить пустые» и тумблер 180° — у прохода оборотов.
+            // S4–S6 M4: панель выделения (больше одной показанной), переключатель «добавить
+            // пустые» и тумблер 180° — у прохода оборотов.
             <EditorRailFooter
+              selection={
+                selection.keys.length > 1
+                  ? {
+                      count: selection.keys.length,
+                      // «Выделить в документ» — только вне режима наборов (M3.6, KTD8).
+                      group: sets === null ? { disabled: locked, onClick: group } : null,
+                      onClear: () => {
+                        // Панель исчезнет вместе с кнопкой — фокус переходит на текущую страницу.
+                        setSelection(collapsed(selection));
+                        focusKey.current = selection.current;
+                      },
+                    }
+                  : null
+              }
               blank={blank}
               blankMode={session.blankMode}
               inSets={sets !== null}
@@ -948,10 +978,11 @@ export function EditorScreen({
 
       {(modal === 'save' || modal === 'saveThenNew') && (
         <SaveModal
-          documents={documents}
+          documents={fileDocuments}
           defaultNames={defaultNames}
           singleDefault={t('editor.doc.defaultSingleName', { date: today })}
-          total={fullTotal}
+          total={fileTotal}
+          blank={blank}
           onRename={renameDocuments}
           editsBusy={edits.busy}
           onWriting={setSaving}
@@ -966,7 +997,8 @@ export function EditorScreen({
       )}
       {modal === 'newscan' && (
         <NewScanModal
-          total={fullTotal}
+          total={fileTotal}
+          hidden={blank.hidden}
           deleted={deletedCount}
           saved={session.saved}
           unassembled={mode === 'sets'}

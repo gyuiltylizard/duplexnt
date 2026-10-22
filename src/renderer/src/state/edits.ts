@@ -262,3 +262,36 @@ export function separated(
   }
   return { edits: next, document: docIndex };
 }
+
+/**
+ * «Выделить в документ» для любого выделения (M4, KTD7; handoff M4, S6): страницы `keys` подряд —
+ * только разрезы, как `separated`; не подряд — явный порядок (выделенные встают на позицию
+ * первой из них, остальные сдвигаются вправо, взаимный порядок не меняется) и разрезы по
+ * арифметике `moved`, затем границы до и после куска. Ключей в ленте нет — `null` (жеста нет).
+ * Группировка не подряд — перенос: порядок становится явным (R7).
+ */
+export function grouped(
+  edits: SessionEdits,
+  visible: readonly string[],
+  keys: readonly string[],
+): { readonly edits: SessionEdits; readonly document: number } | null {
+  const grouping = new Set(keys);
+  const positions = positionsOf(visible, grouping);
+  const from = positions[0];
+  if (from === undefined) {
+    return null;
+  }
+  const to = from + positions.length - 1;
+  if (positions.at(-1) === to) {
+    return separated(edits, from, to, visible.length);
+  }
+  const group = visible.filter((key) => grouping.has(key));
+  const rest = visible.filter((key) => !grouping.has(key));
+  // Кусок встаёт перед страницей, стоявшей за первой выделенной: разрез на позиции `from`
+  // остаётся слева от куска, разрезы правее уезжают на длину куска — как `moved` «перед».
+  const cuts = cutsWithout(edits.cuts, positions).map((cut) =>
+    cut > from ? cut + group.length : cut,
+  );
+  const order = [...rest.slice(0, from), ...group, ...rest.slice(from)];
+  return separated({ ...edits, order, cuts }, from, to, visible.length);
+}

@@ -132,20 +132,3 @@ export function selectionOf(keys: readonly string[], visible: readonly string[])
   const first = ordered[0];
   return first === undefined ? null : { current: first, anchor: first, keys: ordered };
 }
-
-/** Позиции выделения, если оно идёт подряд по ленте («Выделить в документ»); иначе `null`. */
-export function contiguousRange(
-  visible: readonly string[],
-  keys: readonly string[],
-): { readonly from: number; readonly to: number } | null {
-  const positions = keys
-    .map((key) => visible.indexOf(key))
-    .filter((index) => index >= 0)
-    .sort((left, right) => left - right);
-  const from = positions[0];
-  const to = positions.at(-1);
-  if (from === undefined || to === undefined || to - from !== positions.length - 1) {
-    return null;
-  }
-  return { from, to };
-}

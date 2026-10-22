@@ -440,6 +440,31 @@ describe('пустые обороты в редакторе (M4)', () => {
     expect(selectedKeys()).toEqual([B1]);
   });
 
+  it('S14: модалка save считает страницы файла — без скрытых и при включённом переключателе', () => {
+    stubApi();
+    renderEditor(blankSnapshot());
+    fireEvent.click(revealToggle());
+    expect(screen.getByText('стр. 1 из 6')).toBeDefined();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить документ' }));
+    const dialog = screen.getByRole('dialog', { name: 'Сохранить документ' });
+    expect(within(dialog).getByText('Страниц всего').nextElementSibling?.textContent).toBe('4');
+    expect(within(dialog).getByText('Пустых оборотов').nextElementSibling?.textContent).toBe(
+      'скрыто 2 — не попадут в файл',
+    );
+    expect(within(dialog).getByText('4 стр.')).toBeDefined();
+  });
+
+  it('S15: модалка newscan — «N стр.» по файлу и отдельное предложение про скрытые', () => {
+    stubApi();
+    renderEditor(blankSnapshot());
+
+    fireEvent.click(screen.getByRole('button', { name: /Новое сканирование/u }));
+    expect(document.getElementById('newscan-text')?.textContent).toBe(
+      'Последние изменения не сохранены в файл. Если начать новое сканирование, 4 стр. будут удалены с диска. Скрытые пустые обороты (2 стр.) тоже будут стёрты.',
+    );
+  });
+
   it('S16: «После текущей страницы» в add — после скрытого хвоста, номера по показанной ленте', () => {
     stubApi();
     const onAdd = vi.fn();

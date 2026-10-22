@@ -10,11 +10,15 @@ import { errorText } from '../state/error-text';
 // текущий» — только при несохранённом и непустой ленте; в режиме раздельных наборов (M3.6,
 // R16; handoff S11) её нет — ядро всё равно откажет (`notAssembled`), кикер и текст говорят,
 // что документ не собран. Начальный фокус — на «Остаться в документе». Пока идёт закрытие,
-// карточки недоступны; успех уводит на `setup` по снимку, отказ оставляет сессию целой.
+// карточки недоступны; успех уводит на `setup` по снимку, отказ оставляет сессию целой. С M4
+// (handoff M4, S15) «N стр.» — те, что ушли бы в файл; скрытые пустые обороты названы отдельным
+// предложением: закрытие сотрёт и их.
 
 export interface NewScanModalProps {
-  /** Страниц в ленте. */
+  /** Страниц, которые ушли бы в файл (без скрытых пустых оборотов). */
   readonly total: number;
+  /** Скрытых пустых оборотов — закрытие сотрёт и их (S15 M4). */
+  readonly hidden: number;
   /** Удалённых пометкой — их вернул бы Ctrl+Z или «Вернуть». */
   readonly deleted: number;
   readonly saved: boolean;
@@ -38,6 +42,7 @@ const kindOf = (total: number, saved: boolean, unassembled: boolean): Kind => {
 
 export function NewScanModal({
   total,
+  hidden,
   deleted,
   saved,
   unassembled,
@@ -82,15 +87,18 @@ export function NewScanModal({
     );
   };
 
-  const text =
+  // Лента пуста без удалённых — одни скрытые (S7 M4): про Ctrl+Z говорить нечего.
+  const text = [
     kind === 'empty'
-      ? t('newScan.text.empty', { count: deleted })
-      : [
-          t(`newScan.text.${kind}`, { count: total }),
-          deleted > 0 ? t('newScan.text.deleted', { count: deleted }) : null,
-        ]
-          .filter((part) => part !== null)
-          .join(' ');
+      ? deleted > 0
+        ? t('newScan.text.empty', { count: deleted })
+        : null
+      : t(`newScan.text.${kind}`, { count: total }),
+    kind !== 'empty' && deleted > 0 ? t('newScan.text.deleted', { count: deleted }) : null,
+    hidden > 0 ? t('newScan.text.blankHidden', { count: hidden }) : null,
+  ]
+    .filter((part) => part !== null)
+    .join(' ');
 
   let status: ReactNode;
   if (closing) {

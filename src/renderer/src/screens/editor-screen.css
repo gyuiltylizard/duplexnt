@@ -153,12 +153,8 @@
   padding: var(--space-6) var(--space-7) var(--space-8);
 }
 
-/* — S5 M3: панель мультивыделения — */
-
-.rail__top {
-  flex: none;
-  padding: var(--space-4) var(--space-7) 0;
-}
+/* — S5 M3: панель мультивыделения — с M4 в подвале ленты (S6 M4, R18): лента над ней не
+   сдвигается — */
 
 .rail__selection {
   display: flex;

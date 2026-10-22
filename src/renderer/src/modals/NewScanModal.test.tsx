@@ -22,6 +22,7 @@ function renderModal(props: Partial<NewScanModalProps> = {}) {
   render(
     <NewScanModal
       total={24}
+      hidden={0}
       deleted={0}
       saved={false}
       unassembled={false}
@@ -96,6 +97,25 @@ describe('модалка newscan: состояние набора', () => {
     renderModal({ unassembled: true, total: 0, deleted: 5 });
 
     expect(screen.getByText('ДОКУМЕНТ ПУСТ')).toBeDefined();
+    expect(saveFirst()).toBeNull();
+  });
+
+  it('M4, S15: скрытые пустые обороты названы отдельным предложением; «N стр.» — по тем, что ушли бы в файл', () => {
+    stubApi();
+    renderModal({ total: 21, hidden: 3, deleted: 1 });
+
+    expect(subtitle()).toBe(
+      'Последние изменения не сохранены в файл. Если начать новое сканирование, 21 стр. будут удалены с диска. Удалённые из ленты страницы (1 стр.) тоже будут стёрты — вернуть их будет нельзя. Скрытые пустые обороты (3 стр.) тоже будут стёрты.',
+    );
+    expect(fresh().textContent).toContain('Текущие 21 стр. будут удалены без сохранения');
+  });
+
+  it('M4, S7: лента из одних скрытых — «ДОКУМЕНТ ПУСТ», только предложение про скрытые, без сохранения', () => {
+    stubApi();
+    renderModal({ total: 0, hidden: 3, deleted: 0 });
+
+    expect(screen.getByText('ДОКУМЕНТ ПУСТ')).toBeDefined();
+    expect(subtitle()).toBe('Скрытые пустые обороты (3 стр.) тоже будут стёрты.');
     expect(saveFirst()).toBeNull();
   });
 

@@ -2,10 +2,11 @@ import type { ChangeEvent, ReactNode, RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { BlankMode, BlankSummary } from '@shared';
 
-// Подвал ленты (handoff M4, S4–S5; R18): постоянное место строк под миниатюрами — переключатель
-// «добавить пустые» со счётчиком и тумблер 180°; панель выделения переезжает сюда в U7. Обе
-// строки — свойства прохода оборотов: без него подвала нет. Только показ и клики: что показывать
-// и что делать, решает экран.
+// Подвал ленты (handoff M4, S4–S6; R18): постоянное место трёх строк под миниатюрами — панель
+// выделения (при выделении больше одной страницы), переключатель «добавить пустые» со
+// счётчиком и тумблер 180°. Строки появляются и исчезают, лента над подвалом не сдвигается.
+// Переключатель и тумблер — свойства прохода оборотов; панель — выделения. Ни одной строки —
+// подвала нет. Только показ и клики: что показывать и что делать, решает экран.
 
 export interface RailRotate {
   readonly checked: boolean;
@@ -13,7 +14,18 @@ export interface RailRotate {
   readonly onChange: (event: ChangeEvent<HTMLInputElement>) => void;
 }
 
+/** Панель выделения (S6): текст, «Выделить в документ» вне режима наборов, «Снять». */
+export interface RailSelection {
+  /** Выделенных показанных страниц — больше одной. */
+  readonly count: number;
+  /** «Выделить в документ» — вне режима наборов (M3.6, KTD8); `null` — кнопки нет. */
+  readonly group: { readonly disabled: boolean; readonly onClick: () => void } | null;
+  readonly onClear: () => void;
+}
+
 export interface EditorRailFooterProps {
+  /** Панель выделения; `null` — выделена одна страница или ни одной. */
+  readonly selection: RailSelection | null;
   /** Сводка пустых оборотов из снимка: найдено, скрыто, ждут оценки. */
   readonly blank: BlankSummary;
   /** Режим пустых оборотов сессии: переключатель — только при «Скрывать». */
@@ -30,6 +42,7 @@ export interface EditorRailFooterProps {
 }
 
 export function EditorRailFooter({
+  selection,
   blank,
   blankMode,
   inSets,
@@ -39,7 +52,7 @@ export function EditorRailFooter({
   rotate,
 }: EditorRailFooterProps): ReactNode {
   const { t } = useTranslation();
-  if (rotate === null) {
+  if (selection === null && rotate === null) {
     return null;
   }
   // S5: без найденных переключатель недоступен с подписью «не найдено» или «оцениваются…».
@@ -47,7 +60,29 @@ export function EditorRailFooter({
   const idle = blank.pending > 0 ? 'scoring' : 'none';
   return (
     <footer className="rail__footer">
-      {blankMode === 'hide' && !inSets && (
+      {selection !== null && (
+        <div className="rail__selection" role="region" aria-label={t('editor.selection.label')}>
+          <p className="rail__selection-text">
+            {t('editor.selection.text', { count: selection.count })}
+          </p>
+          <div className="rail__selection-actions">
+            {selection.group !== null && (
+              <button
+                type="button"
+                className="rail__selection-group"
+                disabled={selection.group.disabled}
+                onClick={selection.group.onClick}
+              >
+                {t('editor.selection.group')}
+              </button>
+            )}
+            <button type="button" className="rail__selection-clear" onClick={selection.onClear}>
+              {t('editor.selection.clear')}
+            </button>
+          </div>
+        </div>
+      )}
+      {rotate !== null && blankMode === 'hide' && !inSets && (
         <label
           className={found ? 'toggle-row' : 'toggle-row toggle-row--disabled'}
           title={
@@ -78,19 +113,21 @@ export function EditorRailFooter({
           </span>
         </label>
       )}
-      <label className="toggle-row" title={t('editor.rotateBacksTitle')}>
-        <span className="toggle">
-          <input
-            className="toggle__input"
-            type="checkbox"
-            checked={rotate.checked}
-            disabled={rotate.disabled}
-            onChange={rotate.onChange}
-          />
-          <span className="toggle__track" aria-hidden="true" />
-        </span>
-        <span className="toggle-row__label">{t('editor.rotateBacks')}</span>
-      </label>
+      {rotate !== null && (
+        <label className="toggle-row" title={t('editor.rotateBacksTitle')}>
+          <span className="toggle">
+            <input
+              className="toggle__input"
+              type="checkbox"
+              checked={rotate.checked}
+              disabled={rotate.disabled}
+              onChange={rotate.onChange}
+            />
+            <span className="toggle__track" aria-hidden="true" />
+          </span>
+          <span className="toggle-row__label">{t('editor.rotateBacks')}</span>
+        </label>
+      )}
     </footer>
   );
 }

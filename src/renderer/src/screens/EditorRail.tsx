@@ -28,14 +28,14 @@ import {
   type ThumbDrag,
 } from './EditorThumb';
 
-// Лента редактора (план M3, U7–U8; handoff M3, S2–S7; M3.6, S1–S3): панель мультивыделения,
-// группы по документам с разделителем «✕» и полем имени, миниатюры с split-баром и
+// Лента редактора (план M3, U7–U8; handoff M3, S2–S7; M3.6, S1–S3): группы по документам с разделителем «✕» и полем имени, миниатюры с split-баром и
 // перетаскиванием. В режиме раздельных наборов (`sets !== null`) вместо групп документов — две
 // группы «Лицевые стороны» и «Оборотные стороны» с живыми счётчиками и разделителем-целью дропа;
-// разрезов, имён и «Выделить в документ» нет (KTD8: `documentsEditable`). Решает только «что и
-// куда» — сами правки строит и шлёт экран (жесты `state/edits.ts`, KTD-8). С M4 лента здесь —
-// показанная (без скрытых пустых оборотов, handoff M4, S1): позиции — её, документы — в её
-// координатах с номером из полной; документ из одних скрытых не рисуется.
+// разрезов и имён нет (KTD8: `documentsEditable`). Решает только «что и куда» — сами правки
+// строит и шлёт экран (жесты `state/edits.ts`, KTD-8). С M4 лента здесь — показанная (без
+// скрытых пустых оборотов, handoff M4, S1): позиции — её, документы — в её координатах с номером
+// из полной; документ из одних скрытых не рисуется. Панель выделения — в подвале (`footer`,
+// handoff M4, S6; R18): лента над ним не сдвигается.
 
 /**
  * Тип данных перетаскивания — свой: с `text/plain` бросок на поле имени вставил бы в него
@@ -173,8 +173,6 @@ export interface EditorRailProps {
   /** Стабильный: миниатюры под `memo`. */
   readonly onPick: (key: string, mode: PickMode) => void;
   readonly onSelect: (selection: Selection) => void;
-  readonly onClearSelection: () => void;
-  readonly onGroup: () => void;
   /** Граница перед позицией ленты (с нуля). */
   readonly onSplit: (position: number) => void;
   /** Снять границу перед документом (с нуля); `fromDivider` — «✕» разделителя, не split-бар. */
@@ -184,7 +182,7 @@ export interface EditorRailProps {
   readonly onMove: (keys: readonly string[], target: string, side: DropSide) => void;
   /** Бросок на разделитель наборов или в пустую группу: в конец лиц / в начало оборотов (KTD8). */
   readonly onMoveAcross: (keys: readonly string[], side: SetSide) => void;
-  /** Низ ленты — тумблер 180° (S15). */
+  /** Подвал ленты: панель выделения, переключатель пустых, тумблер 180° (handoff M4, S4). */
   readonly footer: ReactNode;
 }
 
@@ -203,8 +201,6 @@ export function EditorRail({
   onKeyDown,
   onPick,
   onSelect,
-  onClearSelection,
-  onGroup,
   onSplit,
   onUnsplit,
   onRename,
@@ -224,7 +220,7 @@ export function EditorRail({
   const multi = selection.keys.length > 1;
   // Правки доступны сейчас: нет записи и команды в полёте — можно тянуть, split-бар виден.
   const editable = !locked && !busy;
-  // Разрезы, имена и «Выделить в документ» — только вне режима наборов (M3.6, KTD8).
+  // Разрезы и имена — только вне режима наборов (M3.6, KTD8).
   const documentsEditable = sets === null;
   // Split-бар уступает выделению (M3.5, KTD-10): пока зажат Ctrl/Shift или выделено больше
   // одной страницы, бара нет — клик по верхнему краю миниатюры с модификатором выделяет.
@@ -558,31 +554,6 @@ export function EditorRail({
 
   return (
     <aside className="rail" aria-label={t('editor.railLabel')} ref={railRef} onKeyDown={onKeyDown}>
-      {/* S5: панель мультивыделения; «Выделить в документ» — только вне режима наборов. */}
-      {multi && (
-        <div className="rail__top">
-          <div className="rail__selection" role="region" aria-label={t('editor.selection.label')}>
-            <p className="rail__selection-text">
-              {t('editor.selection.text', { count: selection.keys.length })}
-            </p>
-            <div className="rail__selection-actions">
-              {documentsEditable && (
-                <button
-                  type="button"
-                  className="rail__selection-group"
-                  disabled={locked}
-                  onClick={onGroup}
-                >
-                  {t('editor.selection.group')}
-                </button>
-              )}
-              <button type="button" className="rail__selection-clear" onClick={onClearSelection}>
-                {t('editor.selection.clear')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       <div
         className="rail__scroll"
         onDragOver={scrollDragOver}
