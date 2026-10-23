@@ -1,15 +1,26 @@
+import type { ScannerState } from '@shared';
 import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../i18n';
-import { makePass, makeSnapshot, option, pages, renderEditor, stubApi } from './editor-fixture';
+import {
+  B2,
+  B3,
+  makePass,
+  makeSnapshot,
+  option,
+  pages,
+  renderEditor,
+  stubApi,
+} from './editor-fixture';
 
 // Страницы двустороннего набора в редакторе (план M4.5, U6; R13, R14; handoff M4.5, S8, S10):
 // теги «Д1» на обеих сторонах и «об» на обороте, подписи с листом внутри набора (в подблоках —
-// без), ДЕТАЛИ с проходом пары, плашка прерванного прохода набора, карточки `add`.
+// без), ДЕТАЛИ с проходом пары, плашка прерванного прохода набора, карточки `add`, «после
+// текущей» при скрытом пустом обороте набора (R18).
 
 /** Пары 3+3 плюс набор «Д1» после лица 2: 3 лица и `backs` оборотов. */
-function withPair(backs: number, backsState: 'completed' | 'interrupted' = 'completed') {
-  return makeSnapshot([
+function pairPasses(backs: number, backsState: 'completed' | 'interrupted' = 'completed') {
+  return [
     makePass({ pages: pages(3) }),
     makePass({ number: 2, kind: 'backs', pages: pages(3, 1, 'p02-s01') }),
     makePass({
@@ -26,7 +37,11 @@ function withPair(backs: number, backsState: 'completed' | 'interrupted' = 'comp
       state: backsState,
       pages: pages(backs, 1, 'p04-s01'),
     }),
-  ]);
+  ];
+}
+
+function withPair(backs: number, backsState: 'completed' | 'interrupted' = 'completed') {
+  return makeSnapshot(pairPasses(backs, backsState));
 }
 
 const facts = (): string[] =>
@@ -174,5 +189,52 @@ describe('плашка прерванного прохода набора (S10)'
     expect(screen.getByRole('button', { name: 'Добавить' }).hasAttribute('disabled')).toBe(true);
     // До оборотов набор показан односторонним блоком: тег «Д1» без «об».
     expect(option(3).getAttribute('aria-label')).toBe('Страница 4, лицевая набора Д1');
+  });
+});
+
+describe('«После текущей страницы» на лице набора со скрытым оборотом (R18)', () => {
+  const READY: ScannerState = {
+    kind: 'ready',
+    scanner: { name: 'ScanPro 200', scheme: 'https', host: '192.0.2.10', port: 443 },
+    options: { colorModes: ['Grayscale8'], resolutions: [300], paperSizes: ['A4'] },
+    params: { colorMode: 'Grayscale8', resolution: 300, paperSize: 'A4' },
+  };
+  // Оборот листа 1 набора Д1 (обороты обратным порядком: лицу 1 — третья страница прохода).
+  const SET_B1 = 'p04-s01-0003';
+
+  it('новый набор встаёт после скрытого хвоста; сводка нумерует по показанной ленте', () => {
+    stubApi();
+    const onAdd = vi.fn();
+    // Пустые и скрытые: B3 (хвост лица 1 основной пачки, перед текущей) и оборот листа 1 набора.
+    const snapshot = makeSnapshot(
+      pairPasses(3),
+      { scanner: READY },
+      { blankMode: 'hide' },
+      new Map([
+        [B3, true],
+        [B2, false],
+        ['p02-s01-0001', false],
+        [SET_B1, true],
+        ['p04-s01-0002', false],
+        ['p04-s01-0001', false],
+      ]),
+    );
+    renderEditor(snapshot, { onAdd });
+
+    // Полная лента: 1л 1о 2л [f1 b1 f2 b2 f3 b3] 2о 3л 3о; показанная — без 1о и b1 набора.
+    const front = option(2);
+    expect(front.getAttribute('data-key')).toBe('p03-s01-0001');
+    expect(option(3).getAttribute('data-key')).toBe('p03-s01-0002');
+    expect(front.getAttribute('aria-label')).toBe('Страница 3, лицо листа 1 набора Д1');
+
+    fireEvent.click(front);
+    fireEvent.click(screen.getByRole('button', { name: 'Добавить' }));
+    fireEvent.click(screen.getByRole('radio', { name: /После текущей страницы/u }));
+    // Номер — по показанной ленте: 3-я (в полной — 4-я).
+    expect(document.querySelector('.add-modal__summary')?.textContent).toBe(
+      'Двустороннее · после стр. 3 (лицо листа 1 набора Д1)',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
+    expect(onAdd).toHaveBeenCalledExactlyOnceWith('addedFronts', SET_B1);
   });
 });

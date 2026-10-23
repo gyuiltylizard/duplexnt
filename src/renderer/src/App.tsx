@@ -25,7 +25,7 @@ import { IncompatibleScreen } from './screens/IncompatibleScreen';
 import { MergeScreen, MERGE_PAUSE_DECLINED_MS, MERGE_PAUSE_MS } from './screens/MergeScreen';
 import { ScanScreen } from './screens/ScanScreen';
 import { SetupScreen } from './screens/SetupScreen';
-import { assemblyLanded, mismatchDue, setMismatchDue } from './state/assembly-outcome';
+import { assemblyLanded, mismatchDue, pairLanded, setMismatchDue } from './state/assembly-outcome';
 import { errorTextInline } from './state/error-text';
 import { createSnapshotStore } from './state/snapshot-store';
 import { screenOf, type Screen } from './state/screen';
@@ -177,7 +177,11 @@ export function App(): ReactNode {
   // отказа — короткая, как у основной), текущая на первой показанной странице набора и один тост
   // «добавлено N» (скрытые названы) — после паузы и после модалки несовпадения, если та нужна.
   // Ключ `EditorScreen` — номер снимка посадки: экран монтируется заново, как после кадра `scan`.
-  const [setToastPending, setSetToastPending] = useState<ToastState | null>(null);
+  // Отложенный тост помнит свой набор: «Переснять» снимает посадку — тост уже не про ту ленту.
+  const [setToastPending, setSetToastPending] = useState<{
+    readonly set: number;
+    readonly toast: ToastState;
+  } | null>(null);
   const setLanding = useSetLanding(snapshot, screen);
   if (setLanding !== null && snapshot !== null && session !== null) {
     const { set, key, shown, hidden } = setLanding;
@@ -190,13 +194,16 @@ export function App(): ReactNode {
       setSeat({ epoch: snapshot.seq, key });
     }
     setSetToastPending({
-      key: `set:${session.id}:${String(set.set)}:${String(snapshot.seq)}`,
-      text:
-        hidden > 0
-          ? t('toast.addedHidden', { shown, count: hidden })
-          : t('toast.added', { count: shown }),
-      durationMs: undefined,
-      action: undefined,
+      set: set.set,
+      toast: {
+        key: `set:${session.id}:${String(set.set)}:${String(snapshot.seq)}`,
+        text:
+          hidden > 0
+            ? t('toast.addedHidden', { shown, count: hidden })
+            : t('toast.added', { count: shown }),
+        durationMs: undefined,
+        action: undefined,
+      },
     });
   }
   const blankPending = snapshot?.assembly?.blank.pending ?? 0;
@@ -406,8 +413,19 @@ export function App(): ReactNode {
   const mismatchedSet =
     screen === 'editor' && !merging && assembly !== null ? setMismatchDue(assembly.report) : null;
   // Тост посадки пары выходит, когда редактор виден без паузы и модалки набора (S10).
-  if (setToastPending !== null && screen === 'editor' && !merging && mismatchedSet === null) {
-    setToast(setToastPending);
+  if (
+    setToastPending !== null &&
+    assembly !== null &&
+    !assembly.report.sets.some((set) => set.set === setToastPending.set && pairLanded(set))
+  ) {
+    setSetToastPending(null);
+  } else if (
+    setToastPending !== null &&
+    screen === 'editor' &&
+    !merging &&
+    mismatchedSet === null
+  ) {
+    setToast(setToastPending.toast);
     setSetToastPending(null);
   }
 

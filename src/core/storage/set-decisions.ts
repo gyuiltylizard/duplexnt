@@ -3,6 +3,7 @@ import {
   addedSetsOfJournal,
   isVacant,
   pagesOf,
+  passStateOf,
   runningSegmentOf,
   type Journal,
   type JournalPass,
@@ -41,8 +42,8 @@ function twoSidedSet(
 
 /**
  * Набор «ДN» с несовпавшими оборотами, по которому ещё можно решать: общий гард «Оставить как
- * есть» и «Переснять» — сессия есть, проход не идёт, набор с оборотами найден, числа не равны и
- * решения ещё нет.
+ * есть» и «Переснять» — сессия есть, проход не идёт, набор с оборотами найден, обороты не
+ * прерваны, числа не равны и решения ещё нет.
  */
 export function mismatchedSetOf(
   journal: Journal | null,
@@ -63,6 +64,11 @@ export function mismatchedSetOf(
     return conflict('noPendingSet');
   }
   const { fronts, backs } = found;
+  // Прерванные обороты решает плашка: досканировать или «Оставить как есть» (`acceptPass` ставит
+  // `kept` сам). Решение поверх досканируемого прохода дало бы `kept` у прохода, который ещё растёт.
+  if (passStateOf(backs) === 'interrupted') {
+    return conflict('passInterrupted');
+  }
   return fronts.backsDecision !== 'none' || pagesOf(backs).length === pagesOf(fronts).length
     ? conflict('setNotMismatched')
     : ok({ journal, fronts, backs });

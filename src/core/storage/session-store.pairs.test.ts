@@ -173,6 +173,18 @@ describe('хранилище сессии: решения по оборотам 
     expect(await context.store.keepSetBacks(1)).toEqual(conflict('setNotMismatched'));
   });
 
+  it('решения по набору при прерванных оборотах — passInterrupted: сначала досканировать или «Оставить как есть» в плашке (U8)', async () => {
+    const context = await mainPack();
+    const { store, journalOnDisk } = context;
+    await setFronts(context, 3);
+    await setBacks(context, 2, 'interrupted');
+    const before = await journalOnDisk();
+
+    expect(await store.keepSetBacks(1)).toEqual(conflict('passInterrupted'));
+    expect(await store.rescanSetBacks(1)).toEqual(conflict('passInterrupted'));
+    expect(await journalOnDisk()).toEqual(before);
+  });
+
   it('принятие пустого прерванного прохода оборотов набора не ставит kept: набор ждёт дальше, очередь даёт новые обороты (ревью)', async () => {
     const context = await mainPack();
     const { store, journalOnDisk } = context;

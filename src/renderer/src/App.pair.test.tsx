@@ -322,6 +322,52 @@ describe('M4.5: посадка пары набора (KTD7; handoff S6, S10)', (
     expect(toasts()).toEqual([]);
   });
 
+  it('AE3 → вторая посадка: после «Переснять» и совпавших оборотов — пауза merge по набору и новый тост, старый не всплывает', async () => {
+    const push = liveApi(scanningBacks(1, 2));
+    render(<App />);
+    expect(await screen.findByText('ДОБАВЛЯЕМ · ОБОРОТЫ')).toBeDefined();
+
+    // Первая посадка: обороты не сошлись — пауза, затем модалка; тост «5 стр.» ждёт решения.
+    await pushLanding(push, withSet(2, { count: 2 }), 1601, () => undefined);
+    const dialog = screen.getByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Переснять обороты набора' }));
+    await push(withSet(3, null));
+    expect(screen.getByText('ДОБАВЛЯЕМ · ЛИЦА ГОТОВЫ: 3 листа')).toBeDefined();
+    expect(toasts()).toEqual([]);
+
+    await push(scanningBacks(4, 2));
+    await pushLanding(push, withSet(5, { count: 3 }), 1601, () => {
+      expect(mergeStatus()).toBe('набор Д1: совпало пар 3');
+      expect(toasts()).toEqual([]);
+    });
+    expect(screen.queryByText('Сопоставляем проходы')).toBeNull();
+    expect(toasts()).toEqual(['Добавлено 6 стр.']);
+    expect(currentKey()).toBe('p03-s01-0001');
+  });
+
+  it('AE16: повторное несовпадение после «Переснять» — модалка снова, после «Оставить» один тост по новой ленте', async () => {
+    const push = liveApi(scanningBacks(1, 2));
+    render(<App />);
+    expect(await screen.findByText('ДОБАВЛЯЕМ · ОБОРОТЫ')).toBeDefined();
+
+    await pushLanding(push, withSet(2, { count: 2 }), 1601, () => undefined);
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: 'Переснять обороты набора' }),
+    );
+    await push(withSet(3, null));
+    await push(scanningBacks(4, 1));
+    await pushLanding(push, withSet(5, { count: 1 }), 1601, () => {
+      expect(mergeStatus()).toBe('набор Д1: не сошлось — лиц 3, оборотов 1');
+    });
+    const dialog = screen.getByRole('dialog', { name: 'В наборе Д1 лиц 3, оборотов 1' });
+    expect(toasts()).toEqual([]);
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Оставить как есть' }));
+    await push(withSet(6, { count: 1 }, 'kept'));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(toasts()).toEqual(['Добавлено 4 стр.']);
+  });
+
   it('после перезапуска без решения модалка набора показывается сразу, без паузы и тоста', async () => {
     liveApi(withSet(1, { count: 2 }));
     render(<App />);

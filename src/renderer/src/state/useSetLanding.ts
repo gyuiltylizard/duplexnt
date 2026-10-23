@@ -63,8 +63,14 @@ export function useSetLanding(snapshot: Snapshot | null, screen: Screen | null):
     setSeen(keys);
     return null;
   }
-  // Пары помечаются увиденными только на `editor`: закрытая на другом кадре дождётся его.
+  // Пара, переставшая быть закрытой («Переснять» убрал обороты), забывается на любом кадре: экран
+  // после отброса уходит на `flip`, кадра `editor` между посадками может не быть. Новые пары
+  // помечаются увиденными только на `editor`: закрытая на другом кадре дождётся его.
   if (screen !== 'editor') {
+    const kept = new Set([...seen].filter((key) => keys.has(key)));
+    if (kept.size !== seen.size) {
+      setSeen(kept);
+    }
     return null;
   }
   if (!sameKeys(seen, keys)) {
