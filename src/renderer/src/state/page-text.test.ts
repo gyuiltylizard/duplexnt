@@ -38,6 +38,34 @@ describe('whatOf', () => {
   });
 });
 
+describe('whatOf: страницы двустороннего набора (M4.5, R13)', () => {
+  it.each([
+    ['addedFronts', page({ addedSet: 1, sheet: 2 }), 'лицо листа 2 набора Д1'],
+    ['addedBacks', page({ addedSet: 1, sheet: 2, side: 'back' }), 'оборот листа 2 набора Д1'],
+    ['addedFronts', page({ addedSet: 1, sheet: null }), 'лицевая набора Д1'],
+    ['addedBacks', page({ addedSet: 1, sheet: null, side: 'back' }), 'оборотная набора Д1'],
+    // Односторонний набор — прежние слова, какой бы ни была сторона.
+    ['added', page({ addedSet: 2, sheet: null }), 'добавленный набор 2'],
+  ] as const)('%s: %o', (origin, entry, expected) => {
+    expect(whatOf(t, entry, 'pairs', origin)).toBe(expected);
+    expect(whatOf(t, entry, 'assembled', origin)).toBe(expected);
+  });
+
+  it('noteOf: пара и подблоки — свои пояснения', () => {
+    expect(
+      noteOf(t, page({ addedSet: 1, sheet: 2, side: 'back' }), 'pairs', false, 'addedBacks'),
+    ).toBe(
+      'Страница двустороннего набора: оборот сопоставлен с лицом по позиции в проходе оборотов набора.',
+    );
+    expect(
+      noteOf(t, page({ addedSet: 1, sheet: null }), 'assembled', false, 'addedFronts'),
+    ).toContain('лежат подблоками, без пар');
+    expect(noteOf(t, page({ addedSet: 1, sheet: null }), 'pairs', false, 'added')).toContain(
+      'сканировалась одним проходом',
+    );
+  });
+});
+
 describe('noteOf', () => {
   it('потеря файла важнее режима', () => {
     expect(noteOf(t, page({ lost: true }), 'sets', false)).toBe(

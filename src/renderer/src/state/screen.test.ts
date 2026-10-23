@@ -222,3 +222,90 @@ describe('screenOf', () => {
     expect(screenOf(makeSnapshot({ pass }))).toBe('scan');
   });
 });
+
+// — M4.5 (KTD7): набор, ждущий обороты, — `flip` с приоритетом над `editor` —
+
+describe('screenOf: двусторонний набор (M4.5)', () => {
+  const setPage = (number: number, index: number) => ({
+    key: `p0${String(number)}-s01-${String(index).padStart(4, '0')}`,
+    number: index,
+    lost: false,
+  });
+  const mainBacks = makePass({ number: 2, kind: 'backs', pages: [setPage(2, 1)] });
+  const main = [makePass({}), mainBacks];
+  const setFronts = (extra: Partial<PassSnapshot> = {}) =>
+    makePass({
+      number: 3,
+      kind: 'addedFronts',
+      after: 'p01-s01-0001',
+      backsDecision: 'none',
+      pages: [setPage(3, 1), setPage(3, 2)],
+      ...extra,
+    });
+  const setBacks = (extra: Partial<PassSnapshot> = {}) =>
+    makePass({ number: 4, kind: 'addedBacks', pair: 3, pages: [setPage(4, 1)], ...extra });
+
+  it.each([
+    ['лица набора завершены', setFronts({})],
+    ['лица набора приняты', setFronts({ state: 'accepted' })],
+  ])('%s → flip набора, даже при отказе по основной пачке', (_name, fronts) => {
+    for (const backsDeclined of [false, true]) {
+      const session = makeSession({
+        backsDeclined,
+        passes: [makePass({}), ...(backsDeclined ? [] : [mainBacks]), fronts],
+      });
+      expect(screenOf(makeSnapshot({ session }))).toBe('flip');
+    }
+  });
+
+  it('другие наборы не мешают: односторонний и закрытая пара рядом с ожидающим набором — flip', () => {
+    const session = makeSession({
+      passes: [
+        ...main,
+        makePass({ number: 3, kind: 'added', after: null, pages: [setPage(3, 1)] }),
+        makePass({
+          number: 4,
+          kind: 'addedFronts',
+          after: null,
+          backsDecision: 'kept',
+          pages: [setPage(4, 1)],
+        }),
+        makePass({ number: 5, kind: 'addedBacks', pair: 4, pages: [setPage(5, 1), setPage(5, 2)] }),
+        setFronts({ number: 6 }),
+      ],
+    });
+    expect(screenOf(makeSnapshot({ session }))).toBe('flip');
+  });
+
+  it.each([
+    ['отказ от оборотов набора', [setFronts({ backsDecision: 'declined' })]],
+    ['обороты набора есть', [setFronts({}), setBacks({})]],
+    ['обороты набора прерваны со страницами', [setFronts({}), setBacks({ state: 'interrupted' })]],
+    ['лица набора прерваны — плашка', [setFronts({ state: 'interrupted' })]],
+  ])('%s → editor', (_name, setPasses) => {
+    const session = makeSession({ passes: [...main, ...setPasses] });
+    expect(screenOf(makeSnapshot({ session }))).toBe('editor');
+  });
+
+  it('обороты набора, прерванные до первой страницы, роли не занимают — flip набора', () => {
+    const session = makeSession({
+      passes: [...main, setFronts({}), setBacks({ state: 'interrupted', pages: [] })],
+    });
+    expect(screenOf(makeSnapshot({ session }))).toBe('flip');
+  });
+
+  it.each(['starting', 'busy'] as const)(
+    'S2 для набора: обороты набора в фазе %s без страниц — остаёмся на flip',
+    (phase) => {
+      const session = makeSession({ passes: [...main, setFronts({})] });
+      const pass: PassProgress = { ...PASS, kind: 'addedBacks', phase, expected: 2, pages: 0 };
+      expect(screenOf(makeSnapshot({ pass, session }))).toBe('flip');
+    },
+  );
+
+  it('лица набора в фазе busy — сразу scan: ожидание S2 только у оборотов', () => {
+    const session = makeSession({ passes: main });
+    const pass: PassProgress = { ...PASS, kind: 'addedFronts', phase: 'busy', pages: 0 };
+    expect(screenOf(makeSnapshot({ pass, session }))).toBe('scan');
+  });
+});

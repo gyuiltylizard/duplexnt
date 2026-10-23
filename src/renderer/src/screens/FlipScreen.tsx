@@ -10,7 +10,9 @@ import './flip-screen.css';
 // Экран `flip` (план M2, U8; UI_SPEC раздел 4; handoff M2, S1–S3): кикер с числом листов,
 // инструкция разворота, анимация `turn180`, чеклист из четырёх пунктов, запуск прохода
 // оборотов и «Обороты не нужны». Состояние занятости S2 — KTD-11: кнопки заменяются на время
-// ожидания, страницы пошли — экран сменится по снимку.
+// ожидания, страницы пошли — экран сменится по снимку. С M4.5 (R6; handoff M4.5, S5) тот же
+// экран для двустороннего набора, ждущего обороты: кикер в акценте набора с числом его листов,
+// остальное — как у основной пачки; команда `declineBacks` одна — ядро адресует её набору.
 
 export interface FlipScreenProps {
   readonly snapshot: Snapshot;
@@ -47,23 +49,35 @@ export function FlipScreen({
   const { t } = useTranslation();
   const screenRef = useRef<HTMLElement>(null);
   const [declineFailure, setDeclineFailure] = useState<DomainError | null>(null);
+  // Отказ в полёте: повторный клик не шлёт вторую команду — вторая уже адресовалась бы не
+  // набору, а сессии (ревью сессий 1–2 M4.5).
+  const [declining, setDeclining] = useState(false);
 
   const busy = pass !== null;
   // В S2 обе кнопки недоступны — фокус уходит на контейнер экрана, как S15 M1.
   useFocusWhen(screenRef, busy);
 
-  // Число листов — страницы лицевого прохода; отчёт сборки уже считает их по роли (KTD-4).
-  const fronts = snapshot.assembly?.report.fronts ?? 0;
+  // Набор, ждущий обороты (M4.5, KTD7), — число листов из его отчёта; иначе основная пачка:
+  // страницы лицевого прохода, отчёт сборки уже считает их по роли (KTD-4).
+  const report = snapshot.assembly?.report;
+  const pendingSet = report?.sets.find((set) => set.set === report.pendingSet) ?? null;
+  const fronts = pendingSet?.fronts ?? report?.fronts ?? 0;
 
   const decline = (): void => {
+    if (declining) {
+      return;
+    }
     setDeclineFailure(null);
+    setDeclining(true);
     window.api.declineBacks().then(
       (result) => {
+        setDeclining(false);
         if (!result.ok) {
           setDeclineFailure(result.error);
         }
       },
       (error: unknown) => {
+        setDeclining(false);
         console.error('[renderer] отказ от оборотов не ответил', error);
       },
     );
@@ -80,7 +94,11 @@ export function FlipScreen({
   return (
     <main className="flip-screen" ref={screenRef} tabIndex={-1}>
       <header className="flip-screen__intro">
-        <div className="kicker">{t('flip.kicker', { count: fronts })}</div>
+        {pendingSet === null ? (
+          <div className="kicker">{t('flip.kicker', { count: fronts })}</div>
+        ) : (
+          <div className="kicker kicker--added">{t('flip.setKicker', { count: fronts })}</div>
+        )}
         <h1 className="flip-screen__title">{t('flip.title')}</h1>
         <p className="flip-screen__lead">{t('flip.lead')}</p>
       </header>
@@ -135,7 +153,13 @@ export function FlipScreen({
             <button type="button" className="btn btn--primary btn--large" onClick={start}>
               {t('flip.start')}
             </button>
-            <button type="button" className="btn btn--link" onClick={decline}>
+            <button
+              type="button"
+              className="btn btn--link"
+              disabled={declining}
+              aria-busy={declining ? true : undefined}
+              onClick={decline}
+            >
               {t('flip.skip')}
             </button>
             {failure !== null && (

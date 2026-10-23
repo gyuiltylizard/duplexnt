@@ -13,6 +13,7 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  type AddedPassIntent,
   type AssembledDocument,
   type AssembledPage,
   type BlankSummary,
@@ -46,6 +47,7 @@ import {
 import { toneOf } from '../state/page-text';
 import { errorTextInline } from '../state/error-text';
 import type { EditState } from '../state/history';
+import { originsOf } from '../state/origins';
 import { rolesOf } from '../state/screen';
 import {
   afterRemoval,
@@ -101,8 +103,8 @@ export interface EditorScreenProps {
   readonly resumeFailure: DomainError | null;
   /** «Досканировать остаток»: тот же `startPass` — сессия есть, ядро продолжит проход. */
   readonly onResume: () => void;
-  /** «Начать скан» из модалки `add`: `startPass` с намерением и якорем (M3.5, KTD-5). */
-  readonly onAdd: (after: string | null) => void;
+  /** «Начать скан» из модалки `add`: `startPass` с намерением и якорем (M3.5, KTD-5; M4.5, R4). */
+  readonly onAdd: (kind: AddedPassIntent['kind'], after: string | null) => void;
   /** Ссылка «подключите заново» в отказе досканирования (S17). */
   readonly onOpenDevice: (initialAddress?: string) => void;
   /**
@@ -201,14 +203,11 @@ export function EditorScreen({
   // Режим сборки и группы — из ядра (M3.6, R10): renderer ничего не считает сам.
   const mode = snapshot.assembly?.report.mode ?? 'pairs';
   const sets = snapshot.assembly?.sets ?? null;
-  // Происхождение страницы — проход по ключу: тег «об» и факт «Откуда» (R11, R23).
-  const origins = useMemo(
-    () =>
-      new Map<string, PassKind>(
-        session.passes.flatMap((pass) => pass.pages.map((page) => [page.key, pass.kind] as const)),
-      ),
-    [session.passes],
-  );
+  // Происхождение страницы — проход по ключу: тег «об», факт «Откуда», слова страницы пары и
+  // цель тумблера 180° (R11, R23; M4.5, KTD4).
+  const origins = useMemo(() => originsOf(session.passes), [session.passes]);
+  const currentOrigin = (key: string | undefined): PassKind | null =>
+    key === undefined ? null : (origins.get(key)?.kind ?? null);
 
   const [modal, setModal] = useState<EditorModal | null>(null);
   /** Идёт запись пакета (модалка `save`): правки заблокированы (KTD-9). */
@@ -756,6 +755,7 @@ export function EditorScreen({
           visible,
           mode,
           sets,
+          origin: currentOrigin(currentEntry?.key),
           after: selection.current === null ? undefined : withTails([selection.current]).at(-1),
           numberOf,
         })
@@ -927,7 +927,7 @@ export function EditorScreen({
             documents={shownDocuments}
             entry={currentEntry}
             position={currentIndex + 1}
-            origin={currentEntry === undefined ? null : (origins.get(currentEntry.key) ?? null)}
+            origin={currentOrigin(currentEntry?.key)}
             currentDocument={currentDocument}
             names={names}
             frontsOnly={backsPass === null}
@@ -988,6 +988,7 @@ export function EditorScreen({
       {anchors !== null && (
         <AddModal
           scanner={snapshot.scanner}
+          mode={mode}
           current={anchors.current}
           end={anchors.end}
           endKind={anchors.endKind}

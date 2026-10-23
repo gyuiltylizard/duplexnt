@@ -4,8 +4,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { i18n } from '../i18n';
 import { AddModal, anchorsOf, type AddModalProps } from './AddModal';
 
-// Модалка `add` (план M3.5, U6; handoff M3.5, S2): карточки, место, сводка с якорем, строка
-// сканера, «Начать скан» с якорем из видимой ленты (KTD-8), клавиатура радиогрупп.
+// Модалка `add` (план M3.5, U6; handoff M3.5, S2; M4.5, S1–S2): карточки сценариев, место,
+// сводка с якорем, строка сканера, «Начать скан» с намерением и якорем из видимой ленты (KTD-8),
+// клавиатура радиогрупп, выключенная карточка в режиме раздельных наборов.
 
 const READY: ScannerState = {
   kind: 'ready',
@@ -23,6 +24,7 @@ function renderModal(props: Partial<AddModalProps> = {}) {
   render(
     <AddModal
       scanner={READY}
+      mode="pairs"
       current={CURRENT}
       end={DOC_END}
       endKind="document"
@@ -35,21 +37,34 @@ function renderModal(props: Partial<AddModalProps> = {}) {
 }
 
 const radio = (name: string | RegExp): HTMLElement => screen.getByRole('radio', { name });
+const twoSided = (): HTMLElement => radio(/Двустороннее сканирование/u);
+const oneSided = (): HTMLElement => radio(/Одностороннее сканирование/u);
 const summary = (): string => document.querySelector('.add-modal__summary')?.textContent ?? '';
 const start = (): HTMLElement => screen.getByRole('button', { name: 'Начать скан' });
 
 afterEach(cleanup);
 
 describe('модалка add: состояние по умолчанию', () => {
-  it('карточка «Односторонние листы» и «После текущей» выбраны, сводка называет якорь, фокус — «Отмена»', () => {
+  it('S1: «Двустороннее сканирование» и «После текущей» выбраны, сводка называет сценарий и якорь, фокус — «Отмена»', () => {
     renderModal();
 
     expect(screen.getByRole('dialog', { name: 'Добавить страницы к документу' })).toBeDefined();
-    expect(radio(/Односторонние листы/).getAttribute('aria-checked')).toBe('true');
-    expect(radio(/Один лист/).getAttribute('aria-checked')).toBe('false');
+    expect(twoSided().getAttribute('aria-checked')).toBe('true');
+    expect(oneSided().getAttribute('aria-checked')).toBe('false');
     expect(radio('После текущей страницы').getAttribute('aria-checked')).toBe('true');
-    expect(summary()).toBe('Один проход · после стр. 7 (оборот листа 4)');
+    expect(summary()).toBe('Двустороннее · после стр. 7 (оборот листа 4)');
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Отмена' }));
+  });
+
+  it('тексты карточек: пара проходов с разворотом и один проход без оборотов; подсказки о ручном обороте нет', () => {
+    renderModal();
+
+    expect(
+      screen.getByText('Два прохода с разворотом на 180°, как основной документ'),
+    ).toBeDefined();
+    expect(screen.getByText('Один или несколько листов, обороты не сканируем')).toBeDefined();
+    expect(screen.queryByText(/разверните на 180°, как при проходе оборотов/)).toBeNull();
+    expect(screen.queryByRole('radio', { name: /Один лист/ })).toBeNull();
   });
 
   it('строка сканера: имя и «готов · параметры»; «Начать скан» доступна', () => {
@@ -65,15 +80,8 @@ describe('модалка add: состояние по умолчанию', () =>
 
     expect(screen.getByText('Сканер не подключён — подключите его в настройках')).toBeDefined();
     expect(start().hasAttribute('disabled')).toBe(true);
-    fireEvent.click(radio(/Один лист/));
-    expect(summary()).toBe('Один лист · после стр. 7 (оборот листа 4)');
-  });
-
-  it('тексты карточек: «Один лист» объясняет, как положить лист оборотом', () => {
-    renderModal();
-
-    expect(screen.getByText('Один проход, обороты не сканируем')).toBeDefined();
-    expect(screen.getByText(/положите его оборотом вверх и разверните на 180°/)).toBeDefined();
+    fireEvent.click(oneSided());
+    expect(summary()).toBe('Одностороннее · после стр. 7 (оборот листа 4)');
   });
 });
 
@@ -81,10 +89,10 @@ describe('модалка add: выбор и сводка', () => {
   it('карточка и место меняют сводку; «В конец документа» называет документ и его последнюю страницу', () => {
     renderModal();
 
-    fireEvent.click(radio(/Один лист/));
-    expect(summary()).toBe('Один лист · после стр. 7 (оборот листа 4)');
+    fireEvent.click(oneSided());
+    expect(summary()).toBe('Одностороннее · после стр. 7 (оборот листа 4)');
     fireEvent.click(radio('В конец документа'));
-    expect(summary()).toBe('Один лист · в конец документа «Акт приёма-передачи», после стр. 9');
+    expect(summary()).toBe('Одностороннее · в конец документа «Акт приёма-передачи», после стр. 9');
   });
 
   it('пустая лента: «После текущей» недоступна с причиной, выбран конец, сводка — «в конец ленты»', () => {
@@ -94,7 +102,7 @@ describe('модалка add: выбор и сводка', () => {
     expect(after.getAttribute('aria-disabled')).toBe('true');
     expect(after.getAttribute('title')).toBe('Нет текущей страницы — лента пуста');
     expect(radio('В конец документа').getAttribute('aria-checked')).toBe('true');
-    expect(summary()).toBe('Один проход · в конец ленты');
+    expect(summary()).toBe('Двустороннее · в конец ленты');
     fireEvent.click(after);
     expect(after.getAttribute('aria-checked')).toBe('false');
   });
@@ -102,13 +110,13 @@ describe('модалка add: выбор и сводка', () => {
   it('стрелки переводят выбор и фокус в радиогруппе; недоступный сегмент пропускается', () => {
     renderModal({ current: null, end: null });
 
-    const sheets = radio(/Односторонние листы/);
-    sheets.focus();
-    fireEvent.keyDown(sheets, { key: 'ArrowDown' });
-    expect(radio(/Один лист/).getAttribute('aria-checked')).toBe('true');
-    expect(document.activeElement).toBe(radio(/Один лист/));
-    fireEvent.keyDown(radio(/Один лист/), { key: 'ArrowUp' });
-    expect(radio(/Односторонние листы/).getAttribute('aria-checked')).toBe('true');
+    const two = twoSided();
+    two.focus();
+    fireEvent.keyDown(two, { key: 'ArrowDown' });
+    expect(oneSided().getAttribute('aria-checked')).toBe('true');
+    expect(document.activeElement).toBe(oneSided());
+    fireEvent.keyDown(oneSided(), { key: 'ArrowUp' });
+    expect(twoSided().getAttribute('aria-checked')).toBe('true');
 
     const end = radio('В конец документа');
     end.focus();
@@ -120,32 +128,33 @@ describe('модалка add: выбор и сводка', () => {
   it('в обходе Tab — только выбранный элемент каждой группы', () => {
     renderModal();
 
-    expect(radio(/Односторонние листы/).tabIndex).toBe(0);
-    expect(radio(/Один лист/).tabIndex).toBe(-1);
+    expect(twoSided().tabIndex).toBe(0);
+    expect(oneSided().tabIndex).toBe(-1);
     expect(radio('После текущей страницы').tabIndex).toBe(0);
     expect(radio('В конец документа').tabIndex).toBe(-1);
   });
 });
 
 describe('модалка add: запуск и отмена', () => {
-  it('«Начать скан» закрывает модалку и зовёт запуск с якорем текущей', () => {
+  it('«Начать скан» закрывает модалку и зовёт запуск с намерением пары и якорем текущей', () => {
     const { onStart, onClose } = renderModal();
 
     fireEvent.click(start());
     expect(onClose).toHaveBeenCalledTimes(1);
-    expect(onStart).toHaveBeenCalledExactlyOnceWith('p02-s01-0009');
+    expect(onStart).toHaveBeenCalledExactlyOnceWith('addedFronts', 'p02-s01-0009');
   });
 
-  it('«В конец документа» — якорь: последняя страница документа; пустая лента — null', () => {
+  it('одностороннее — намерение `added`; «В конец документа» — якорь последней страницы; пустая лента — null', () => {
     const first = renderModal();
+    fireEvent.click(oneSided());
     fireEvent.click(radio('В конец документа'));
     fireEvent.click(start());
-    expect(first.onStart).toHaveBeenCalledExactlyOnceWith('p01-s01-0005');
+    expect(first.onStart).toHaveBeenCalledExactlyOnceWith('added', 'p01-s01-0005');
     cleanup();
 
     const second = renderModal({ current: null, end: null });
     fireEvent.click(start());
-    expect(second.onStart).toHaveBeenCalledExactlyOnceWith(null);
+    expect(second.onStart).toHaveBeenCalledExactlyOnceWith('addedFronts', null);
   });
 
   it('«Отмена» закрывает без запуска', () => {
@@ -159,18 +168,18 @@ describe('модалка add: запуск и отмена', () => {
   it('фокус заперт: Tab с «Начать скан» — на выбранную карточку, Shift+Tab с неё — на «Начать скан»', () => {
     renderModal();
     // Выбрана вторая карточка: первая в DOM — с tabIndex −1, в кольцо она не входит.
-    fireEvent.click(radio(/Один лист/));
+    fireEvent.click(oneSided());
 
     const button = start();
     button.focus();
     fireEvent.keyDown(button, { key: 'Tab' });
-    expect(document.activeElement).toBe(radio(/Один лист/));
-    fireEvent.keyDown(radio(/Один лист/), { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(oneSided());
+    fireEvent.keyDown(oneSided(), { key: 'Tab', shiftKey: true });
     expect(document.activeElement).toBe(button);
   });
 });
 
-describe('модалка add в режиме наборов (M3.6, KTD11; handoff S10)', () => {
+describe('модалка add в режиме наборов (M3.6, KTD11; M4.5, R3; handoff S2, S10)', () => {
   const t = i18n.t.bind(i18n);
   const entry = (
     key: string,
@@ -238,7 +247,7 @@ describe('модалка add в режиме наборов (M3.6, KTD11; handof
     ).toEqual({ current: null, end: null, endKind: 'set' });
   });
 
-  it('anchorsOf: режим пар и собрано — конец документа, как в M3.5', () => {
+  it('anchorsOf: режим пар и собрано — конец документа, как в M3.5; страница пары — с листом набора', () => {
     expect(
       anchorsOf(t, {
         entry: entry('f2', 'front', 2),
@@ -254,21 +263,68 @@ describe('модалка add в режиме наборов (M3.6, KTD11; handof
       end: { key: 'f2', page: 2, label: 'Акт' },
       endKind: 'document',
     });
+    expect(
+      anchorsOf(t, {
+        entry: entry('a1', 'back', 2, 1),
+        index: 1,
+        document: { name: 'Акт', start: 0, count: 3 },
+        documentName: 'Акт',
+        visible: ['f1', 'a1', 'f3'],
+        mode: 'pairs',
+        sets: null,
+        origin: 'addedBacks',
+      }).current,
+    ).toEqual({ key: 'a1', page: 2, label: 'оборот листа 2 набора Д1' });
   });
 
   it('сегмент «В конец набора», сводка называет группу и последнюю страницу; якорь — её ключ', () => {
     const { onStart } = renderModal({
+      mode: 'sets',
       current: { key: 'b2', page: 4, label: 'оборотная, 1-я в наборе оборотов' },
       end: { key: 'b1', page: 6, label: 'оборотов' },
       endKind: 'set',
     });
 
-    expect(summary()).toBe('Один проход · после стр. 4 (оборотная, 1-я в наборе оборотов)');
+    expect(summary()).toBe('Одностороннее · после стр. 4 (оборотная, 1-я в наборе оборотов)');
     expect(screen.queryByRole('radio', { name: 'В конец документа' })).toBeNull();
     fireEvent.click(radio('В конец набора'));
-    expect(summary()).toBe('Один проход · в конец набора оборотов, после стр. 6');
+    expect(summary()).toBe('Одностороннее · в конец набора оборотов, после стр. 6');
     fireEvent.click(start());
-    expect(onStart).toHaveBeenCalledExactlyOnceWith('b1');
+    expect(onStart).toHaveBeenCalledExactlyOnceWith('added', 'b1');
+  });
+
+  it('S2: двусторонняя карточка выключена с причиной, выбрана односторонняя; клик и стрелки её не выбирают', () => {
+    renderModal({ mode: 'sets' });
+
+    const two = twoSided();
+    expect(two.getAttribute('aria-disabled')).toBe('true');
+    expect(two.getAttribute('aria-checked')).toBe('false');
+    expect(two.className).toBe('radio-card radio-card--disabled');
+    expect(two.tabIndex).toBe(-1);
+    const reason = screen.getByText(
+      'Недоступно, пока документ не собран — сначала соберите документ',
+    );
+    expect(two.getAttribute('aria-describedby')).toBe(reason.id);
+    expect(
+      screen.queryByText('Два прохода с разворотом на 180°, как основной документ'),
+    ).toBeNull();
+    expect(oneSided().getAttribute('aria-checked')).toBe('true');
+    expect(oneSided().tabIndex).toBe(0);
+
+    fireEvent.click(two);
+    expect(two.getAttribute('aria-checked')).toBe('false');
+    expect(summary()).toMatch(/^Одностороннее · /);
+    oneSided().focus();
+    fireEvent.keyDown(oneSided(), { key: 'ArrowDown' });
+    expect(oneSided().getAttribute('aria-checked')).toBe('true');
+    expect(globalThis.document.activeElement).toBe(oneSided());
+  });
+
+  it('в режиме «собрано» двусторонняя доступна и выбрана (R3)', () => {
+    renderModal({ mode: 'assembled' });
+
+    expect(twoSided().getAttribute('aria-disabled')).toBeNull();
+    expect(twoSided().getAttribute('aria-checked')).toBe('true');
   });
 });
 

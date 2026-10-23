@@ -560,7 +560,7 @@ describe('инспектор до сборки (S8–S9, R22–R23)', () => {
     expect(screen.getByRole('radio', { name: 'В конец набора' })).toBeDefined();
     fireEvent.click(screen.getByRole('radio', { name: 'В конец набора' }));
     expect(document.querySelector('.add-modal__summary')?.textContent).toBe(
-      'Один проход · в конец набора оборотов, после стр. 5',
+      'Одностороннее · в конец набора оборотов, после стр. 5',
     );
   });
 

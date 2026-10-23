@@ -138,9 +138,9 @@ describe('«+ Добавить»: доступность (S1, R12)', () => {
     expect(
       screen.getByRole('radio', { name: 'После текущей страницы' }).getAttribute('aria-disabled'),
     ).toBe('true');
-    expect(summary()).toBe('Один проход · в конец ленты');
+    expect(summary()).toBe('Двустороннее · в конец ленты');
     fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
-    expect(onAdd).toHaveBeenCalledExactlyOnceWith(null);
+    expect(onAdd).toHaveBeenCalledExactlyOnceWith('addedFronts', null);
   });
 });
 
@@ -153,9 +153,9 @@ describe('«+ Добавить»: якорь из видимой ленты (S2,
     // Лента 1л 1о 2л 2о 3л 3о: третья — лицо листа 2.
     fireEvent.click(option(2));
     fireEvent.click(addButton());
-    expect(summary()).toBe('Один проход · после стр. 3 (лицо листа 2)');
+    expect(summary()).toBe('Двустороннее · после стр. 3 (лицо листа 2)');
     fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
-    expect(onAdd).toHaveBeenCalledExactlyOnceWith('p01-s01-0002');
+    expect(onAdd).toHaveBeenCalledExactlyOnceWith('addedFronts', 'p01-s01-0002');
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
@@ -170,9 +170,9 @@ describe('«+ Добавить»: якорь из видимой ленты (S2,
     // Текущая после Ctrl-кликов — последняя добавленная в выделение: пятая (3л).
     expect(screen.getByText('5 из 6')).toBeDefined();
     fireEvent.click(addButton());
-    expect(summary()).toBe('Один проход · после стр. 5 (лицо листа 3)');
+    expect(summary()).toBe('Двустороннее · после стр. 5 (лицо листа 3)');
     fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
-    expect(onAdd).toHaveBeenCalledExactlyOnceWith('p01-s01-0003');
+    expect(onAdd).toHaveBeenCalledExactlyOnceWith('addedFronts', 'p01-s01-0003');
   });
 
   it('«В конец документа» — последняя видимая страница документа текущей, имя — как в тулбаре', () => {
@@ -192,15 +192,15 @@ describe('«+ Добавить»: якорь из видимой ленты (S2,
     fireEvent.click(option(1));
     fireEvent.click(addButton());
     fireEvent.click(screen.getByRole('radio', { name: 'В конец документа' }));
-    expect(summary()).toBe('Один проход · в конец документа «Акт», после стр. 4');
+    expect(summary()).toBe('Двустороннее · в конец документа «Акт», после стр. 4');
     fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
-    expect(onAdd).toHaveBeenCalledExactlyOnceWith('p02-s01-0002');
+    expect(onAdd).toHaveBeenCalledExactlyOnceWith('addedFronts', 'p02-s01-0002');
 
     // Документ без имени — в сводке имя по умолчанию, как в тулбаре.
     fireEvent.click(option(5));
     fireEvent.click(addButton());
     fireEvent.click(screen.getByRole('radio', { name: 'В конец документа' }));
-    expect(summary()).toBe('Один проход · в конец документа «Документ 2», после стр. 6');
+    expect(summary()).toBe('Двустороннее · в конец документа «Документ 2», после стр. 6');
   });
 
   it('после «Начать скан» фокус возвращается на «+ Добавить» (и под StrictMode)', () => {

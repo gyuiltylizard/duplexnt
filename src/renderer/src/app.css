@@ -164,6 +164,11 @@
   color: var(--color-accent);
 }
 
+/* S5 M4.5: кикер набора на flip — цвет набора, как тег scan. */
+.kicker--added {
+  color: var(--color-pass-3);
+}
+
 .dot {
   flex: none;
   width: var(--size-dot);
@@ -628,6 +633,14 @@
 .radio-card:focus-visible {
   outline: var(--space-1) solid var(--color-border-focus);
   outline-offset: var(--space-1);
+}
+/* S2 M4.5: выключенная карточка — не кликается, причина читается. */
+.radio-card--disabled {
+  opacity: var(--opacity-disabled);
+  cursor: default;
+}
+.radio-card--disabled .radio-card__note {
+  color: var(--color-text-subtle);
 }
 
 /* — крупные сегменты «Куда вставить» (handoff M3.5, S2) — */

@@ -1,10 +1,17 @@
 import { memo, type DragEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { pageImageUrl, type AssembledPage, type BlankFlag, type PageAngle } from '@shared';
+import {
+  isBacksKind,
+  pageImageUrl,
+  type AssembledPage,
+  type BlankFlag,
+  type PageAngle,
+  type PassKind,
+} from '@shared';
 import type { TFunction } from 'i18next';
 import { useImageLoad } from '../components/useImageLoad';
 import type { DropSide } from '../state/edits';
-import { whatOf } from '../state/page-text';
+import { isPairKind, whatOf } from '../state/page-text';
 
 /** Как выбрали миниатюру: клик, Shift — диапазон, Ctrl — по одной (handoff M3, S4). */
 export type PickMode = 'single' | 'range' | 'toggle';
@@ -33,14 +40,16 @@ export const pickModifierHeld = (event: ModifierKeys): boolean => modeOf(event) 
 
 /**
  * Имя карточки для скринридера — по самому важному: потеря, затем режим наборов («Страница 15,
- * оборотная, 3-я в наборе оборотов» — M3.6, S9), добавленный набор (у его страницы нет ни
- * «лица», ни «оборота» — её называет набор, S5), иначе номер.
+ * оборотная, 3-я в наборе оборотов» — M3.6, S9), страница двустороннего набора («Страница 9,
+ * оборот листа 2 набора Д1» — M4.5, S8), добавленный набор (у его страницы нет ни «лица», ни
+ * «оборота» — её называет набор, S5), иначе номер.
  */
 function thumbLabelOf(
   t: TFunction,
   page: {
     readonly lost: boolean;
     readonly inSets: boolean;
+    readonly origin: PassKind | null;
     readonly side: AssembledPage['side'];
     readonly sheet: number | null;
     readonly addedSet: number | null;
@@ -50,25 +59,32 @@ function thumbLabelOf(
   if (page.lost) {
     return t('thumb.lostLabel', { number: page.position });
   }
+  const { side, sheet, addedSet, origin } = page;
   if (page.inSets) {
-    const { side, sheet, addedSet } = page;
     return t('thumb.setLabel', {
       number: page.position,
       what: whatOf(t, { side, sheet, addedSet }, 'sets'),
     });
   }
-  if (page.addedSet !== null) {
-    return t('thumb.addedLabel', { number: page.position, set: page.addedSet });
+  if (addedSet !== null && isPairKind(origin)) {
+    return t('thumb.setLabel', {
+      number: page.position,
+      what: whatOf(t, { side, sheet, addedSet }, 'pairs', origin),
+    });
+  }
+  if (addedSet !== null) {
+    return t('thumb.addedLabel', { number: page.position, set: addedSet });
   }
   return t('thumb.alt', { number: page.position });
 }
 
 /**
  * Миниатюра в ленте: обычная, потерянная (S18 M1), строится или не построилась (S19 M1),
- * страница прохода оборотов с тегом «об» (по происхождению — R11 M3.6), угол из ядра (S4 M3),
- * перетаскивание с маркером вставки (S6 M3), split-бар границы (S7 M3), страница
- * добавленного набора с тегом «Д1» (S5 M3.5), пустой оборот с меткой «ПУСТО» и скрытая,
- * показанная переключателем, — пунктир и приглушённый лист (S2–S3 M4).
+ * страница прохода оборотов с тегом «об» (по происхождению — R11 M3.6; обороты набора — тоже,
+ * M4.5), угол из ядра (S4 M3), перетаскивание с маркером вставки (S6 M3), split-бар границы
+ * (S7 M3), страница добавленного набора с тегом «Д1» (S5 M3.5; у пары — на обеих сторонах,
+ * S8 M4.5), пустой оборот с меткой «ПУСТО» и скрытая, показанная переключателем, — пунктир и
+ * приглушённый лист (S2–S3 M4).
  * Пропсы — примитивы, чтобы `memo` переживал новый снимок (объекты порядка пересоздаются
  * десериализацией IPC): тумблер и отметка сохранения не перерисовывают всю ленту, смена
  * выделения — только затронутые карточки.
@@ -76,7 +92,7 @@ function thumbLabelOf(
 export const EditorThumb = memo(function EditorThumb({
   sessionId,
   pageKey,
-  backsOrigin,
+  origin,
   side,
   sheet,
   angle,
@@ -98,8 +114,8 @@ export const EditorThumb = memo(function EditorThumb({
 }: {
   readonly sessionId: string;
   readonly pageKey: string;
-  /** Страница прохода оборотов — тег «об» по происхождению, в любой группе (R11). */
-  readonly backsOrigin: boolean;
+  /** Роль прохода страницы (R11; M4.5): тег «об» у оборотов любой пачки, слова страницы пары. */
+  readonly origin: PassKind | null;
   /** Сторона и номер по режиму (R11) — подпись карточки в режиме наборов. */
   readonly side: AssembledPage['side'];
   readonly sheet: number | null;
@@ -205,7 +221,7 @@ export const EditorThumb = memo(function EditorThumb({
     classes.push('thumb--dragging');
   }
 
-  const base = thumbLabelOf(t, { lost, inSets, side, sheet, addedSet, position });
+  const base = thumbLabelOf(t, { lost, inSets, origin, side, sheet, addedSet, position });
   const turned = angle === 0 ? base : `${base}, ${t('thumb.angle', { angle })}`;
   const label =
     blank === null
@@ -250,7 +266,7 @@ export const EditorThumb = memo(function EditorThumb({
       <div className="thumb__paper">{paper}</div>
       <div className="thumb__foot">
         <span className="thumb__num">{position}</span>
-        {backsOrigin && <span className="thumb__tag">{t('thumb.tagBacks')}</span>}
+        {/* S8 M4.5: у оборота набора два тега рядом — «Д1» цветом набора, «об» цветом оборотов. */}
         {addedSet !== null && (
           <span
             className="thumb__tag thumb__tag--added"
@@ -258,6 +274,9 @@ export const EditorThumb = memo(function EditorThumb({
           >
             {t('thumb.tagAdded', { set: addedSet })}
           </span>
+        )}
+        {origin !== null && isBacksKind(origin) && (
+          <span className="thumb__tag">{t('thumb.tagBacks')}</span>
         )}
       </div>
     </li>
