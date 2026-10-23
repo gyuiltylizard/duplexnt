@@ -1,11 +1,15 @@
 import {
+  addedSetReportOf,
   addedSetsOf,
   blankFlagOf,
   blankSummaryOf,
+  hasPages,
+  isAnchoredKind,
+  isBacksKind,
   NO_VERDICTS,
   passesByKind,
   pendingSetOf,
-  type AddedSetReport,
+  type AddedSet,
   type AssembledPage,
   type BlankFlag,
   type BlankVerdicts,
@@ -49,18 +53,12 @@ import {
 // чётность номера; роль есть только у прохода со страницами. Блок двустороннего набора (M4.5)
 // встаёт по якорю прохода его лиц в любом режиме и внутри себя чередуется тем же правилом пар.
 
-const hasPages = (pass: PassSnapshot): boolean => pass.pages.length > 0;
-
 /** Роли проходов снимка: роль только у прохода со страницами (shared `passesByKind`, KTD-4). */
 const rolesOf = (passes: readonly PassSnapshot[]) => passesByKind(passes, hasPages);
 
-/** Роль «обороты» — основной пачки или набора: флаг 180° и оценка детектора (M4.5, KTD4, KTD6). */
-const isBacksRole = (pass: PassSnapshot): boolean =>
-  pass.kind === 'backs' || pass.kind === 'addedBacks';
-
 /** Есть включённый поворот у какого-либо прохода оборотов со страницами — «Вернуть» его сбросит. */
 const rotatedOf = (passes: readonly PassSnapshot[]): boolean =>
-  passes.some((pass) => isBacksRole(pass) && hasPages(pass) && pass.rotate180);
+  passes.some((pass) => isBacksKind(pass.kind) && hasPages(pass) && pass.rotate180);
 
 type Group = 'fronts' | 'backs';
 
@@ -93,6 +91,26 @@ export interface BaseAssembly {
   readonly addedSetOf: ReadonlyMap<string, number>;
 }
 
+/** Наборы «ДN» и проходы по номеру — считаются один раз на сборку (M4.5, KTD2). */
+interface SetsIndex {
+  readonly sets: readonly AddedSet[];
+  readonly byNumber: ReadonlyMap<number, PassSnapshot>;
+}
+
+const indexOf = (passes: readonly PassSnapshot[]): SetsIndex => ({
+  sets: addedSetsOf(passes, hasPages),
+  byNumber: new Map(passes.map((pass) => [pass.number, pass])),
+});
+
+/** Проходы набора: лица (нет — набор без страниц) и обороты со страницами или `null`. */
+const passesOfSet = (
+  index: SetsIndex,
+  set: AddedSet,
+): { readonly fronts: PassSnapshot | undefined; readonly backs: PassSnapshot | null } => ({
+  fronts: index.byNumber.get(set.fronts),
+  backs: index.byNumber.get(set.backs ?? -1) ?? null,
+});
+
 /**
  * Режим сессии (R4): запись сборки — «собрано»; иначе проход оборотов со страницами, который не
  * идёт, с числом страниц не равным лицевому — «раздельные наборы»; иначе — «пары». Идущий проход
@@ -117,34 +135,44 @@ export function modeOf(
 
 /**
  * Отчёт о проходах — один для всех режимов: правки и режим на числа проходов не влияют (KTD-7).
- * Наборы «ДN» — по `addedSetsOf` (M4.5, KTD5): числа и состояние их проходов, решение,
- * несовпадение; набор, ждущий обороты, — по общему правилу `pendingSetOf`.
+ * Наборы «ДN» — по индексу (M4.5, KTD5): числа и состояние их проходов, решение, несовпадение;
+ * набор, ждущий обороты, — по общему правилу `pendingSetOf`.
  */
-function passReport(passes: readonly PassSnapshot[]): BaseAssembly['report'] {
+function passReport(passes: readonly PassSnapshot[], index: SetsIndex): BaseAssembly['report'] {
   const { fronts, backs } = rolesOf(passes);
-  const byNumber = new Map(passes.map((pass) => [pass.number, pass]));
-  const sets = addedSetsOf(passes, hasPages).map((set): AddedSetReport => {
-    const setFronts = byNumber.get(set.fronts)?.pages.length ?? 0;
-    const setBacks = set.backs === null ? null : (byNumber.get(set.backs) ?? null);
-    const setBacksCount = setBacks?.pages.length ?? 0;
-    return {
-      set: set.set,
-      fronts: setFronts,
-      backs: setBacksCount,
-      backsState: setBacks?.state ?? null,
-      decision: set.decision,
-      mismatch: setBacksCount > 0 && setBacksCount !== setFronts,
-      sides: set.sides,
-    };
-  });
   return {
     fronts: fronts?.pages.length ?? 0,
     backs: backs?.pages.length ?? 0,
     backsState: backs?.state ?? null,
-    sets,
+    sets: index.sets.map((set) => {
+      const own = passesOfSet(index, set);
+      return addedSetReportOf(set, own.fronts, own.backs);
+    }),
     pendingSet: pendingSetOf(passes, hasPages, (pass) => pass.state)?.set ?? null,
   };
 }
+
+/** Номер набора «ДN» по ключу страницы — лиц и оборотов набора (M4.5, R13). */
+function addedSetMapOf(index: SetsIndex): ReadonlyMap<string, number> {
+  const addedSetOf = new Map<string, number>();
+  for (const set of index.sets) {
+    const { fronts, backs } = passesOfSet(index, set);
+    for (const page of [...(fronts?.pages ?? []), ...(backs?.pages ?? [])]) {
+      addedSetOf.set(page.key, set.set);
+    }
+  }
+  return addedSetOf;
+}
+
+/** Общая часть базовой сборки любого режима: отчёт, поворот и теги наборов. */
+const derivedOf = (
+  passes: readonly PassSnapshot[],
+  index: SetsIndex,
+): Pick<BaseAssembly, 'report' | 'rotated' | 'addedSetOf'> => ({
+  report: passReport(passes, index),
+  rotated: rotatedOf(passes),
+  addedSetOf: addedSetMapOf(index),
+});
 
 const frontPage = (page: PageSnapshot, sheet: number | null, group: Group | null): BasePage => ({
   key: page.key,
@@ -205,28 +233,25 @@ function setBlockOf(
 }
 
 /**
- * Блоки добавленных наборов по номеру «ДN» (порядок номера прохода лиц): блок встаёт буквально
- * сразу за якорем прохода лиц — перед наборами, прикреплёнными к нему раньше; якорь внутри чужого
- * блока — сразу за ним; якоря нет (`null`, страница ушла из сессии, ключ более позднего прохода) —
- * в конец. Досканированный сегмент — в конце своего прохода (страницы прохода идут подряд).
- * Удалённая правкой или потерянная страница якорем быть может: правки накладываются позже,
- * потерянная стоит на своём месте. Группа блока — группа якоря; без якоря — последняя. `include`
- * отбирает наборы (режим «собрано» ставит блоком только наборы целиком вне записи).
+ * Блоки добавленных наборов `sets` по номеру «ДN» (порядок номера прохода лиц): блок встаёт
+ * буквально сразу за якорем прохода лиц — перед наборами, прикреплёнными к нему раньше; якорь
+ * внутри чужого блока — сразу за ним; якоря нет (`null`, страница ушла из сессии, ключ более
+ * позднего прохода) — в конец. Досканированный сегмент — в конце своего прохода (страницы прохода
+ * идут подряд). Удалённая правкой или потерянная страница якорем быть может: правки накладываются
+ * позже, потерянная стоит на своём месте. Группа блока — группа якоря; без якоря — последняя.
  */
 function placeAdded(
   pages: BasePage[],
-  passes: readonly PassSnapshot[],
+  index: SetsIndex,
+  sets: readonly AddedSet[],
   groupOfEnd: Group | null,
   settled: boolean,
-  include: (set: number) => boolean = () => true,
 ): void {
-  const byNumber = new Map(passes.map((pass) => [pass.number, pass]));
-  for (const set of addedSetsOf(passes, hasPages)) {
-    const fronts = byNumber.get(set.fronts);
-    if (fronts === undefined || !include(set.set)) {
+  for (const set of sets) {
+    const { fronts, backs } = passesOfSet(index, set);
+    if (fronts === undefined) {
       continue;
     }
-    const backs = set.backs === null ? null : (byNumber.get(set.backs) ?? null);
     const anchor =
       fronts.after === null ? -1 : pages.findIndex((page) => page.key === fronts.after);
     const group = anchor === -1 ? groupOfEnd : (pages[anchor]?.group ?? null);
@@ -243,9 +268,10 @@ function placeAdded(
 function placeOrphans(
   pages: BasePage[],
   passes: readonly PassSnapshot[],
+  index: SetsIndex,
   group: Group | null,
 ): void {
-  const paired = new Set(addedSetsOf(passes, hasPages).map((set) => set.backs));
+  const paired = new Set(index.sets.map((set) => set.backs));
   for (const pass of rolesOf(passes).addedBacks) {
     if (!paired.has(pass.number)) {
       pages.push(...[...pass.pages].reverse().map((page) => backPage(page, pass, null, group)));
@@ -253,30 +279,17 @@ function placeOrphans(
   }
 }
 
-/** Номер набора «ДN» по ключу страницы — лиц и оборотов набора (M4.5, R13). */
-function addedSetMapOf(passes: readonly PassSnapshot[]): ReadonlyMap<string, number> {
-  const byNumber = new Map(passes.map((pass) => [pass.number, pass]));
-  const addedSetOf = new Map<string, number>();
-  for (const set of addedSetsOf(passes, hasPages)) {
-    for (const number of [set.fronts, set.backs]) {
-      for (const page of byNumber.get(number ?? -1)?.pages ?? []) {
-        addedSetOf.set(page.key, set.set);
-      }
-    }
-  }
-  return addedSetOf;
-}
-
 /** Режим пар (M2, KTD-4): лицо i, оборот i; лишние обороты — в конец; добавленные — по якорям. */
 function pairsBase(passes: readonly PassSnapshot[], settled: boolean): BaseAssembly {
+  const index = indexOf(passes);
   const { fronts: frontsPass, backs: backsPass } = rolesOf(passes);
   const fronts = frontsPass?.pages ?? [];
   const backs = backsPass?.pages ?? [];
   const pages: BasePage[] = [];
-  for (const [index, front] of fronts.entries()) {
+  for (const [position, front] of fronts.entries()) {
     pages.push(frontPage(front, front.number, null));
     // Оборот листа i (с нуля) — страница F−1−i прохода оборотов: пары от его начала.
-    const back = backs[fronts.length - 1 - index];
+    const back = backs[fronts.length - 1 - position];
     if (back !== undefined && backsPass !== null) {
       pages.push(backPage(back, backsPass, front.number, null));
     }
@@ -287,15 +300,9 @@ function pairsBase(passes: readonly PassSnapshot[], settled: boolean): BaseAssem
       pages.push(backPage(extra, backsPass, null, null));
     }
   }
-  placeAdded(pages, passes, null, settled);
-  placeOrphans(pages, passes, null);
-  return {
-    mode: 'pairs',
-    pages,
-    report: passReport(passes),
-    rotated: rotatedOf(passes),
-    addedSetOf: addedSetMapOf(passes),
-  };
+  placeAdded(pages, index, index.sets, null, settled);
+  placeOrphans(pages, passes, index, null);
+  return { mode: 'pairs', pages, ...derivedOf(passes, index) };
 }
 
 /**
@@ -306,6 +313,7 @@ function pairsBase(passes: readonly PassSnapshot[], settled: boolean): BaseAssem
  * считает по позиции против границы.
  */
 function setsBase(passes: readonly PassSnapshot[], settled: boolean): BaseAssembly {
+  const index = indexOf(passes);
   const { fronts: frontsPass, backs: backsPass } = rolesOf(passes);
   const pages: BasePage[] = [
     ...(frontsPass?.pages ?? []).map((page) => frontPage(page, page.number, 'fronts')),
@@ -313,15 +321,9 @@ function setsBase(passes: readonly PassSnapshot[], settled: boolean): BaseAssemb
       ? []
       : [...backsPass.pages].reverse().map((page) => backPage(page, backsPass, null, 'backs'))),
   ];
-  placeAdded(pages, passes, 'backs', settled);
-  placeOrphans(pages, passes, 'backs');
-  return {
-    mode: 'sets',
-    pages,
-    report: passReport(passes),
-    rotated: rotatedOf(passes),
-    addedSetOf: addedSetMapOf(passes),
-  };
+  placeAdded(pages, index, index.sets, 'backs', settled);
+  placeOrphans(pages, passes, index, 'backs');
+  return { mode: 'sets', pages, ...derivedOf(passes, index) };
 }
 
 /**
@@ -333,18 +335,19 @@ function setsBase(passes: readonly PassSnapshot[], settled: boolean): BaseAssemb
  * (`assembleSession`), у блока пары вне записи — внутри набора.
  */
 function assembledBase(passes: readonly PassSnapshot[], record: readonly string[]): BaseAssembly {
+  const index = indexOf(passes);
   const counted = passes.filter(hasPages);
   const origin = new Map(
     counted.flatMap((pass) =>
-      pass.pages.map((page, index) => [
+      pass.pages.map((page, position) => [
         page.key,
-        { pass, previous: pass.pages[index - 1]?.key ?? null, lost: page.lost },
+        { pass, previous: pass.pages[position - 1]?.key ?? null, lost: page.lost },
       ]),
     ),
   );
   const pageOf = (key: string): BasePage => {
     const known = origin.get(key);
-    const ofBacks = known !== undefined && isBacksRole(known.pass);
+    const ofBacks = known !== undefined && isBacksKind(known.pass.kind);
     return {
       key,
       side: ofBacks ? 'back' : 'front',
@@ -365,23 +368,13 @@ function assembledBase(passes: readonly PassSnapshot[], record: readonly string[
     }
   }
   // Наборы, ни одной страницы которых в записи нет, встают блоком; их проходы ниже пропускаются.
-  const byNumber = new Map(passes.map((pass) => [pass.number, pass]));
-  const outside = new Set(
-    addedSetsOf(passes, hasPages)
-      .filter((set) =>
-        [set.fronts, set.backs].every(
-          (number) =>
-            number === null ||
-            (byNumber.get(number)?.pages ?? []).every((page) => !placed.has(page.key)),
-        ),
-      )
-      .map((set) => set.set),
-  );
-  const blockPasses = new Set(
-    addedSetsOf(passes, hasPages)
-      .filter((set) => outside.has(set.set))
-      .flatMap((set) => [set.fronts, set.backs]),
-  );
+  const outside = index.sets.filter((set) => {
+    const { fronts, backs } = passesOfSet(index, set);
+    return [...(fronts?.pages ?? []), ...(backs?.pages ?? [])].every(
+      (page) => !placed.has(page.key),
+    );
+  });
+  const blockPasses = new Set(outside.flatMap((set) => [set.fronts, set.backs]));
   for (const pass of counted) {
     if (blockPasses.has(pass.number)) {
       continue;
@@ -393,23 +386,15 @@ function assembledBase(passes: readonly PassSnapshot[], record: readonly string[
       const previous = origin.get(page.key)?.previous ?? null;
       const after = previous === null ? -1 : pages.findIndex((one) => one.key === previous);
       const anchor =
-        after === -1 &&
-        (pass.kind === 'added' || pass.kind === 'addedFronts') &&
-        pass.after !== null
+        after === -1 && isAnchoredKind(pass.kind) && pass.after !== null
           ? pages.findIndex((one) => one.key === pass.after)
           : after;
       placed.add(page.key);
       pages.splice(anchor === -1 ? pages.length : anchor + 1, 0, pageOf(page.key));
     }
   }
-  placeAdded(pages, passes, null, false, (set) => outside.has(set));
-  return {
-    mode: 'assembled',
-    pages,
-    report: passReport(passes),
-    rotated: rotatedOf(passes),
-    addedSetOf: addedSetMapOf(passes),
-  };
+  placeAdded(pages, index, outside, null, false);
+  return { mode: 'assembled', pages, ...derivedOf(passes, index) };
 }
 
 /**

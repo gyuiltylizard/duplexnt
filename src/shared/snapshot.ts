@@ -15,6 +15,9 @@ import type { ScanOptions, ScanParams } from './scan-params';
  */
 export type PassState = 'running' | 'completed' | 'interrupted' | 'accepted';
 
+/** Проход закончен и больше не меняется: завершён или принят как есть. */
+export const SETTLED_STATES: readonly PassState[] = ['completed', 'accepted'];
+
 export interface PageSnapshot {
   /** Устойчивый ключ страницы; по нему же запрашивается изображение. */
   readonly key: string;
@@ -73,6 +76,25 @@ export function passesByKind<T extends { readonly kind: PassKind }>(
   };
 }
 
+/** Роль «обороты» — основной пачки или набора (M4.5): флаг 180° и оценка детектора. */
+export const isBacksKind = (kind: PassKind): boolean => kind === 'backs' || kind === 'addedBacks';
+
+/** Роли с якорем вставки: односторонний набор и лица двустороннего (M3.5; M4.5). */
+export const isAnchoredKind = (kind: PassKind): boolean =>
+  kind === 'added' || kind === 'addedFronts';
+
+/** Проход со страницами — только у него есть роль (KTD-4); для проходов снимка. */
+export const hasPages = (pass: { readonly pages: readonly unknown[] }): boolean =>
+  pass.pages.length > 0;
+
+/** Проход, по которому собираются наборы: роль, ссылка пары и решение по оборотам. */
+interface SetPass {
+  readonly number: number;
+  readonly kind: PassKind;
+  readonly pair: number | null;
+  readonly backsDecision: BacksDecision | null;
+}
+
 /**
  * Добавленный набор «ДN» (M4.5, KTD2): одна нумерация и один идентификатор для ядра, моста и
  * renderer. Односторонний набор — проход `added`; двусторонний — проход лиц `addedFronts` и его
@@ -96,26 +118,21 @@ export interface AddedSet {
  * в наборы не входят (сборка ставит их в конец ленты стороной «оборот»). Проход оборотов на
  * одну пару со страницами — не больше одного (схема журнала): берётся он.
  */
-export function addedSetsOf<
-  T extends {
-    readonly number: number;
-    readonly kind: PassKind;
-    readonly pair: number | null;
-    readonly backsDecision: BacksDecision | null;
-  },
->(passes: readonly T[], hasPages: (pass: T) => boolean): AddedSet[] {
-  const { added, addedFronts, addedBacks } = passesByKind(passes, hasPages);
+export function addedSetsOf<T extends SetPass>(
+  passes: readonly T[],
+  counted: (pass: T) => boolean,
+): AddedSet[] {
+  const { added, addedFronts, addedBacks } = passesByKind(passes, counted);
   return [...added, ...addedFronts]
     .sort((left, right) => left.number - right.number)
     .map((fronts, index) => {
       if (fronts.kind === 'added') {
         return { set: index + 1, fronts: fronts.number, backs: null, decision: null, sides: 'one' };
       }
-      const backs = addedBacks.find((pass) => pass.pair === fronts.number) ?? null;
       return {
         set: index + 1,
         fronts: fronts.number,
-        backs: backs === null ? null : backs.number,
+        backs: addedBacks.find((pass) => pass.pair === fronts.number)?.number ?? null,
         decision: fronts.backsDecision ?? 'none',
         sides: 'two',
       };
@@ -130,26 +147,19 @@ export function addedSetsOf<
  * берётся последний по номеру прохода лиц. Одно правило для журнала (`pendingPairOf`), сборки
  * (`report.pendingSet`) и renderer.
  */
-export function pendingSetOf<
-  T extends {
-    readonly number: number;
-    readonly kind: PassKind;
-    readonly pair: number | null;
-    readonly backsDecision: BacksDecision | null;
-  },
->(
+export function pendingSetOf<T extends SetPass>(
   passes: readonly T[],
-  hasPages: (pass: T) => boolean,
+  counted: (pass: T) => boolean,
   stateOf: (pass: T) => PassState,
 ): AddedSet | null {
-  const waiting = addedSetsOf(passes, hasPages).filter((set) => {
+  const waiting = addedSetsOf(passes, counted).filter((set) => {
     const fronts = passes.find((pass) => pass.number === set.fronts);
     return (
       set.sides === 'two' &&
       set.decision === 'none' &&
       set.backs === null &&
       fronts !== undefined &&
-      ['completed', 'accepted'].includes(stateOf(fronts))
+      SETTLED_STATES.includes(stateOf(fronts))
     );
   });
   return waiting.at(-1) ?? null;
@@ -290,6 +300,25 @@ export interface AddedSetReport {
   /** Обороты набора есть и их число не равно числу лиц: блок стоит подблоками. */
   readonly mismatch: boolean;
   readonly sides: 'one' | 'two';
+}
+
+/** Отчёт по набору из его проходов — одно правило для сборки ядра и зеркала renderer (KTD5). */
+export function addedSetReportOf(
+  set: AddedSet,
+  fronts: { readonly pages: readonly unknown[] } | undefined,
+  backs: { readonly pages: readonly unknown[]; readonly state: PassState } | null,
+): AddedSetReport {
+  const frontsCount = fronts?.pages.length ?? 0;
+  const backsCount = backs?.pages.length ?? 0;
+  return {
+    set: set.set,
+    fronts: frontsCount,
+    backs: backsCount,
+    backsState: backs?.state ?? null,
+    decision: set.decision,
+    mismatch: backsCount > 0 && backsCount !== frontsCount,
+    sides: set.sides,
+  };
 }
 
 /** Отчёт сборки — кормит статусную строку `merge`, модалку `mismatch` и пометки в ленте. */

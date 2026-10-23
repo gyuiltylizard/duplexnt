@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   addedSetsOf,
   BACKS_DECISIONS,
+  isAnchoredKind,
   BLANK_MODES,
   EMPTY_EDITS,
   PASS_KINDS,
@@ -84,7 +85,7 @@ const passV3Fields = {
 };
 
 // Роли проходов версий 4–6: лицевые, обороты, добавленный односторонний набор.
-const PASS_KINDS_V4 = ['fronts', 'backs', 'added'] as const;
+const PASS_KINDS_V4_TO_V6 = ['fronts', 'backs', 'added'] as const;
 
 // Проход версии 4 (M3.5; амендмент ADR 0004 от 2026-10-07): роль записана явно, у добавленного
 // набора — якорь вставки. Якорь только у `added`; у основных проходов всегда `null`.
@@ -93,12 +94,9 @@ const passV4Fields = {
   after: pageKeySchema.nullable(),
 };
 
-const passV6Schema = z
-  .strictObject({ ...passV4Fields, kind: z.enum(PASS_KINDS_V4) })
+const passV4toV6Schema = z
+  .strictObject({ ...passV4Fields, kind: z.enum(PASS_KINDS_V4_TO_V6) })
   .refine((pass) => pass.kind === 'added' || pass.after === null);
-
-/** Роли с якорем: односторонний набор и лица двустороннего. */
-const anchored = (kind: PassKind): boolean => kind === 'added' || kind === 'addedFronts';
 
 // Проход версии 7 (M4.5; амендмент ADR 0004 от 2026-10-23): роли пары добавленного набора,
 // ссылка оборотов набора на проход его лиц и решение по оборотам — на проходе лиц. Поля
@@ -111,7 +109,7 @@ const passSchema = z
     pair: z.number().int().min(1).max(MAX_PASS_NUMBER).nullable(),
     backsDecision: z.enum(BACKS_DECISIONS).nullable(),
   })
-  .refine((pass) => anchored(pass.kind) || pass.after === null)
+  .refine((pass) => isAnchoredKind(pass.kind) || pass.after === null)
   .refine((pass) => (pass.pair !== null) === (pass.kind === 'addedBacks'))
   .refine((pass) => (pass.backsDecision !== null) === (pass.kind === 'addedFronts'));
 
@@ -217,7 +215,7 @@ const journalV2Fields = {
 const journalV3Fields = { ...journalV2Fields, edits: editsV4Schema };
 
 // Журнал версии 4 (M3.5): роль прохода и якорь записаны явно.
-const journalV4Fields = { ...journalV3Fields, passes: z.array(passV6Schema) };
+const journalV4Fields = { ...journalV3Fields, passes: z.array(passV4toV6Schema) };
 
 // Журнал версии 5 (M3.6; амендмент ADR 0004 от 2026-10-19): запись сборки на сессии и граница
 // наборов в правках. `assembled` — зафиксированная командой «Собрать документ» последовательность

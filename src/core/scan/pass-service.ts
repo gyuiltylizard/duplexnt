@@ -1,6 +1,7 @@
 import { setTimeout as delay } from 'node:timers/promises';
 import {
   fail,
+  isBacksKind,
   ok,
   type AssembledPage,
   type BlankMode,
@@ -301,7 +302,7 @@ export function createPassService(
   };
   // Оценку получают обороты любой пачки — основной и добавленного набора (M4.5, KTD6).
   const detectsBlank = (kind: PassKind): boolean =>
-    (kind === 'backs' || kind === 'addedBacks') && store.snapshot()?.blankMode !== 'keep';
+    isBacksKind(kind) && store.snapshot()?.blankMode !== 'keep';
   // При открытии: страницы оборотов без кэша считаются в фоне, лента до них — с `pending`.
   for (const page of pagesToScore(store.snapshot())) {
     detectBlank(page.key);

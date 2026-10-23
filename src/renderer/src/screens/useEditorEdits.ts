@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import type { DomainError, SessionSnapshot } from '@shared';
+import { hasPages, isBacksKind, type DomainError, type SessionSnapshot } from '@shared';
 import {
   editStateOf,
   emptyHistory,
@@ -126,9 +126,18 @@ export function useEditorEdits({
       setPending((previous) => (previous?.id === id ? null : previous));
     };
     // Мост несёт флаги 180° картой по проходам оборотов (M4.5, KTD4); история редактора до U7
-    // держит один флаг — на обороты основной пачки.
+    // держит один флаг — на обороты основной пачки, флаги оборотов наборов идут как есть
+    // (не названный проход ядро считает выключенным).
     const backs = rolesOf(session.passes).backs;
-    const rotate180 = backs === null || !target.rotate180 ? {} : { [backs.number]: true };
+    const rotate180: Record<number, boolean> = Object.fromEntries(
+      session.passes
+        .filter((pass) => isBacksKind(pass.kind) && hasPages(pass))
+        .map((pass): [number, boolean] => [
+          pass.number,
+          pass === backs ? target.rotate180 : pass.rotate180,
+        ])
+        .filter(([, flag]) => flag),
+    );
     window.api.setEdits({ edits: target.edits, rotate180 }).then(
       (result) => {
         if (!result.ok) {

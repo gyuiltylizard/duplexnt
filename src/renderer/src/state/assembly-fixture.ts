@@ -1,8 +1,12 @@
 import {
+  addedSetReportOf,
   addedSetsOf,
   blankFlagOf,
   blankSummaryOf,
   EMPTY_EDITS,
+  hasPages,
+  isAnchoredKind,
+  isBacksKind,
   NO_VERDICTS,
   pendingSetOf,
   sameEdits,
@@ -35,10 +39,7 @@ export const NO_EDITS_ASSEMBLY: Omit<SessionAssembly, 'report'> = {
   blank: NO_BLANK,
 };
 
-const hasPages = (pass: PassSnapshot): boolean => pass.pages.length > 0;
-/** Роль «обороты» — основной пачки или набора (M4.5): флаг 180° и оценка детектора. */
-const isBacksRole = (pass: PassSnapshot): boolean =>
-  pass.kind === 'backs' || pass.kind === 'addedBacks';
+const isBacksRole = (pass: PassSnapshot): boolean => isBacksKind(pass.kind);
 
 /** Режим сборки без правок (M3.6, R4): как считает ядро, с идущим проходом оборотов — пары. */
 function modeOf(session: SessionSnapshot): AssemblyMode {
@@ -178,20 +179,9 @@ function setsReportOf(passes: readonly PassSnapshot[]): {
 } {
   const byNumber = new Map(passes.map((pass) => [pass.number, pass]));
   return {
-    sets: addedSetsOf(passes, hasPages).map((set) => {
-      const fronts = byNumber.get(set.fronts)?.pages.length ?? 0;
-      const backsPass = set.backs === null ? null : (byNumber.get(set.backs) ?? null);
-      const backs = backsPass?.pages.length ?? 0;
-      return {
-        set: set.set,
-        fronts,
-        backs,
-        backsState: backsPass?.state ?? null,
-        decision: set.decision,
-        mismatch: backs > 0 && backs !== fronts,
-        sides: set.sides,
-      };
-    }),
+    sets: addedSetsOf(passes, hasPages).map((set) =>
+      addedSetReportOf(set, byNumber.get(set.fronts), byNumber.get(set.backs ?? -1) ?? null),
+    ),
     pendingSet: pendingSetOf(passes, hasPages, (pass) => pass.state)?.set ?? null,
   };
 }
@@ -295,7 +285,7 @@ export function assemblyOf(
         }
         const previous = known.get(page.key)?.previous ?? null;
         const after = previous === null ? -1 : order.findIndex((one) => one.key === previous);
-        const anchored = pass.kind === 'added' || pass.kind === 'addedFronts';
+        const anchored = isAnchoredKind(pass.kind);
         const anchor =
           after === -1 && anchored && pass.after !== null
             ? order.findIndex((one) => one.key === pass.after)

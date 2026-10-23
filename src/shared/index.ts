@@ -76,11 +76,16 @@ export {
 } from './scan-params';
 
 export {
+  addedSetReportOf,
   addedSetsOf,
   BACKS_DECISIONS,
+  hasPages,
+  isAnchoredKind,
+  isBacksKind,
   PASS_KINDS,
   passesByKind,
   pendingSetOf,
+  SETTLED_STATES,
   type AddedSet,
   type AddedSetReport,
   type AssembledDocument,

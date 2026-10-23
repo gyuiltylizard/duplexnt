@@ -2,6 +2,7 @@ import { join } from 'node:path';
 import {
   EMPTY_EDITS,
   fail,
+  isBacksKind,
   ok,
   sameEdits,
   sessionConflict,
@@ -403,6 +404,32 @@ export function createSessionStore(
     return fronts === undefined || backs === undefined ? null : { fronts, backs };
   }
 
+  /**
+   * Набор «ДN» с несовпавшими оборотами, по которому ещё можно решать (M4.5, KTD3): общий
+   * гард «Оставить как есть» и «Переснять» — сессия есть, проход не идёт, набор с оборотами
+   * найден, числа не равны и решения ещё нет.
+   */
+  function mismatchedSetOf(set: number): Result<{
+    readonly journal: Journal;
+    readonly fronts: JournalPass;
+    readonly backs: JournalPass;
+  }> {
+    if (journal === null || isVacant(journal)) {
+      return conflict('noSession');
+    }
+    if (runningSegmentOf(journal) !== null) {
+      return conflict('passRunning');
+    }
+    const found = twoSidedSet(journal, set);
+    if (found === null) {
+      return conflict('noPendingSet');
+    }
+    const { fronts, backs } = found;
+    return fronts.backsDecision !== 'none' || pagesOf(backs).length === pagesOf(fronts).length
+      ? conflict('setNotMismatched')
+      : ok({ journal, fronts, backs });
+  }
+
   /** Журнал с решением по оборотам набора на проходе его лиц (M4.5, KTD1). */
   const withDecision = (
     current: Journal,
@@ -496,7 +523,6 @@ export function createSessionStore(
         }
         // Роль по очереди — та же `nextKindOf`, что в `planPass`: между планом и записью журнал
         // не меняется, служба держит `run` и отклоняет остальные мутации (`passRunning`).
-        // Обороты набора получают ссылку на лица ожидающего набора из того же журнала.
         const space = await checkFreeSpace();
         if (!space.ok) {
           return space;
@@ -537,6 +563,7 @@ export function createSessionStore(
           number,
           kind,
           after: intent?.after ?? null,
+          // Обороты набора ссылаются на лица ожидающего набора из того же журнала (M4.5, KTD1).
           pair: kind === 'addedBacks' ? (pendingPairOf(base)?.fronts ?? null) : null,
           backsDecision: kind === 'addedFronts' ? 'none' : null,
           accepted: false,
@@ -730,19 +757,20 @@ export function createSessionStore(
         if (passState !== 'interrupted') {
           return conflict(passState === 'running' ? 'passRunning' : 'notInterrupted');
         }
-        const accepted = withLastPass(journal, { ...pass, accepted: true });
+        let accepted = withLastPass(journal, { ...pass, accepted: true });
         // Принятые короткие обороты набора — то же «оставить как есть» (M4.5, R15): модалка
         // несовпадения набора после них не показывается.
-        const fronts =
-          pass.kind === 'addedBacks'
-            ? accepted.passes.find((it) => it.number === pass.pair && it.kind === 'addedFronts')
-            : undefined;
-        return commit(
-          fronts?.backsDecision === 'none' && pagesOf(pass).length !== pagesOf(fronts).length
-            ? withDecision(accepted, fronts, 'kept')
-            : accepted,
-          'must',
+        const setFronts = accepted.passes.find(
+          (it) =>
+            pass.kind === 'addedBacks' && it.number === pass.pair && it.kind === 'addedFronts',
         );
+        if (
+          setFronts?.backsDecision === 'none' &&
+          pagesOf(pass).length !== pagesOf(setFronts).length
+        ) {
+          accepted = withDecision(accepted, setFronts, 'kept');
+        }
+        return commit(accepted, 'must');
       }),
 
     setEdits: (edits, rotate180) =>
@@ -758,7 +786,7 @@ export function createSessionStore(
         // проход другой роли или без страниц (роли не занимает) — отказ целиком, без частичной
         // записи.
         const isBacks = (pass: JournalPass): boolean =>
-          (pass.kind === 'backs' || pass.kind === 'addedBacks') && pagesOf(pass).length > 0;
+          isBacksKind(pass.kind) && pagesOf(pass).length > 0;
         const current = journal;
         const addressed = Object.keys(rotate180).map(Number);
         if (
@@ -822,41 +850,22 @@ export function createSessionStore(
 
     keepSetBacks: (set) =>
       mutating(async () => {
-        if (journal === null || isVacant(journal)) {
-          return conflict('noSession');
-        }
-        if (runningSegmentOf(journal) !== null) {
-          return conflict('passRunning');
-        }
-        const found = twoSidedSet(journal, set);
-        if (found === null) {
-          return conflict('noPendingSet');
-        }
-        const { fronts, backs } = found;
-        if (fronts.backsDecision !== 'none' || pagesOf(backs).length === pagesOf(fronts).length) {
-          return conflict('setNotMismatched');
+        const found = mismatchedSetOf(set);
+        if (!found.ok) {
+          return found;
         }
         // Вывод не меняется (подблоки уже в ленте) — отметка о сохранении остаётся.
-        return commit(withDecision(journal, fronts, 'kept'), 'must');
+        return commit(withDecision(found.value.journal, found.value.fronts, 'kept'), 'must');
       }),
 
     rescanSetBacks: (set) =>
       mutating(async () => {
-        if (journal === null || isVacant(journal)) {
-          return conflict('noSession');
+        const found = mismatchedSetOf(set);
+        if (!found.ok) {
+          return found;
         }
-        if (runningSegmentOf(journal) !== null) {
-          return conflict('passRunning');
-        }
-        const found = twoSidedSet(journal, set);
-        if (found === null) {
-          return conflict('noPendingSet');
-        }
-        const { fronts, backs } = found;
-        if (fronts.backsDecision !== 'none' || pagesOf(backs).length === pagesOf(fronts).length) {
-          return conflict('setNotMismatched');
-        }
-        const { sessionId } = journal;
+        const { journal: current, backs } = found.value;
+        const { sessionId } = current;
         // Отброс прохода — как «Остановить» на сегменте (KTD-20): пометки об удалении в журнале
         // раньше файлов; не доведённое удаление дочищает сверка при запуске. Правки по ключам
         // прохода вычищает нормализация в `commit`; вывод меняется — отметка снимается.
@@ -865,9 +874,9 @@ export function createSessionStore(
         );
         const marked = await commit(
           {
-            ...journal,
-            passes: journal.passes.filter((pass) => pass !== backs),
-            deletions: [...journal.deletions, ...prefixes],
+            ...current,
+            passes: current.passes.filter((pass) => pass !== backs),
+            deletions: [...current.deletions, ...prefixes],
             saved: false,
           },
           'must',
