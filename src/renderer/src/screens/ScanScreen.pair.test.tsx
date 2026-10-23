@@ -131,6 +131,21 @@ describe('ScanScreen проходов набора (M4.5)', () => {
     expect(screen.getByRole('status').textContent).toBe('Начинаем проход…');
   });
 
+  it('досканирование одностороннего набора — прежняя мета M3.5 без номера (ревью 3–4)', () => {
+    const added = makePass({
+      number: 3,
+      kind: 'added',
+      after: 'p01-s01-0002',
+      state: 'interrupted',
+      pages: pages(2, 'p03-s01'),
+    });
+    const pass = progress({ kind: 'added', expected: null, resumed: true, pages: 0 });
+    render(<ScanScreen snapshot={makeSnapshot([added], pass)} pass={pass} onStop={vi.fn()} />);
+
+    expect(screen.getByText(/^досканируем добавленный набор · до обрыва было 2 · /)).toBeDefined();
+    expect(screen.queryByText(/набор Д1/)).toBeNull();
+  });
+
   it('досканирование основной пачки и одностороннего набора — прежние меты', () => {
     const interruptedBacks = makePass({
       number: 2,

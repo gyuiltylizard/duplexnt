@@ -4,20 +4,13 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { describe, expect, it } from 'vitest';
 import { EMPTY_EDITS, type Snapshot } from '@shared';
 import { blankRatio, type BlankDetector } from '../../src/core/detect/blank';
-import { probeScanner, type ConnectedScanner } from '../../src/core/escl/connect';
 import type { ScanJobLimits } from '../../src/core/escl/scan-job';
-import {
-  openPassService,
-  type PassService,
-  type PassServiceOptions,
-} from '../../src/core/scan/pass-service';
+import { type PassServiceOptions } from '../../src/core/scan/pass-service';
 import { layoutOf } from '../../src/core/storage/layout';
 import { SCENARIOS, type Scenario } from '../emulator/scenarios';
-import { startTestEmulator } from '../support/emulator';
-import { scanned } from '../support/pass-service';
+import { connectService, scanned, saveSingle } from '../support/pass-service';
 import { pageFixtureOf, pdfPageFixtures } from '../support/fixtures';
 import { journalOnDisk, rolesOf } from '../support/session-store';
-import { makeTempDataRoot } from '../support/temp-data-root';
 import { unwrap } from '../support/result';
 import { untilScored } from '../support/until';
 
@@ -88,20 +81,9 @@ function counting() {
 
 const sorted = (items: readonly (number | string)[]): string[] => items.map(String).sort();
 
-async function connect(scenario: Partial<Scenario>, extra: Partial<PassServiceOptions> = {}) {
-  const emulator = await startTestEmulator({ scenario });
-  const connected: ConnectedScanner = unwrap(
-    await probeScanner({ ...emulator, fingerprint: null }),
-  );
-  const root = await makeTempDataRoot();
-  const open = async (options: Partial<PassServiceOptions> = extra): Promise<PassService> => {
-    const service = await openPassService(root, { ...OPTIONS, ...options });
-    await service.useScanner(connected);
-    return service;
-  };
-  const service = await open();
-  return { emulator, root, service, restart: open };
-}
+/** Эмулятор и служба с опциями этого файла (`connectService` в test/support/pass-service.ts). */
+const connect = (scenario: Partial<Scenario>, extra: Partial<PassServiceOptions> = {}) =>
+  connectService(scenario, OPTIONS, extra);
 
 /** Основная пара 3+3, лица набора после оборота листа 2 и короткие обороты набора: 2 из 3. */
 async function mismatched(
@@ -143,19 +125,6 @@ const filesOf = async (dir: string, pass: number): Promise<string[]> =>
 
 const blankDirOf = (root: string, snapshot: Snapshot): string =>
   join(layoutOf(root).derivedDir, snapshot.session?.id ?? '', 'blank');
-
-/** Запись одним файлом после прихода оценок; путь к PDF — фактический (повтор даёт « (2)»). */
-async function saveSingle(service: PassService, root: string): Promise<string> {
-  const folder = join(root, 'выход');
-  await mkdir(folder, { recursive: true });
-  await untilScored(() => service.snapshot());
-  const saved = unwrap(
-    await service.saveDocuments(folder, { mode: 'single', names: ['Документ'], retry: false }),
-  );
-  expect(saved.failed).toEqual([]);
-  expect(saved.written).toHaveLength(1);
-  return join(folder, saved.written[0]?.fileName ?? '');
-}
 
 const conflictOf = (reason: string) => ({
   ok: false,

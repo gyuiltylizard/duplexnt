@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  isPairKind,
   isMainKind,
   type DomainError,
   type ErrorCode,
@@ -11,7 +12,6 @@ import {
 } from '@shared';
 import type { TFunction } from 'i18next';
 import { errorText, errorTextInline } from '../state/error-text';
-import { isPairKind } from '../state/page-text';
 import { addressOf, reconnectAddress } from '../state/scanner-address';
 import { setOfPass } from '../state/screen';
 

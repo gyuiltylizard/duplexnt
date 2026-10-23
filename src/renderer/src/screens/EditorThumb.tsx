@@ -1,6 +1,7 @@
 import { memo, type DragEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  isPairKind,
   isBacksKind,
   pageImageUrl,
   type AssembledPage,
@@ -11,7 +12,7 @@ import {
 import type { TFunction } from 'i18next';
 import { useImageLoad } from '../components/useImageLoad';
 import type { DropSide } from '../state/edits';
-import { isPairKind, whatOf } from '../state/page-text';
+import { whatOf } from '../state/page-text';
 
 /** Как выбрали миниатюру: клик, Shift — диапазон, Ctrl — по одной (handoff M3, S4). */
 export type PickMode = 'single' | 'range' | 'toggle';

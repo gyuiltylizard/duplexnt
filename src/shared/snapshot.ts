@@ -82,6 +82,10 @@ export const isBacksKind = (kind: PassKind): boolean => kind === 'backs' || kind
 /** Роль основного документа — лицевые или обороты, не добавленный набор: пауза merge, номер прохода. */
 export const isMainKind = (kind: PassKind): boolean => kind === 'fronts' || kind === 'backs';
 
+/** Роли двустороннего набора — лица и обороты пары (M4.5); `null` — роли нет. */
+export const isPairKind = (kind: PassKind | null): boolean =>
+  kind === 'addedFronts' || kind === 'addedBacks';
+
 /** Роли с якорем вставки: односторонний набор и лица двустороннего (M3.5; M4.5). */
 export const isAnchoredKind = (kind: PassKind): boolean =>
   kind === 'added' || kind === 'addedFronts';

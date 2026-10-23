@@ -30,7 +30,7 @@ import { assemblyLanded, mismatchDue, pairLanded, setMismatchDue } from './state
 import { errorTextInline } from './state/error-text';
 import { createSnapshotStore } from './state/snapshot-store';
 import { screenOf, type Screen } from './state/screen';
-import { useSetLanding } from './state/useSetLanding';
+import { landingOf, useSetLanding } from './state/useSetLanding';
 import './app.css';
 
 // Каркас интерфейса M1 (U20): экран выводится из снимка, своего состояния сессии у renderer
@@ -95,10 +95,10 @@ interface Seat {
   readonly key: string;
 }
 
-/** Пауза `merge`: сколько держать и чья пара — основной пачки (`null`) или набора «ДN». */
-interface MergeHold {
-  readonly ms: number;
-  readonly set: number | null;
+/** Отложенный тост посадки пары: какой набор и с какого снимка; текст — в момент показа. */
+interface SetToast {
+  readonly set: number;
+  readonly key: string;
 }
 
 const keysOf = (session: SessionSnapshot): ReadonlySet<string> =>
@@ -143,7 +143,10 @@ export function App(): ReactNode {
   // идёт без намерения) и по намерению запуска — проход без страниц ядро из журнала
   // выбрасывает, и последним снова становится проход оборотов; «Остановить» на лицах набора до
   // первой страницы (M4.5, AE12) — тот же случай. Пара набора (M4.5, R9) — своя пауза ниже.
-  const [mergeHold, setMergeHold] = useState<MergeHold | null>(null);
+  const [mergeHoldMs, setMergeHoldMs] = useState<number | null>(null);
+  // Чья пара на экране паузы: основного документа (`null`) или набора «ДN». Живёт отдельно от
+  // таймера: по истечении паузы экран может ждать оценок пустых оборотов — и остаётся про набор.
+  const [mergeSet, setMergeSet] = useState<number | null>(null);
   // Ожидание оценок пустых оборотов (M4, KTD6; handoff M4, S12; решение автора 2026-10-22):
   // по истечении паузы экран держится, пока `blank.pending` не станет 0, — без потолка. Флаг
   // ставится вместе с паузой и снимается корректировкой при рендере, как только ждать нечего.
@@ -164,10 +167,8 @@ export function App(): ReactNode {
       isMainKind(lastPass.kind) &&
       !(launch !== null && launch.kind !== null && launch.sessionId === session?.id)
     ) {
-      setMergeHold({
-        ms: transitionReport.backsDeclined ? MERGE_PAUSE_DECLINED_MS : MERGE_PAUSE_MS,
-        set: null,
-      });
+      setMergeHoldMs(transitionReport.backsDeclined ? MERGE_PAUSE_DECLINED_MS : MERGE_PAUSE_MS);
+      setMergeSet(null);
       // Ждать оценок есть смысл, когда они прячут страницы: в режиме наборов ничего не скрыто
       // (R15), статус про пустые там не рисуется — держать экран нечем объяснить (ревью).
       setMergeBlankWait(transitionReport.mode !== 'sets');
@@ -180,32 +181,21 @@ export function App(): ReactNode {
   // «добавлено N» (скрытые названы) — после паузы и после модалки несовпадения, если та нужна.
   // Ключ `EditorScreen` — номер снимка посадки: экран монтируется заново, как после кадра `scan`.
   // Отложенный тост помнит свой набор: «Переснять» снимает посадку — тост уже не про ту ленту.
-  const [setToastPending, setSetToastPending] = useState<{
-    readonly set: number;
-    readonly toast: ToastState;
-  } | null>(null);
+  // Число страниц и скрытых считается при показе, по ленте после оценок: на кадре посадки
+  // поздние вердикты детектора ещё не пришли.
+  const [setToastPending, setSetToastPending] = useState<SetToast | null>(null);
   const setLanding = useSetLanding(snapshot, screen);
   if (setLanding !== null && snapshot !== null && session !== null) {
-    const { set, key, shown, hidden } = setLanding;
-    setMergeHold({
-      ms: set.decision === 'declined' ? MERGE_PAUSE_DECLINED_MS : MERGE_PAUSE_MS,
-      set: set.set,
-    });
+    const { set, key } = setLanding;
+    setMergeHoldMs(set.decision === 'declined' ? MERGE_PAUSE_DECLINED_MS : MERGE_PAUSE_MS);
+    setMergeSet(set.set);
     setMergeBlankWait(transitionReport?.mode !== 'sets');
     if (key !== null) {
       setSeat({ epoch: snapshot.seq, key });
     }
     setSetToastPending({
       set: set.set,
-      toast: {
-        key: `set:${session.id}:${String(set.set)}:${String(snapshot.seq)}`,
-        text:
-          hidden > 0
-            ? t('toast.addedHidden', { shown, count: hidden })
-            : t('toast.added', { count: shown }),
-        durationMs: undefined,
-        action: undefined,
-      },
+      key: `set:${session.id}:${String(set.set)}:${String(snapshot.seq)}`,
     });
   }
   const blankPending = snapshot?.assembly?.blank.pending ?? 0;
@@ -252,16 +242,16 @@ export function App(): ReactNode {
   }
 
   useEffect(() => {
-    if (mergeHold === null) {
+    if (mergeHoldMs === null) {
       return;
     }
     const timer = setTimeout(() => {
-      setMergeHold(null);
-    }, mergeHold.ms);
+      setMergeHoldMs(null);
+    }, mergeHoldMs);
     return () => {
       clearTimeout(timer);
     };
-  }, [mergeHold]);
+  }, [mergeHoldMs]);
 
   // Подтверждение `mismatch` — на время жизни процесса и на конкретную сессию (KTD-8):
   // после перезапуска модалка показывается снова, новая сессия начинает с чистого листа.
@@ -395,7 +385,7 @@ export function App(): ReactNode {
   const merging =
     screen === 'editor' &&
     assembly !== null &&
-    (mergeHold !== null || (mergeBlankWait && blankPending > 0));
+    (mergeHoldMs !== null || (mergeBlankWait && blankPending > 0));
   // `mismatch` (KTD-8; M3.6, R20): первый вход в editor за процесс при неподтверждённом
   // режиме раздельных наборов — включая вход через «Оставить как есть» и после перезапуска;
   // условие уместности — общий предикат `mismatchDue` (добавленные наборы показ не отменяют,
@@ -415,19 +405,30 @@ export function App(): ReactNode {
   const mismatchedSet =
     screen === 'editor' && !merging && assembly !== null ? setMismatchDue(assembly.report) : null;
   // Тост посадки пары выходит, когда редактор виден без паузы и модалки набора (S10).
-  if (
-    setToastPending !== null &&
-    assembly !== null &&
-    !assembly.report.sets.some((set) => set.set === setToastPending.set && pairLanded(set))
-  ) {
+  const pendingSet =
+    setToastPending === null
+      ? undefined
+      : assembly?.report.sets.find((set) => set.set === setToastPending.set);
+  if (setToastPending !== null && (pendingSet === undefined || !pairLanded(pendingSet))) {
     setSetToastPending(null);
   } else if (
     setToastPending !== null &&
+    pendingSet !== undefined &&
+    assembly !== null &&
     screen === 'editor' &&
     !merging &&
     mismatchedSet === null
   ) {
-    setToast(setToastPending.toast);
+    const { shown, hidden } = landingOf(assembly.order, pendingSet);
+    setToast({
+      key: setToastPending.key,
+      text:
+        hidden > 0
+          ? t('toast.addedHidden', { shown, count: hidden })
+          : t('toast.added', { count: shown }),
+      durationMs: undefined,
+      action: undefined,
+    });
     setSetToastPending(null);
   }
 
@@ -454,7 +455,7 @@ export function App(): ReactNode {
           onOpenDevice={openDevice}
         />
       )}
-      {merging && <MergeScreen assembly={assembly} set={mergeHold?.set ?? null} />}
+      {merging && <MergeScreen assembly={assembly} set={mergeSet} />}
       {screen === 'editor' && !merging && session !== null && (
         <EditorScreen
           key={seat?.epoch ?? 0}

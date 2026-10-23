@@ -1,24 +1,19 @@
-import { mkdir, readdir, readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { describe, expect, it } from 'vitest';
 import type { Snapshot } from '@shared';
 import { blankRatio, type BlankDetector } from '../../src/core/detect/blank';
-import { probeScanner, type ConnectedScanner } from '../../src/core/escl/connect';
+import { probeScanner } from '../../src/core/escl/connect';
 import type { ScanJobLimits } from '../../src/core/escl/scan-job';
-import {
-  openPassService,
-  type PassService,
-  type PassServiceOptions,
-} from '../../src/core/scan/pass-service';
+import { type PassService, type PassServiceOptions } from '../../src/core/scan/pass-service';
 import { layoutOf } from '../../src/core/storage/layout';
 import { SCENARIOS, type Scenario } from '../emulator/scenarios';
 import type { Emulator } from '../emulator/server';
 import { startTestEmulator } from '../support/emulator';
-import { scanned } from '../support/pass-service';
+import { connectService, scanned, saveSingle } from '../support/pass-service';
 import { pageFixtureOf, pdfPageFixtures } from '../support/fixtures';
 import { journalOnDisk } from '../support/session-store';
-import { makeTempDataRoot } from '../support/temp-data-root';
 import { unwrap } from '../support/result';
 import { until, untilScored } from '../support/until';
 
@@ -94,31 +89,9 @@ function counting() {
   return { detector, calls };
 }
 
-async function connect(scenario: Partial<Scenario>, extra: Partial<PassServiceOptions> = {}) {
-  const emulator = await startTestEmulator({ scenario });
-  const connected: ConnectedScanner = unwrap(
-    await probeScanner({ ...emulator, fingerprint: null }),
-  );
-  const root = await makeTempDataRoot();
-  const snapshots: Snapshot[] = [];
-  // Перезапуск — та же служба заново на том же корне и том же сканере (прецедент `blank-backs`).
-  const open = async (options: Partial<PassServiceOptions> = extra): Promise<PassService> => {
-    let opened: PassService | null = null;
-    opened = await openPassService(root, {
-      ...OPTIONS,
-      ...options,
-      onChange: () => {
-        if (opened !== null) {
-          snapshots.push(opened.snapshot());
-        }
-      },
-    });
-    await opened.useScanner(connected);
-    return opened;
-  };
-  const service = await open();
-  return { emulator, root, service, snapshots, restart: open };
-}
+/** Эмулятор и служба с опциями этого файла (`connectService` в test/support/pass-service.ts). */
+const connect = (scenario: Partial<Scenario>, extra: Partial<PassServiceOptions> = {}) =>
+  connectService(scenario, OPTIONS, extra);
 
 /** Второй сканер B на своём адресе: служба переключается на него, как при выборе в окне. */
 async function switchTo(service: PassService, scenario: Partial<Scenario>): Promise<Emulator> {
@@ -177,18 +150,6 @@ const shownFixturesOf = (root: string, snapshot: Snapshot): Promise<(number | st
     root,
     (snapshot.assembly?.order ?? []).filter((page) => page.blank !== 'hidden').map((it) => it.key),
   );
-
-/** Запись одним файлом после прихода оценок; путь к PDF. */
-async function saveSingle(service: PassService, root: string, name = 'Документ'): Promise<string> {
-  const folder = join(root, 'выход');
-  await mkdir(folder, { recursive: true });
-  await untilScored(() => service.snapshot());
-  const saved = unwrap(
-    await service.saveDocuments(folder, { mode: 'single', names: [name], retry: false }),
-  );
-  expect(saved.failed).toEqual([]);
-  return join(folder, `${name}.pdf`);
-}
 
 /** Прогоны службы, начатые после отметки `from`: роль, досканирование, ожидаемое число. */
 const runsSince = (snapshots: readonly Snapshot[], from: number) =>

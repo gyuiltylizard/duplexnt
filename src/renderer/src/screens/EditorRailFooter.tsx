@@ -1,6 +1,7 @@
-import type { ChangeEvent, ReactNode, RefObject } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { BlankSummary } from '@shared';
+import type { RailRotate } from '../state/useRotateTarget';
 
 // Подвал ленты (handoff M4, S4–S6; R18): постоянное место трёх строк под миниатюрами — панель
 // выделения (при выделении больше одной страницы), переключатель «добавить пустые» со
@@ -9,16 +10,6 @@ import type { BlankSummary } from '@shared';
 // подвала нет. Только показ и клики: что показывать и что делать, решает экран. С M4.5 (R16;
 // handoff M4.5, S9) тумблер крутит обороты пачки текущей страницы: подпись цели — в месте
 // счётчика, недоступность с причиной там же.
-
-export interface RailRotate {
-  readonly checked: boolean;
-  readonly disabled: boolean;
-  /** У пачки текущей страницы нет оборотов: строка приглушена, `target` — причина. */
-  readonly unavailable: boolean;
-  /** Подпись цели («обороты набора Д1») или причина недоступности. */
-  readonly target: string;
-  readonly onChange: (event: ChangeEvent<HTMLInputElement>) => void;
-}
 
 /** Панель выделения (S6): текст, «Выделить в документ» вне режима наборов, «Снять». */
 export interface RailSelection {

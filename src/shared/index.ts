@@ -83,6 +83,7 @@ export {
   isAnchoredKind,
   isBacksKind,
   isMainKind,
+  isPairKind,
   PASS_KINDS,
   passesByKind,
   pendingSetOf,

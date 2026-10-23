@@ -1,15 +1,16 @@
 import { useId, useState, type MouseEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import type {
-  AssembledPage,
-  AssemblyMode,
-  BlankSummary,
-  PassKind,
-  SessionAssembly,
-  SetsLayout,
+import {
+  isPairKind,
+  type AssembledPage,
+  type AssemblyMode,
+  type BlankSummary,
+  type PassKind,
+  type SessionAssembly,
+  type SetsLayout,
 } from '@shared';
 import type { TFunction } from 'i18next';
-import { isPairKind, noteOf, toneOf, whatOf } from '../state/page-text';
+import { noteOf, toneOf, whatOf } from '../state/page-text';
 import type { ShownDocument } from '../state/shown';
 
 // Инспектор редактора (handoff M3, S11–S13; M3.5, S6–S7; M3.6, S8–S9): ДЕТАЛИ текущей страницы,

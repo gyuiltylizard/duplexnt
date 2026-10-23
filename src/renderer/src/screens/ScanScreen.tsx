@@ -2,6 +2,7 @@ import { useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   isMainKind,
+  isPairKind,
   pageImageUrl,
   type PageSnapshot,
   type PassProgress,
@@ -146,7 +147,8 @@ export function ScanScreen({ snapshot, pass, onStop }: ScanScreenProps): ReactNo
 
   let meta = busy ? t('scan.busy.meta') : paramsLine(t, pass.params);
   if (!busy && pass.resumed) {
-    const set = setNumberOf(snapshot, running);
+    // «Набор ДN» — только у проходов пары; односторонний набор — прежняя мета M3.5.
+    const set = isPairKind(pass.kind) ? setNumberOf(snapshot, running) : null;
     let resume: string;
     if (set !== null) {
       resume = t('scan.resumeMetaSet', { set, count: prior });

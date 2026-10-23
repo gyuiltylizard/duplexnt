@@ -1,7 +1,6 @@
 import { useMemo, type ChangeEvent } from 'react';
 import { addedSetsOf, hasPages, type PassSnapshot } from '@shared';
 import type { TFunction } from 'i18next';
-import type { RailRotate } from '../screens/EditorRailFooter';
 import { rolesOf } from './screen';
 
 // Цель тумблера 180° (план M4.5, U7; R16; KTD4; handoff M4.5, S9): проход оборотов пачки текущей
@@ -9,6 +8,17 @@ import { rolesOf } from './screen';
 // без оборотов (односторонний набор, основной документ без оборотов) — тумблер недоступен с
 // причиной; скрыт, только если оборотов нет ни у одной пачки. Флаг — на проходе оборотов этой
 // пачки; переключение — шаг undo, как у одного флага раньше.
+
+/** Строка тумблера в подвале ленты: флаг цели, подпись, недоступность (handoff M4.5, S9). */
+export interface RailRotate {
+  readonly checked: boolean;
+  readonly disabled: boolean;
+  /** У пачки текущей страницы нет оборотов: строка приглушена, `target` — причина. */
+  readonly unavailable: boolean;
+  /** Подпись цели («обороты набора Д1») или причина недоступности. */
+  readonly target: string;
+  readonly onChange: (event: ChangeEvent<HTMLInputElement>) => void;
+}
 
 export type RotateTarget =
   | { readonly kind: 'main'; readonly pass: number }

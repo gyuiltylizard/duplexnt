@@ -1,4 +1,4 @@
-import type { AssembledPage, AssemblyMode, PassKind } from '@shared';
+import { isPairKind, type AssembledPage, type AssemblyMode, type PassKind } from '@shared';
 import type { TFunction } from 'i18next';
 
 // Словарь страницы ленты — общий для инспектора, экрана и модалки `add` (ревью сессий 3–4):
@@ -11,10 +11,6 @@ import type { TFunction } from 'i18next';
 
 /** Тон документа по номеру с нуля: четыре цвета по кругу (handoff M3, Anatomy). */
 export const toneOf = (document: number): string => `doc-tone--${String((document % 4) + 1)}`;
-
-/** Страница двустороннего набора — по роли её прохода (M4.5). */
-export const isPairKind = (origin: PassKind | null): boolean =>
-  origin === 'addedFronts' || origin === 'addedBacks';
 
 /**
  * Что это за страница — заголовок ДЕТАЛЕЙ без «Стр. N —»; теми же словами подпись миниатюры и

@@ -202,8 +202,8 @@ export interface BridgeCommands {
   readonly setEdits: { readonly request: SetEditsRequest; readonly value: SetEditsReport };
   /**
    * «Оставить как есть» для набора «ДN» с несовпавшими оборотами (M4.5, KTD3): durable, модалка
-   * набора больше не показывается. Отказы: `noPendingSet`, `setNotMismatched`, `passRunning`,
-   * `saving`.
+   * набора больше не показывается. Отказы: `noSession`, `noPendingSet`, `setNotMismatched`,
+   * `passInterrupted` (обороты набора прерваны — решает плашка), `passRunning`, `saving`.
    */
   readonly keepSetBacks: { readonly request: SetDecisionRequest; readonly value: undefined };
   /**

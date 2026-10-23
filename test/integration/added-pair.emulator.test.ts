@@ -3,20 +3,13 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { EMPTY_EDITS, type Snapshot } from '@shared';
 import { blankRatio, type BlankDetector } from '../../src/core/detect/blank';
-import { probeScanner, type ConnectedScanner } from '../../src/core/escl/connect';
 import type { ScanJobLimits } from '../../src/core/escl/scan-job';
-import {
-  openPassService,
-  type PassService,
-  type PassServiceOptions,
-} from '../../src/core/scan/pass-service';
+import { type PassService, type PassServiceOptions } from '../../src/core/scan/pass-service';
 import { layoutOf } from '../../src/core/storage/layout';
 import { SCENARIOS, type Scenario } from '../emulator/scenarios';
-import { startTestEmulator } from '../support/emulator';
-import { scanned } from '../support/pass-service';
+import { connectService, scanned } from '../support/pass-service';
 import { pageFixture, pageFixtureOf, pdfImageStreams } from '../support/fixtures';
 import { journalOnDisk, rolesOf } from '../support/session-store';
-import { makeTempDataRoot } from '../support/temp-data-root';
 import { unwrap } from '../support/result';
 import { untilScored } from '../support/until';
 
@@ -73,28 +66,9 @@ const pairBlock = (fronts: number, backs: number): string[] => [
 const AE1_ORDER = [F1, B(1), F2, B(2), ...pairBlock(3, 4), F3, B(3)];
 const AE1_FIXTURES = [1, 4, 2, 5, 7, 10, 8, 11, 9, 12, 3, 6];
 
-async function connect(scenario: Partial<Scenario>, extra: Partial<PassServiceOptions> = {}) {
-  const emulator = await startTestEmulator({ scenario });
-  const connected: ConnectedScanner = unwrap(
-    await probeScanner({ ...emulator, fingerprint: null }),
-  );
-  const root = await makeTempDataRoot();
-  // Снимки всех запусков службы — экраны выводятся из `pass.kind` (KTD7).
-  const snapshots: Snapshot[] = [];
-  const open = async (): Promise<PassService> => {
-    const service: PassService = await openPassService(root, {
-      ...OPTIONS,
-      ...extra,
-      onChange: () => {
-        snapshots.push(service.snapshot());
-      },
-    });
-    await service.useScanner(connected);
-    return service;
-  };
-  const service = await open();
-  return { emulator, root, service, snapshots, restart: open };
-}
+/** Эмулятор и служба с опциями этого файла (`connectService` в test/support/pass-service.ts). */
+const connect = (scenario: Partial<Scenario>, extra: Partial<PassServiceOptions> = {}) =>
+  connectService(scenario, OPTIONS, extra);
 
 /** Основная пара 3+3 и лица набора после оборота листа 2 — набор ждёт обороты. */
 async function setFrontsScanned(service: PassService): Promise<void> {

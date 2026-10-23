@@ -419,4 +419,35 @@ describe('M4.5: посадка пары набора (KTD7; handoff S6, S10)', (
     expect(currentKey()).toBe('p03-s01-0001');
     expect(screen.getAllByRole('option')).toHaveLength(11);
   });
+
+  it('оценки не пришли к концу паузы: merge держится на наборе, тост считает скрытых по ленте после оценок (ревью 3–4)', async () => {
+    // Последний оборот набора ещё не оценён: пауза истекла, экран ждёт оценок.
+    const partial = new Map<string, boolean>([
+      ['p02-s01-0001', false],
+      ['p02-s01-0002', false],
+      ['p02-s01-0003', false],
+      ['p04-s01-0002', false],
+      ['p04-s01-0003', false],
+    ]);
+    const push = liveApi({
+      ...scanningBacks(1, 2),
+      session: { ...scanningBacks(1, 2).session, blankMode: 'hide' } as Session,
+    });
+    render(<App />);
+    expect(await screen.findByText('ДОБАВЛЯЕМ · ОБОРОТЫ')).toBeDefined();
+
+    await pushLanding(push, withSet(2, { count: 3 }, 'none', 'hide', partial), 1601, () => {
+      expect(mergeStatus()).toBe('набор Д1: совпало пар 3 · ищем пустые обороты…');
+    });
+    // Пауза истекла, оценка ещё идёт: экран тот же — набор, не основной документ.
+    expect(mergeStatus()).toBe('набор Д1: совпало пар 3 · ищем пустые обороты…');
+    expect(screen.getByText('лица набора 1→3')).toBeDefined();
+    expect(toasts()).toEqual([]);
+
+    await push(
+      withSet(3, { count: 3 }, 'none', 'hide', new Map([...partial, ['p04-s01-0001', true]])),
+    );
+    expect(screen.queryByText('Сопоставляем проходы')).toBeNull();
+    expect(toasts()).toEqual(['Добавлено 5 стр. — скрыт 1 пустой оборот']);
+  });
 });
