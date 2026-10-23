@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { isAbsolute, join, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PDFDict, PDFDocument, PDFName, PDFRawStream } from '@cantoo/pdf-lib';
@@ -67,6 +67,64 @@ export function pageFixtureNumberOf(bytes: Uint8Array): number {
     }
   }
   throw new Error('байты не совпадают ни с одной страницей-фикстурой');
+}
+
+/** Каталог настоящих сканов ET-3850 для детектора пустых страниц (M4, U1). */
+export const SCANS_DIR = [...ET_3850, 'scans'] as const;
+
+/** Имя скана: `<содержимое>-<gray|color>-<dpi>`, без расширения. */
+export const SCAN_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*-(?:gray|color)-(?:200|300|600)$/;
+
+/** Имена сканов в каталоге, по алфавиту; каталога нет — пустой список. */
+export function scanFixtureNames(): string[] {
+  let entries: string[];
+  try {
+    entries = readdirSync(fixturePath(...SCANS_DIR));
+  } catch {
+    return [];
+  }
+  return entries
+    .filter((name) => name.endsWith('.jpg'))
+    .map((name) => name.slice(0, -'.jpg'.length))
+    .sort();
+}
+
+/** Байты скана по имени; неизвестное имя — ошибка с именем файла. */
+export function scanFixture(name: string): Buffer {
+  if (!SCAN_NAME.test(name)) {
+    throw new Error(`имя скана не по конвенции «<содержимое>-<gray|color>-<dpi>»: ${name}`);
+  }
+  try {
+    return readFixture(...SCANS_DIR, `${name}.jpg`);
+  } catch {
+    throw new Error(`скана-фикстуры нет: ${fixtureRepoPath(...SCANS_DIR, `${name}.jpg`)}`);
+  }
+}
+
+const scanFixtures = new Map<string, Buffer>();
+
+/**
+ * Страница-фикстура по байтам: номер синтетической страницы или имя скана. Как
+ * `pageFixtureNumberOf`, но знает и сканы — для PDF из смешанных лотков (M4).
+ */
+export function pageFixtureOf(bytes: Uint8Array): number | string {
+  try {
+    return pageFixtureNumberOf(bytes);
+  } catch {
+    // не синтетическая страница — ищем среди сканов
+  }
+  const buffer = Buffer.from(bytes);
+  for (const name of scanFixtureNames()) {
+    let fixture = scanFixtures.get(name);
+    if (fixture === undefined) {
+      fixture = scanFixture(name);
+      scanFixtures.set(name, fixture);
+    }
+    if (fixture.equals(buffer)) {
+      return name;
+    }
+  }
+  throw new Error('байты не совпадают ни с одной страницей-фикстурой, ни со сканом');
 }
 
 /** Потоки изображений документа — по страницам, в их порядке, без декодирования фильтров. */

@@ -127,6 +127,10 @@ export function App(): ReactNode {
   // идёт без намерения) и по намерению запуска — проход без страниц ядро из журнала
   // выбрасывает, и последним снова становится проход оборотов.
   const [mergeHoldMs, setMergeHoldMs] = useState<number | null>(null);
+  // Ожидание оценок пустых оборотов (M4, KTD6; handoff M4, S12; решение автора 2026-10-22):
+  // по истечении паузы экран держится, пока `blank.pending` не станет 0, — без потолка. Флаг
+  // ставится вместе с паузой и снимается корректировкой при рендере, как только ждать нечего.
+  const [mergeBlankWait, setMergeBlankWait] = useState(false);
   const [previousScreen, setPreviousScreen] = useState<Screen | null>(null);
   const screen = snapshot === null ? null : screenOf(snapshot);
   const session = snapshot?.session ?? null;
@@ -143,7 +147,14 @@ export function App(): ReactNode {
       !(launch?.kind === 'added' && launch.sessionId === session?.id)
     ) {
       setMergeHoldMs(transitionReport.backsDeclined ? MERGE_PAUSE_DECLINED_MS : MERGE_PAUSE_MS);
+      // Ждать оценок есть смысл, когда они прячут страницы: в режиме наборов ничего не скрыто
+      // (R15), статус про пустые там не рисуется — держать экран нечем объяснить (ревью).
+      setMergeBlankWait(transitionReport.mode !== 'sets');
     }
+  }
+  const blankPending = snapshot?.assembly?.blank.pending ?? 0;
+  if (mergeBlankWait && blankPending === 0) {
+    setMergeBlankWait(false);
   }
 
   // Посадка добавленного набора (KTD-7; handoff S9–S10): в `editor` той же сессии появились
@@ -322,8 +333,12 @@ export function App(): ReactNode {
   );
 
   const assembly = snapshot.assembly;
-  // Пауза `merge` — поверх выведенного экрана `editor` (KTD-5).
-  const merging = screen === 'editor' && mergeHoldMs !== null && assembly !== null;
+  // Пауза `merge` — поверх выведенного экрана `editor` (KTD-5); после неё — ожидание оценок
+  // пустых оборотов (M4, S12).
+  const merging =
+    screen === 'editor' &&
+    assembly !== null &&
+    (mergeHoldMs !== null || (mergeBlankWait && blankPending > 0));
   // `mismatch` (KTD-8; M3.6, R20): первый вход в editor за процесс при неподтверждённом
   // режиме раздельных наборов — включая вход через «Оставить как есть» и после перезапуска;
   // условие уместности — общий предикат `mismatchDue` (добавленные наборы показ не отменяют,

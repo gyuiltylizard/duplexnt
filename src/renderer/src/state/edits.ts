@@ -197,6 +197,18 @@ export function withoutCut(edits: SessionEdits, docIndex: number): SessionEdits 
   };
 }
 
+/**
+ * «Это не пустая страница» (M4, KTD5; handoff M4, S9): ключ входит в `notBlank` — любой флаг
+ * детектора снимается, страница возвращается в ленту и в файл. Обратной пометки нет: лишнее
+ * удаляется. Уже помеченная — без изменений (шага нет).
+ */
+export function markedNotBlank(edits: SessionEdits, key: string): SessionEdits {
+  if (edits.notBlank.includes(key)) {
+    return edits;
+  }
+  return { ...edits, notBlank: [...edits.notBlank, key] };
+}
+
 /** Имя документа `docIndex` (с нуля); пустая строка — имя по умолчанию. */
 export function renamed(edits: SessionEdits, docIndex: number, name: string): SessionEdits {
   if (docIndex < 0 || docIndex >= edits.names.length || edits.names[docIndex] === name) {
@@ -249,4 +261,39 @@ export function separated(
     next = renamed(next, docIndex + 1, tailName);
   }
   return { edits: next, document: docIndex };
+}
+
+/**
+ * «Выделить в документ» для любого выделения (M4, KTD7; handoff M4, S6): страницы `keys` подряд —
+ * только разрезы, как `separated`; не подряд — явный порядок (выделенные встают на позицию
+ * первой из них, остальные сдвигаются вправо, взаимный порядок не меняется) и разрезы по
+ * арифметике `moved`, затем границы до и после куска. Ключей в ленте нет — `null` (жеста нет).
+ * Группировка не подряд — перенос: порядок становится явным (R7).
+ */
+export function grouped(
+  edits: SessionEdits,
+  visible: readonly string[],
+  keys: readonly string[],
+): { readonly edits: SessionEdits; readonly document: number } | null {
+  const grouping = new Set(keys);
+  const positions = positionsOf(visible, grouping);
+  const from = positions[0];
+  if (from === undefined) {
+    return null;
+  }
+  const to = from + positions.length - 1;
+  if (positions.at(-1) === to) {
+    return separated(edits, from, to, visible.length);
+  }
+  const group = visible.filter((key) => grouping.has(key));
+  const rest = visible.filter((key) => !grouping.has(key));
+  // Кусок встаёт на позицию первой выделенной: разрез на этой позиции остаётся слева от куска,
+  // разрезы правее (по исходной ленте — и тот, что стоял сразу за первой выделенной) уезжают за
+  // кусок, как у `moved` «перед»; сдвиг на изъятые левее — как у `cutsWithout`.
+  const cuts = edits.cuts.map((cut) => {
+    const shifted = cut - positions.filter((index) => index < cut).length;
+    return cut > from ? shifted + group.length : shifted;
+  });
+  const order = [...rest.slice(0, from), ...group, ...rest.slice(from)];
+  return separated({ ...edits, order, cuts }, from, to, visible.length);
 }

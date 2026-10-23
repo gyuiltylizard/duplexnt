@@ -12,6 +12,7 @@ import { join } from 'node:path';
 //         p01-s01-0001.jpg        ключ: проход, сегмент, номер в сегменте
 //     session.closing-<id>/       закрываемая сессия, дочищается при запуске
 //     derived/<id сессии>/thumbs/ производное: удаляется без потерь
+//     derived/<id сессии>/blank/  оценки детектора пустых страниц (M4): тоже производное
 //
 // Ключ стоит в имени файла: сессию можно пересобрать по именам, даже если журнал потерян. Номера
 // проходов и сегментов внутри сессии не переиспользуются — иначе файл отброшенного сегмента
@@ -26,6 +27,8 @@ export const PAGES_DIR_NAME = 'pages';
 
 /** Имя файла страницы: ключ и расширение. Без флагов `g` и `y` — шаблон идёт в `removeByPrefix`. */
 export const PAGE_FILE = /^p(\d{2})-s(\d{2})-(\d{4})\.jpg$/;
+/** Имя файла оценки пустой страницы: ключ и `.json` (M4, KTD3). */
+export const BLANK_FILE = /^p(\d{2})-s(\d{2})-(\d{4})\.json$/;
 const PAGE_KEY = /^p(\d{2})-s(\d{2})-(\d{4})$/;
 
 export const SESSION_ID = /^[0-9a-f]{16}$/;
@@ -80,6 +83,15 @@ export function thumbsDirOf(layout: DataLayout, sessionId: string): string {
   return thumbsDirIn(layout.derivedDir, sessionId);
 }
 
+/** Каталог оценок пустых страниц сессии от корня производного кэша (M4, KTD3). */
+export function blankDirIn(derivedDir: string, sessionId: string): string {
+  return join(derivedDir, sessionId, 'blank');
+}
+
+export function blankDirOf(layout: DataLayout, sessionId: string): string {
+  return blankDirIn(layout.derivedDir, sessionId);
+}
+
 export interface PageAddress {
   readonly pass: number;
   readonly segment: number;
@@ -100,6 +112,10 @@ export function pageKey({ pass, segment, index }: PageAddress): string {
 
 export function pageFileName(key: string): string {
   return `${key}.jpg`;
+}
+
+export function blankFileName(key: string): string {
+  return `${key}.json`;
 }
 
 function addressOf(match: RegExpExecArray | null): PageAddress | null {

@@ -407,39 +407,6 @@ describe('editor M3: границы документов (S1, S2, S5, S7)', () =
       rotate180: false,
     });
   });
-
-  it('S5: «Выделить в документ» — подряд: две границы одним шагом, тост, фокус в имя нового', async () => {
-    const api = stubApi();
-    const snapshot = twoPass();
-    const { onToast, rerender } = renderEditor(snapshot);
-
-    fireEvent.click(option(1));
-    fireEvent.click(option(2), { shiftKey: true });
-    fireEvent.click(button('Выделить в документ'));
-    expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({
-      edits: edits({ cuts: [1, 3], names: ['', '', ''] }),
-      rotate180: false,
-    });
-    await settle();
-    expect(onToast).toHaveBeenCalledExactlyOnceWith('Отдельный документ из 2 стр. создан');
-
-    rerender(applied(snapshot, lastSent(api)));
-    expect(screen.getAllByRole('listbox').length).toBe(3);
-    expect(document.activeElement).toBe(nameField(2));
-    // Граница — не страницы: выделение не тронуто.
-    expect(selectedKeys()).toEqual([B3, F2]);
-  });
-
-  it('S5: выделение не подряд — тост, ничего не меняется', () => {
-    const api = stubApi();
-    const { onToast } = renderEditor(twoPass());
-
-    fireEvent.click(option(1));
-    fireEvent.click(option(3), { ctrlKey: true });
-    fireEvent.click(button('Выделить в документ'));
-    expect(onToast).toHaveBeenCalledExactlyOnceWith('Выделите подряд идущие страницы');
-    expect(api.setEdits).not.toHaveBeenCalled();
-  });
 });
 
 describe('editor M3: имя документа (S3)', () => {

@@ -3,7 +3,7 @@ import * as https from 'node:https';
 import { setTimeout as delay } from 'node:timers/promises';
 import { describe, expect, it } from 'vitest';
 import { startTestEmulator } from '../support/emulator';
-import { ET_3850, readFixture, readFixtureText } from '../support/fixtures';
+import { ET_3850, readFixture, readFixtureText, scanFixture } from '../support/fixtures';
 import type { Emulator } from './server';
 
 // Эмулятор проверяется голым клиентом Node: код приложения сюда не импортируется (KTD-4).
@@ -176,6 +176,37 @@ describe('эмулятор сканера: задание', () => {
     expect(bodies[1]?.equals(readFixture(...ET_3850, 'pages', 'page-02.jpg'))).toBe(true);
     expect(bodies[29]?.equals(readFixture(...ET_3850, 'pages', 'page-30.jpg'))).toBe(true);
     expect(bodies[30]?.equals(readFixture(...ET_3850, 'pages', 'page-01.jpg'))).toBe(true);
+  });
+
+  it('лоток по именам: настоящий скан отдаётся байт в байт среди синтетических страниц (M4, U1)', async () => {
+    const emulator = await startTestEmulator({
+      scenario: { trays: [[1, 'blank-gray-300', 2]] },
+    });
+    const job = await createJob(emulator);
+
+    const bodies: Buffer[] = [];
+    for (let index = 0; index < 3; index += 1) {
+      bodies.push((await nextDocument(emulator, job)).body);
+    }
+
+    expect(bodies[0]?.equals(readFixture(...ET_3850, 'pages', 'page-01.jpg'))).toBe(true);
+    expect(bodies[1]?.equals(scanFixture('blank-gray-300'))).toBe(true);
+    expect(bodies[2]?.equals(readFixture(...ET_3850, 'pages', 'page-02.jpg'))).toBe(true);
+    expect((await nextDocument(emulator, job)).status).toBe(404);
+  });
+
+  it('неизвестное имя скана в лотке — ошибка при загрузке сценария, с именем файла', async () => {
+    await expect(
+      startTestEmulator({ scenario: { trays: [['no-such-scan-gray-300']] } }),
+    ).rejects.toThrow('test/fixtures/escl/et-3850/scans/no-such-scan-gray-300.jpg');
+
+    const emulator = await startTestEmulator({ scenario: { trays: [[1]] } });
+    expect(() => {
+      emulator.reloadTray(['no-such-scan-gray-300']);
+    }).toThrow('скана-фикстуры нет');
+    expect(() => {
+      emulator.load({ trays: [['Не По Конвенции']] });
+    }).toThrow('не по конвенции');
   });
 
   it('DELETE закрывает задание; следующее создаётся без занятости', async () => {

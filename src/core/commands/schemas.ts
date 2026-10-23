@@ -1,10 +1,12 @@
 import { z } from 'zod';
 import {
+  BLANK_MODES,
   fail,
   MAX_DOCUMENT_NAME_LENGTH,
   ok,
   PROBE_TOKEN_MAX_LENGTH,
   SAVE_MODES,
+  type BlankMode,
   type ConnectScannerRequest,
   type ProbeRequest,
   type Result,
@@ -80,6 +82,9 @@ export const saveDocumentsRequestSchema = z.strictObject({
 }) satisfies z.ZodType<SaveDocumentsRequest>;
 
 export { scanParamsSchema };
+
+/** Режим пустых оборотов (M4, R1): одно из трёх значений словаря, без приведения типов. */
+export const blankModeSchema = z.enum(BLANK_MODES) satisfies z.ZodType<BlankMode>;
 
 // Мусор на входе — доменный отказ, а не исключение. В детали идут только путь поля и код
 // нарушения: само значение не возвращается, оно может оказаться большим или чужим.

@@ -422,7 +422,7 @@ describe('экран editor', () => {
     renderEditor(twoPass());
 
     expect(screen.getByText(/^Границы не отмечены/).textContent).toContain(
-      'выделите страницы подряд (Shift — диапазон, Ctrl — по одной) и нажмите «Выделить в документ»',
+      'выделите страницы (Shift — диапазон, Ctrl — по одной) и нажмите «Выделить в документ»',
     );
   });
 

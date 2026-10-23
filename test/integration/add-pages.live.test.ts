@@ -6,6 +6,7 @@ import { openPassService } from '../../src/core/scan/pass-service';
 import { describeLive, probeLive, startPassWhenPaper } from '../support/live-device';
 import { makeTempDataRoot } from '../support/temp-data-root';
 import { unwrap } from '../support/result';
+import { untilScored } from '../support/until';
 
 // «Один лист после двух проходов» на живом устройстве (план M3.5, U8; AE12 — выход вехи):
 // двусторонняя пачка → два прохода → один лист ОБОРОТОМ ВВЕРХ, развёрнутый на 180° (инструкция
@@ -74,6 +75,7 @@ describeLive('один лист после двух проходов на жив
 
       const outDir = resolve('temp');
       await mkdir(outDir, { recursive: true });
+      await untilScored(() => service.snapshot());
       const saved = unwrap(
         await service.saveDocuments(outDir, {
           mode: 'single',

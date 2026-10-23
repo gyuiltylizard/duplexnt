@@ -51,6 +51,7 @@ const JOURNAL: Journal = {
   saved: false,
   edits: EMPTY_EDITS,
   assembled: null,
+  blankMode: 'keep',
 };
 
 // Правки M3 во всех полях: перенос, поворот, удаление, разрез с именем второго документа.
@@ -63,6 +64,7 @@ const EDITED: Journal = {
     cuts: [5],
     names: ['', 'Договор'],
     divider: null,
+    notBlank: [],
   },
 };
 
@@ -94,11 +96,18 @@ const passAt = (number: number, pageCount: number, extra: Partial<JournalPass> =
 const v3PassAt = (number: number, pageCount: number, extra: object = {}) =>
   omit({ ...passAt(number, pageCount), ...extra }, 'kind', 'after');
 
+// Журнал версии 5 (M3.6): тот же состав без режима пустых оборотов и пометок «не пустая».
+const V5_JOURNAL = {
+  ...omit(JOURNAL, 'blankMode'),
+  version: 5,
+  edits: omit(EMPTY_EDITS, 'notBlank'),
+};
+
 // Журнал версии 4 (M3.5): тот же состав без записи сборки и границы наборов.
 const V4_JOURNAL = {
-  ...omit(JOURNAL, 'assembled'),
+  ...omit(V5_JOURNAL, 'assembled'),
   version: 4,
-  edits: omit(EMPTY_EDITS, 'divider'),
+  edits: omit(EMPTY_EDITS, 'divider', 'notBlank'),
 };
 
 // Журнал версии 3 (M3): тот же состав, роль прохода — по позиции.
@@ -194,7 +203,7 @@ describe('журнал: чтение прежних версий (M2, R13; M3, R
     expect(parse(V2_JOURNAL)).toEqual({ kind: 'ok', value: JOURNAL });
   });
 
-  it('журнал v1 читается цепочкой v1 → v2 → v3 → v4 → v5 с дефолтами всех новых полей', () => {
+  it('журнал v1 читается цепочкой v1 → v2 → v3 → v4 → v5 → v6 с дефолтами всех новых полей', () => {
     expect(parse(V1_JOURNAL)).toEqual({ kind: 'ok', value: JOURNAL });
   });
 
@@ -237,11 +246,11 @@ describe('журнал: чтение прежних версий (M2, R13; M3, R
 
 describe('журнал: версия (KTD-35)', () => {
   it('маркер версии новее понятного — несовместимость, что бы ни лежало рядом', () => {
-    expect(parse({ ...JOURNAL, version: 6 })).toEqual({
+    expect(parse({ ...JOURNAL, version: 7 })).toEqual({
       kind: 'incompatible',
       reason: 'newerVersion',
     });
-    expect(parse({ version: 7, совсем: 'другая форма' })).toEqual({
+    expect(parse({ version: 8, совсем: 'другая форма' })).toEqual({
       kind: 'incompatible',
       reason: 'newerVersion',
     });
@@ -594,5 +603,43 @@ describe('раскладка: ключ страницы', () => {
     expect(isSetAsideName('session.json', 'session.json')).toBe(false);
     expect(isSetAsideName('session.json.bak', 'session.json')).toBe(false);
     expect(isSetAsideName('other.json.unreadable-0123456789ab', 'session.json')).toBe(false);
+  });
+});
+
+describe('журнал: режим пустых оборотов и пометки «не пустая» (M4; амендмент ADR 0004 от 2026-10-22)', () => {
+  it('журнал v5 читается: режим «оставлять», пометок нет; версия в памяти — текущая', () => {
+    expect(parse(V5_JOURNAL)).toEqual({ kind: 'ok', value: JOURNAL });
+  });
+
+  it('журнал v5 с режимом или пометками — ошибка схемы: они есть только в v6', () => {
+    const schema = { kind: 'unreadable', reason: 'schema' };
+
+    expect(parse({ ...V5_JOURNAL, blankMode: 'hide' })).toEqual(schema);
+    expect(parse({ ...V5_JOURNAL, edits: EMPTY_EDITS })).toEqual(schema);
+  });
+
+  it('режим — одно из трёх значений; пометки — ключи страниц без приведения', () => {
+    const schema = { kind: 'unreadable', reason: 'schema' };
+
+    expect(parse({ ...JOURNAL, blankMode: 'mark' })).toMatchObject({ kind: 'ok' });
+    expect(parse({ ...JOURNAL, blankMode: 'auto' })).toEqual(schema);
+    expect(parse({ ...JOURNAL, blankMode: null })).toEqual(schema);
+    expect(
+      parse({ ...JOURNAL, edits: { ...EMPTY_EDITS, notBlank: ['p01-s01-0002'] } }),
+    ).toMatchObject({ kind: 'ok' });
+    expect(parse({ ...JOURNAL, edits: { ...EMPTY_EDITS, notBlank: ['лист 2'] } })).toEqual(schema);
+  });
+
+  it('в журнале нет выводимого: оценка детектора схемой не принимается', () => {
+    const incompatible = { kind: 'incompatible', reason: 'unknownField' };
+
+    expect(parse({ ...JOURNAL, blankScores: { 'p01-s01-0001': 0.001 } })).toEqual(incompatible);
+    expect(parse({ ...JOURNAL, edits: { ...EMPTY_EDITS, blank: ['p01-s01-0001'] } })).toEqual(
+      incompatible,
+    );
+  });
+
+  it('новый журнал начинает с режимом «оставлять» и без пометок', () => {
+    expect(newJournal('a1b2c3d4e5f60718')).toMatchObject({ blankMode: 'keep', edits: EMPTY_EDITS });
   });
 });

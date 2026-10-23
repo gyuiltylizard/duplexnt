@@ -1,7 +1,9 @@
 import {
   EMPTY_EDITS,
+  NO_VERDICTS,
   ok,
   type Api,
+  type BlankVerdicts,
   type CommandResult,
   type PassSnapshot,
   type SaveDocumentsRequest,
@@ -46,10 +48,12 @@ export function makePass(overrides: Partial<PassSnapshot>): PassSnapshot {
   };
 }
 
+/** `blank` — вердикты детектора по ключам оборотов (M4): флаги ленты считает зеркало сборки. */
 export function makeSnapshot(
   passes: PassSnapshot[],
   overrides: Partial<Snapshot> = {},
   sessionOverrides: Partial<SessionSnapshot> = {},
+  blank: BlankVerdicts = NO_VERDICTS,
 ): Snapshot {
   const session: SessionSnapshot = {
     id: 'session.x',
@@ -57,6 +61,7 @@ export function makeSnapshot(
     saved: false,
     edits: EMPTY_EDITS,
     assembled: null,
+    blankMode: 'keep',
     passes,
     ...sessionOverrides,
   };
@@ -68,9 +73,10 @@ export function makeSnapshot(
     canAccept: false,
     storage: { incompatible: false, unsaved: false },
     notices: [],
+    blankMode: 'hide',
     ...overrides,
     session,
-    assembly: overrides.assembly === undefined ? assemblyOf(session) : overrides.assembly,
+    assembly: overrides.assembly === undefined ? assemblyOf(session, blank) : overrides.assembly,
   };
 }
 
@@ -189,7 +195,11 @@ export const edits = (change: Partial<SessionEdits>): SessionEdits => ({
  * — тест подаёт ровно то, что ушло в `setEdits`), сборка — зеркало ядра с правками
  * (`assemblyWithEditsOf`, сверено с ядром guard-тестом).
  */
-export function applied(snapshot: Snapshot, state: EditState): Snapshot {
+export function applied(
+  snapshot: Snapshot,
+  state: EditState,
+  blank: BlankVerdicts = NO_VERDICTS,
+): Snapshot {
   const session = snapshot.session;
   if (session === null) {
     throw new Error('в фикстуре нет сессии');
@@ -201,7 +211,12 @@ export function applied(snapshot: Snapshot, state: EditState): Snapshot {
       pass.kind === 'backs' ? { ...pass, rotate180: state.rotate180 } : pass,
     ),
   };
-  return { ...snapshot, seq: snapshot.seq + 1, session: next, assembly: assemblyWithEditsOf(next) };
+  return {
+    ...snapshot,
+    seq: snapshot.seq + 1,
+    session: next,
+    assembly: assemblyWithEditsOf(next, blank),
+  };
 }
 
 /** `setEdits`, чей ответ тест отдаёт сам — до или после снимка с результатом. */

@@ -1,6 +1,11 @@
 import {
+  blankFlagOf,
+  blankSummaryOf,
+  NO_VERDICTS,
   passesByKind,
   type AssembledPage,
+  type BlankFlag,
+  type BlankVerdicts,
   type AssemblyMode,
   type AssemblyReport,
   type PassSnapshot,
@@ -405,8 +410,17 @@ export function frozenSequenceOf(
  * Сборка сессии: базовый порядок по режиму, поверх него правки (M3, U2), документы по разрезам
  * или группы по границе и отчёт. Отчёт о проходах — о сканировании, не о ленте: правки его не
  * меняют (KTD-7); группы — живые счётчики видимой ленты (R10).
+ *
+ * Пустые обороты (M4, R10, KTD4, KTD9): флаг получает только страница прохода оборотов по
+ * вердикту детектора и режиму сессии; пометка «не пустая» (`edits.notBlank`) флаг снимает; в
+ * режиме раздельных наборов скрытие не действует — только метка. Лента, разрезы, граница и
+ * номера листов считаются по полной видимой ленте: скрытие их не двигает, показ — фильтр
+ * renderer. Потерянная страница не оценивается: не пуста и оценки не ждёт.
  */
-export function assembleSession(session: SessionSnapshot): SessionAssembly {
+export function assembleSession(
+  session: SessionSnapshot,
+  blank: BlankVerdicts = NO_VERDICTS,
+): SessionAssembly {
   const base = baseAssembly(session.passes, session.assembled);
   const byKey = new Map(base.pages.map((page) => [page.key, page]));
   const baseKeys = [...byKey.keys()];
@@ -430,6 +444,24 @@ export function assembleSession(session: SessionSnapshot): SessionAssembly {
       .filter((key) => recorded.has(key) && !hidden.has(key))
       .map((key, index) => [key, index]),
   );
+
+  // Флаг пустого оборота — общее правило с зеркалом renderer'а (`blankFlagOf`); ожидание
+  // считается в сводку, в ленте такая страница обычная.
+  const { blankMode } = session;
+  const notBlank = new Set(edits.notBlank);
+  const blankFlags: (BlankFlag | 'pending')[] = [];
+  const flagOf = (page: BasePage): BlankFlag => {
+    const flag = blankFlagOf({
+      mode: blankMode,
+      ofBacks: page.ofBacks,
+      lost: page.lost,
+      verdict: blank.get(page.key),
+      notBlank: notBlank.has(page.key),
+      inSets: sets !== null,
+    });
+    blankFlags.push(flag);
+    return flag === 'pending' ? null : flag;
+  };
 
   const order: AssembledPage[] = visible.flatMap((key, index) => {
     const page = byKey.get(key);
@@ -456,6 +488,7 @@ export function assembleSession(session: SessionSnapshot): SessionAssembly {
         angle: pageAngle(edits.rotations[key], page.ofBacks && base.rotateBacks),
         lost: page.lost,
         addedSet: base.addedSetOf.get(key) ?? null,
+        blank: flagOf(page),
       },
     ];
   });
@@ -474,5 +507,6 @@ export function assembleSession(session: SessionSnapshot): SessionAssembly {
       backsDeclined: session.backsDeclined,
       mismatch: base.mode === 'sets',
     },
+    blank: blankSummaryOf(blankMode, blankFlags),
   };
 }

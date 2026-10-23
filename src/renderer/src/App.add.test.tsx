@@ -35,6 +35,7 @@ describe('M3.5: посадка добавленного набора (KTD-7; han
     return makeSnapshot({
       seq,
       session: {
+        blankMode: 'keep',
         id: 'session.x',
         backsDeclined: false,
         saved: false,

@@ -19,6 +19,7 @@ import { startDiscovery, type Discovery, type DiscoveryOptions } from '../discov
 import { handleProbe } from '../probe/handle-probe';
 import type { PassService } from '../scan/pass-service';
 import {
+  blankModeSchema,
   connectScannerRequestSchema,
   noRequestSchema,
   parseInput,
@@ -218,6 +219,11 @@ export function createCommands(context: CommandContext): Commands {
       setScanParams: async (rawRequest) => {
         const request = parseInput(scanParamsSchema, rawRequest);
         return request.ok ? done(() => service.setParams(request.value)) : request;
+      },
+
+      setBlankMode: async (rawRequest) => {
+        const request = parseInput(blankModeSchema, rawRequest);
+        return request.ok ? done(() => service.setBlankMode(request.value)) : request;
       },
 
       startPass: async (rawRequest) => {

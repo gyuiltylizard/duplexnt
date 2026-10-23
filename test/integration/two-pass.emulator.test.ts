@@ -17,7 +17,7 @@ import { startTestEmulator } from '../support/emulator';
 import { pageFixture } from '../support/fixtures';
 import { makeTempDataRoot } from '../support/temp-data-root';
 import { unwrap } from '../support/result';
-import { until } from '../support/until';
+import { until, untilScored } from '../support/until';
 
 // Двухпроходный сценарий на настоящей цепочке (план M2, U3–U4): эмулятор с лотками по заданиям →
 // клиент → хранилище → сборка в снимке. Правило пар проверяется побайтово: какая фикстура легла
@@ -117,6 +117,7 @@ describe('два прохода через эмулятор (M2)', () => {
     expect(unwrap(await service.startPass(null))).toMatchObject({ end: 'completed', pages: 3 });
     expect(unwrap(await service.startPass(null))).toMatchObject({ end: 'completed', pages: 3 });
     unwrap(await service.setEdits(EMPTY_EDITS, true));
+    await untilScored(() => service.snapshot());
 
     const outDir = join(root, 'выход');
     await mkdir(outDir, { recursive: true });

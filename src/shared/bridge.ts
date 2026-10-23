@@ -12,6 +12,7 @@
 // - в типах контракта — только то, что есть в ES-библиотеке и переживает structured clone:
 //   `Uint8Array` и `ArrayBuffer` можно; `Buffer`, `Blob` и потоки нельзя.
 
+import type { BlankMode } from './blank';
 import type { DiscoveryState } from './discovery';
 import type { SessionEdits } from './edits';
 import type { DomainError, Result } from './errors';
@@ -166,6 +167,11 @@ export interface BridgeCommands {
   readonly recheckScanner: { readonly request: NoRequest; readonly value: undefined };
   readonly setScanParams: { readonly request: ScanParams; readonly value: undefined };
   /**
+   * Режим пустых оборотов (M4, R1): помнится в настройках, в сессию замораживается при старте
+   * первого прохода. Не параметр устройства — принимается и без сканера.
+   */
+  readonly setBlankMode: { readonly request: BlankMode; readonly value: undefined };
+  /**
    * Новый проход, досканирование или добавленный набор (M3.5); возвращается, когда задание
    * закрыто. Добавление без сессии — `noSession`, при прерванном последнем проходе —
    * `passInterrupted`, якорь не из сессии — `invalidInput`.
@@ -220,6 +226,7 @@ export const BRIDGE_CHANNELS = {
   cancelConnect: 'duplexnt:cancel-connect',
   recheckScanner: 'duplexnt:recheck-scanner',
   setScanParams: 'duplexnt:set-scan-params',
+  setBlankMode: 'duplexnt:set-blank-mode',
   startPass: 'duplexnt:start-pass',
   stopPass: 'duplexnt:stop-pass',
   acceptPass: 'duplexnt:accept-pass',

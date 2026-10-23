@@ -9,6 +9,7 @@ import {
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../i18n';
+import { NO_BLANK } from '../state/assembly-fixture';
 import { SaveModal, type SaveModalProps } from './SaveModal';
 
 // Модалка `save` (план M3, U9; handoff M3, S16): режим, имена, папка, сводка, запись пакета,
@@ -60,6 +61,7 @@ function renderModal(props: Partial<SaveModalProps> = {}) {
       defaultNames={THREE_DEFAULTS}
       singleDefault="Скан 2026-10-06"
       total={24}
+      blank={NO_BLANK}
       editsBusy={false}
       {...handlers}
       {...next}
@@ -467,5 +469,125 @@ describe('модалка save: ИТОГ', () => {
 
     expect(screen.getByText('имя изменено: недопустимые для Windows символы убраны')).toBeDefined();
     expect(button('Готово')).toBeDefined();
+  });
+});
+
+describe('модалка save: пустые обороты (M4, S14)', () => {
+  const HIDE = { mode: 'hide', found: 3, hidden: 3, pending: 0 } as const;
+
+  it('режим «Скрывать»: ряд «Пустых оборотов» — скрыто N; страницы — те, что уйдут в файл', async () => {
+    stubApi();
+    renderModal({
+      documents: [doc(0, 9, 'Акт'), doc(9, 7), doc(16, 5)],
+      total: 21,
+      blank: HIDE,
+    });
+    await settle();
+
+    expect(fact('Страниц всего')).toBe('21');
+    expect(fact('Пустых оборотов')).toBe('скрыто 3 — не попадут в файл');
+    expect(mode(/Один файл/).textContent).toContain('все 21 стр. подряд');
+    expect(file(3).closest('li')?.textContent).toContain('5 стр.');
+    expect(button('Сохранить 3 файла').hasAttribute('disabled')).toBe(false);
+  });
+
+  it.each([
+    [
+      '«Помечать» — помечено N',
+      { mode: 'mark', found: 1, hidden: 0, pending: 0 },
+      'помечен 1 — останется в файле',
+    ],
+    [
+      'один скрытый — единственное число',
+      { mode: 'hide', found: 1, hidden: 1, pending: 0 },
+      'скрыт 1 — не попадёт в файл',
+    ],
+    ['ничего не найдено', { mode: 'hide', found: 0, hidden: 0, pending: 0 }, 'не найдено'],
+  ] as const)('ряд сводки: %s', (_name, blank, expected) => {
+    stubApi();
+    renderModal({ blank });
+
+    expect(fact('Пустых оборотов')).toBe(expected);
+  });
+
+  it('«Оставлять» — ряда нет', () => {
+    stubApi();
+    renderModal();
+
+    expect(screen.queryByText('Пустых оборотов')).toBeNull();
+  });
+
+  it('documentBlank: строка подсвечена, статус с именем, «Сохранить» недоступна; правка в снимке снимает блок', () => {
+    const api = stubApi();
+    const { rerender } = renderModal({
+      documents: [doc(0, 9, 'Акт'), doc(9, 0, 'Приложение'), doc(9, 8)],
+      total: 17,
+      blank: { mode: 'hide', found: 7, hidden: 7, pending: 1 },
+    });
+
+    const row = file(2).closest('li');
+    expect(row?.className).toContain('save-file--blank');
+    expect(row?.textContent).toContain('только пустые — 0 стр.');
+    // Документ из одних скрытых важнее незавершённой оценки: её ждать бесполезно.
+    expect(screen.getByRole('alert').textContent).toBe(
+      'Документ «Приложение» состоит из одних пустых оборотов — покажите их переключателем или уберите границу.',
+    );
+    expect(button('Сохранить 3 файла').hasAttribute('disabled')).toBe(true);
+    fireEvent.click(button('Сохранить 3 файла'));
+    expect(api.saveDocuments).not.toHaveBeenCalled();
+
+    // Снимок после правки (граница убрана): два документа, блок снят.
+    rerender({
+      documents: [doc(0, 9, 'Акт'), doc(9, 8)],
+      blank: { mode: 'hide', found: 7, hidden: 7, pending: 0 },
+    });
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(button('Сохранить 2 файла').hasAttribute('disabled')).toBe(false);
+  });
+
+  it('documentBlank: безымянный документ назван именем по умолчанию; «Один файл» пишется, пока есть хоть одна показанная', () => {
+    stubApi();
+    renderModal({
+      documents: [doc(0, 9, 'Акт'), doc(9, 0), doc(9, 8)],
+      total: 17,
+      blank: HIDE,
+    });
+
+    expect(screen.getByRole('alert').textContent).toContain('Документ «Документ 2»');
+    fireEvent.click(mode(/Один файл/));
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(button('Сохранить файл').hasAttribute('disabled')).toBe(false);
+  });
+
+  it('все документы из одних скрытых — не записать и одним файлом', () => {
+    stubApi();
+    renderModal({
+      documents: [doc(0, 0, 'Акт'), doc(0, 0)],
+      total: 0,
+      blank: { mode: 'hide', found: 4, hidden: 4, pending: 0 },
+    });
+
+    fireEvent.click(mode(/Один файл/));
+    expect(screen.getByRole('alert').textContent).toContain('Документ «Акт»');
+    expect(button('Сохранить файл').hasAttribute('disabled')).toBe(true);
+  });
+
+  it('blankPending: статус, кнопка недоступна до снимка с pending = 0 — без действий человека', () => {
+    const api = stubApi();
+    const { rerender } = renderModal({
+      blank: { mode: 'hide', found: 0, hidden: 0, pending: 2 },
+    });
+
+    expect(screen.getByRole('status').textContent).toBe(
+      'Оценка пустых оборотов: ещё 2 стр. — кнопка станет доступна сама.',
+    );
+    expect(button('Сохранить 3 файла').hasAttribute('disabled')).toBe(true);
+    fireEvent.click(button('Сохранить 3 файла'));
+    expect(api.saveDocuments).not.toHaveBeenCalled();
+
+    rerender({ blank: { mode: 'hide', found: 1, hidden: 1, pending: 0 } });
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(button('Сохранить 3 файла').hasAttribute('disabled')).toBe(false);
+    expect(fact('Пустых оборотов')).toBe('скрыт 1 — не попадёт в файл');
   });
 });

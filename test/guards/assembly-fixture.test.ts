@@ -40,6 +40,7 @@ const sessionOf = (
   saved: false,
   edits: EMPTY_EDITS,
   assembled: null,
+  blankMode: 'keep',
   passes,
   ...extra,
 });
@@ -300,5 +301,77 @@ describe('зеркало с правками против ядра (M3, KTD-2; M
     ],
   ])('%s', (_name, session) => {
     expect(assemblyWithEditsOf(session)).toEqual(assembleSession(session));
+  });
+});
+
+// Флаги пустых оборотов (M4, R10, KTD4, KTD9): зеркало ставит их по тем же правилам, что ядро —
+// по проходу оборотов, режиму сессии, вердикту, пометке и режиму сборки.
+describe('зеркало с флагами пустых оборотов против ядра (M4, R10)', () => {
+  const B1 = 'p02-s01-0001';
+  const B2 = 'p02-s01-0002';
+  const B3 = 'p02-s01-0003';
+  const verdicts = new Map<string, boolean>([
+    [B1, true],
+    [B2, false],
+    [F2, true],
+    ['p03-s01-0001', true],
+  ]);
+  const sets3x2 = [passOf(1, 'fronts', 3), passOf(2, 'backs', 2)];
+
+  it.each<[string, SessionSnapshot]>([
+    [
+      'пары, «Скрывать»: B1 скрыт, B2 нет, B3 ждёт, лицо без флага',
+      sessionOf(pairs, { blankMode: 'hide' }),
+    ],
+    ['пары, «Помечать»', sessionOf(pairs, { blankMode: 'mark' })],
+    ['пары, «Оставлять»: без флагов и ожидания', sessionOf(pairs, { blankMode: 'keep' })],
+    ['наборы, «Скрывать» — метка, не скрытие', sessionOf(sets3x2, { blankMode: 'hide' })],
+    [
+      'добавленный набор не оценивается',
+      sessionOf([...pairs, passOf(3, 'added', 1, { after: B1 })], { blankMode: 'hide' }),
+    ],
+    [
+      'потерянный оборот — без флага и ожидания',
+      sessionOf([passOf(1, 'fronts', 3), passOf(2, 'backs', 3, { pages: pagesOf(2, 3, [1, 3]) })], {
+        blankMode: 'hide',
+      }),
+    ],
+    [
+      'собрано, «Скрывать»: оборот по проходу',
+      sessionOf(sets3x2, {
+        blankMode: 'hide',
+        assembled: ['p01-s01-0001', B2, F2, B1, 'p01-s01-0003'],
+      }),
+    ],
+  ])('%s', (_name, session) => {
+    expect(assemblyOf(session, verdicts)).toEqual(assembleSession(session, verdicts));
+    expect(assemblyOf(session)).toEqual(assembleSession(session));
+  });
+
+  it.each<[string, SessionSnapshot]>([
+    [
+      'пары: пометка «не пустая» (с вердиктом и без), удаление',
+      sessionOf(pairs, {
+        blankMode: 'hide',
+        edits: { ...EMPTY_EDITS, notBlank: [B1, B3], deleted: [B2] },
+      }),
+    ],
+    [
+      'наборы с явной границей: оборот в группе лиц остаётся оборотом по проходу',
+      sessionOf(sets3x2, {
+        blankMode: 'hide',
+        edits: { ...EMPTY_EDITS, order: [B1, 'p01-s01-0001'], divider: 2 },
+      }),
+    ],
+    [
+      'собрано: порядок и разрезы поверх, флаги по проходу',
+      sessionOf(sets3x2, {
+        blankMode: 'mark',
+        assembled: ['p01-s01-0001', B2, F2, B1, 'p01-s01-0003'],
+        edits: { ...EMPTY_EDITS, order: [B1], cuts: [2], names: ['', ''] },
+      }),
+    ],
+  ])('%s', (_name, session) => {
+    expect(assemblyWithEditsOf(session, verdicts)).toEqual(assembleSession(session, verdicts));
   });
 });

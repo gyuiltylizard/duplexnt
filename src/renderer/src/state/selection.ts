@@ -1,6 +1,10 @@
+import { relocate } from './shown';
+
 // Выделение в ленте редактора (план M3, U6; UI_SPEC §6.5; handoff M3, Behaviour): текущая
 // страница (её показывает превью), якорь диапазона и набор выделенных. Текущая выделена всегда;
-// набор хранится в порядке ленты — групповые операции идут в нём же (R7).
+// набор хранится в порядке ленты — групповые операции идут в нём же (R7). С M4 лента здесь —
+// показанная (без скрытых пустых оборотов, handoff M4, R11): скрытые ключи из выделения
+// выпадают, а текущая, ставшая скрытой, переезжает на ближайшую показанную.
 
 export interface Selection {
   /** Страница превью и точка входа клавиатуры; `null` — лента пуста. */
@@ -76,19 +80,31 @@ export const targetsOf = (selection: Selection): readonly string[] =>
 /**
  * Выделение после нового снимка: исчезнувшие ключи выпадают, порядок — по новой ленте. Пропала
  * текущая — текущей становится первая уцелевшая выделенная, иначе первая страница ленты.
+ * Текущая осталась в полной ленте `order`, но ушла из показанной `visible` (скрыта как пустой
+ * оборот, M4 R11) — ближайшая показанная справа, в конце — слева.
  */
-export function pruned(selection: Selection, visible: readonly string[]): Selection {
+export function pruned(
+  selection: Selection,
+  visible: readonly string[],
+  order: readonly string[] = visible,
+): Selection {
   const keys = inTapeOrder(visible, selection.keys);
-  const current =
-    selection.current !== null && visible.includes(selection.current)
-      ? selection.current
-      : (keys[0] ?? visible[0] ?? null);
+  let current: string | null;
+  if (selection.current !== null && visible.includes(selection.current)) {
+    current = selection.current;
+  } else if (selection.current !== null && order.includes(selection.current)) {
+    current = relocate(selection.current, visible, order) ?? keys[0] ?? visible[0] ?? null;
+  } else {
+    current = keys[0] ?? visible[0] ?? null;
+  }
   if (current === null) {
     return NO_SELECTION;
   }
+  // Пропавшая текущая сжимает выделение до новой; якорь живёт только внутри выделения.
+  const kept = keys.includes(current) ? keys : [current];
   const anchor =
-    selection.anchor !== null && keys.includes(selection.anchor) ? selection.anchor : current;
-  return { current, anchor, keys: keys.includes(current) ? keys : [current] };
+    selection.anchor !== null && kept.includes(selection.anchor) ? selection.anchor : current;
+  return { current, anchor, keys: kept };
 }
 
 /**
@@ -115,21 +131,4 @@ export function selectionOf(keys: readonly string[], visible: readonly string[])
   const ordered = inTapeOrder(visible, keys);
   const first = ordered[0];
   return first === undefined ? null : { current: first, anchor: first, keys: ordered };
-}
-
-/** Позиции выделения, если оно идёт подряд по ленте («Выделить в документ»); иначе `null`. */
-export function contiguousRange(
-  visible: readonly string[],
-  keys: readonly string[],
-): { readonly from: number; readonly to: number } | null {
-  const positions = keys
-    .map((key) => visible.indexOf(key))
-    .filter((index) => index >= 0)
-    .sort((left, right) => left - right);
-  const from = positions[0];
-  const to = positions.at(-1);
-  if (from === undefined || to === undefined || to - from !== positions.length - 1) {
-    return null;
-  }
-  return { from, to };
 }

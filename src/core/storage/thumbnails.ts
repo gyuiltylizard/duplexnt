@@ -2,9 +2,11 @@ import { join } from 'node:path';
 import sharp from 'sharp';
 import { fail, ok, type Result } from '@shared';
 import type { InputCaps } from '../escl/capabilities';
+import { hasJpegMarkers } from '../escl/jpeg-markers';
 import { REGION_UNITS_PER_INCH } from '../escl/region';
 import { writeFileAtomic } from './atomic-file';
 import { pageFileName, thumbsDirIn } from './layout';
+import { limiterOf } from './limiter';
 import type { PageInfo } from './session-store';
 import { ioOf, type StorageOptions } from './storage-fs';
 
@@ -77,18 +79,6 @@ type FailureReason = 'notJpeg' | 'tooLarge' | 'decode';
 const failed = (reason: FailureReason): Result<never> => fail('thumbnailFailed', { reason });
 const UNAVAILABLE = fail('pageUnavailable', { reason: 'unknown' });
 
-// Тот же признак, что при получении страницы (./../escl/scan-job.ts): начало `SOI`, конец `EOI`.
-function hasJpegMarkers(bytes: Uint8Array): boolean {
-  const { byteLength: length } = bytes;
-  return (
-    length >= 4 &&
-    bytes[0] === 0xff &&
-    bytes[1] === 0xd8 &&
-    bytes[length - 2] === 0xff &&
-    bytes[length - 1] === 0xd9
-  );
-}
-
 async function render(source: Uint8Array, pixelLimit: number): Promise<Result<Uint8Array>> {
   if (!hasJpegMarkers(source)) {
     return failed('notJpeg');
@@ -119,28 +109,7 @@ export function createThumbnails(
 ): Thumbnails {
   const io = ioOf(options);
   const { fs } = io;
-  const concurrency = Math.max(1, options.concurrency ?? DEFAULT_CONCURRENCY);
-
-  // Ограничение одновременных построений: освободившееся место передаётся ждущему напрямую.
-  let active = 0;
-  const waiting: (() => void)[] = [];
-  async function limited<T>(task: () => Promise<T>): Promise<T> {
-    if (active >= concurrency) {
-      await new Promise<void>((resolve) => waiting.push(resolve));
-    } else {
-      active += 1;
-    }
-    try {
-      return await task();
-    } finally {
-      const next = waiting.shift();
-      if (next === undefined) {
-        active -= 1;
-      } else {
-        next();
-      }
-    }
-  }
+  const limited = limiterOf(options.concurrency ?? DEFAULT_CONCURRENCY);
 
   async function build(key: string, info: PageInfo, file: string): Promise<Result<Uint8Array>> {
     const page = await source.readPage(key);

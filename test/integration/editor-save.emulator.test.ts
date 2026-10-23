@@ -14,6 +14,7 @@ import { pageFixture } from '../support/fixtures';
 import { fsError, interceptFs } from '../support/intercept-fs';
 import { makeTempDataRoot } from '../support/temp-data-root';
 import { unwrap } from '../support/result';
+import { untilScored } from '../support/until';
 
 // Правки и пакетное сохранение на настоящей цепочке (план M3, U10): эмулятор → клиент →
 // хранилище → служба. Ядро проверяет то же на посеянной сессии; здесь — что страницы настоящих
@@ -72,6 +73,7 @@ describe('правки и сохранение через эмулятор (M3, 
     cuts: [1, 2, 3, 4],
     names: NAMES,
     divider: null,
+    notBlank: [],
   };
 
   it('AE1, AE7: правки переживают перезапуск; пакет — занятое имя, сбой записи, повтор', async () => {
@@ -116,6 +118,7 @@ describe('правки и сохранение через эмулятор (M3, 
     check(service.snapshot());
 
     const request = { mode: 'separate', names: NAMES, retry: false } as const;
+    await untilScored(() => service.snapshot());
     expect(unwrap(await service.saveDocuments(folder, request))).toEqual({
       folder,
       written: [
@@ -173,6 +176,7 @@ describe('правки и сохранение через эмулятор (M3, 
       cuts: [1],
       names: ['', 'Хвост'],
       divider: null,
+      notBlank: [],
     };
     unwrap(await service.setEdits(manual, false));
 
@@ -200,6 +204,7 @@ describe('правки и сохранение через эмулятор (M3, 
 
     const folder = join(root, 'выход');
     await mkdir(folder, { recursive: true });
+    await untilScored(() => service.snapshot());
     const saved = unwrap(
       await service.saveDocuments(folder, {
         mode: 'separate',
@@ -231,6 +236,7 @@ describe('пакетное сохранение через эмулятор (M3)
     // Первая сессия: пакет упал на записи — незавершённый.
     expect(unwrap(await service.startPass(null))).toMatchObject({ end: 'completed', pages: 2 });
     const first = service.sessionId();
+    await untilScored(() => service.snapshot());
     expect(unwrap(await service.saveDocuments(folder, request)).failed).toHaveLength(1);
 
     // «Новое сканирование»: другая сессия в той же службе.

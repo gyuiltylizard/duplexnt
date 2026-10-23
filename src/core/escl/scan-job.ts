@@ -1,6 +1,7 @@
 import { setTimeout as delay } from 'node:timers/promises';
 import { fail, ok, type DomainError, type Result } from '@shared';
 import { jobPathFromLocation, SCAN_JOBS_SEGMENT } from './device-path';
+import { EOI, SOI } from './jpeg-markers';
 import { parseStatus } from './status';
 import { TransportError, type ScannerTransport } from './transport';
 import type { BadResponseReason } from './xml';
@@ -150,9 +151,6 @@ const sinkFailed = (error: unknown): ScanJobEnd => ({
   kind: 'interrupted',
   reason: { source: 'sink', error },
 });
-
-const SOI = [0xff, 0xd8] as const;
-const EOI = [0xff, 0xd9] as const;
 
 /**
  * Тело страницы с проверкой маркеров JPEG (KTD-31). Начало проверяется до того, как первый байт

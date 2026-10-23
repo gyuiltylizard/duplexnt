@@ -34,6 +34,7 @@ describe('каркас приложения', () => {
           pages: 7,
         },
         session: {
+          blankMode: 'keep',
           id: 'session.x',
           backsDeclined: false,
           saved: false,
@@ -65,6 +66,7 @@ describe('каркас приложения', () => {
     stubApi(
       makeSnapshot({
         session: {
+          blankMode: 'keep',
           id: 'session.x',
           backsDeclined: false,
           saved: false,
@@ -111,6 +113,7 @@ describe('каркас приложения', () => {
     stubApi(
       makeSnapshot({
         session: {
+          blankMode: 'keep',
           id: 'session.x',
           backsDeclined: false,
           saved: false,
@@ -141,6 +144,7 @@ describe('каркас приложения', () => {
     stubApi(
       makeSnapshot({
         session: {
+          blankMode: 'keep',
           id: 'session.x',
           backsDeclined: true,
           saved: false,
@@ -264,6 +268,7 @@ describe('каркас приложения', () => {
           pages: 2,
         },
         session: {
+          blankMode: 'keep',
           id: 'session.x',
           backsDeclined: false,
           saved: false,
@@ -305,6 +310,7 @@ describe('каркас приложения', () => {
           pages: 2,
         },
         session: {
+          blankMode: 'keep',
           id: 'session.x',
           backsDeclined: false,
           saved: false,
@@ -344,6 +350,7 @@ describe('каркас приложения', () => {
       makeSnapshot({
         notices: ['pagesLost'],
         session: {
+          blankMode: 'keep',
           id: 'session.x',
           backsDeclined: false,
           saved: false,
@@ -378,6 +385,7 @@ describe('каркас приложения', () => {
       canResume: true,
       canAccept: true,
       session: {
+        blankMode: 'keep',
         id: 'session.x',
         backsDeclined: false,
         saved: false,
@@ -469,6 +477,7 @@ describe('каркас приложения', () => {
         canResume: true,
         canAccept: true,
         session: {
+          blankMode: 'keep',
           id: 'session.x',
           backsDeclined: false,
           saved: false,
@@ -512,6 +521,7 @@ describe('каркас приложения', () => {
         pages: 3,
       },
       session: {
+        blankMode: 'keep',
         id: 'session.x',
         backsDeclined: false,
         saved: false,
@@ -544,6 +554,7 @@ describe('каркас приложения', () => {
     const done = makeSnapshot({
       seq: 2,
       session: {
+        blankMode: 'keep',
         id: 'session.x',
         backsDeclined: false,
         saved: false,
@@ -618,6 +629,7 @@ describe('каркас приложения', () => {
   it('KTD-5: «Обороты не нужны» — пауза merge 1,2 с, затем editor только с лицевыми', async () => {
     const flip = makeSnapshot({
       session: {
+        blankMode: 'keep',
         id: 'session.x',
         backsDeclined: false,
         saved: false,
@@ -640,6 +652,7 @@ describe('каркас приложения', () => {
     const declined = makeSnapshot({
       seq: 2,
       session: {
+        blankMode: 'keep',
         id: 'session.x',
         backsDeclined: true,
         saved: false,
@@ -685,6 +698,7 @@ describe('каркас приложения', () => {
   it('KTD-5: пауза merge не теряется, когда кадр scan пропущен (снимки пришли пачкой)', async () => {
     const flip = makeSnapshot({
       session: {
+        blankMode: 'keep',
         id: 'session.x',
         backsDeclined: false,
         saved: false,
@@ -707,6 +721,7 @@ describe('каркас приложения', () => {
     const done = makeSnapshot({
       seq: 2,
       session: {
+        blankMode: 'keep',
         id: 'session.x',
         backsDeclined: false,
         saved: false,
@@ -764,6 +779,7 @@ describe('каркас приложения', () => {
     stubApi(
       makeSnapshot({
         session: {
+          blankMode: 'keep',
           id: 'session.x',
           backsDeclined: false,
           saved: false,
@@ -811,6 +827,7 @@ describe('каркас приложения', () => {
         canResume: true,
         canAccept: true,
         session: {
+          blankMode: 'keep',
           id: 'session.x',
           backsDeclined: false,
           saved: false,

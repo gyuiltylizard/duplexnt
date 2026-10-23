@@ -22,6 +22,7 @@ import { MAX_EDIT_ITEMS } from './schemas';
 // подставные: сам проход проверяется против эмулятора.
 
 const EMPTY_SNAPSHOT: Snapshot = {
+  blankMode: 'hide',
   seq: 0,
   scanner: { kind: 'none' },
   session: null,
@@ -49,6 +50,7 @@ function setup(
     checkRememberedScanner: vi.fn(() => Promise.resolve()),
     useScanner: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
     setParams: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
+    setBlankMode: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
     startPass: vi.fn(() =>
       Promise.resolve(ok({ end: 'completed' as const, pages: 3, error: null })),
     ),
@@ -273,6 +275,7 @@ describe('снимок и проход', () => {
       cuts: [1],
       names: ['', 'Договор'],
       divider: null,
+      notBlank: [],
     };
 
     expect(await handlers.setEdits({ edits, rotate180: true })).toEqual(ok({ seq: 7 }));
@@ -673,5 +676,18 @@ describe('подключение сканера', () => {
 
     expect(result).toEqual(fail('sessionConflict', { reason: 'passRunning' }));
     expect(connect).not.toHaveBeenCalled();
+  });
+});
+
+describe('команды: режим пустых оборотов (M4, U3)', () => {
+  it('setBlankMode: строгая схема словаря, затем служба', async () => {
+    const { handlers, service } = setup();
+
+    expect(await handlers.setBlankMode('mark')).toEqual(ok(undefined));
+    expect(service.setBlankMode).toHaveBeenCalledExactlyOnceWith('mark');
+    for (const garbage of ['auto', 'Hide', '', 0, { mode: 'hide' }, null, undefined]) {
+      expect(invalid(await handlers.setBlankMode(garbage)), JSON.stringify(garbage)).toBe(true);
+    }
+    expect(service.setBlankMode).toHaveBeenCalledOnce();
   });
 });

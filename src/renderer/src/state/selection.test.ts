@@ -3,7 +3,6 @@ import {
   NO_SELECTION,
   afterRemoval,
   collapsed,
-  contiguousRange,
   pruned,
   ranged,
   selectionOf,
@@ -119,14 +118,39 @@ describe('выделение после изменения ленты', () => {
   });
 });
 
-describe('«Выделить в документ»: только подряд', () => {
-  it.each([
-    ['подряд в любом порядке', ['d', 'b', 'c'], { from: 1, to: 3 }],
-    ['одна страница', ['c'], { from: 2, to: 2 }],
-    ['с дыркой', ['a', 'c'], null],
-    ['пусто', [], null],
-    ['чужие ключи не считаются', ['b', 'q', 'c'], { from: 1, to: 2 }],
-  ])('%s', (_name, keys, expected) => {
-    expect(contiguousRange(TAPE, keys)).toEqual(expected);
+// M4 (handoff, R11): текущая, ставшая скрытой, переезжает на ближайшую показанную справа.
+describe('выделение по показанной ленте (M4)', () => {
+  const ORDER = ['1l', '1o', '2l', '2o', '3l'];
+  const SHOWN = ['1l', '2l', '3l'];
+
+  it('скрытая текущая переезжает на ближайшую показанную справа; скрытые ключи выпадают', () => {
+    const selection = { current: '1o', anchor: '1o', keys: ['1o', '2o'] };
+    expect(pruned(selection, SHOWN, ORDER)).toEqual({ current: '2l', anchor: '2l', keys: ['2l'] });
+  });
+
+  it('скрытая текущая в конце — на ближайшую слева; переехавшая текущая выделена одна', () => {
+    const selection = { current: '2o', anchor: '1l', keys: ['1l', '2o'] };
+    // `2o` стоит перед `3l` — справа есть показанная; выделение сжимается до неё (как при
+    // любой пропавшей текущей).
+    expect(pruned(selection, SHOWN, ORDER)).toEqual({ current: '3l', anchor: '3l', keys: ['3l'] });
+    const last = { current: '3o', anchor: '3o', keys: ['3o'] };
+    expect(pruned(last, SHOWN, [...ORDER, '3o'])).toEqual({
+      current: '3l',
+      anchor: '3l',
+      keys: ['3l'],
+    });
+  });
+
+  it('текущая исчезла из полной ленты — прежнее правило: первая уцелевшая выделенная', () => {
+    const selection = { current: 'zz', anchor: 'zz', keys: ['zz', '3l', '2l'] };
+    expect(pruned(selection, SHOWN, ORDER)).toEqual({
+      current: '2l',
+      anchor: '2l',
+      keys: ['2l', '3l'],
+    });
+  });
+
+  it('показанных нет — выделения нет', () => {
+    expect(pruned({ current: '1o', anchor: '1o', keys: ['1o'] }, [], ORDER)).toEqual(NO_SELECTION);
   });
 });

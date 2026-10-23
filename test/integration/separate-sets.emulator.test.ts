@@ -22,7 +22,7 @@ import {
 import { journalOnDisk } from '../support/session-store';
 import { makeTempDataRoot } from '../support/temp-data-root';
 import { unwrap } from '../support/result';
-import { until } from '../support/until';
+import { until, untilScored } from '../support/until';
 
 // Раздельные наборы — полный путь на настоящей цепочке (план M3.6, U7; R27): эмулятор с лотками
 // по заданиям → служба → журнал v5 → режим наборов в снимке → «Добавить» в группу якоря → перенос
@@ -108,6 +108,7 @@ async function scanned(service: PassService, ...pages: readonly number[]): Promi
 async function saveSingle(service: PassService, root: string): Promise<string> {
   const folder = join(root, 'выход');
   await mkdir(folder, { recursive: true });
+  await untilScored(() => service.snapshot());
   const saved = unwrap(
     await service.saveDocuments(folder, { mode: 'single', names: ['Документ'], retry: false }),
   );
@@ -440,7 +441,7 @@ describe('раздельные наборы — полный путь через
     expect(snapshot.assembly?.documents).toEqual([{ name: '', start: 0, count: 5 }]);
     const journal = await journalOnDisk(root);
     expect(journal).toMatchObject({
-      version: 5,
+      version: 6,
       assembled: null,
       edits: { divider: null, cuts: [], names: [''] },
     });

@@ -10,7 +10,8 @@ import './merge-screen.css';
 // органов управления, уходит сам по таймеру App (KTD-5). Диаграмма иллюстративна, статусная
 // строка — фактический результат сборки и первой сообщает о несовпадении. При несовпадении
 // (режим раздельных наборов) ряда «документ» нет: лица и обороты лежат отдельными наборами,
-// документ соберут в редакторе (R21).
+// документ соберут в редакторе (R21). С M4 (S12) статус получает хвост про пустые обороты, а
+// App держит экран, пока оценки не пришли (решение автора: без потолка).
 
 /** Пауза `merge` (KTD-5, UI_SPEC раздел 9). */
 export const MERGE_PAUSE_MS = 1600;
@@ -25,8 +26,29 @@ export interface MergeScreenProps {
   readonly assembly: SessionAssembly;
 }
 
+/**
+ * Хвост статуса про пустые обороты (M4, S12): только при режиме, отличном от «Оставлять», при
+ * проходе оборотов и вне режима наборов — там детектор не работал или страницы не скрываются.
+ */
+function blankStatus(t: TFunction, assembly: SessionAssembly): string | null {
+  const { blank, report } = assembly;
+  if (blank.mode === 'keep' || report.backsState === null || report.mode === 'sets') {
+    return null;
+  }
+  if (blank.pending > 0) {
+    return t('merge.blank.scoring');
+  }
+  return blank.found === 0 ? t('merge.blank.none') : t('merge.blank.found', { count: blank.found });
+}
+
 /** Статусная строка: исход — общей классификацией, тот же, что увидит `mismatch` (KTD-8). */
-function statusText(t: TFunction, report: AssemblyReport): string {
+function statusText(t: TFunction, assembly: SessionAssembly): string {
+  const status = outcomeText(t, assembly.report);
+  const blank = blankStatus(t, assembly);
+  return blank === null ? status : t('merge.blank.join', { status, blank });
+}
+
+function outcomeText(t: TFunction, report: AssemblyReport): string {
   const { fronts, backs } = report;
   switch (assemblyOutcome(report)) {
     case 'frontsOnly':
@@ -130,7 +152,7 @@ export function MergeScreen({ assembly }: MergeScreenProps): ReactNode {
           </p>
         )}
         <p className="merge-screen__status" role="status">
-          {statusText(t, report)}
+          {statusText(t, assembly)}
         </p>
       </footer>
     </main>

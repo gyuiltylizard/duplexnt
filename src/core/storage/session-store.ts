@@ -6,6 +6,7 @@ import {
   sameEdits,
   sessionConflict,
   type AddedPassIntent,
+  type BlankMode,
   type DomainError,
   type PassKind,
   type PassSnapshot,
@@ -43,6 +44,8 @@ import {
   type PassOrigin,
 } from './journal';
 import {
+  BLANK_FILE,
+  blankDirOf,
   closingDirOf,
   derivedDirOf,
   JOURNAL_FILE_NAME,
@@ -178,9 +181,15 @@ export interface SessionStore {
   /**
    * Новый проход: первый сегмент «идёт» записан в журнал. Вызывается до `POST`. Роль и якорь
    * пишутся сразу (журнал v4): по намерению (`AddedPassIntent`) или по очереди (`nextKindOf`).
-   * Намерение проверяется той же проверкой, что в `planPass`.
+   * Намерение проверяется той же проверкой, что в `planPass`. Режим пустых оборотов (M4, R2)
+   * замораживается в журнале, когда проход открывает сессию — новую или заново после пустой;
+   * дальше аргумент не читается.
    */
-  beginPass(origin: PassOrigin, intent: AddedPassIntent | null): Promise<Result<SegmentStart>>;
+  beginPass(
+    origin: PassOrigin,
+    intent: AddedPassIntent | null,
+    blankMode?: BlankMode,
+  ): Promise<Result<SegmentStart>>;
   /** С чем можно досканировать последний проход; отказ — досканировать нельзя. */
   resumeTarget(): Result<PassOrigin>;
   /** Досканирование прерванного прохода: новый сегмент того же прохода. */
@@ -541,8 +550,12 @@ export function createSessionStore(
   async function removeMarked(sessionId: string, prefix: string): Promise<void> {
     try {
       const report = await removeByPrefix(layout.pagesDir, prefix, PAGE_FILE, io);
-      // Миниатюры отброшенных страниц — производное: чистятся по возможности.
+      // Миниатюры и оценки пустых страниц отброшенных страниц — производное: чистятся по
+      // возможности.
       await removeByPrefix(thumbsDirOf(layout, sessionId), prefix, PAGE_FILE, io).catch(
+        () => undefined,
+      );
+      await removeByPrefix(blankDirOf(layout, sessionId), prefix, BLANK_FILE, io).catch(
         () => undefined,
       );
       if (report.failed.length === 0 && journal !== null) {
@@ -568,6 +581,7 @@ export function createSessionStore(
         passes: passSnapshotsOf(journal, lost),
         edits: journal.edits,
         assembled: journal.assembled,
+        blankMode: journal.blankMode,
       };
     },
 
@@ -577,7 +591,7 @@ export function createSessionStore(
 
     planPass,
 
-    beginPass: (origin, intent) =>
+    beginPass: (origin, intent, blankMode = 'keep') =>
       mutating(async () => {
         if (runningSegmentOf(journal) !== null) {
           return conflict('passRunning');
@@ -598,7 +612,7 @@ export function createSessionStore(
         // оборотов, отметка о сохранении, правки) с ней и уходят.
         const base =
           journal === null || (isVacant(journal) && journal.deletions.length === 0)
-            ? newJournal(newSessionId())
+            ? { ...newJournal(newSessionId()), blankMode }
             : isVacant(journal)
               ? {
                   ...journal,
@@ -607,6 +621,7 @@ export function createSessionStore(
                   saved: false,
                   edits: EMPTY_EDITS,
                   assembled: null,
+                  blankMode,
                 }
               : journal;
         const number = base.nextPass;

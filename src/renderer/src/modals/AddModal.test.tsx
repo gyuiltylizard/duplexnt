@@ -1,4 +1,4 @@
-import type { ScannerState } from '@shared';
+import type { AssembledPage, ScannerState } from '@shared';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { i18n } from '../i18n';
@@ -184,6 +184,7 @@ describe('модалка add в режиме наборов (M3.6, KTD11; handof
     angle: 0 as const,
     lost: false,
     addedSet,
+    blank: null,
   });
   // Лента f1 f2 f3 | b2 a1 b1: граница 3, добавленный набор в группе оборотов.
   const visible = ['f1', 'f2', 'f3', 'b2', 'a1', 'b1'];
@@ -268,5 +269,41 @@ describe('модалка add в режиме наборов (M3.6, KTD11; handof
     expect(summary()).toBe('Один проход · в конец набора оборотов, после стр. 6');
     fireEvent.click(start());
     expect(onStart).toHaveBeenCalledExactlyOnceWith('b1');
+  });
+});
+
+// M4 (R11–R12; handoff M4, S16): «После текущей» — за скрытым хвостом, номера — по показанной
+// ленте.
+describe('якоря add при скрытых пустых оборотах (M4)', () => {
+  const t = i18n.t.bind(i18n);
+  it('anchorsOf: after подменяет ключ якоря, numberOf — номера страниц', () => {
+    const entry = (key: string, side: 'front' | 'back', sheet: number): AssembledPage => ({
+      key,
+      side,
+      sheet,
+      angle: 0,
+      lost: false,
+      addedSet: null,
+      blank: null,
+    });
+    const visible = ['f1', 'b1', 'f2'];
+    const shown = ['f1', 'f2'];
+    expect(
+      anchorsOf(t, {
+        entry: entry('f1', 'front', 1),
+        index: 0,
+        document: { name: 'Скан', start: 0, count: 3 },
+        documentName: 'Скан',
+        visible,
+        mode: 'pairs',
+        sets: null,
+        after: 'b1',
+        numberOf: (key) => shown.indexOf(key) + 1,
+      }),
+    ).toEqual({
+      current: { key: 'b1', page: 1, label: 'лицо листа 1' },
+      end: { key: 'f2', page: 2, label: 'Скан' },
+      endKind: 'document',
+    });
   });
 });

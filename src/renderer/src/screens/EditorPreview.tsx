@@ -1,12 +1,13 @@
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { pageImageUrl, type AssembledPage } from '@shared';
+import { pageImageUrl, type AssembledPage, type BlankFlag } from '@shared';
 import { multiline } from '../components/multiline';
 import { useImageLoad } from '../components/useImageLoad';
 
 /**
  * Превью: сама страница под углом из ядра (S8 M3: 90°/270° — альбомная бумага), кромка и метка
- * начала документа; потерянная — пунктирный лист S18 M1; не открылась — текст S19 M1.
+ * начала документа; потерянная — пунктирный лист S18 M1; не открылась — текст S19 M1. Пустой
+ * оборот (S8 M4) — скан как есть, пустоту проверяют глазами, пилюля «ПУСТАЯ СТОРОНА» в углу.
  * Перемонтируется на каждую страницу (`key` по ключу) — так требует `useImageLoad`.
  */
 export function EditorPreview({
@@ -15,6 +16,7 @@ export function EditorPreview({
   position,
   docStart,
   tone,
+  blank,
 }: {
   readonly sessionId: string;
   readonly entry: AssembledPage;
@@ -23,6 +25,8 @@ export function EditorPreview({
   readonly docStart: number | null;
   /** Класс тона документа страницы (`doc-tone--N`). */
   readonly tone: string;
+  /** Пустой оборот (M4, R10): помечена или скрыта и показана переключателем. */
+  readonly blank: BlankFlag;
 }): ReactNode {
   const { t } = useTranslation();
   const image = useImageLoad();
@@ -57,6 +61,11 @@ export function EditorPreview({
     <div className={classes.join(' ')} aria-busy={image.state === 'loading' ? true : undefined}>
       {docStart !== null && (
         <span className="preview__doc-start">{t('preview.docStart', { number: docStart })}</span>
+      )}
+      {blank !== null && (
+        <span className="preview__blank">
+          {t(blank === 'hidden' ? 'preview.blankHidden' : 'preview.blank')}
+        </span>
       )}
       <img
         className="preview__img"

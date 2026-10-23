@@ -32,6 +32,7 @@ function makeSnapshot(fronts: number): Snapshot {
     seq: 1,
     scanner: { kind: 'none' },
     session: {
+      blankMode: 'keep',
       id: 'session.x',
       backsDeclined: false,
       saved: false,
@@ -60,6 +61,7 @@ function makeSnapshot(fronts: number): Snapshot {
     canAccept: false,
     storage: { incompatible: false, unsaved: false },
     notices: [],
+    blankMode: 'hide',
   };
 }
 

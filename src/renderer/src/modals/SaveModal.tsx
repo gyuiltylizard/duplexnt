@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import {
   MAX_DOCUMENT_NAME_LENGTH,
   type AssembledDocument,
+  type BlankSummary,
   type SaveDocumentsReport,
   type SaveMode,
 } from '@shared';
@@ -20,15 +22,21 @@ import './save-modal.css';
 // успех под запрошенными именами закрывает модалку (тост S18 ставит экран); частичный сбой или
 // имя, изменённое ядром, держат ИТОГ: выбор, имена и папка недоступны — повтор пишет тот же
 // пакет. На время записи модалка занята и не закрывается: отменять пакет ядро не умеет.
+// С M4 (handoff M4, S14; R16–R17) счёт страниц — по тем, что уйдут в файл (без скрытых пустых
+// оборотов), сводка несёт ряд «Пустых оборотов», а отказы ядра `documentBlank` и `blankPending`
+// видны до клика: кнопка недоступна, статус объясняет.
 
 export interface SaveModalProps {
+  /** Документы со счётом страниц, которые уйдут в файл (без скрытых); `count: 0` — одни скрытые. */
   readonly documents: readonly AssembledDocument[];
   /** Имена по умолчанию — плейсхолдеры строк документов. */
   readonly defaultNames: readonly string[];
   /** Имя единого файла по умолчанию при нескольких документах — «Скан ГГГГ-ММ-ДД». */
   readonly singleDefault: string;
-  /** Страниц в ленте. */
+  /** Страниц, которые уйдут в файл (без скрытых пустых оборотов). */
   readonly total: number;
+  /** Сводка пустых оборотов снимка: ряд сводки и причины отказа до клика (S14 M4). */
+  readonly blank: BlankSummary;
   /**
    * Записать имена, тронутые в модалке (номер документа → имя), одной правкой; `false` — не
    * записались (об этом уже сказано).
@@ -62,7 +70,19 @@ interface Row {
   readonly value: string;
   readonly placeholder: string;
   readonly pages: number;
+  /** Документ из одних скрытых пустых оборотов — в файл не запишется (S14 M4). */
+  readonly blank: boolean;
   readonly onChange: (value: string) => void;
+}
+
+/** Ряд «Пустых оборотов» (S14 M4): скрыто / помечено / не найдено — по режиму сессии. */
+function blankFact(t: TFunction, blank: BlankSummary): string {
+  if (blank.found === 0) {
+    return t('save.fact.blankNone');
+  }
+  return blank.mode === 'hide'
+    ? t('save.fact.blankHidden', { count: blank.hidden })
+    : t('save.fact.blankMarked', { count: blank.found });
 }
 
 /** Отказ повтора, после которого пакета у ядра больше нет: выбор снова доступен (S16). */
@@ -73,6 +93,7 @@ export function SaveModal({
   defaultNames,
   singleDefault,
   total,
+  blank,
   onRename,
   editsBusy,
   onWriting,
@@ -127,6 +148,7 @@ export function SaveModal({
     value: edited.get(index) ?? doc.name,
     placeholder: defaultNames[index] ?? '',
     pages: doc.count,
+    blank: doc.count === 0,
     onChange: (value) => {
       setEdited((previous) => new Map(previous).set(index, value));
     },
@@ -135,7 +157,22 @@ export function SaveModal({
   const perDocument = mode === 'separate' || !several;
   const rows: Row[] = perDocument
     ? docRows
-    : [{ value: fileName, placeholder: singleDefault, pages: total, onChange: setFileName }];
+    : [
+        {
+          value: fileName,
+          placeholder: singleDefault,
+          pages: total,
+          blank: false,
+          onChange: setFileName,
+        },
+      ];
+
+  // S14 M4: причины отказа ядра — до клика. Документ из одних скрытых (R16) не записать по
+  // документам; «Один файл» пишется, пока есть хоть одна показанная. Оценки ещё идут —
+  // `blankPending`: снимок с `pending === 0` снимет блок сам.
+  const emptyDoc = documents.findIndex((doc) => doc.count === 0);
+  const blankDocument = emptyDoc >= 0 && (perDocument || total === 0) ? emptyDoc : -1;
+  const unsaveable = blankDocument >= 0 || blank.pending > 0;
 
   const write = (requested: readonly string[], retry: boolean): void => {
     setWriting(true);
@@ -176,7 +213,7 @@ export function SaveModal({
   };
 
   const submit = (): void => {
-    if (locked || editsBusy) {
+    if (locked || editsBusy || unsaveable) {
       return;
     }
     const requested = requestedNames(rows);
@@ -248,6 +285,24 @@ export function SaveModal({
         })}
       </p>
     );
+  } else if (blankDocument >= 0) {
+    // Безымянный документ назван именем по умолчанию — как в строке.
+    const blankDoc = documents[blankDocument];
+    const name =
+      blankDoc === undefined || blankDoc.name === ''
+        ? (defaultNames[blankDocument] ?? '')
+        : blankDoc.name;
+    status = (
+      <p className="modal__status modal__status--danger" role="alert">
+        {t('save.documentBlank', { name })}
+      </p>
+    );
+  } else if (blank.pending > 0) {
+    status = (
+      <p className="modal__status" role="status" aria-live="polite">
+        {t('save.blankPending', { count: blank.pending })}
+      </p>
+    );
   } else {
     status = <p className="modal__status" />;
   }
@@ -288,7 +343,7 @@ export function SaveModal({
           ref={primaryRef}
           type="button"
           className="btn btn--primary btn--small"
-          disabled={writing || (retry === null && editsBusy)}
+          disabled={writing || (retry === null && (editsBusy || unsaveable))}
           aria-busy={writing ? true : undefined}
           onClick={() => {
             if (retry === null) {
@@ -368,7 +423,10 @@ export function SaveModal({
             className={rows.length > SCROLL_ROWS ? 'save-files save-files--scroll' : 'save-files'}
           >
             {rows.map((row, index) => (
-              <li key={index} className={`save-file ${toneOf(index)}`}>
+              <li
+                key={index}
+                className={`save-file ${toneOf(index)}${row.blank ? ' save-file--blank' : ''}`}
+              >
                 <span className="doc-badge doc-badge--small" aria-hidden="true">
                   {index + 1}
                 </span>
@@ -385,7 +443,9 @@ export function SaveModal({
                   }}
                 />
                 <span className="save-file__ext">.pdf</span>
-                <span className="save-file__meta">{t('save.fileMeta', { count: row.pages })}</span>
+                <span className="save-file__meta">
+                  {row.blank ? t('save.fileMetaBlank') : t('save.fileMeta', { count: row.pages })}
+                </span>
               </li>
             ))}
           </ul>
@@ -420,6 +480,12 @@ export function SaveModal({
             <dt className="facts__key">{t('save.fact.pages')}</dt>
             <dd className="facts__value">{total}</dd>
           </div>
+          {blank.mode !== 'keep' && (
+            <div className="facts__row">
+              <dt className="facts__key">{t('save.fact.blank')}</dt>
+              <dd className="facts__value">{blankFact(t, blank)}</dd>
+            </div>
+          )}
           <div className="facts__row">
             <dt className="facts__key">{t('save.fact.format')}</dt>
             <dd className="facts__value">{t('save.fact.formatValue')}</dd>

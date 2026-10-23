@@ -47,6 +47,7 @@ describe('хранилище сессии: проход', () => {
     expect(store.snapshot()).toEqual({
       id: SESSION,
       backsDeclined: false,
+      blankMode: 'keep',
       saved: false,
       passes: [
         {
