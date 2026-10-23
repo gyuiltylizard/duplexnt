@@ -70,8 +70,9 @@ execution: code
 
 - R1. Две карточки-радио: «Одностороннее сканирование» (один или несколько листов, обороты не
   сканируем) и «Двустороннее сканирование» (два прохода с разворотом на 180°, как основной
-  документ); по умолчанию выбрана двусторонняя; карточек «Односторонние листы» / «Один лист» и
-  подсказки о ручном обороте нет. (origin R1)
+  документ); по умолчанию выбрана двусторонняя, если доступна, иначе односторонняя; выключенная
+  карточка не выбирается и не влияет на сводку и «Начать скан»; карточек «Односторонние листы» /
+  «Один лист» и подсказки о ручном обороте нет. (origin R1)
 - R2. Места вставки и сводка подвала — без изменений; сводка называет сценарий. (origin R2)
 - R3. В режиме раздельных наборов карточка «Двустороннее сканирование» неактивна с подписью
   «сначала соберите документ»; одностороннее — как в M3.5. В режиме «собрано» двустороннее
@@ -108,10 +109,13 @@ execution: code
 **Сборка и лента**
 
 - R12. При равном числе страниц блок набора — чередование: оборот листа _i_ набора — страница
-  _F−1−i_ прохода оборотов набора; блок встаёт по якорю прохода лиц по правилу вставки M3.5 во
-  всех трёх режимах, включая «собрано»; досканированный сегмент любого прохода пары попадает в
-  чередование; при ручном порядке новые ключи встают за ближайшим предшественником по автопорядку
-  (оборот — за своим лицом). (origin R11)
+  _F−1−i_ прохода оборотов набора; блок встаёт по якорю прохода лиц по правилу вставки M3.5 в
+  режимах пары и «собрано» (в режиме наборов добавляются только односторонние — R3);
+  досканированный сегмент любого прохода пары попадает в чередование автопорядка. При ручном
+  порядке страницы оборотов набора встают в подблок оборотов за соседом по проходу:
+  `settled`-проекция идущего или короткого прохода оборотов набора — всегда подблоки, как у
+  оборотов основной пачки (M3.6, ревью #1); чередование действует только в автопорядке. (origin
+  R11)
 - R13. Страницы пары: тег «ДN» на обеих сторонах, сторона и лист внутри набора в подписях, превью и
   «Деталях»; нумерация «ДN» — по наборам (пара = один номер), в порядке номера прохода лиц. (origin
   R12)
@@ -122,8 +126,11 @@ execution: code
 - R15. При первом входе в редактор после завершённых оборотов набора с неравным числом и
   `backsDecision: none` — модалка «Обороты набора не сошлись: N лиц, M оборотов» с действиями
   «Переснять обороты набора» (отброс прохода оборотов, затем `flip` набора) и «Оставить как есть»
-  (`backsDecision: kept`). Принятые плашкой короткие обороты набора ставят `kept` без модалки.
-  Повторное несовпадение после пересъёмки — модалка снова. (origin R14)
+  (`backsDecision: kept`). Модалка закрывается только одним из двух действий: Esc и клик по
+  подложке её не закрывают (как `mismatch` M3.6). Показывается при первом входе в редактор за
+  процесс, пока `backsDecision: none` и числа не равны — в том числе после перезапуска без
+  решения. Принятые плашкой короткие обороты набора ставят `kept` без модалки. Повторное
+  несовпадение после пересъёмки — модалка снова. (origin R14)
 - R16. Тумблер 180° крутит обороты пачки текущей страницы (основная или набор «ДN»), подпись
   называет пачку; при текущей на пачке без оборотов — недоступен с причиной; скрыт, только если
   оборотов нет ни у одной пачки. Флаг — на проходе оборотов этой пачки; переключение — шаг undo,
@@ -163,11 +170,14 @@ execution: code
 - **KTD2. Политика ролей остаётся в одном месте: `nextKindOf` + `planPass` + `passesByKind`.**
   `passesByKind` возвращает дополнительно `addedFronts: T[]` и `addedBacks: T[]`; новый помощник
   `addedSetsOf(passes)` в `src/shared/snapshot.ts` собирает наборы по порядку номера прохода лиц:
-  `{ set, fronts, backs | null, decision, sides: 'one' | 'two' }` — одна нумерация «ДN» для ядра и
-  renderer. `nextKindOf`: `fronts` → `backs` → обороты ожидающей пары (с `pair` и `expected`) →
-  `added` (конфликт). `planPass(null)`: resumable последний → ожидающая пара → очередь. Намерение
-  модалки: `AddedPassIntent.kind: 'added' | 'addedFronts'`. Ветки выносятся в
-  `src/core/storage/pass-policy.ts` (`planPass`, `checkIntent`, `resumable`, `pendingPairOf`) —
+  `{ set, fronts, backs, decision, sides }`, где `set` — номер «ДN» (с единицы, по порядку номера
+  прохода лиц), `fronts` — номер прохода лиц, `backs` — номер прохода оборотов или `null`,
+  `sides: 'one' | 'two'` — одна нумерация и один идентификатор набора для ядра, моста и renderer.
+  `nextKindOf(journal)` остаётся `PassKind` (`fronts` → `backs` → `addedBacks` при ожидающей паре →
+  `added`); `pendingPairOf(journal)` рядом с ним в `journal.ts` даёт `pair` и `expected`.
+  `planPass(null)`: resumable последний → ожидающая пара → очередь. Намерение модалки:
+  `AddedPassIntent.kind: 'added' | 'addedFronts'`. Ветки `planPass`, `checkIntent`, `resumable`
+  выносятся в `src/core/storage/pass-policy.ts` (импортирует `nextKindOf` и `pendingPairOf`) —
   `session-store.ts` на границе R21. _Отклонено:_ вторая очередь ролей в службе проходов.
 - **KTD3. Команды решения набора — адресные, с проверкой ядра.** `declineBacks()` без аргумента
   адресуется ожидающей паре, если она есть, иначе сессии (экран `flip` один, команда одна —
@@ -175,16 +185,21 @@ execution: code
   оборотов набора (запись журнала → удаление файлов → чистка `derived` и правок по мёртвым ключам,
   как `prune` M4) и отвечает снимком, после которого `screenOf` даёт `flip` набора; `acceptPass`
   прерванных оборотов набора с неравным числом ставит `kept`. Конфликты: `noPendingSet`,
-  `setNotMismatched`, `passRunning`, `saving`. Вход валидируется схемой (`set` — номер прохода лиц
-  набора). _Отклонено:_ «Переснять» как новый проход с пометкой прежнего — третье состояние без
+  `setNotMismatched`, `pairInSets` (двустороннее недоступно в режиме раздельных наборов — R3,
+  ядро отказывает и без UI), `passRunning`, `saving`. Вход валидируется схемой: `set` — номер «ДN»,
+  ядро находит проходы через `addedSetsOf` и отвечает `noPendingSet`, если такого набора нет.
+  _Отклонено:_ «Переснять» как новый проход с пометкой прежнего — третье состояние без
   потребителя (ADR).
-- **KTD4. Флаг 180° — адресная команда `setRotate180({ pass, on })`; `setEdits` теряет второй
-  аргумент.** Ядро принимает только проход роли `backs` или `addedBacks`; история редактора держит
-  `rotate180: ReadonlyMap<number, boolean>` (номер прохода → флаг), шаг undo — как сегодня;
-  сборка кладёт флаг на страницы его прохода (`BasePage.rotate180` вместо `base.rotateBacks`).
-  Подвал: цель тумблера — пачка текущей страницы, `origins` редактора расширяются до карты
-  `ключ → { pass, kind }`. _Отклонено:_ `rotate180` в `setEdits` как карта — два пути к одному
-  флагу.
+- **KTD4. Флаг 180° — карта по проходам внутри одного `setEdits`.** Второй аргумент `setEdits`
+  становится `rotate180: Record<number, boolean>` (номер прохода оборотов → флаг); ядро принимает
+  только проходы ролей `backs` и `addedBacks`, иначе `noBacksPass`, и пишет флаг на проход.
+  История редактора держит `rotate180: ReadonlyMap<number, boolean>`, `REVERTED` — пустая карта;
+  тумблер, Ctrl+Z и «Вернуть» остаются одним `setEdits` и одним `seq`, как сегодня. Сборка кладёт
+  флаг на страницы его прохода (`BasePage.rotate180` вместо `base.rotateBacks`). Подвал: цель
+  тумблера — проход оборотов пачки текущей страницы (`AddedSet.backs` или `backs` сессии),
+  `origins` редактора расширяются до карты `ключ → { pass, kind }`. _Отклонено:_ отдельная команда
+  `setRotate180({ pass, on })` — «Вернуть» и undo поверх него требовали бы нескольких команд,
+  записей и снимков с видимым промежуточным состоянием (ревью плана).
 - **KTD5. Чередование набора — в `placeAdded`, одна точка для трёх режимов.** Блок пары при
   равном числе страниц — interleave (оборот _i_ = `backs[F−1−i]`), иначе два подблока; страницы
   оборотов набора — `side: 'back'`, `ofBacks: true` (флаги детектора), `sheet` — номер листа внутри
@@ -200,12 +215,18 @@ AddedSetReport[]` (`set`, `fronts`, `backs`, `backsState`, `decision`, `mismatch
   впереди нет). _Отклонено:_ ждать только оценки набора — второй счётчик без выигрыша.
 - **KTD7. Экраны — предикаты от снимка, без своих экранов.** `flipForm`: ожидающая пара
   (`report.pendingSet !== null`) → `flip` с приоритетом над `editor`; основная пара — как раньше.
-  `flipBusy`: `kind ∈ {backs, addedBacks}`. `FlipScreen` берёт число из `report.sets[pendingSet]`
-  или `report.fronts`. Пауза `merge` и посадка в `App` выводятся из «пара набора завершена /
-  принята / отказ» по снимку + `Launch` (урок M3.5 ревью 3: не из «последнего прохода»); дедуп —
-  по `session.id + set`. Модалка несовпадения набора — `modals/SetMismatchModal.tsx`, предикат
-  `setMismatchDue(report)` в `assembly-outcome.ts`. _Отклонено:_ отдельный поток экранов набора
-  (origin).
+  `flipBusy`: `kind ∈ {backs, addedBacks}`. `report.pendingSet` — номер «ДN»; `FlipScreen` берёт
+  число из `report.sets.find((it) => it.set === pendingSet)` или `report.fronts`. Пауза `merge` и
+  посадка в `App` выводятся из «пара набора завершена / принята / отказ» по снимку + `Launch`
+  (урок M3.5 ревью 3: не из «последнего прохода»); дедуп — по `session.id + set`. N тоста и ключ
+  посадки — по показанной ленте снимка: страницы `assembly.order` с `addedSet === set` (скрытые —
+  по флагу `blank` среди них), посадка — первая из них; `fresh`/`keysBefore` для пары не
+  используются. Модалка несовпадения набора — `modals/SetMismatchModal.tsx`, предикат
+  `setMismatchDue(report)` в `assembly-outcome.ts`: набор с завершёнными оборотами, неравным
+  числом и `decision: none`; показ — первый вход в редактор за процесс, ключ подтверждения
+  `session.id + set`; закрытие — только действиями. Тост при несовпадении — после закрытия
+  модалки; числа модалки — по страницам проходов, не по показанной ленте. _Отклонено:_ отдельный
+  поток экранов набора (origin).
 - **KTD8. Handoff состояний до renderer — утверждение автора как гейт.**
   `docs/design/handoffs/2026-10-m4-5-states.md` по шаблону: две карточки `add` и выключенная
   карточка; `scan` оборотов набора (тег «ДОБАВЛЯЕМ · ОБОРОТЫ», счётчик «из N»); `flip` набора
@@ -260,7 +281,7 @@ SessionAssembly.report.sets[0] / report.pendingSet → screenOf, FlipScreen, Mer
 
 Команды моста (новые и изменённые): `startPass(AddedPassIntent{kind: 'added' | 'addedFronts',
 after})`, `declineBacks()` (адресация в ядре), `keepSetBacks({set})`, `rescanSetBacks({set})`,
-`setRotate180({pass, on})`, `setEdits(edits)`.
+`setEdits(edits, rotate180: Record<number, boolean>)`.
 
 ---
 
@@ -296,16 +317,16 @@ after})`, `declineBacks()` (адресация в ядре), `keepSetBacks({set}
 - **Files:** `src/shared/snapshot.ts` (`PASS_KINDS`, `PassSnapshot.pair/backsDecision`,
   `PassesByKind.addedFronts/addedBacks`, `addedSetsOf`, `AddedSet`), `src/shared/bridge.ts`
   (`AddedPassIntent.kind`), `src/core/storage/journal.ts` (v7: `journalV6Schema`, `upgradeToV7`,
-  `passSchema` с `refine` по ролям, `nextKindOf` с ожидающей парой, `pendingPairOf`),
+  `passSchema` с `refine` по ролям, `nextKindOf` с ожидающей парой, `pendingPairOf` — единственный
+  дом обоих помощников),
   `src/core/storage/edits-schema.ts` (если задето чтением), `src/core/storage/reconcile.ts`
   (`adopt` — всегда `added`, `pair: null`, `backsDecision: null`); тесты: `journal.test.ts`
   (645 — новый `journal.v7.test.ts`), `reconcile.test.ts` (1182 — новый
   `reconcile.pairs.test.ts`), `src/shared/snapshot.test.ts` (`addedSetsOf`).
 - **Approach:** KTD1, KTD2 (помощники). `refine`: `after` только у `added`/`addedFronts`; `pair`
-  ⇔ `addedBacks`; `backsDecision` ⇔ `addedFronts`. `nextKindOf(journal)` возвращает
-  `{ kind, pair?, expected? }` или остаётся `PassKind` плюс отдельный `pendingPairOf(journal)` —
-  решить при реализации, не плодя второй источник. Тест «в журнале нет выводимого»: поле
-  «ждёт обороты» в v7 — отказ схемы.
+  ⇔ `addedBacks`; `backsDecision` ⇔ `addedFronts`. `nextKindOf(journal)` остаётся `PassKind`;
+  `pendingPairOf(journal)` возвращает `{ set, fronts, expected } | null` (KTD2). Тест «в журнале
+  нет выводимого»: поле «ждёт обороты» в v7 — отказ схемы.
 - **Patterns to follow:** амендмент 2026-10-22 и `upgradeToV6`; `journal.test.ts:609-620`
   («v5 читается с дефолтами», «v5 с полем v6 — ошибка»); `adopt` по номеру прохода.
 - **Test scenarios:**
@@ -317,28 +338,30 @@ after})`, `declineBacks()` (адресация в ядре), `keepSetBacks({set}
     `expected`; `declined` или `kept` → `added`-конфликт; пустой прерванный проход оборотов набора
     роли не занимает; прерванные лица набора → resumable, не пара.
   - `addedSetsOf`: пара и односторонний набор нумеруются по номеру прохода лиц; обороты с
-    `pair` на отсутствующий проход — осиротевшие (`backs` без `fronts`).
+    `pair` на отсутствующий проход — осиротевшие (`addedBacks` без `addedFronts`).
   - `adopt`: усыновлённый проход при ожидающей паре — `added`, пара остаётся ожидающей.
 - **Verification:** `test:all` зелёный; ADR с формой v7 закоммичен раньше кода (сделано).
 
 ### U2. Политика проходов и команды решения набора в хранилище
 
-- **Goal:** `planPass` ведёт пару; `declineBacks` адресует пару; `keepSetBacks`, `rescanSetBacks`,
-  `setRotate180`; `acceptPass` коротких оборотов набора ставит `kept`.
+- **Goal:** `planPass` ведёт пару; `declineBacks` адресует пару; `keepSetBacks`, `rescanSetBacks`;
+  `setEdits` с картой флагов 180°; `acceptPass` коротких оборотов набора ставит `kept`.
 - **Requirements:** R4, R6, R7, R10, R11, R15, R16, R22.
 - **Dependencies:** U1.
 - **Files:** новый `src/core/storage/pass-policy.ts` (вынос `planPass`, `checkIntent`,
-  `resumable`, `pendingPairOf` из `session-store.ts`), `src/core/storage/session-store.ts`
-  (`beginPass` — `pair`, `backsDecision`, `expected`; `declineBacks(target)`, `keepSetBacks`,
-  `rescanSetBacks`, `setRotate180`, `setEdits(edits)`), `src/shared/errors.ts` (`noPendingSet`,
-  `setNotMismatched`, `noBacksPass` — уточнённый текст), `locales/ru/common.json`
+  `resumable` из `session-store.ts`; импорт `nextKindOf`/`pendingPairOf` из `journal.ts`),
+  `src/core/storage/session-store.ts` (`beginPass` — `pair`, `backsDecision`, `expected`;
+  `declineBacks(target)`, `keepSetBacks`, `rescanSetBacks`, `setEdits(edits, rotate180)` с картой),
+  `src/shared/errors.ts` (`noPendingSet`, `setNotMismatched`, `pairInSets`, `noBacksPass` —
+  уточнённый текст), `locales/ru/common.json`
   (`errorReasons.*`); тесты: новый `session-store.pairs.test.ts`, `session-store.flags.test.ts`
   (812 — `rotate180`-блок переезжает), `pass-policy.test.ts`.
 - **Approach:** KTD2, KTD3, KTD4. `rescanSetBacks`: запись журнала без прохода оборотов →
   удаление файлов → `removeMarked`-чистка `derived` → нормализация правок (мёртвые ключи: разрезы,
   `order`, `notBlank`, `rotations`); идемпотентно при падении посреди (сверка дочищает). Тест
-  `pass-service.test.ts:448` («третий проход без намерения не начинается») переписывается: при
-  ожидающей паре начинается её обороты.
+  `pass-service.test.ts:448` («третий проход без намерения не начинается») остаётся как есть — там
+  пары нет; рядом в `pass-service.pairs.test.ts` добавляется случай «при ожидающей паре
+  `startPass(null)` начинает её обороты с `expected = F`».
 - **Execution note:** вынос `pass-policy.ts` — сначала без изменения поведения (тесты зелёные),
   затем новые ветки.
 - **Patterns to follow:** `declineBacks` (чистка пустого прерванного прохода), `prune` M4 (0007 U8),
@@ -348,8 +371,8 @@ after})`, `declineBacks()` (адресация в ядре), `keepSetBacks({set}
     обороты набора → resumable того же прохода; после `declined`/`kept` → `backsPresent`-класс
     конфликта по очереди M2.
   - `planPass({kind: addedFronts, after})`: как `added` — `noSession`, `passInterrupted`,
-    `invalidInput`; в режиме раздельных наборов — конфликт `notAssembled`-класса (R3 — ядро тоже
-    отказывает, не только UI).
+    `invalidInput`; в режиме раздельных наборов — конфликт `pairInSets` (R3 — ядро тоже отказывает,
+    не только UI).
   - `declineBacks()`: при ожидающей паре пишет `declined` на лица набора, флаг сессии не трогает;
     без пары — как раньше; при `addedBacks` со страницами — конфликт.
   - `keepSetBacks`: только при неравном числе и `none`; иначе `setNotMismatched`.
@@ -357,8 +380,9 @@ after})`, `declineBacks()` (адресация в ядре), `keepSetBacks({set}
     `blank/` по ключам удалён, разрезы и `order` на его ключах сняты без шага undo; после
     повторного прохода — новая пара; падение между записью и удалением — сверка дочищает.
   - Covers AE11. `acceptPass` прерванных оборотов набора с M < F → `kept`; с M = F → `none`.
-  - `setRotate180`: `backs` и `addedBacks` — пишет; `fronts`/`added`/`addedFronts` —
-    `noBacksPass`; `passRunning` — конфликт; `setEdits` больше не трогает флаг.
+  - `setEdits(edits, rotate180)`: карта с номерами `backs` и `addedBacks` — пишет на каждый проход;
+    номер `fronts`/`added`/`addedFronts` или отсутствующего прохода — `noBacksPass`; пустая карта
+    («Вернуть») сбрасывает все флаги одной записью; `passRunning` — конфликт.
   - `beginPass` оборотов набора: `pair`, `after: null`, `rotate180: false`; лиц набора —
     `backsDecision: none`.
 - **Verification:** `test:all` зелёный; `session-store.ts` не выше ориентира R21.
@@ -410,8 +434,9 @@ after})`, `declineBacks()` (адресация в ядре), `keepSetBacks({set}
 - **Requirements:** R4, R9 (снимок), R10, R15, R16, R17.
 - **Dependencies:** U2, U3.
 - **Files:** `src/core/scan/pass-service.ts` (`startPass` — план пары, `expected`; `keepSetBacks`,
-  `rescanSetBacks`, `setRotate180`, `setEdits(edits)`, `declineBacks`), `src/core/commands/
-schemas.ts` (`z.enum(['added','addedFronts'])`, схемы `{set}`, `{pass, on}`),
+  `rescanSetBacks`, `setEdits(edits, rotate180)`, `declineBacks`; `settleSegment` — условие роли
+  расширяется на `addedBacks`), `src/core/commands/schemas.ts` (`z.enum(['added','addedFronts'])`,
+  схема `{set}`, `rotate180` как `z.record` номеров проходов),
   `src/core/commands/handlers.ts`, `src/preload/api.ts`, `src/main/bridge.ts`,
   `src/shared/bridge.ts` (карта команд); тесты: `pass-service.test.ts` (1084 — новый
   `pass-service.pairs.test.ts`), `schemas.test.ts`, `handlers.test.ts`, `preload/api.test.ts`,
@@ -442,10 +467,18 @@ schemas.ts` (`z.enum(['added','addedFronts'])`, схемы `{set}`, `{pass, on}`
 - **Dependencies:** U3 (отчёт по наборам известен).
 - **Files:** `docs/design/handoffs/2026-10-m4-5-states.md` (по `docs/templates/handoff.md`),
   `docs/design/mock/Сканер ADF.dc.html` (правка `kinds`: две карточки), при необходимости
-  `docs/design/DESIGN_SYSTEM.md` (цвет тега оборота набора).
+  `docs/design/DESIGN_SYSTEM.md` не меняется — тег оборота набора собирается из существующих
+  токенов «ДN» и «об».
 - **Approach:** KTD8. Dev-агент пишет handoff по моку и брейншторму, автор утверждает в чате —
-  гейт U6/U7. Решения handoff'а: тег оборота набора; текст тоста со скрытыми; подпись тумблера;
-  кикер `flip` набора; строки `merge` набора; текст выключенной карточки.
+  гейт U6/U7. Решения handoff'а: тег оборота набора из существующих токенов; текст тоста со
+  скрытыми и его очередь после модалки несовпадения; подпись тумблера и видимая причина
+  недоступности; кикер `flip` набора и состояния `flip` набора (обычное, запуск, отказ запуска с
+  причиной, сканер недоступен — выход в редактор только через «Обороты не нужны»); строки `merge`
+  набора; текст выключенной карточки; текст «Переснять обороты набора», называющий удаление M
+  оборотов набора и правок на них, и состояния кнопки (идёт отброс, повтор заблокирован, ошибка
+  отброса); доступность — Tab-порядок и фокус в `add` и модалке набора, `aria-disabled` с видимой
+  причиной у выключенной карточки и недоступного тумблера, сторона и набор в подписи страницы
+  текстом, не только цветом.
 - **Patterns to follow:** `2026-10-m4-states.md` (Placement S1…, ссылки на U-ID/KTD, «Что
   меняется в существующем»).
 - **Test expectation:** none — документ; гейт — явное «утверждён автором <дата>» в шапке.
@@ -487,8 +520,11 @@ schemas.ts` (`z.enum(['added','addedFronts'])`, схемы `{set}`, `{pass, on}`
     названы), посадка на первую показанную страницу набора; после лиц набора — ни паузы, ни
     тоста; «Остановить» на лицах до первой страницы — ни паузы, ни тоста; после отказа — пауза
     короткая, как у основной.
-  - Covers AE8. `AddModal`: две карточки, двусторонняя по умолчанию, в режиме наборов выключена
-    с причиной; сводка называет сценарий; `onStart` получает `kind`.
+  - Covers AE8. `AddModal`: две карточки, двусторонняя по умолчанию; в режиме наборов она выключена
+    с причиной, выбрана односторонняя, выключенная не выбирается стрелками и кликом; сводка
+    называет сценарий; `onStart` получает `kind`; Tab-порядок и `aria-disabled` с текстом причины.
+  - Модалка набора: Esc и клик по подложке не закрывают; без решения `backsDecision` остаётся
+    `none`, и модалка показывается при следующем входе в редактор; фокус внутри модалки.
   - `whatOf`/теги: «лицо листа 2 набора Д1», «оборот листа 2 набора Д1», в подблоках — без
     номера листа; тег «ДN» на обеих сторонах.
   - StrictMode-рендер `App` с парой — без двойного тоста.
@@ -497,22 +533,23 @@ schemas.ts` (`z.enum(['added','addedFronts'])`, схемы `{set}`, `{pass, on}`
 ### U7. Редактор: тумблер 180° по пачке текущей страницы и история правок
 
 - **Goal:** тумблер в подвале крутит обороты пачки текущей; история держит карту флагов;
-  `setEdits` без второго аргумента.
+  карта флагов идёт одним `setEdits`.
 - **Requirements:** R16.
 - **Dependencies:** U4, U5.
 - **Files:** новый `src/renderer/src/state/useRotateTarget.ts` (цель по текущей странице и
   `origins`), `screens/EditorRailFooter.tsx` (подпись, недоступность с причиной),
-  `screens/EditorScreen.tsx` (провод — только замена вызова), `state/history.ts` (`EditState.rotate180`
-  → карта), `state/edits.ts` (`REVERTED`, жест поворота → `setRotate180`), `state/useEditorEdits.ts`
-  (если есть), `locales/ru/common.json` (`editor.rotateBacks*`); тесты: новый
+  `screens/EditorScreen.tsx` (провод через хук, файл не растёт), `state/history.ts`
+  (`EditState.rotate180` → карта), `state/edits.ts` (`REVERTED` — пустая карта, жест поворота —
+  запись в карту), `state/useEditorEdits.ts` (если есть), `locales/ru/common.json`
+  (`editor.rotateBacks*`); тесты: новый
   `EditorScreen.rotate.test.tsx`, `history.test.ts`, `useRotateTarget.test.ts`.
-- **Approach:** KTD4. Цель — проход оборотов пачки текущей страницы (основная: `backs`; набор:
-  `addedBacks` пары по `addedSet` страницы); при мультивыделении — по текущей. «Вернуть»
-  сбрасывает все флаги карты, как сегодня один.
+- **Approach:** KTD4. Цель — проход оборотов пачки текущей страницы (основная: `backs` сессии;
+  набор: `AddedSet.backs` набора с номером `addedSet` страницы); при мультивыделении — по
+  текущей. «Вернуть» — пустая карта одним `setEdits`, как сегодня один флаг.
 - **Patterns to follow:** `rotate` в `EditorScreen.tsx:859-862`, `editStateOf`/`tapeOf`.
 - **Test scenarios:**
-  - Covers AE6. Текущая на обороте «Д1» → переключение шлёт `setRotate180({pass: 4, on})`,
-    обороты основной не меняются; текущая на лице основной → цель `backs`.
+  - Covers AE6. Текущая на обороте «Д1» → переключение шлёт `setEdits` с картой `{2: прежний,
+4: новый}`, обороты основной не меняются; текущая на лице основной → цель `backs` (проход 2).
   - Covers AE15. Текущая на одностороннем «Д2» → тумблер недоступен с причиной; сессия без
     оборотов у всех пачек → тумблер скрыт; основная без оборотов + набор с оборотами → виден.
   - Ctrl+Z после переключения возвращает прежний флаг нужного прохода; «Вернуть» — все в `false`.
@@ -539,7 +576,9 @@ schemas.ts` (`z.enum(['added','addedFronts'])`, схемы `{set}`, `{pass, on}`
   - Covers F1/AE1. Основная пара + двусторонний набор «после стр. 7»: журнал v7 с ролями и
     `pair`; `assembly.order` — чередование по якорю; PDF — порядок как в AE1; снимки экранов
     `scan` → `flip` → `scan` → `editor` по `pass.kind`.
-  - Covers F2/AE2/AE3/AE16. Обороты 2 из 3 (fault на листе): `report.sets[0].mismatch`;
+  - Covers F2/AE2/AE3/AE16. Обороты 2 из 3 коротким лотком `[12, 11]` (слиплись, проход завершён;
+    `fault: gone` — только в `added-pair-jam` для AE11): `report.sets[0].mismatch`,
+    `backsState: 'completed'`;
     `keepSetBacks` → `kept`, PDF с подблоками; `rescanSetBacks` → файлы и кэш удалены, второй
     проход → чередование; повторное несовпадение → снова `mismatch`.
   - Covers F3/AE4/AE5. Перезапуск между проходами → `pendingSet`; `declineBacks` → `declined`,
@@ -607,8 +646,8 @@ schemas.ts` (`z.enum(['added','addedFronts'])`, схемы `{set}`, `{pass, on}`
 - **Список наборов** с удалением набора целиком — бэклог (UI_SPEC §11 п.5); при его появлении —
   отброс прохода лиц набора по явному действию (ADR, «что пересматривает»).
 - **Предупреждение о расхождении параметров** набора с основной пачкой — бэклог.
-- **Расхождение цветов проходов DESIGN_SYSTEM ↔ код** — решается в handoff U5 только для тега
-  оборота набора; остальное — бэклог.
+- **Расхождение цветов проходов DESIGN_SYSTEM ↔ код** — бэклог; тег оборота набора собирается из
+  существующих токенов, новых цветов веха не вводит.
 - **Кнопка «Разобрать» для пары** — пост-MVP.
 
 ---
@@ -619,19 +658,21 @@ schemas.ts` (`z.enum(['added','addedFronts'])`, схемы `{set}`, `{pass, on}`
   миграции данных нет.
 - **Shared-типы:** `PASS_KINDS` (+2), `PassSnapshot.pair/backsDecision`, `PassesByKind`,
   `addedSetsOf`, `AssemblyReport.sets/pendingSet`, `AddedPassIntent.kind`, команды
-  `keepSetBacks`/`rescanSetBacks`/`setRotate180`, `setEdits` без `rotate180` — typecheck ведёт по
+  `keepSetBacks`/`rescanSetBacks`, `setEdits` с картой `rotate180` — typecheck ведёт по
   потребителям (фикстуры renderer, `app-fixture.ts`, `editor-fixture.tsx`, зеркало сборки,
   `test/support/*`).
 - **Сборка:** `placeAdded` — чередование; `BasePage.rotate180`; guard-таблица расширяется.
-- **Служба проходов:** `detectsBlank` по двум ролям; `settleSegment` без изменений логики.
+- **Служба проходов:** `detectsBlank` по двум ролям; `settleSegment` — условие роли расширяется на
+  `addedBacks`, логика та же.
 - **Renderer:** `screenOf` — третий источник `flip`; `App` — пауза/посадка по паре; история —
   карта флагов; подвал — цель тумблера.
 - **Локаль:** ключи `add.kind.*` (замена), `scan.tagSetBacks`, `flip.setKicker*`, `merge.set*`,
-  `setMismatch.*`, `editor.rotateBacksOf*`, `inspector.what.addedFront/addedBack`,
-  `toast.addedHidden*`, `errorReasons.sessionConflict.{noPendingSet,setNotMismatched}`.
-- **Тесты M3.5, меняющие смысл:** `pass-service.test.ts:448` (третий проход без намерения),
-  `screen.test.ts` (добавленный → editor — остаётся для `added`), `App.add.test.tsx` (пауза не при
-  `added` — остаётся), `session-store.flags.test.ts` (`rotate180` через `setEdits`).
+  `setMismatch.*`, `editor.rotateBacks*`, `inspector.what.addedFront/addedBack`,
+  `toast.addedHidden*`, `errorReasons.sessionConflict.{noPendingSet,setNotMismatched,pairInSets}`.
+- **Тесты M3.5, меняющие смысл:** `screen.test.ts` (добавленный → editor — остаётся для `added`,
+  новый случай для `addedFronts`), `App.add.test.tsx` (пауза не при `added` — остаётся),
+  `session-store.flags.test.ts` (`rotate180` становится картой). `pass-service.test.ts:448` не
+  меняется — пары там нет.
 - **Доки:** спека, UI_SPEC, роадмап, бэклог, ADR 0004 («по факту»), журнал 0008.
 
 ---
@@ -643,7 +684,8 @@ schemas.ts` (`z.enum(['added','addedFronts'])`, схемы `{set}`, `{pass, on}`
 - **Зеркало сборки расходится с ядром** (M3.6 #8) → зеркало и guard в U3 с правками, раньше
   renderer.
 - **`rescanSetBacks` — деструктивная команда** → журнал раньше файлов, сверка дочищает, чистка
-  производного и правок; тест падения посреди; показ модалки только сразу после пары (ADR).
+  производного и правок; тест падения посреди; пока решения нет, модалка закрыта быть не может, и
+  на страницы оборотов набора никто не ссылается (ADR).
 - **Размер файлов у ориентира R21** (`EditorScreen.tsx` 1002, `session-store.ts` 999,
   `pass-service.ts` 959, `pass-service.test.ts` 1084, `reconcile.test.ts` 1182) → выносы
   (`pass-policy.ts`, хуки) и новые тестовые файлы названы в юнитах.
@@ -672,8 +714,8 @@ schemas.ts` (`z.enum(['added','addedFronts'])`, схемы `{set}`, `{pass, on}`
 ## Definition of Done
 
 - `npm run typecheck`, `lint`, `format:check`, `test:all` зелёные; страж приватности зелёный.
-- AE1–AE17 покрыты: интеграцией на эмуляторе (AE1–AE5, AE10–AE14, AE16, AE17), jsdom (AE6, AE8,
-  AE9, AE15), CDP-смоуком (AE1, AE3, AE6, AE8, AE12) и чеклистом на живом ET-3850 (пара с
+- AE1–AE17 покрыты: интеграцией на эмуляторе (AE1–AE5, AE7, AE10–AE13, AE16, AE17), юнитом
+  службы (AE14), jsdom (AE6, AE8, AE9, AE15), CDP-смоуком (AE1, AE3, AE6, AE8, AE12) и чеклистом на живом ET-3850 (пара с
   пронумерованными листами, слипшиеся листы, карандашный номер на обороте набора, поздние
   оценки).
 - Handoff U5 утверждён; доки U9 долиты; бэклог B-2 закрыт строкой в «Завершённом».
