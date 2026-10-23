@@ -29,10 +29,7 @@ const sameKeys = (left: ReadonlySet<string>, right: ReadonlySet<string>): boolea
   left.size === right.size && [...left].every((key) => right.has(key));
 
 /** Посадка по показанной ленте снимка (KTD7): страницы набора, скрытые — по флагу `blank`. */
-export function landingOf(
-  order: readonly AssembledPage[],
-  set: AddedSetReport,
-): Omit<SetLanding, 'set'> {
+function landingOf(order: readonly AssembledPage[], set: AddedSetReport): Omit<SetLanding, 'set'> {
   const pages = order.filter((entry) => entry.addedSet === set.set);
   const shown = pages.filter((entry) => entry.blank !== 'hidden');
   return { key: shown[0]?.key ?? null, shown: shown.length, hidden: pages.length - shown.length };

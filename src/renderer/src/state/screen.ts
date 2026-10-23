@@ -1,8 +1,10 @@
 import {
+  addedSetsOf,
   hasPages,
   isBacksKind,
   passesByKind,
   pendingSetOf,
+  type AddedSet,
   type PassesByKind,
   type PassProgress,
   type PassSnapshot,
@@ -29,8 +31,16 @@ export const rolesOf = (passes: readonly PassSnapshot[]): PassesByKind<PassSnaps
   passesByKind(passes, hasPages);
 
 /** Номер «ДN» набора, ждущего обороты (M4.5, KTD2) — тем же правилом, что ядро; `null` — нет. */
-export const pendingSetNumberOf = (passes: readonly PassSnapshot[]): number | null =>
+const pendingSetNumberOf = (passes: readonly PassSnapshot[]): number | null =>
   pendingSetOf(passes, hasPages, (pass) => pass.state)?.set ?? null;
+
+/**
+ * Набор «ДN», которому принадлежит проход лицами или оборотами (M4.5, KTD2) — тем же правилом
+ * «только проходы со страницами»; `null` — проход не набора.
+ */
+export const setOfPass = (passes: readonly PassSnapshot[], number: number): AddedSet | null =>
+  addedSetsOf(passes, hasPages).find((set) => set.fronts === number || set.backs === number) ??
+  null;
 
 /**
  * Форма «flip». Набор ждёт обороты (M4.5, R6) — `flip` с приоритетом над `editor` и независимо

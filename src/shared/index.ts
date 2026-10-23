@@ -82,6 +82,7 @@ export {
   hasPages,
   isAnchoredKind,
   isBacksKind,
+  isMainKind,
   PASS_KINDS,
   passesByKind,
   pendingSetOf,

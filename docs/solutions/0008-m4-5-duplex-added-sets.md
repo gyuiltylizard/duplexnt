@@ -414,6 +414,19 @@ CDP-смоук `temp/smoke-m4-5.mjs` (вне git; порты 9271/9371 и 9272/9
 **Готово:** typecheck, lint, format:check, `test:all` дважды подряд зелёные (node + jsdom 2110, интеграция 202, 4 пропущены — живое устройство), смоук
 `built` + `dev` зелёный. Коммит `feat(m4.5): U8 …`.
 
+### Ревью сессий 3–4: simplify
+
+Три линзы (reuse, quality, efficiency) по диффу U6–U8, каждую находку проверял отдельный
+скептик (16 находок, 10 к применению). Применено: `isMainKind` в shared — роль основного
+документа вместо трёх ручных проверок (`App`, `ScanScreen`, `EditorPassBanner`); `setOfPass` в
+`state/screen.ts` — один поиск набора по проходу вместо двух копий; `isPairKind` в плашке;
+`origins` — снова карта `ключ → роль` (`PageOrigin.pass` никто не читал, цель тумблера идёт от
+`addedSet`), комментарии поправлены; `formulaKeyOf` в `MergeScreen` вместо тернара в три уровня;
+`pendingSetNumberOf` и `landingOf` — без экспорта; `scanned` (`test/support/pass-service.ts`) и
+`pdfPageFixtures` (`test/support/fixtures.ts`) — общие для трёх новых файлов интеграции.
+Отклонено: аллокация в `useSetLanding` на кадрах не-`editor` (наборов единицы), `setReportOf`
+(выигрыш мал), слияние веток имени карточки в `EditorThumb`, вынос ключа текста плашки в функцию.
+
 ### Сессия 4 — итог
 
 Граница сессии достигнута: U8 закрыт. Дальше — ревью пары сессий 3–4 (simplify + код-ревью,

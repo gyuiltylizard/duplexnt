@@ -10,9 +10,14 @@ import {
   type RefObject,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import { MAX_DOCUMENT_NAME_LENGTH, type AssembledPage, type SetsLayout } from '@shared';
+import {
+  MAX_DOCUMENT_NAME_LENGTH,
+  type AssembledPage,
+  type PassKind,
+  type SetsLayout,
+} from '@shared';
 import type { DropSide, SetSide } from '../state/edits';
-import type { PageOrigin } from '../state/origins';
+import { originKindOf } from '../state/origins';
 import { single, type Selection } from '../state/selection';
 import type { ShownDocument } from '../state/shown';
 import { toneOf } from '../state/page-text';
@@ -157,7 +162,7 @@ export interface EditorRailProps {
   /** Группы ленты в режиме раздельных наборов (M3.6, R17); `null` — группы документов. */
   readonly sets: SetsLayout | null;
   /** Происхождение страницы по ключу — тег «об» и слова пары по проходу, не по группе (R11). */
-  readonly origins: ReadonlyMap<string, PageOrigin>;
+  readonly origins: ReadonlyMap<string, PassKind>;
   /** Имена по умолчанию — плейсхолдеры полей имени (S3). */
   readonly defaultNames: readonly string[];
   readonly selection: Selection;
@@ -390,7 +395,7 @@ export function EditorRail({
       key={entry.key}
       sessionId={sessionId}
       pageKey={entry.key}
-      origin={origins.get(entry.key)?.kind ?? null}
+      origin={originKindOf(origins, entry.key)}
       side={entry.side}
       sheet={entry.sheet}
       angle={entry.angle}

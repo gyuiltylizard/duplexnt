@@ -7,12 +7,13 @@ import {
   type ReactNode,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import type {
-  AddedPassIntent,
-  DomainError,
-  SessionSnapshot,
-  StartPassRequest,
-  StartupNotice,
+import {
+  isMainKind,
+  type AddedPassIntent,
+  type DomainError,
+  type SessionSnapshot,
+  type StartPassRequest,
+  type StartupNotice,
 } from '@shared';
 import { NoticesBar } from './components/NoticesBar';
 import { Toast, type ToastAction } from './components/Toast';
@@ -159,7 +160,8 @@ export function App(): ReactNode {
       (previousScreen === 'scan' || previousScreen === 'flip') &&
       transitionReport !== undefined &&
       assemblyLanded(transitionReport) &&
-      (lastPass?.kind === 'fronts' || lastPass?.kind === 'backs') &&
+      lastPass !== undefined &&
+      isMainKind(lastPass.kind) &&
       !(launch !== null && launch.kind !== null && launch.sessionId === session?.id)
     ) {
       setMergeHold({

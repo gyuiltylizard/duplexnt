@@ -79,6 +79,9 @@ export function passesByKind<T extends { readonly kind: PassKind }>(
 /** Роль «обороты» — основной пачки или набора (M4.5): флаг 180° и оценка детектора. */
 export const isBacksKind = (kind: PassKind): boolean => kind === 'backs' || kind === 'addedBacks';
 
+/** Роль основного документа — лицевые или обороты, не добавленный набор: пауза merge, номер прохода. */
+export const isMainKind = (kind: PassKind): boolean => kind === 'fronts' || kind === 'backs';
+
 /** Роли с якорем вставки: односторонний набор и лица двустороннего (M3.5; M4.5). */
 export const isAnchoredKind = (kind: PassKind): boolean =>
   kind === 'added' || kind === 'addedFronts';

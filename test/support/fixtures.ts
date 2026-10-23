@@ -1,4 +1,5 @@
 import { readdirSync, readFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { isAbsolute, join, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PDFDict, PDFDocument, PDFName, PDFRawStream } from '@cantoo/pdf-lib';
@@ -144,4 +145,10 @@ export async function pdfImageStreams(pdfBytes: Uint8Array): Promise<PDFRawStrea
     }
   }
   return streams;
+}
+
+/** Какая фикстура — номер страницы или имя скана — лежит на каждой странице PDF по порядку. */
+export async function pdfPageFixtures(path: string): Promise<(number | string)[]> {
+  const streams = await pdfImageStreams(await readFile(path));
+  return streams.map((stream) => pageFixtureOf(stream.contents));
 }

@@ -1,8 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  addedSetsOf,
-  hasPages,
+  isMainKind,
   type DomainError,
   type ErrorCode,
   type PassSnapshot,
@@ -12,7 +11,9 @@ import {
 } from '@shared';
 import type { TFunction } from 'i18next';
 import { errorText, errorTextInline } from '../state/error-text';
+import { isPairKind } from '../state/page-text';
 import { addressOf, reconnectAddress } from '../state/scanner-address';
+import { setOfPass } from '../state/screen';
 
 // Плашка прерванного прохода в `editor` (план M1, U24; handoff U19, S17): досканировать остаток,
 // оставить как есть или начать новое сканирование; отказы — строкой под кнопками. У прерванного
@@ -44,10 +45,8 @@ function titleOf(t: TFunction, session: SessionSnapshot, last: PassSnapshot, las
   if (last.kind === 'added') {
     return t('editor.interrupted.titleAdded', { last: lastNumber });
   }
-  if (last.kind === 'addedFronts' || last.kind === 'addedBacks') {
-    const set = addedSetsOf(session.passes, hasPages).find(
-      (it) => it.fronts === last.number || it.backs === last.number,
-    );
+  if (isPairKind(last.kind)) {
+    const set = setOfPass(session.passes, last.number);
     const setNumber = set?.set ?? 0;
     if (last.kind === 'addedFronts') {
       return t('editor.interrupted.titleSetFronts', { set: setNumber, last: lastNumber });
@@ -112,7 +111,7 @@ export function EditorPassBanner({
     const key =
       last.kind === 'added'
         ? 'editor.interrupted.textAdded'
-        : last.kind === 'fronts' || last.kind === 'backs'
+        : isMainKind(last.kind)
           ? 'editor.interrupted.text'
           : 'editor.interrupted.textSet';
     text = t(key, { next: lastNumber + 1 });

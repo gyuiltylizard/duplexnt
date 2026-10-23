@@ -204,8 +204,8 @@ export function EditorScreen({
   // Режим сборки и группы — из ядра (M3.6, R10): renderer ничего не считает сам.
   const mode = snapshot.assembly?.report.mode ?? 'pairs';
   const sets = snapshot.assembly?.sets ?? null;
-  // Происхождение страницы — проход по ключу: тег «об», факт «Откуда», слова страницы пары и
-  // цель тумблера 180° (R11, R23; M4.5, KTD4).
+  // Происхождение страницы — роль прохода по ключу: тег «об», факт «Откуда» и слова страницы пары
+  // (R11, R23; M4.5).
   const origins = useMemo(() => originsOf(session.passes), [session.passes]);
 
   const [modal, setModal] = useState<EditorModal | null>(null);

@@ -120,6 +120,19 @@ function setOutcomeText(t: TFunction, set: AddedSetReport): string {
   return t('merge.status.setOk', { set: set.set, count: fronts });
 }
 
+/**
+ * Строка-формула под схемой. При несовпадении документа ещё нет: у всей ленты лица и обороты
+ * лежат отдельными наборами, у набора (S6 M4.5) — подблоками рядом, поэтому формулировки разные.
+ */
+function formulaKeyOf(
+  pack: Pack,
+): 'merge.formula' | 'merge.formulaMismatch' | 'merge.formulaSetMismatch' {
+  if (!pack.mismatch) {
+    return 'merge.formula';
+  }
+  return pack.set === null ? 'merge.formulaMismatch' : 'merge.formulaSetMismatch';
+}
+
 function cells(count: number, max: number): number[] {
   return Array.from({ length: Math.max(1, Math.min(count, max)) }, (_, index) => index);
 }
@@ -204,17 +217,7 @@ export function MergeScreen({ assembly, set = null }: MergeScreenProps): ReactNo
       </div>
 
       <footer className="merge-screen__footer">
-        {!pack.declined && (
-          <p className="merge-screen__formula">
-            {t(
-              pack.mismatch
-                ? ofSet
-                  ? 'merge.formulaSetMismatch'
-                  : 'merge.formulaMismatch'
-                : 'merge.formula',
-            )}
-          </p>
-        )}
+        {!pack.declined && <p className="merge-screen__formula">{t(formulaKeyOf(pack))}</p>}
         <p className="merge-screen__status" role="status">
           {statusText(t, assembly, pack)}
         </p>

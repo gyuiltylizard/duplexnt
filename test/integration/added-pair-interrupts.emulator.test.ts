@@ -15,7 +15,8 @@ import { layoutOf } from '../../src/core/storage/layout';
 import { SCENARIOS, type Scenario } from '../emulator/scenarios';
 import type { Emulator } from '../emulator/server';
 import { startTestEmulator } from '../support/emulator';
-import { pageFixtureOf, pdfImageStreams } from '../support/fixtures';
+import { scanned } from '../support/pass-service';
+import { pageFixtureOf, pdfPageFixtures } from '../support/fixtures';
 import { journalOnDisk } from '../support/session-store';
 import { makeTempDataRoot } from '../support/temp-data-root';
 import { unwrap } from '../support/result';
@@ -134,12 +135,6 @@ async function switchBack(service: PassService, emulator: Emulator): Promise<voi
 const postsOf = (emulator: Emulator): string[] =>
   emulator.requests().filter((it) => it.startsWith('POST /eSCL/ScanJobs'));
 
-async function scanned(service: PassService, ...pages: readonly number[]): Promise<void> {
-  for (const count of pages) {
-    expect(unwrap(await service.startPass(null))).toMatchObject({ end: 'completed', pages: count });
-  }
-}
-
 /** Основной документ 3+3 и лица набора «после стр. 4» (оборот листа 2). */
 async function mainAndSetFronts(service: PassService): Promise<void> {
   await scanned(service, 3, 3);
@@ -182,11 +177,6 @@ const shownFixturesOf = (root: string, snapshot: Snapshot): Promise<(number | st
     root,
     (snapshot.assembly?.order ?? []).filter((page) => page.blank !== 'hidden').map((it) => it.key),
   );
-
-async function pdfFixtures(path: string): Promise<(number | string)[]> {
-  const streams = await pdfImageStreams(await readFile(path));
-  return streams.map((stream) => pageFixtureOf(stream.contents));
-}
 
 /** Запись одним файлом после прихода оценок; путь к PDF. */
 async function saveSingle(service: PassService, root: string, name = 'Документ'): Promise<string> {
@@ -289,7 +279,9 @@ describe('двусторонний набор: обрывы, «Останови�
       [keyOf(4, 1, 1), 'back', 3],
     ]);
     expect(await shownFixturesOf(root, snapshot)).toEqual(withSet(SET_INTERLEAVED));
-    expect(await pdfFixtures(await saveSingle(service, root))).toEqual(withSet(SET_INTERLEAVED));
+    expect(await pdfPageFixtures(await saveSingle(service, root))).toEqual(
+      withSet(SET_INTERLEAVED),
+    );
   });
 
   it('AE11, R20: прерванные обороты набора пишутся в PDF подблоками; «Принять» → `kept` без модалки, решение переживает перезапуск', async () => {
@@ -299,7 +291,7 @@ describe('двусторонний набор: обрывы, «Останови�
     const subBlocks = withSet([7, 8, 9, 12]);
 
     // Сохранение при прерванных оборотах набора не блокируется (R20).
-    expect(await pdfFixtures(await saveSingle(service, root, 'До решения'))).toEqual(subBlocks);
+    expect(await pdfPageFixtures(await saveSingle(service, root, 'До решения'))).toEqual(subBlocks);
 
     unwrap(await service.acceptPass());
     let snapshot = service.snapshot();
@@ -324,7 +316,7 @@ describe('двусторонний набор: обрывы, «Останови�
       });
     }
     expect(await shownFixturesOf(root, snapshot)).toEqual(subBlocks);
-    expect(await pdfFixtures(await saveSingle(service, root))).toEqual(subBlocks);
+    expect(await pdfPageFixtures(await saveSingle(service, root))).toEqual(subBlocks);
 
     const second = await restart();
     snapshot = second.snapshot();
@@ -730,7 +722,9 @@ describe('двусторонний набор: обрывы, «Останови�
       mismatch: false,
     });
     expect(await shownFixturesOf(root, snapshot)).toEqual(withSet(SET_INTERLEAVED));
-    expect(await pdfFixtures(await saveSingle(service, root))).toEqual(withSet(SET_INTERLEAVED));
+    expect(await pdfPageFixtures(await saveSingle(service, root))).toEqual(
+      withSet(SET_INTERLEAVED),
+    );
   });
 
   it('R10: досканирование прерванных оборотов набора на другом сканере — `otherScanner` до сети, принять можно; на прежнем сканере досканирование идёт', async () => {
@@ -798,7 +792,7 @@ describe('двусторонний набор: обрывы, «Останови�
       [keyOf(4, 1, 1), 'back', 1],
     ]);
     expect(await shownFixturesOf(root, snapshot)).toEqual(withSet([7, 10]));
-    expect(await pdfFixtures(await saveSingle(service, root))).toEqual(withSet([7, 10]));
+    expect(await pdfPageFixtures(await saveSingle(service, root))).toEqual(withSet([7, 10]));
   });
 
   it('AE17, AE7: набор из одного листа с пустым оборотом в «Скрывать» — оборот оценён и скрыт, в ленте одно лицо «Д1», PDF без пустого', async () => {
@@ -838,7 +832,7 @@ describe('двусторонний набор: обрывы, «Останови�
     expect(await fixturesOf(root, [keyOf(4, 1, 1)])).toEqual([BLANK]);
     expect(await shownFixturesOf(root, snapshot)).toEqual(withSet([7]));
 
-    expect(await pdfFixtures(await saveSingle(service, root))).toEqual(withSet([7]));
+    expect(await pdfPageFixtures(await saveSingle(service, root))).toEqual(withSet([7]));
     expect(service.snapshot().session?.saved).toBe(true);
   });
 });

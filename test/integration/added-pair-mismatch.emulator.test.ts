@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile } from 'node:fs/promises';
+import { mkdir, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { describe, expect, it } from 'vitest';
@@ -14,7 +14,8 @@ import {
 import { layoutOf } from '../../src/core/storage/layout';
 import { SCENARIOS, type Scenario } from '../emulator/scenarios';
 import { startTestEmulator } from '../support/emulator';
-import { pageFixtureOf, pdfImageStreams } from '../support/fixtures';
+import { scanned } from '../support/pass-service';
+import { pageFixtureOf, pdfPageFixtures } from '../support/fixtures';
 import { journalOnDisk, rolesOf } from '../support/session-store';
 import { makeTempDataRoot } from '../support/temp-data-root';
 import { unwrap } from '../support/result';
@@ -123,12 +124,6 @@ async function mismatched(
   return harness;
 }
 
-async function scanned(service: PassService, ...pages: readonly number[]): Promise<void> {
-  for (const count of pages) {
-    expect(unwrap(await service.startPass(null))).toMatchObject({ end: 'completed', pages: count });
-  }
-}
-
 const keysOf = (snapshot: Snapshot): string[] =>
   snapshot.assembly?.order.map((page) => page.key) ?? [];
 
@@ -148,12 +143,6 @@ const filesOf = async (dir: string, pass: number): Promise<string[]> =>
 
 const blankDirOf = (root: string, snapshot: Snapshot): string =>
   join(layoutOf(root).derivedDir, snapshot.session?.id ?? '', 'blank');
-
-/** Какая фикстура лежит на каждой странице PDF — порядок в файле сверяется точно. */
-async function pdfFixtures(path: string): Promise<(number | string)[]> {
-  const streams = await pdfImageStreams(await readFile(path));
-  return streams.map((stream) => pageFixtureOf(stream.contents));
-}
 
 /** Запись одним файлом после прихода оценок; путь к PDF — фактический (повтор даёт « (2)»). */
 async function saveSingle(service: PassService, root: string): Promise<string> {
@@ -217,7 +206,7 @@ describe('несовпадение оборотов добавленного н�
       [key(4, 1), 'back', null],
     ]);
 
-    expect(await pdfFixtures(await saveSingle(service, root))).toEqual([
+    expect(await pdfPageFixtures(await saveSingle(service, root))).toEqual([
       1, 4, 2, 5, 7, 8, 9, 11, 12, 3, 6,
     ]);
     expect(service.snapshot().session?.saved).toBe(true);
@@ -257,7 +246,7 @@ describe('несовпадение оборотов добавленного н�
     snapshot = third.snapshot();
     expect(snapshot.assembly?.report.sets).toEqual([{ ...MISMATCHED_SET, decision: 'kept' }]);
     expect(keysOf(snapshot)).toEqual(order);
-    expect(await pdfFixtures(await saveSingle(third, root))).toEqual([
+    expect(await pdfPageFixtures(await saveSingle(third, root))).toEqual([
       1, 4, 2, 5, 7, 8, 9, 11, 12, 3, 6,
     ]);
   });
@@ -378,7 +367,7 @@ describe('несовпадение оборотов добавленного н�
     // Живая правка пережила пересъёмку; новый проход без флага 180°.
     expect(snapshot.assembly?.order.find((page) => page.key === key(3, 1))?.angle).toBe(90);
     expect(snapshot.assembly?.order.find((page) => page.key === key(5, 1))?.angle).toBe(0);
-    expect(await pdfFixtures(await saveSingle(reopened, root))).toEqual([
+    expect(await pdfPageFixtures(await saveSingle(reopened, root))).toEqual([
       1, 4, 2, 5, 7, 10, 8, 11, 9, 12, 3, 6,
     ]);
   });

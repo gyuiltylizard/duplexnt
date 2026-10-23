@@ -1,10 +1,7 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  addedSetsOf,
-  hasPages,
-  isAnchoredKind,
-  isBacksKind,
+  isMainKind,
   pageImageUrl,
   type PageSnapshot,
   type PassProgress,
@@ -15,6 +12,7 @@ import type { TFunction } from 'i18next';
 import { useFocusWhen } from '../components/useFocusWhen';
 import { useImageLoad } from '../components/useImageLoad';
 import { paramsLine } from '../state/params-line';
+import { setOfPass } from '../state/screen';
 import './scan-screen.css';
 
 // Экран `scan` (план M1, U23; UI_SPEC раздел 3; handoff U19, S12–S15, S19): тег прохода,
@@ -61,12 +59,7 @@ function setNumberOf(snapshot: Snapshot, pass: PassSnapshot | undefined): number
   if (pass === undefined) {
     return null;
   }
-  const passes = snapshot.session?.passes ?? [];
-  return (
-    addedSetsOf(passes, hasPages).find(
-      (set) => set.fronts === pass.number || set.backs === pass.number,
-    )?.set ?? null
-  );
+  return setOfPass(snapshot.session?.passes ?? [], pass.number)?.set ?? null;
 }
 
 /** Тег прохода по роли (KTD-4): у набора — с ролью пары (M4.5), у основной пачки — с номером. */
@@ -166,7 +159,7 @@ export function ScanScreen({ snapshot, pass, onStop }: ScanScreenProps): ReactNo
   }
   const tag = tagOf(t, pass.kind, running?.number ?? 1);
   // Добавляем — односторонний набор или проход пары: тег на цвете набора (S3 M3.5, S3–S4 M4.5).
-  const added = isAnchoredKind(pass.kind) || (isBacksKind(pass.kind) && pass.kind !== 'backs');
+  const added = !isMainKind(pass.kind);
 
   const strip = pages.slice(-STRIP_SIZE);
   const sessionId = snapshot.session?.id;

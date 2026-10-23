@@ -13,6 +13,7 @@ import {
 import { layoutOf } from '../../src/core/storage/layout';
 import { SCENARIOS, type Scenario } from '../emulator/scenarios';
 import { startTestEmulator } from '../support/emulator';
+import { scanned } from '../support/pass-service';
 import { pageFixture, pageFixtureOf, pdfImageStreams } from '../support/fixtures';
 import { journalOnDisk, rolesOf } from '../support/session-store';
 import { makeTempDataRoot } from '../support/temp-data-root';
@@ -93,12 +94,6 @@ async function connect(scenario: Partial<Scenario>, extra: Partial<PassServiceOp
   };
   const service = await open();
   return { emulator, root, service, snapshots, restart: open };
-}
-
-async function scanned(service: PassService, ...pages: readonly number[]): Promise<void> {
-  for (const count of pages) {
-    expect(unwrap(await service.startPass(null))).toMatchObject({ end: 'completed', pages: count });
-  }
 }
 
 /** Основная пара 3+3 и лица набора после оборота листа 2 — набор ждёт обороты. */
