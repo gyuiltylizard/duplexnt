@@ -122,6 +122,39 @@ export function addedSetsOf<
     });
 }
 
+/**
+ * Набор, ждущий обороты (M4.5, R11; ADR 0004, амендмент 2026-10-23) — выводится из фактов и не
+ * хранится: лица двустороннего набора со страницами, завершённые или принятые, с решением
+ * «ждём» и без прохода оборотов со страницами. Прерванные лица не ждут — их досканируют. Пока
+ * набор ждёт, новый не начинается (ядро отказывает), так что такой набор один; на всякий случай
+ * берётся последний по номеру прохода лиц. Одно правило для журнала (`pendingPairOf`), сборки
+ * (`report.pendingSet`) и renderer.
+ */
+export function pendingSetOf<
+  T extends {
+    readonly number: number;
+    readonly kind: PassKind;
+    readonly pair: number | null;
+    readonly backsDecision: BacksDecision | null;
+  },
+>(
+  passes: readonly T[],
+  hasPages: (pass: T) => boolean,
+  stateOf: (pass: T) => PassState,
+): AddedSet | null {
+  const waiting = addedSetsOf(passes, hasPages).filter((set) => {
+    const fronts = passes.find((pass) => pass.number === set.fronts);
+    return (
+      set.sides === 'two' &&
+      set.decision === 'none' &&
+      set.backs === null &&
+      fronts !== undefined &&
+      ['completed', 'accepted'].includes(stateOf(fronts))
+    );
+  });
+  return waiting.at(-1) ?? null;
+}
+
 export interface PassSnapshot {
   readonly number: number;
   readonly kind: PassKind;
@@ -204,12 +237,14 @@ export interface SetsLayout {
  * Страница видимой ленты (M2, KTD-4; M3, KTD-2; M3.6, R11). Сторона и номер — по режиму: в режиме
  * пар — по роли прохода и позиции в лицевом проходе; в режиме раздельных наборов — по группе и
  * позиции в наборе от 1; после сборки — по позиции в видимом чередовании записи, ключи вне записи
- * — сторона по проходу, без листа. Угол считает ядро.
+ * — сторона по проходу, без листа. У страниц добавленного набора (`addedSet`, M4.5) сторона — по
+ * роли прохода пары, а `sheet` — номер листа внутри набора при чередовании и `null` в подблоках;
+ * потребители читают `addedSet` раньше `sheet`. Угол считает ядро.
  */
 export interface AssembledPage {
   readonly key: string;
   readonly side: 'front' | 'back';
-  /** Номер листа или номер в наборе (см. выше); `null` — листа нет. */
+  /** Номер листа, номер в наборе или лист внутри добавленного набора (см. выше); `null` — листа нет. */
   readonly sheet: number | null;
   /** Ручной поворот плюс 180° прохода оборотов, по модулю 360; исходник не меняется. */
   readonly angle: PageAngle;
@@ -236,10 +271,35 @@ export interface AssembledDocument {
   readonly count: number;
 }
 
+/**
+ * Добавленный набор «ДN» в отчёте сборки (M4.5, KTD5): числа страниц его проходов, состояние
+ * оборотов, решение и несовпадение — для `flip` и `merge` набора, модалки несовпадения набора и
+ * тумблера 180°. Правки на числа не влияют (KTD-7).
+ */
+export interface AddedSetReport {
+  /** Номер «ДN» (`AddedSet.set`). */
+  readonly set: number;
+  /** Страниц прохода лиц набора. */
+  readonly fronts: number;
+  /** Страниц прохода оборотов набора; 0 — прохода нет. */
+  readonly backs: number;
+  /** Состояние прохода оборотов набора; `null` — прохода нет. */
+  readonly backsState: PassState | null;
+  /** Решение по оборотам набора (`backsDecision` лиц); у одностороннего — `null`. */
+  readonly decision: BacksDecision | null;
+  /** Обороты набора есть и их число не равно числу лиц: блок стоит подблоками. */
+  readonly mismatch: boolean;
+  readonly sides: 'one' | 'two';
+}
+
 /** Отчёт сборки — кормит статусную строку `merge`, модалку `mismatch` и пометки в ленте. */
 export interface AssemblyReport {
   /** Режим сборки (M3.6, R4). */
   readonly mode: AssemblyMode;
+  /** Добавленные наборы по номеру «ДN» (M4.5, KTD5); без наборов — пусто. */
+  readonly sets: readonly AddedSetReport[];
+  /** Номер «ДN» набора, ждущего обороты (`pendingSetOf`); `null` — такого нет. */
+  readonly pendingSet: number | null;
   /** Группы ленты в режиме раздельных наборов — живые счётчики (R10); иначе `null`. */
   readonly groups: SetsLayout | null;
   /** Страниц лицевого прохода (= листов). */

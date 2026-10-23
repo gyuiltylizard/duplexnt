@@ -19,6 +19,8 @@ function report(fronts: number): AssemblyReport {
   return {
     mode: 'pairs',
     groups: null,
+    sets: [],
+    pendingSet: null,
     fronts,
     backs: 0,
     backsState: null,

@@ -285,8 +285,9 @@ export function createPassService(
       () => undefined,
     );
   };
+  // Оценку получают обороты любой пачки — основной и добавленного набора (M4.5, KTD6).
   const detectsBlank = (kind: PassKind): boolean =>
-    kind === 'backs' && store.snapshot()?.blankMode !== 'keep';
+    (kind === 'backs' || kind === 'addedBacks') && store.snapshot()?.blankMode !== 'keep';
   // При открытии: страницы оборотов без кэша считаются в фоне, лента до них — с `pending`.
   for (const page of pagesToScore(store.snapshot())) {
     detectBlank(page.key);

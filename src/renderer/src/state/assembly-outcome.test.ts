@@ -6,6 +6,8 @@ function report(overrides: Partial<AssemblyReport>): AssemblyReport {
   return {
     mode: 'pairs',
     groups: null,
+    sets: [],
+    pendingSet: null,
     fronts: 3,
     backs: 3,
     backsState: 'completed',
@@ -20,6 +22,8 @@ const sets = (fronts: number, backs: number, extra: Partial<AssemblyReport> = {}
   report({
     mode: 'sets',
     groups: { fronts, backs, divider: fronts },
+    sets: [],
+    pendingSet: null,
     fronts,
     backs,
     mismatch: true,

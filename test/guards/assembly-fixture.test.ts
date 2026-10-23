@@ -49,6 +49,10 @@ const sessionOf = (
 
 const pairs = [passOf(1, 'fronts', 3), passOf(2, 'backs', 3)];
 const F2 = 'p01-s01-0002';
+/** Лица двустороннего набора «Д1» (3 стр.) после F2, обороты ждём (M4.5). */
+const SET_FRONTS = passOf(3, 'addedFronts', 3, { after: F2, backsDecision: 'none' });
+/** Пара набора «Д1» 3+3. */
+const PAIR = [SET_FRONTS, passOf(4, 'addedBacks', 3, { pair: 3 })];
 
 describe('зеркало автопорядка renderer против ядра (KTD-2)', () => {
   it.each<[string, SessionSnapshot]>([
@@ -223,6 +227,94 @@ describe('зеркало автопорядка renderer против ядра (
         assembled: ['p01-s01-0001', 'p09-s01-0001', 'p02-s01-0002', 'p01-s01-0003'],
       }),
     ],
+    // Двусторонние добавленные наборы (M4.5, KTD5).
+    ['пара набора 3+3 по якорю — чередование, лист внутри набора', sessionOf([...pairs, ...PAIR])],
+    [
+      'пара набора: обороты короче — подблоки, несовпадение набора в отчёте',
+      sessionOf([...pairs, SET_FRONTS, passOf(4, 'addedBacks', 2, { pair: 3 })]),
+    ],
+    [
+      'пара набора: обороты прерваны на одной странице',
+      sessionOf([
+        ...pairs,
+        SET_FRONTS,
+        passOf(4, 'addedBacks', 1, { pair: 3, state: 'interrupted' }),
+      ]),
+    ],
+    [
+      'пара набора: обороты приняты короткими, решение «оставить»',
+      sessionOf([
+        ...pairs,
+        passOf(3, 'addedFronts', 3, { after: F2, backsDecision: 'kept' }),
+        passOf(4, 'addedBacks', 2, { pair: 3, state: 'accepted' }),
+      ]),
+    ],
+    ['набор ждёт обороты — pendingSet', sessionOf([...pairs, SET_FRONTS])],
+    [
+      'набор после отказа от оборотов — односторонним блоком',
+      sessionOf([...pairs, passOf(3, 'addedFronts', 3, { after: F2, backsDecision: 'declined' })]),
+    ],
+    [
+      'обороты набора повёрнуты, основной пачки — нет',
+      sessionOf([...pairs, SET_FRONTS, passOf(4, 'addedBacks', 3, { pair: 3, rotate180: true })]),
+    ],
+    [
+      'обороты основной пачки повёрнуты, набора — нет',
+      sessionOf([passOf(1, 'fronts', 3), passOf(2, 'backs', 3, { rotate180: true }), ...PAIR]),
+    ],
+    [
+      'два набора: односторонний, пара и односторонний с якорем внутри блока пары',
+      sessionOf([
+        ...pairs,
+        passOf(3, 'added', 1, { after: 'p01-s01-0001' }),
+        passOf(4, 'addedFronts', 2, { after: F2, backsDecision: 'none' }),
+        passOf(5, 'addedBacks', 2, { pair: 4 }),
+        passOf(6, 'added', 1, { after: 'p05-s01-0001' }),
+      ]),
+    ],
+    [
+      'осиротевшие обороты набора — в конец',
+      sessionOf([...pairs, passOf(4, 'addedBacks', 2, { pair: 3 })]),
+    ],
+    [
+      'пара набора без якоря — блоком в конец',
+      sessionOf([
+        ...pairs,
+        passOf(3, 'addedFronts', 2, { backsDecision: 'none' }),
+        passOf(4, 'addedBacks', 2, { pair: 3 }),
+      ]),
+    ],
+    [
+      'пустые лица набора роли не занимают, обороты по ссылке на них — осиротевшие',
+      sessionOf([
+        ...pairs,
+        passOf(3, 'addedFronts', 0, { after: F2, backsDecision: 'none', state: 'interrupted' }),
+        passOf(4, 'addedBacks', 1, { pair: 3 }),
+      ]),
+    ],
+    [
+      'собрано: пара вне записи — блоком по якорю с чередованием',
+      sessionOf([passOf(1, 'fronts', 3), passOf(2, 'backs', 2), ...PAIR], {
+        assembled: ['p01-s01-0001', 'p02-s01-0002', 'p01-s01-0002', 'p02-s01-0001', 'p01-s01-0003'],
+      }),
+    ],
+    [
+      'собрано: набор, которого запись коснулась, — по одной странице',
+      sessionOf([passOf(1, 'fronts', 3), passOf(2, 'backs', 2), ...PAIR], {
+        assembled: [
+          'p01-s01-0001',
+          'p02-s01-0002',
+          'p01-s01-0002',
+          'p03-s01-0001',
+          'p02-s01-0001',
+          'p01-s01-0003',
+        ],
+      }),
+    ],
+    [
+      'наборы: односторонний набор рядом с парой (пара — только через правку журнала)',
+      sessionOf([passOf(1, 'fronts', 3), passOf(2, 'backs', 2), ...PAIR, passOf(5, 'added', 1)]),
+    ],
   ])('%s', (_name, session) => {
     expect(assemblyOf(session)).toEqual(assembleSession(session));
   });
@@ -301,6 +393,33 @@ describe('зеркало с правками против ядра (M3, KTD-2; M
         edits: { ...EMPTY_EDITS, order: ['p03-s01-0001', F1], rotations: { 'p03-s01-0001': 90 } },
       }),
     ],
+    // Пары добавленных наборов с правками (M4.5).
+    [
+      'пары: пара набора — явный порядок, удаление оборота набора, ручной поворот поверх флага, разрез',
+      sessionOf([...pairs, SET_FRONTS, passOf(4, 'addedBacks', 3, { pair: 3, rotate180: true })], {
+        edits: {
+          ...EMPTY_EDITS,
+          order: ['p04-s01-0001', F1],
+          deleted: ['p04-s01-0003'],
+          rotations: { 'p04-s01-0002': 90, 'p03-s01-0001': 180 },
+          cuts: [4],
+          names: ['', 'Набор'],
+        },
+      }),
+    ],
+    [
+      'пары: подблоки несовпавшего набора с удалением лица набора',
+      sessionOf([...pairs, SET_FRONTS, passOf(4, 'addedBacks', 2, { pair: 3 })], {
+        edits: { ...EMPTY_EDITS, deleted: ['p03-s01-0002'] },
+      }),
+    ],
+    [
+      'собрано: пара после сборки с переносом её оборота',
+      sessionOf([...sets3x2, ...PAIR], {
+        assembled: record,
+        edits: { ...EMPTY_EDITS, order: ['p04-s01-0003', F1] },
+      }),
+    ],
   ])('%s', (_name, session) => {
     expect(assemblyWithEditsOf(session)).toEqual(assembleSession(session));
   });
@@ -317,6 +436,7 @@ describe('зеркало с флагами пустых оборотов про�
     [B2, false],
     [F2, true],
     ['p03-s01-0001', true],
+    ['p04-s01-0001', true],
   ]);
   const sets3x2 = [passOf(1, 'fronts', 3), passOf(2, 'backs', 2)];
 
@@ -344,6 +464,21 @@ describe('зеркало с флагами пустых оборотов про�
         blankMode: 'hide',
         assembled: ['p01-s01-0001', B2, F2, B1, 'p01-s01-0003'],
       }),
+    ],
+    // Обороты набора оцениваются (M4.5, KTD6): вердикт на p04-s01-0001 — пусто.
+    [
+      'пара набора, «Скрывать»: оборот набора скрыт в чередовании, лица набора без флага',
+      sessionOf([...pairs, ...PAIR], { blankMode: 'hide' }),
+    ],
+    [
+      'подблоки несовпавшего набора, «Скрывать»: скрытие действует',
+      sessionOf([...pairs, SET_FRONTS, passOf(4, 'addedBacks', 2, { pair: 3 })], {
+        blankMode: 'hide',
+      }),
+    ],
+    [
+      'осиротевшие обороты набора, «Помечать»',
+      sessionOf([...pairs, passOf(4, 'addedBacks', 2, { pair: 3 })], { blankMode: 'mark' }),
     ],
   ])('%s', (_name, session) => {
     expect(assemblyOf(session, verdicts)).toEqual(assembleSession(session, verdicts));

@@ -6,6 +6,7 @@ import {
   EMPTY_EDITS,
   PASS_KINDS,
   passesByKind,
+  pendingSetOf,
   type AddedSet,
   type PassesByKind,
   type PassKind,
@@ -457,20 +458,14 @@ export interface PendingPair {
 /**
  * Набор, ждущий обороты, — выводится из фактов журнала, отдельно не хранится (амендмент
  * 2026-10-23): лица двустороннего набора со страницами, завершённые или принятые, с решением
- * `none` и без прохода оборотов со страницами. Прерванные лица набора не ждут — их
- * досканируют. Таких наборов не больше одного: пока пара ждёт, новый набор не начинается;
- * на всякий случай берётся последний по номеру прохода лиц.
+ * `none` и без прохода оборотов со страницами — правило `pendingSetOf` из shared.
  */
 export function pendingPairOf(journal: Journal): PendingPair | null {
-  const waiting = addedSetsOfJournal(journal)
-    .filter((set) => set.sides === 'two' && set.decision === 'none' && set.backs === null)
-    .flatMap((set) => {
-      const pass = journal.passes.find((it) => it.number === set.fronts);
-      return pass !== undefined && ['completed', 'accepted'].includes(passStateOf(pass))
-        ? [{ set: set.set, fronts: set.fronts, expected: pagesOf(pass).length }]
-        : [];
-    });
-  return waiting.at(-1) ?? null;
+  const set = pendingSetOf(journal.passes, hasPages, passStateOf);
+  const fronts = journal.passes.find((pass) => pass.number === set?.fronts);
+  return set === null || fronts === undefined
+    ? null
+    : { set: set.set, fronts: set.fronts, expected: pagesOf(fronts).length };
 }
 
 /**

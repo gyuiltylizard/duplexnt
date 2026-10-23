@@ -94,6 +94,8 @@ describe('каркас приложения', () => {
           report: {
             mode: 'pairs',
             groups: null,
+            sets: [],
+            pendingSet: null,
             fronts: 12,
             backs: 0,
             backsState: null,
