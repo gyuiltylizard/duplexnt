@@ -334,7 +334,11 @@ function setsBase(passes: readonly PassSnapshot[], settled: boolean): BaseAssemb
  * предыдущей; иначе — в конец. Сторона — по проходу; лист считается по позиции в записи
  * (`assembleSession`), у блока пары вне записи — внутри набора.
  */
-function assembledBase(passes: readonly PassSnapshot[], record: readonly string[]): BaseAssembly {
+function assembledBase(
+  passes: readonly PassSnapshot[],
+  record: readonly string[],
+  settled: boolean,
+): BaseAssembly {
   const index = indexOf(passes);
   const counted = passes.filter(hasPages);
   const origin = new Map(
@@ -393,7 +397,7 @@ function assembledBase(passes: readonly PassSnapshot[], record: readonly string[
       pages.splice(anchor === -1 ? pages.length : anchor + 1, 0, pageOf(page.key));
     }
   }
-  placeAdded(pages, index, outside, null, false);
+  placeAdded(pages, index, outside, null, settled);
   return { mode: 'assembled', pages, ...derivedOf(passes, index) };
 }
 
@@ -410,7 +414,7 @@ export function baseAssembly(
 ): BaseAssembly {
   switch (modeOf(passes, assembled, settled)) {
     case 'assembled':
-      return assembledBase(passes, assembled ?? []);
+      return assembledBase(passes, assembled ?? [], settled);
     case 'sets':
       return setsBase(passes, settled);
     default:

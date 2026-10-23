@@ -349,6 +349,29 @@ describe('сборка: блок пары добавленного набора 
     ]);
   });
 
+  it('`settled`-проекция действует и в режиме «собрано»: идущие обороты набора вне записи — подблоки (R12, ревью)', () => {
+    const passes = [
+      passOf(1, 3),
+      passOf(2, 2),
+      setFrontsOf(3, 2, F(2)),
+      setBacksOf(4, 3, 2, { state: 'running' }),
+    ];
+    const record = [F(1), B(2), F(2), B(1), F(3)];
+
+    expect(baseKeysOf(baseAssembly(passes, record)).slice(3, 7)).toEqual([
+      SF(1),
+      SB(2),
+      SF(2),
+      SB(1),
+    ]);
+    expect(baseKeysOf(baseAssembly(passes, record, true)).slice(3, 7)).toEqual([
+      SF(1),
+      SF(2),
+      SB(2),
+      SB(1),
+    ]);
+  });
+
   it('каждая страница сессии — ровно один раз: пары, подблоки, осиротевшие, пустые проходы', () => {
     const session = sessionOf([
       ...MAIN,

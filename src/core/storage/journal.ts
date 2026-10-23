@@ -476,10 +476,11 @@ export function nextKindOf(journal: Journal): PassKind {
   if (fronts === null) {
     return 'fronts';
   }
-  if (backs === null && !journal.backsDeclined) {
-    return 'backs';
+  // Набор, ждущий обороты, — раньше очереди основной пачки (R11): его `flip` уже на экране.
+  if (pendingPairOf(journal) !== null) {
+    return 'addedBacks';
   }
-  return pendingPairOf(journal) === null ? 'added' : 'addedBacks';
+  return backs === null && !journal.backsDeclined ? 'backs' : 'added';
 }
 
 export const pageCountOf = (journal: Journal): number =>

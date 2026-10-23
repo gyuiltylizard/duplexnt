@@ -173,6 +173,22 @@ describe('хранилище сессии: решения по оборотам 
     expect(await context.store.keepSetBacks(1)).toEqual(conflict('setNotMismatched'));
   });
 
+  it('принятие пустого прерванного прохода оборотов набора не ставит kept: набор ждёт дальше, очередь даёт новые обороты (ревью)', async () => {
+    const context = await mainPack();
+    const { store, journalOnDisk } = context;
+    await setFronts(context, 3);
+    ok(await store.beginPass(ORIGIN, null));
+    ok(await store.endSegment('interrupted'));
+
+    ok(await store.acceptPass());
+
+    expect((await journalOnDisk()).passes[2]?.backsDecision).toBe('none');
+    expect(pendingPairOf(await journalOnDisk())).toEqual({ set: 1, fronts: 3, expected: 3 });
+    expect(store.planPass(null)).toEqual(
+      okOf({ kind: 'addedBacks', resumed: false, expected: 3, pair: 3 }),
+    );
+  });
+
   it('принятие прерванных оборотов набора: короткие → kept, полные → «ждём» остаётся (AE11)', async () => {
     const short = await mainPack();
     await setFronts(short, 3);

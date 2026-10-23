@@ -23,7 +23,6 @@ import {
 import { visibleKeysOf } from '../scan/edits';
 import { isTempName, removeByPrefix, renameWithRetry, writeStreamAtomic } from './atomic-file';
 import {
-  addedSetsOfJournal,
   isVacant,
   JOURNAL_VERSION,
   journalSchema,
@@ -73,6 +72,7 @@ import {
   type PolicyState,
 } from './pass-policy';
 import { withRebasedEdits } from './rebase';
+import { setDecisionsOf, withDecision } from './set-decisions';
 import {
   fsErrorCode,
   isMissing,
@@ -393,53 +393,6 @@ export function createSessionStore(
   /** Состояние для политики запуска (`./pass-policy.ts`) — журнал в памяти и режим отказа. */
   const state = (): PolicyState => ({ journal, incompatible });
 
-  /** Двусторонний набор «ДN» с проходами лиц и оборотов; `null` — набора нет или оборотов у него нет. */
-  function twoSidedSet(
-    current: Journal,
-    set: number,
-  ): { readonly fronts: JournalPass; readonly backs: JournalPass } | null {
-    const found = addedSetsOfJournal(current).find((it) => it.set === set && it.sides === 'two');
-    const fronts = current.passes.find((pass) => pass.number === found?.fronts);
-    const backs = current.passes.find((pass) => pass.number === found?.backs);
-    return fronts === undefined || backs === undefined ? null : { fronts, backs };
-  }
-
-  /**
-   * Набор «ДN» с несовпавшими оборотами, по которому ещё можно решать (M4.5, KTD3): общий
-   * гард «Оставить как есть» и «Переснять» — сессия есть, проход не идёт, набор с оборотами
-   * найден, числа не равны и решения ещё нет.
-   */
-  function mismatchedSetOf(set: number): Result<{
-    readonly journal: Journal;
-    readonly fronts: JournalPass;
-    readonly backs: JournalPass;
-  }> {
-    if (journal === null || isVacant(journal)) {
-      return conflict('noSession');
-    }
-    if (runningSegmentOf(journal) !== null) {
-      return conflict('passRunning');
-    }
-    const found = twoSidedSet(journal, set);
-    if (found === null) {
-      return conflict('noPendingSet');
-    }
-    const { fronts, backs } = found;
-    return fronts.backsDecision !== 'none' || pagesOf(backs).length === pagesOf(fronts).length
-      ? conflict('setNotMismatched')
-      : ok({ journal, fronts, backs });
-  }
-
-  /** Журнал с решением по оборотам набора на проходе его лиц (M4.5, KTD1). */
-  const withDecision = (
-    current: Journal,
-    fronts: JournalPass,
-    backsDecision: 'declined' | 'kept',
-  ): Journal => ({
-    ...current,
-    passes: current.passes.map((pass) => (pass === fronts ? { ...pass, backsDecision } : pass)),
-  });
-
   // Переименование каталога сессии и очистка. Пофайлового удаления взамен нет: не
   // переименовался — сессия остаётся целой.
   async function closeDirectory(sessionId: string): Promise<Result<void>> {
@@ -487,6 +440,14 @@ export function createSessionStore(
       // Каталог не читается: пометка остаётся.
     }
   }
+
+  // Решения по оборотам набора «ДN» (M4.5, KTD3) — своим модулем, на очереди и `commit` хранилища.
+  const sets = setDecisionsOf({
+    journal: () => journal,
+    commit,
+    settleReads,
+    removeMarked,
+  });
 
   return {
     incompatible,
@@ -764,8 +725,11 @@ export function createSessionStore(
           (it) =>
             pass.kind === 'addedBacks' && it.number === pass.pair && it.kind === 'addedFronts',
         );
+        // Пустой прерванный проход роли не занимает: принятый без страниц набор ждёт дальше
+        // (ревью сессий 1–2), иначе «оставить как есть» запирало бы набор без оборотов.
         if (
           setFronts?.backsDecision === 'none' &&
+          pagesOf(pass).length > 0 &&
           pagesOf(pass).length !== pagesOf(setFronts).length
         ) {
           accepted = withDecision(accepted, setFronts, 'kept');
@@ -848,49 +812,9 @@ export function createSessionStore(
         return commit({ ...trimmedOf('backs'), backsDeclined: true }, 'must');
       }),
 
-    keepSetBacks: (set) =>
-      mutating(async () => {
-        const found = mismatchedSetOf(set);
-        if (!found.ok) {
-          return found;
-        }
-        // Вывод не меняется (подблоки уже в ленте) — отметка о сохранении остаётся.
-        return commit(withDecision(found.value.journal, found.value.fronts, 'kept'), 'must');
-      }),
+    keepSetBacks: (set) => mutating(() => sets.keepSetBacks(set)),
 
-    rescanSetBacks: (set) =>
-      mutating(async () => {
-        const found = mismatchedSetOf(set);
-        if (!found.ok) {
-          return found;
-        }
-        const { journal: current, backs } = found.value;
-        const { sessionId } = current;
-        // Отброс прохода — как «Остановить» на сегменте (KTD-20): пометки об удалении в журнале
-        // раньше файлов; не доведённое удаление дочищает сверка при запуске. Правки по ключам
-        // прохода вычищает нормализация в `commit`; вывод меняется — отметка снимается.
-        const prefixes = backs.segments.map((segment) =>
-          segmentPrefix(backs.number, segment.number),
-        );
-        const marked = await commit(
-          {
-            ...current,
-            passes: current.passes.filter((pass) => pass !== backs),
-            deletions: [...current.deletions, ...prefixes],
-            saved: false,
-          },
-          'must',
-        );
-        if (!marked.ok) {
-          return marked;
-        }
-        // Страницы прохода уже не выдаются; идущие чтения дочитывают и закрывают файл.
-        await settleReads();
-        for (const prefix of prefixes) {
-          await removeMarked(sessionId, prefix);
-        }
-        return ok(undefined);
-      }),
+    rescanSetBacks: (set) => mutating(() => sets.rescanSetBacks(set)),
 
     assemble: () =>
       mutating(async () => {

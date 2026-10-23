@@ -301,6 +301,10 @@ export function createPassService(
     );
   };
   // Оценку получают обороты любой пачки — основной и добавленного набора (M4.5, KTD6).
+  // Команды, меняющие ленту, ждут конца записи PDF и прохода (KTD-9): одно правило на все.
+  const busyConflict = (): Result<never> | null =>
+    saving ? conflict('saving') : run !== null ? conflict('passRunning') : null;
+
   const detectsBlank = (kind: PassKind): boolean =>
     isBacksKind(kind) && store.snapshot()?.blankMode !== 'keep';
   // При открытии: страницы оборотов без кэша считаются в фоне, лента до них — с `pending`.
@@ -868,11 +872,9 @@ export function createPassService(
 
     async assemble() {
       // Запись PDF читает ленту по снимку: сборка посреди неё сделала бы файл неправдой (KTD-9).
-      if (saving) {
-        return conflict('saving');
-      }
-      if (run !== null) {
-        return conflict('passRunning');
+      const busy = busyConflict();
+      if (busy !== null) {
+        return busy;
       }
       const assembled = await store.assemble();
       notify();
@@ -880,11 +882,9 @@ export function createPassService(
     },
 
     async keepSetBacks(set) {
-      if (saving) {
-        return conflict('saving');
-      }
-      if (run !== null) {
-        return conflict('passRunning');
+      const busy = busyConflict();
+      if (busy !== null) {
+        return busy;
       }
       const kept = await store.keepSetBacks(set);
       notify();
@@ -894,11 +894,9 @@ export function createPassService(
     async rescanSetBacks(set) {
       // Отброс прохода меняет ленту: посреди записи PDF и прохода — отказ (KTD-9). Оценки
       // отброшенных страниц уходят вместе с ними.
-      if (saving) {
-        return conflict('saving');
-      }
-      if (run !== null) {
-        return conflict('passRunning');
+      const busy = busyConflict();
+      if (busy !== null) {
+        return busy;
       }
       const rescanned = await store.rescanSetBacks(set);
       blank.prune();
@@ -909,11 +907,9 @@ export function createPassService(
     async setEdits(edits, rotate180) {
       // Запись PDF читает ленту по снимку: правка посреди неё сделала бы файл и отметку
       // «сохранено» неправдой, а повтор неудавшихся — гонкой с лентой (KTD-9).
-      if (saving) {
-        return conflict('saving');
-      }
-      if (run !== null) {
-        return conflict('passRunning');
+      const busy = busyConflict();
+      if (busy !== null) {
+        return busy;
       }
       const set = await store.setEdits(edits, rotate180);
       notify();

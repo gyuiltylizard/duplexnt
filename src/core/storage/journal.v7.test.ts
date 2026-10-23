@@ -234,11 +234,14 @@ describe('журнал v7: выводимое — набор ждёт оборо
     expect(nextKindOf(journal)).toBe('addedBacks');
   });
 
-  it('очередь основной пачки раньше пары: без оборотов и без отказа — обороты', () => {
-    expect(nextKindOf(journalOf([passAt(1, 2), setFronts(3, 2)]))).toBe('backs');
+  it('набор, ждущий обороты, — раньше очереди основной пачки (R11): даже когда обороты основной не решены', () => {
+    // Набор мог начаться после принятых коротких лицевых (M3.5): его `flip` уже на экране.
+    expect(nextKindOf(journalOf([passAt(1, 2), setFronts(3, 2)]))).toBe('addedBacks');
     expect(nextKindOf(journalOf([passAt(1, 2), setFronts(3, 2)], { backsDeclined: true }))).toBe(
       'addedBacks',
     );
+    // Без ожидающего набора очередь M2 прежняя.
+    expect(nextKindOf(journalOf([passAt(1, 2), setFronts(3, 2, 'declined')]))).toBe('backs');
   });
 
   it('номер «ДN» — по порядку номера прохода лиц среди всех добавленных наборов; пара — один номер', () => {

@@ -91,6 +91,15 @@ describe('политика запуска: пара добавленного н�
     ).toEqual(expected);
   });
 
+  it('ожидающий набор — раньше очереди основной пачки (R11): после принятых коротких лицевых без оборотов — обороты набора', () => {
+    expect(
+      planPass(
+        state(journalOf([passAt(1, 2, { ...interrupted(2), accepted: true }), setFronts(3, 2)])),
+        null,
+      ),
+    ).toEqual(okOf({ kind: 'addedBacks', resumed: false, expected: 2, pair: 3 }));
+  });
+
   it('прерванные обороты набора — досканирование того же прохода с «из F»; прерванные лица набора — без ожидаемого', () => {
     expect(
       planPass(
