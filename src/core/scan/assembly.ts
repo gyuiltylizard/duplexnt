@@ -78,7 +78,7 @@ export interface BaseAssembly {
  * режим не включает: его числа меняются с каждой страницей. `settled` — режим, каким он стал бы,
  * кончись идущий проход прямо сейчас: по нему перебазируются правки посреди досканирования.
  */
-function modeOf(
+export function modeOf(
   passes: readonly PassSnapshot[],
   assembled: readonly string[] | null,
   settled = false,

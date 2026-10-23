@@ -9,6 +9,7 @@ import {
   type AddedSet,
   type PassesByKind,
   type PassKind,
+  type PassSnapshot,
   type PassState,
 } from '@shared';
 import { scanParamsSchema } from '../escl/scan-settings';
@@ -21,7 +22,7 @@ import {
   SESSION_ID,
   type PageAddress,
 } from './layout';
-import { storedScannerSchema } from './stored-scanner';
+import { scannerInfoOf, storedScannerSchema } from './stored-scanner';
 import { parseVersioned, type VersionedParse } from './versioned-file';
 
 // Журнал сессии — один JSON-документ, который целиком переписывается атомарно (ADR 0004,
@@ -461,16 +462,15 @@ export interface PendingPair {
  * на всякий случай берётся последний по номеру прохода лиц.
  */
 export function pendingPairOf(journal: Journal): PendingPair | null {
-  const pending = addedSetsOfJournal(journal)
+  const waiting = addedSetsOfJournal(journal)
     .filter((set) => set.sides === 'two' && set.decision === 'none' && set.backs === null)
-    .map((set) => ({ set, pass: journal.passes.find((it) => it.number === set.fronts) }))
-    .filter(
-      (it) => it.pass !== undefined && ['completed', 'accepted'].includes(passStateOf(it.pass)),
-    )
-    .at(-1);
-  return pending === undefined || pending.pass === undefined
-    ? null
-    : { set: pending.set.set, fronts: pending.set.fronts, expected: pagesOf(pending.pass).length };
+    .flatMap((set) => {
+      const pass = journal.passes.find((it) => it.number === set.fronts);
+      return pass !== undefined && ['completed', 'accepted'].includes(passStateOf(pass))
+        ? [{ set: set.set, fronts: set.fronts, expected: pagesOf(pass).length }]
+        : [];
+    });
+  return waiting.at(-1) ?? null;
 }
 
 /**
@@ -508,6 +508,32 @@ export function runningSegmentOf(journal: Journal | null): RunningSegment | null
   }
   const segment = lastSegmentOf(pass);
   return segment.state === 'running' ? { pass, segment } : null;
+}
+
+/**
+ * Пустая сессия равна отсутствию сессии (ADR 0004, амендмент): журнал без единой записи о
+ * странице и без идущего сегмента. На диске он может остаться ради пометки об удалении или до
+ * следующего запуска — для вызывающего сессии нет.
+ */
+export const isVacant = (journal: Journal): boolean =>
+  pageCountOf(journal) === 0 && runningSegmentOf(journal) === null;
+
+export const NOTHING_LOST: ReadonlySet<string> = new Set();
+
+/** Проходы журнала, как их видит снимок; `lost` — ключи страниц без файлов. */
+export function passSnapshotsOf(journal: Journal, lost: ReadonlySet<string>): PassSnapshot[] {
+  return journal.passes.map((pass) => ({
+    number: pass.number,
+    kind: pass.kind,
+    after: pass.after,
+    pair: pass.pair,
+    backsDecision: pass.backsDecision,
+    state: passStateOf(pass),
+    paramsKnown: pass.origin !== null,
+    scanner: pass.origin === null ? null : scannerInfoOf(pass.origin.scanner),
+    rotate180: pass.rotate180,
+    pages: pagesOf(pass).map(({ key, number }) => ({ key, number, lost: lost.has(key) })),
+  }));
 }
 
 /** Журнал с заменённым последним проходом; `null` убирает проход. */

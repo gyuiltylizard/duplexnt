@@ -28,11 +28,11 @@ import {
   createSessionStore,
   NO_SESSION,
   sweepClosedSession,
-  withRebasedEdits,
   type SessionState,
   type SessionStore,
   type SessionStoreOptions,
 } from './session-store';
+import { withRebasedEdits } from './rebase';
 import { ioOf, isMissing, listDir } from './storage-fs';
 import { readVersionMarker, setAside, setAsidePathOf, writeVersioned } from './versioned-file';
 

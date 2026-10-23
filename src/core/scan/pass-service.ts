@@ -2,6 +2,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import {
   fail,
   ok,
+  passesByKind,
   type AssembledPage,
   type BlankMode,
   type DomainError,
@@ -871,7 +872,16 @@ export function createPassService(
       if (run !== null) {
         return conflict('passRunning');
       }
-      const set = await store.setEdits(edits, rotate180);
+      // Хранилище держит флаг 180° картой по проходам оборотов (M4.5, KTD4); мост до U4 M4.5
+      // несёт один флаг — на обороты основной пачки.
+      const backs = passesByKind(
+        store.snapshot()?.passes ?? [],
+        (pass) => pass.pages.length > 0,
+      ).backs;
+      if (backs === null && rotate180) {
+        return conflict('noBacksPass');
+      }
+      const set = await store.setEdits(edits, backs === null ? {} : { [backs.number]: rotate180 });
       notify();
       return set.ok ? ok({ seq }) : set;
     },
