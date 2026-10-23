@@ -18,7 +18,6 @@ import {
   type AssembledPage,
   type BlankSummary,
   type DomainError,
-  type PassKind,
   type SessionEdits,
   type SessionSnapshot,
   type Snapshot,
@@ -38,6 +37,7 @@ import {
   renamed,
   REVERTED,
   rotated,
+  rotatedBacks,
   withCut,
   withoutCut,
   type DropSide,
@@ -47,8 +47,9 @@ import {
 import { toneOf } from '../state/page-text';
 import { errorTextInline } from '../state/error-text';
 import type { EditState } from '../state/history';
-import { originsOf } from '../state/origins';
+import { originKindOf, originsOf } from '../state/origins';
 import { rolesOf } from '../state/screen';
+import { rotateRowOf, useRotateTarget } from '../state/useRotateTarget';
 import {
   afterRemoval,
   collapsed,
@@ -206,8 +207,6 @@ export function EditorScreen({
   // Происхождение страницы — проход по ключу: тег «об», факт «Откуда», слова страницы пары и
   // цель тумблера 180° (R11, R23; M4.5, KTD4).
   const origins = useMemo(() => originsOf(session.passes), [session.passes]);
-  const currentOrigin = (key: string | undefined): PassKind | null =>
-    key === undefined ? null : (origins.get(key)?.kind ?? null);
 
   const [modal, setModal] = useState<EditorModal | null>(null);
   /** Идёт запись пакета (модалка `save`): правки заблокированы (KTD-9). */
@@ -655,13 +654,14 @@ export function EditorScreen({
     };
   }, []);
 
-  // Тумблер 180° — у прохода оборотов (роль по `kind`, не номер — KTD-4), включая прерванный
-  // и принятый; без прохода оборотов тумблера нет (S7). Правило роли — одно на renderer.
-  const backsPass = rolesOf(session.passes).backs;
+  // Тумблер 180° — у прохода оборотов пачки текущей страницы (M4.5, KTD4; R16): основной
+  // документ или набор «ДN», роль по `kind` (KTD-4). Тумблер — правка (KTD-3, S15): шаг undo с
+  // текущими правками снимка; при отказе команда ничего не меняет, чекбокс вернётся по снимку.
+  const rotateTarget = useRotateTarget(session.passes, currentEntry?.addedSet);
   const setRotate = (event: ChangeEvent<HTMLInputElement>): void => {
-    // Тумблер — правка (KTD-3, S15): шаг undo с текущими правками снимка. Снимок — источник
-    // правды: при отказе команда не меняет ничего, и чекбокс вернётся сам.
-    edits.edit({ edits: edits.current.edits, rotate180: event.target.checked }, []);
+    if (rotateTarget !== null && rotateTarget.kind !== 'none') {
+      edits.edit(rotatedBacks(edits.current, rotateTarget.pass, event.target.checked), []);
+    }
   };
 
   // Сохранение и закрытие сессии (S16–S18) — хук; модалка `save` закрывается до тоста.
@@ -755,7 +755,7 @@ export function EditorScreen({
           visible,
           mode,
           sets,
-          origin: currentOrigin(currentEntry?.key),
+          origin: originKindOf(origins, currentEntry?.key),
           after: selection.current === null ? undefined : withTails([selection.current]).at(-1),
           numberOf,
         })
@@ -856,11 +856,7 @@ export function EditorScreen({
               reveal={reveal}
               toggleRef={blankToggleRef}
               onReveal={setReveal}
-              rotate={
-                backsPass === null
-                  ? null
-                  : { checked: backsPass.rotate180, disabled: saving, onChange: setRotate }
-              }
+              rotate={rotateRowOf(t, rotateTarget, edits.current.rotate180, saving, setRotate)}
             />
           }
         />
@@ -927,10 +923,10 @@ export function EditorScreen({
             documents={shownDocuments}
             entry={currentEntry}
             position={currentIndex + 1}
-            origin={currentOrigin(currentEntry?.key)}
+            origin={originKindOf(origins, currentEntry?.key)}
             currentDocument={currentDocument}
             names={names}
-            frontsOnly={backsPass === null}
+            frontsOnly={rolesOf(session.passes).backs === null}
             notBlank={currentEntry !== undefined && notBlank.includes(currentEntry.key)}
             locked={locked}
             onPickDocument={pickDocument}

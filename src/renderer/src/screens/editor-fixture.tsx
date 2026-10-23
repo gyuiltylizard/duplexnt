@@ -192,6 +192,14 @@ export const edits = (change: Partial<SessionEdits>): SessionEdits => ({
   ...change,
 });
 
+const isFlagMap = (value: unknown): value is ReadonlyMap<number, boolean> => value instanceof Map;
+
+/** Правки с одним флагом 180° на все проходы оборотов — запись тестов до M4.5. */
+interface FlagState {
+  readonly edits: SessionEdits;
+  readonly rotate180: boolean;
+}
+
 /**
  * Снимок после того, как ядро приняло правки `state`: сессия несёт их дословно (нормализации нет
  * — тест подаёт ровно то, что ушло в `setEdits`), сборка — зеркало ядра с правками
@@ -199,16 +207,27 @@ export const edits = (change: Partial<SessionEdits>): SessionEdits => ({
  */
 export function applied(
   snapshot: Snapshot,
-  /** Состояние правок или запрос моста (`lastSent`): карта флагов по проходам (M4.5, KTD4). */
-  state: EditState | Parameters<Api['setEdits']>[0],
+  /**
+   * Состояние правок (карта флагов 180° по проходам, M4.5 KTD4), запрос моста (`lastSent`) или
+   * один флаг на все проходы оборотов — короткая запись тестов основной пачки.
+   */
+  state: EditState | Parameters<Api['setEdits']>[0] | FlagState,
   blank: BlankVerdicts = NO_VERDICTS,
 ): Snapshot {
   const session = snapshot.session;
   if (session === null) {
     throw new Error('в фикстуре нет сессии');
   }
-  const flagOf = (number: number): boolean =>
-    typeof state.rotate180 === 'boolean' ? state.rotate180 : (state.rotate180[number] ?? false);
+  const flagOf = (number: number): boolean => {
+    const { rotate180 } = state;
+    if (typeof rotate180 === 'boolean') {
+      return rotate180;
+    }
+    if (isFlagMap(rotate180)) {
+      return rotate180.get(number) ?? false;
+    }
+    return rotate180[number] ?? false;
+  };
   const next: SessionSnapshot = {
     ...session,
     edits: state.edits,

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { hasPages, isBacksKind, type DomainError, type SessionSnapshot } from '@shared';
+import type { DomainError, SessionSnapshot } from '@shared';
 import {
   editStateOf,
   emptyHistory,
@@ -12,7 +12,6 @@ import {
   type EditState,
   type HistoryMove,
 } from '../state/history';
-import { rolesOf } from '../state/screen';
 import { NO_SELECTION, pruned, selectionOf, single, type Selection } from '../state/selection';
 
 // Проводка правок редактора (план M3, U7; KTD-3, KTD-3a; журнал M3, сессия 3): undo-стек и
@@ -125,18 +124,10 @@ export function useEditorEdits({
     const settle = (): void => {
       setPending((previous) => (previous?.id === id ? null : previous));
     };
-    // Мост несёт флаги 180° картой по проходам оборотов (M4.5, KTD4); история редактора до U7
-    // держит один флаг — на обороты основной пачки, флаги оборотов наборов идут как есть
-    // (не названный проход ядро считает выключенным).
-    const backs = rolesOf(session.passes).backs;
+    // Мост несёт флаги 180° картой по проходам оборотов (M4.5, KTD4): только включённые — не
+    // названный проход ядро считает выключенным, «Вернуть» — пустая карта.
     const rotate180: Record<number, boolean> = Object.fromEntries(
-      session.passes
-        .filter((pass) => isBacksKind(pass.kind) && hasPages(pass))
-        .map((pass): [number, boolean] => [
-          pass.number,
-          pass === backs ? target.rotate180 : pass.rotate180,
-        ])
-        .filter(([, flag]) => flag),
+      [...target.rotate180].filter(([, on]) => on),
     );
     window.api.setEdits({ edits: target.edits, rotate180 }).then(
       (result) => {

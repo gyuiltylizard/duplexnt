@@ -15,3 +15,9 @@ export function originsOf(passes: readonly PassSnapshot[]): ReadonlyMap<string, 
     ),
   );
 }
+
+/** Роль прохода страницы по ключу; `null` — ключа нет или ленты нет. */
+export const originKindOf = (
+  origins: ReadonlyMap<string, PageOrigin>,
+  key: string | undefined,
+): PassKind | null => (key === undefined ? null : (origins.get(key)?.kind ?? null));

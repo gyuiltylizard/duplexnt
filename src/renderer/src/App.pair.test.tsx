@@ -253,6 +253,28 @@ describe('M4.5: посадка пары набора (KTD7; handoff S6, S10)', (
     expect(screen.getByText('стр. 1 из 6')).toBeDefined();
   });
 
+  it('«Остановить» на оборотах набора до первой страницы: проход снят, экран снова flip набора — ни паузы, ни тоста', async () => {
+    const pending = withSet(1, null);
+    const push = liveApi({
+      ...pending,
+      pass: {
+        phase: 'scanning',
+        resumed: false,
+        kind: 'addedBacks',
+        expected: 3,
+        params: PARAMS,
+        pages: 0,
+      },
+    });
+    render(<App />);
+    expect(await screen.findByText('ДОБАВЛЯЕМ · ОБОРОТЫ')).toBeDefined();
+
+    await push({ ...pending, seq: 2 });
+    expect(screen.getByText('ДОБАВЛЯЕМ · ЛИЦА ГОТОВЫ: 3 листа')).toBeDefined();
+    expect(screen.queryByText('Сопоставляем проходы')).toBeNull();
+    expect(toasts()).toEqual([]);
+  });
+
   it('AE2: обороты набора не сошлись — статус и формула набора, после паузы модалка набора; «Оставить» → kept, затем тост', async () => {
     const push = liveApi(scanningBacks(1, 2));
     render(<App />);
