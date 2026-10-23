@@ -292,7 +292,7 @@ describe('служба прохода: оценки пустых оборото�
     // Третий документ целиком: F3, B3 — B3 скрыт, F3 остаётся; второй — остаётся F2. Переносим
     // лица в первый документ: разрезы [3, 4] → [F1 B2 F2], [B1], [F3 B3].
     expect(
-      await service.setEdits({ ...EMPTY_EDITS, cuts: [3, 4], names, order: [] }, false),
+      await service.setEdits({ ...EMPTY_EDITS, cuts: [3, 4], names, order: [] }, {}),
     ).toMatchObject({ ok: true });
     expect(await service.saveDocuments(folder, { mode: 'separate', names, retry: false })).toEqual(
       fail('sessionConflict', { documents: '2', reason: 'documentBlank' }),
@@ -301,7 +301,7 @@ describe('служба прохода: оценки пустых оборото�
 
     // Все лица удалены — остались одни скрытые обороты.
     expect(
-      await service.setEdits({ ...EMPTY_EDITS, deleted: [F(1), F(2), F(3)] }, false),
+      await service.setEdits({ ...EMPTY_EDITS, deleted: [F(1), F(2), F(3)] }, {}),
     ).toMatchObject({ ok: true });
     expect(await service.saveDocuments(folder, SINGLE)).toEqual(
       fail('sessionConflict', { reason: 'nothingToSave' }),
@@ -317,7 +317,7 @@ describe('служба прохода: оценки пустых оборото�
     expect(service.snapshot().assembly?.hasEdits).toBe(false);
 
     expect(
-      await service.setEdits({ ...EMPTY_EDITS, notBlank: [B(1), 'p09-s01-0001'] }, false),
+      await service.setEdits({ ...EMPTY_EDITS, notBlank: [B(1), 'p09-s01-0001'] }, {}),
     ).toMatchObject({ ok: true });
 
     const marked = service.snapshot();
@@ -331,7 +331,7 @@ describe('служба прохода: оценки пустых оборото�
     // Пометка переживает перезапуск; «Вернуть» (пустые правки) её снимает.
     const again = await openPassService(root, { blankDetector: detectorOf([11]).detector });
     expect(again.snapshot().assembly?.blank.hidden).toBe(0);
-    expect(await again.setEdits(EMPTY_EDITS, false)).toMatchObject({ ok: true });
+    expect(await again.setEdits(EMPTY_EDITS, {})).toMatchObject({ ok: true });
     expect(again.snapshot().assembly?.blank.hidden).toBe(1);
     expect(again.snapshot().assembly?.hasEdits).toBe(false);
   });

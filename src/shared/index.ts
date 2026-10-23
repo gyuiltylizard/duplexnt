@@ -32,6 +32,7 @@ export {
   type SaveDocumentsRequest,
   type SaveFolderChoice,
   type SaveMode,
+  type SetDecisionRequest,
   type SetEditsReport,
   type SetEditsRequest,
   type StartPassRequest,

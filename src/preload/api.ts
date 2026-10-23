@@ -64,6 +64,8 @@ export function buildApi(ipcRenderer: PreloadIpcRenderer): Api {
     declineBacks: command(ipcRenderer, 'declineBacks'),
     assemble: command(ipcRenderer, 'assemble'),
     setEdits: command(ipcRenderer, 'setEdits'),
+    keepSetBacks: command(ipcRenderer, 'keepSetBacks'),
+    rescanSetBacks: command(ipcRenderer, 'rescanSetBacks'),
     getSaveFolder: command(ipcRenderer, 'getSaveFolder'),
     chooseSaveFolder: command(ipcRenderer, 'chooseSaveFolder'),
     saveDocuments: command(ipcRenderer, 'saveDocuments'),

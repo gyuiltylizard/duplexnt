@@ -74,7 +74,7 @@ describe('служба прохода: «Собрать документ» (M3.6
 
     expect(service.snapshot().assembly?.report).toMatchObject({ mode: 'sets', mismatch: true });
     // Уравнять удалением лица: 2/2.
-    expect(await service.setEdits({ ...EMPTY_EDITS, deleted: [F(2)] }, false)).toMatchObject({
+    expect(await service.setEdits({ ...EMPTY_EDITS, deleted: [F(2)] }, {})).toMatchObject({
       ok: true,
     });
     const before = seen.length;
@@ -120,7 +120,7 @@ describe('служба прохода: «Собрать документ» (M3.6
     );
     expect(await readdir(folder)).toEqual([]);
 
-    expect(await service.setEdits({ ...EMPTY_EDITS, deleted: [F(2)] }, false)).toMatchObject({
+    expect(await service.setEdits({ ...EMPTY_EDITS, deleted: [F(2)] }, {})).toMatchObject({
       ok: true,
     });
     expect(await service.assemble()).toMatchObject({ ok: true });

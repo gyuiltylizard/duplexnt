@@ -155,13 +155,42 @@ describe про обороты набора (AE7, AE17, подблоки, пом
 
 ---
 
+## Сессия 2 — служба, мост, схемы; handoff
+
+### U4. Служба проходов, мост и схемы команд — ✅ зелёный
+
+`src/core/scan/pass-service.ts`: `setEdits(edits, rotate180)` принимает карту флагов (временный
+перевод из U2 снят); `keepSetBacks(set)` / `rescanSetBacks(set)` с гардами `saving` и
+`passRunning`, после отброса — `blank.prune()` (оценки отброшенных страниц уходят) и снимок;
+`detectsBlank` — роли `backs` и `addedBacks` (с U3). `startPass` ничего не потребовал: роль,
+`expected` и `pair` приходят из `planPass` (U2), `Run.kind` — `addedFronts` / `addedBacks`.
+Мост: `SetEditsRequest.rotate180` — карта, `SetDecisionRequest { set }`, команды `keepSetBacks` /
+`rescanSetBacks` в `BridgeCommands` и `BRIDGE_CHANNELS` (preload и main регистрируют по таблице);
+схемы — `kind: z.enum(['added', 'addedFronts'])`, `rotate180Schema` (record с ключами-номерами
+проходов, потолок `MAX_PASS_NUMBER` и `MAX_EDIT_ITEMS`), `setDecisionRequestSchema`; обработчики
+через `done`. Renderer до U7: `useEditorEdits.send` переводит булев флаг истории в карту
+`{ [backs]: true }` / `{}`; фикстуры `applied` / `lastSent` принимают форму моста.
+
+**Отклонение от плана (осознанное):** в `settleSegment` условия роли нет и не было — ноль страниц
+нового прохода любой роли отбрасывается общим правилом (R9), прерванные обороты набора без страниц
+снимаются и набор снова ждёт; расширять нечего, тест закреплён в `pass-service.pairs.test.ts`.
+
+Тесты: новые `pass-service.pairs.test.ts` (намерение лиц набора, обороты набора «из F» и отказ
+до первой страницы, AE14 на подставном транспорте, `otherScanner` для досканирования прохода
+набора, `keepSetBacks` / `rescanSetBacks` через службу и `passRunning`), `blank-flow.test.ts`
+(`pagesToScore`); `handlers.test.ts` — намерение `addedFronts`, отказ `addedBacks`, схема карты
+флагов (мусор), команды решения набора. Ожидания `setEdits` в тестах renderer и интеграции
+переведены на карту (`{}` / `{ 2: true }`, AE6 — `{ 3: true }`).
+
+**Готово:** typecheck, lint, format:check, node + jsdom, интеграция зелёные.
+Коммит `feat(m4.5): U4 …`.
+
+---
+
 ## На чём встали
 
-Сессия 1 закрыта (U1–U3). Дальше — сессия 2: U4 (служба проходов: `startPass` с `addedFronts` и
-`expected` оборотов набора, `keepSetBacks` / `rescanSetBacks` / `setEdits` с картой через мост и
-схемы, `settleSegment` для `addedBacks`; временный перевод булева флага в карту в `pass-service.ts`
-убрать) и U5 (handoff `docs/design/handoffs/2026-10-m4-5-states.md` — писать в начале сессии,
-утверждение автора — гейт U6/U7). Ревью пары сессий 1–2 — после U5.
+Сессия 2 в работе: U4 закрыт; дальше U5 — handoff `docs/design/handoffs/2026-10-m4-5-states.md`,
+утверждение автора — гейт U6/U7. Ревью пары сессий 1–2 — после U5.
 
 ## Закрытие вехи
 

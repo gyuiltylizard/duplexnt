@@ -116,7 +116,7 @@ describe('два прохода через эмулятор (M2)', () => {
 
     expect(unwrap(await service.startPass(null))).toMatchObject({ end: 'completed', pages: 3 });
     expect(unwrap(await service.startPass(null))).toMatchObject({ end: 'completed', pages: 3 });
-    unwrap(await service.setEdits(EMPTY_EDITS, true));
+    unwrap(await service.setEdits(EMPTY_EDITS, { 2: true }));
     await untilScored(() => service.snapshot());
 
     const outDir = join(root, 'выход');
@@ -282,7 +282,7 @@ describe('два прохода через эмулятор (M2)', () => {
     ).toBe(true);
 
     expect(service.snapshot().session?.passes.map((pass) => pass.number)).toEqual([1, 3]);
-    expect(await service.setEdits(EMPTY_EDITS, true)).toEqual({
+    expect(await service.setEdits(EMPTY_EDITS, { 3: true })).toEqual({
       ok: true,
       value: { seq: service.snapshot().seq },
     });

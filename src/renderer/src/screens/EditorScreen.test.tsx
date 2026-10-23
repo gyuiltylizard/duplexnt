@@ -69,7 +69,10 @@ describe('экран editor', () => {
 
     const toggle = screen.getByRole('checkbox', { name: 'Повернуть обороты на 180°' });
     fireEvent.click(toggle);
-    expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({ edits: EMPTY_EDITS, rotate180: true });
+    expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({
+      edits: EMPTY_EDITS,
+      rotate180: { 2: true },
+    });
   });
 
   it('S7: включённый поворот разворачивает только обороты; выключение шлёт rotate180: false', () => {
@@ -87,7 +90,7 @@ describe('экран editor', () => {
     const toggle = screen.getByRole('checkbox', { name: 'Повернуть обороты на 180°' });
     expect((toggle as HTMLInputElement).checked).toBe(true);
     fireEvent.click(toggle);
-    expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({ edits: EMPTY_EDITS, rotate180: false });
+    expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({ edits: EMPTY_EDITS, rotate180: {} });
   });
 
   it('без прохода оборотов тумблера нет', () => {
@@ -395,7 +398,7 @@ describe('экран editor', () => {
 
     expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({
       edits: { ...EMPTY_EDITS, rotations: { 'p01-s01-0001': 270, 'p01-s01-0002': 270 } },
-      rotate180: false,
+      rotate180: {},
     });
   });
 
@@ -412,7 +415,7 @@ describe('экран editor', () => {
 
     expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({
       edits: { ...EMPTY_EDITS, names: ['Акт'] },
-      rotate180: false,
+      rotate180: {},
     });
     expect(document.activeElement).toBe(option(1));
   });

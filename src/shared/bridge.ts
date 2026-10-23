@@ -52,12 +52,19 @@ export interface ProbeRequest {
 }
 
 /**
- * Правки редактора (M3, KTD-3): итоговое состояние целиком и поворот оборотов на 180° — одной
- * командой, чтобы «Вернуть» и его отмена были одним шагом. Нормализует ядро.
+ * Правки редактора (M3, KTD-3): итоговое состояние целиком и флаги поворота на 180° по проходам
+ * оборотов (M4.5, KTD4: номер прохода → флаг; не названные — `false`) — одной командой, чтобы
+ * «Вернуть» и его отмена были одним шагом. Нормализует ядро; номер не прохода оборотов —
+ * конфликт `noBacksPass`.
  */
 export interface SetEditsRequest {
   readonly edits: SessionEdits;
-  readonly rotate180: boolean;
+  readonly rotate180: Readonly<Record<number, boolean>>;
+}
+
+/** Решение по оборотам добавленного набора «ДN» (M4.5, KTD3): номер набора из отчёта сборки. */
+export interface SetDecisionRequest {
+  readonly set: number;
 }
 
 /**
@@ -193,6 +200,17 @@ export interface BridgeCommands {
    * записи PDF и идущего прохода отклоняется конфликтом (KTD-9).
    */
   readonly setEdits: { readonly request: SetEditsRequest; readonly value: SetEditsReport };
+  /**
+   * «Оставить как есть» для набора «ДN» с несовпавшими оборотами (M4.5, KTD3): durable, модалка
+   * набора больше не показывается. Отказы: `noPendingSet`, `setNotMismatched`, `passRunning`,
+   * `saving`.
+   */
+  readonly keepSetBacks: { readonly request: SetDecisionRequest; readonly value: undefined };
+  /**
+   * «Переснять обороты набора» (M4.5, KTD3): проход оборотов набора отбрасывается целиком, набор
+   * снова ждёт обороты (`flip` по снимку). Отказы — как у `keepSetBacks`.
+   */
+  readonly rescanSetBacks: { readonly request: SetDecisionRequest; readonly value: undefined };
   /** Папка сохранения пакета (M3, KTD-5): по умолчанию «Документы», помнится до выхода. */
   readonly getSaveFolder: { readonly request: NoRequest; readonly value: string };
   /** «Выбрать…» в модалке `save`: системный диалог папки в main. */
@@ -234,6 +252,8 @@ export const BRIDGE_CHANNELS = {
   declineBacks: 'duplexnt:decline-backs',
   assemble: 'duplexnt:assemble',
   setEdits: 'duplexnt:set-edits',
+  keepSetBacks: 'duplexnt:keep-set-backs',
+  rescanSetBacks: 'duplexnt:rescan-set-backs',
   getSaveFolder: 'duplexnt:get-save-folder',
   chooseSaveFolder: 'duplexnt:choose-save-folder',
   saveDocuments: 'duplexnt:save-documents',

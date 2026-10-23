@@ -286,7 +286,7 @@ describe('пустые обороты в редакторе (M4)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Это не пустая страница' }));
     expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({
       edits: { ...EMPTY_EDITS, notBlank: [B3] },
-      rotate180: false,
+      rotate180: {},
     });
     await settle();
     expect(onToast).toHaveBeenCalledWith('Страница возвращена в документ — Ctrl+Z отменит');

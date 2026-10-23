@@ -87,7 +87,7 @@ describe('правки и сохранение через эмулятор (M3, 
     await first.useScanner(connected);
     expect(unwrap(await first.startPass(null))).toMatchObject({ end: 'completed', pages: 3 });
     expect(unwrap(await first.startPass(null))).toMatchObject({ end: 'completed', pages: 3 });
-    unwrap(await first.setEdits(EDITS, true));
+    unwrap(await first.setEdits(EDITS, { 2: true }));
 
     const check = (snapshot: Snapshot): void => {
       expect(snapshot.session).toMatchObject({ saved: false, edits: EDITS });
@@ -178,7 +178,7 @@ describe('правки и сохранение через эмулятор (M3, 
       divider: null,
       notBlank: [],
     };
-    unwrap(await service.setEdits(manual, false));
+    unwrap(await service.setEdits(manual, {}));
 
     emulator.clearJam();
     expect(unwrap(await service.startPass(null))).toMatchObject({ end: 'completed', pages: 2 });

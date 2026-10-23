@@ -58,6 +58,8 @@ function setup(
     acceptPass: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
     declineBacks: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
     assemble: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
+    keepSetBacks: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
+    rescanSetBacks: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
     setEdits: vi.fn((): Promise<Result<{ readonly seq: number }>> =>
       Promise.resolve(ok({ seq: 7 })),
     ),
@@ -204,6 +206,16 @@ describe('снимок и проход', () => {
     expect(service.startPass).toHaveBeenLastCalledWith(intent);
     expect(await handlers.startPass({ kind: 'added', after: null })).toMatchObject({ ok: true });
     expect(service.startPass).toHaveBeenLastCalledWith({ kind: 'added', after: null });
+    // Лица двустороннего набора (M4.5, R4) — то же намерение с другой ролью; роль оборотов
+    // набора намерением не бывает — её назначает ядро.
+    const twoSided = { kind: 'addedFronts', after: 'p01-s01-0001' } as const;
+    expect(await handlers.startPass(twoSided)).toMatchObject({ ok: true });
+    expect(service.startPass).toHaveBeenLastCalledWith(twoSided);
+    expect(await handlers.startPass({ kind: 'addedBacks', after: null })).toMatchObject({
+      ok: false,
+      error: { code: 'invalidInput' },
+    });
+    expect(service.startPass).toHaveBeenCalledTimes(3);
   });
 
   it.each([
@@ -266,6 +278,49 @@ describe('снимок и проход', () => {
     expect(service.assemble).toHaveBeenCalledTimes(2);
   });
 
+  it('keepSetBacks / rescanSetBacks: номер набора по схеме, затем служба; отказ доходит кодом (M4.5, U4)', async () => {
+    const { handlers, service } = setup();
+
+    expect(await handlers.keepSetBacks({ set: 2 })).toEqual(ok(undefined));
+    expect(service.keepSetBacks).toHaveBeenCalledExactlyOnceWith(2);
+    expect(await handlers.rescanSetBacks({ set: 1 })).toEqual(ok(undefined));
+    expect(service.rescanSetBacks).toHaveBeenCalledExactlyOnceWith(1);
+
+    service.keepSetBacks.mockResolvedValueOnce(
+      fail('sessionConflict', { reason: 'setNotMismatched' }),
+    );
+    expect(await handlers.keepSetBacks({ set: 2 })).toEqual(
+      fail('sessionConflict', { reason: 'setNotMismatched' }),
+    );
+    service.rescanSetBacks.mockResolvedValueOnce(
+      fail('sessionConflict', { reason: 'noPendingSet' }),
+    );
+    expect(await handlers.rescanSetBacks({ set: 9 })).toEqual(
+      fail('sessionConflict', { reason: 'noPendingSet' }),
+    );
+
+    for (const garbage of [
+      undefined,
+      null,
+      2,
+      { set: 0 },
+      { set: 1.5 },
+      { set: '2' },
+      { set: 2, x: 1 },
+    ]) {
+      expect(await handlers.keepSetBacks(garbage)).toMatchObject({
+        ok: false,
+        error: { code: 'invalidInput' },
+      });
+      expect(await handlers.rescanSetBacks(garbage)).toMatchObject({
+        ok: false,
+        error: { code: 'invalidInput' },
+      });
+    }
+    expect(service.keepSetBacks).toHaveBeenCalledTimes(2);
+    expect(service.rescanSetBacks).toHaveBeenCalledTimes(2);
+  });
+
   it('setEdits: строгая схема, затем служба — правки и тумблер одним вызовом (M3, U3)', async () => {
     const { handlers, service } = setup();
     const edits: SessionEdits = {
@@ -278,19 +333,22 @@ describe('снимок и проход', () => {
       notBlank: [],
     };
 
-    expect(await handlers.setEdits({ edits, rotate180: true })).toEqual(ok({ seq: 7 }));
-    expect(service.setEdits).toHaveBeenCalledExactlyOnceWith(edits, true);
-    expect(await handlers.setEdits({ edits: EMPTY_EDITS, rotate180: false })).toEqual(
-      ok({ seq: 7 }),
-    );
-    expect(service.setEdits).toHaveBeenLastCalledWith(EMPTY_EDITS, false);
+    expect(await handlers.setEdits({ edits, rotate180: { 2: true } })).toEqual(ok({ seq: 7 }));
+    expect(service.setEdits).toHaveBeenCalledExactlyOnceWith(edits, { 2: true });
+    expect(await handlers.setEdits({ edits: EMPTY_EDITS, rotate180: {} })).toEqual(ok({ seq: 7 }));
+    expect(service.setEdits).toHaveBeenLastCalledWith(EMPTY_EDITS, {});
 
     const tooMany = Array.from({ length: MAX_EDIT_ITEMS + 1 }, () => 'p01-s01-0001');
     const garbage = [
       true,
       { edits },
       { edits, rotate180: 'да' },
-      { edits, rotate180: true, extra: 1 },
+      { edits, rotate180: true },
+      { edits, rotate180: { 2: 'да' } },
+      { edits, rotate180: { x: true } },
+      { edits, rotate180: { 0: true } },
+      { edits, rotate180: { 10000: true } },
+      { edits, rotate180: { 2: true }, extra: 1 },
       { edits: { ...edits, extra: 1 }, rotate180: false },
       { edits: { ...edits, names: ['Договор'] }, rotate180: false },
       { edits: { ...edits, cuts: [2, 1], names: ['', '', ''] }, rotate180: false },

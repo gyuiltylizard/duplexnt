@@ -212,7 +212,7 @@ describe('editor M3: правки', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Удалить 2 стр.' }));
     expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({
       edits: edits({ deleted: [B3, F2] }),
-      rotate180: false,
+      rotate180: {},
     });
     await settle();
     // Тост — без длительности: обычные 2,6 с.
@@ -246,7 +246,7 @@ describe('editor M3: правки', () => {
 
     ctrlZ();
     expect(api.setEdits).toHaveBeenCalledTimes(2);
-    expect(api.setEdits).toHaveBeenLastCalledWith({ edits: EMPTY_EDITS, rotate180: false });
+    expect(api.setEdits).toHaveBeenLastCalledWith({ edits: EMPTY_EDITS, rotate180: {} });
     await settle();
     rerender({ ...snapshot, seq: removed.seq + 1 });
     expect(selectedKeys()).toEqual([B3, F2]);
@@ -255,7 +255,7 @@ describe('editor M3: правки', () => {
     fireEvent.keyDown(document.body, { key: 'y', code: 'KeyY', ctrlKey: true });
     expect(api.setEdits).toHaveBeenLastCalledWith({
       edits: edits({ deleted: [B3, F2] }),
-      rotate180: false,
+      rotate180: {},
     });
   });
 
@@ -269,7 +269,7 @@ describe('editor M3: правки', () => {
     fireEvent.keyDown(option(0), { key: 'Delete', repeat: true });
     expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({
       edits: edits({ deleted: [F1] }),
-      rotate180: false,
+      rotate180: {},
     });
     await settle();
     expect(onToast).toHaveBeenCalledExactlyOnceWith('Страница удалена — Ctrl+Z вернёт');
@@ -292,7 +292,7 @@ describe('editor M3: правки', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Повернуть на 90° по часовой' }));
     expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({
       edits: edits({ rotations: { [F1]: 90 } }),
-      rotate180: false,
+      rotate180: {},
     });
     await settle();
     expect(onToast).not.toHaveBeenCalled();
@@ -326,7 +326,7 @@ describe('editor M3: правки', () => {
 
     fireEvent.keyDown(document.body, { key: 'я', code: 'KeyZ', ctrlKey: true });
     expect(api.setEdits).toHaveBeenCalledTimes(2);
-    expect(api.setEdits).toHaveBeenLastCalledWith({ edits: EMPTY_EDITS, rotate180: false });
+    expect(api.setEdits).toHaveBeenLastCalledWith({ edits: EMPTY_EDITS, rotate180: {} });
   });
 
   it('пока команда в полёте — до снимка с её результатом — новые жесты игнорируются', async () => {
@@ -353,7 +353,7 @@ describe('editor M3: правки', () => {
     expect(api.setEdits).toHaveBeenCalledTimes(2);
     expect(api.setEdits).toHaveBeenLastCalledWith({
       edits: edits({ rotations: { [F1]: 180 } }),
-      rotate180: false,
+      rotate180: {},
     });
   });
 
@@ -404,7 +404,7 @@ describe('editor M3: правки', () => {
     expect(setEdits).toHaveBeenCalledTimes(2);
     expect(setEdits).toHaveBeenLastCalledWith({
       edits: edits({ rotations: { [F1]: 180 } }),
-      rotate180: false,
+      rotate180: {},
     });
   });
 
@@ -551,7 +551,7 @@ describe('editor M3: правки', () => {
     expect(api.setEdits).toHaveBeenCalledTimes(3);
     expect(api.setEdits).toHaveBeenLastCalledWith({
       edits: edits({ rotations: { [F1]: 90 } }),
-      rotate180: false,
+      rotate180: {},
     });
   });
 
@@ -579,13 +579,14 @@ describe('editor M3: правки', () => {
     rerender(removed);
 
     ctrlZ();
-    expect(lastSent(api)).toEqual({ edits: base.session?.edits, rotate180: false });
+    // Без прохода оборотов карта флагов 180° в команде пуста (M4.5, KTD4).
+    expect(lastSent(api)).toEqual({ edits: base.session?.edits, rotate180: {} });
     await settle();
     rerender({ ...base, seq: removed.seq + 1 });
 
     fireEvent.keyDown(document.body, { key: 'y', code: 'KeyY', ctrlKey: true });
     expect(api.setEdits).toHaveBeenCalledTimes(3);
-    expect(lastSent(api)).toEqual(normalized);
+    expect(lastSent(api)).toEqual({ edits: normalized.edits, rotate180: {} });
   });
 
   it('S15: тумблер 180° — шаг undo: Ctrl+Z возвращает выключенный', async () => {
@@ -594,7 +595,10 @@ describe('editor M3: правки', () => {
     const { rerender } = renderEditor(snapshot);
 
     fireEvent.click(screen.getByRole('checkbox', { name: 'Повернуть обороты на 180°' }));
-    expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({ edits: EMPTY_EDITS, rotate180: true });
+    expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({
+      edits: EMPTY_EDITS,
+      rotate180: { 2: true },
+    });
     await settle();
     const session = snapshot.session;
     if (session === null) {
@@ -611,7 +615,7 @@ describe('editor M3: правки', () => {
     );
 
     ctrlZ();
-    expect(api.setEdits).toHaveBeenLastCalledWith({ edits: EMPTY_EDITS, rotate180: false });
+    expect(api.setEdits).toHaveBeenLastCalledWith({ edits: EMPTY_EDITS, rotate180: {} });
   });
 });
 

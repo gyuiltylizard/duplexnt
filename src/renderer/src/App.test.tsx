@@ -187,7 +187,7 @@ describe('каркас приложения', () => {
     fireEvent.keyDown(document.body, { key: 'Delete' });
     expect(setEdits).toHaveBeenCalledExactlyOnceWith({
       edits: { ...EMPTY_EDITS, deleted: ['p01-s01-0001'] },
-      rotate180: false,
+      rotate180: {},
     });
   });
 

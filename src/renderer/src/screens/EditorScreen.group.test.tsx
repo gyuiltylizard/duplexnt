@@ -155,7 +155,7 @@ describe('«Выделить в документ» (S6, KTD7, R19)', () => {
     fireEvent.click(button('Выделить в документ'));
     expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({
       edits: edits({ cuts: [1, 3], names: ['', '', ''] }),
-      rotate180: false,
+      rotate180: {},
     });
     await settle();
     expect(onToast).toHaveBeenCalledExactlyOnceWith('Отдельный документ из 2 стр. создан');
@@ -178,7 +178,7 @@ describe('«Выделить в документ» (S6, KTD7, R19)', () => {
     fireEvent.click(button('Выделить в документ'));
     expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({
       edits: edits({ order: [F1, B3, B2, F2, F3, B1], cuts: [1, 3], names: ['', '', ''] }),
-      rotate180: false,
+      rotate180: {},
     });
     await settle();
     expect(onToast).toHaveBeenCalledExactlyOnceWith('Отдельный документ из 2 стр. создан');
@@ -199,7 +199,7 @@ describe('«Выделить в документ» (S6, KTD7, R19)', () => {
     expect(screen.getByText('Есть ручные правки')).toBeDefined();
 
     ctrlZ();
-    expect(api.setEdits).toHaveBeenLastCalledWith({ edits: EMPTY_EDITS, rotate180: false });
+    expect(api.setEdits).toHaveBeenLastCalledWith({ edits: EMPTY_EDITS, rotate180: {} });
     await settle();
     rerender(applied(snapshot, lastSent(api)));
     expect(selectedKeys()).toEqual([B3, B2]);
@@ -216,7 +216,7 @@ describe('«Выделить в документ» (S6, KTD7, R19)', () => {
     fireEvent.click(button('Выделить в документ'));
     expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({
       edits: edits({ order: [F1, B3, F3, B1, F2, B2], cuts: [4], names: ['', ''] }),
-      rotate180: false,
+      rotate180: {},
     });
     await settle();
     // Число в тосте — по показанным.
@@ -236,7 +236,7 @@ describe('«Выделить в документ» (S6, KTD7, R19)', () => {
     fireEvent.click(button('Выделить в документ'));
     expect(literal.setEdits).toHaveBeenCalledExactlyOnceWith({
       edits: edits({ order: [F1, F3, B3, F2, B2, B1], cuts: [2], names: ['', ''] }),
-      rotate180: false,
+      rotate180: {},
     });
   });
 

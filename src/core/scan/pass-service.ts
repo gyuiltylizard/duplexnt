@@ -2,7 +2,6 @@ import { setTimeout as delay } from 'node:timers/promises';
 import {
   fail,
   ok,
-  passesByKind,
   type AssembledPage,
   type BlankMode,
   type DomainError,
@@ -128,11 +127,26 @@ export interface PassService {
    */
   assemble(): Promise<Result<void>>;
   /**
-   * Правки редактора и тумблер 180° (M3, KTD-3). Отклоняется, пока пишется PDF (`saving`) и
-   * пока идёт проход (`passRunning`) — KTD-9. Принятая команда всегда шлёт снимок; успех
-   * возвращает его номер — по нему редактор узнаёт снимок со своим результатом.
+   * Правки редактора и флаги 180° по проходам оборотов (M3, KTD-3; M4.5, KTD4). Отклоняется,
+   * пока пишется PDF (`saving`) и пока идёт проход (`passRunning`) — KTD-9. Принятая команда
+   * всегда шлёт снимок; успех возвращает его номер — по нему редактор узнаёт снимок со своим
+   * результатом.
    */
-  setEdits(edits: SessionEdits, rotate180: boolean): Promise<Result<SetEditsReport>>;
+  setEdits(
+    edits: SessionEdits,
+    rotate180: Readonly<Record<number, boolean>>,
+  ): Promise<Result<SetEditsReport>>;
+  /**
+   * «Оставить как есть» для набора «ДN» с несовпавшими оборотами (M4.5, KTD3). Отклоняется,
+   * пока пишется PDF (`saving`) и пока идёт проход (`passRunning`); остальные гарды —
+   * хранилище. Принятая и отклонённая команда шлёт снимок.
+   */
+  keepSetBacks(set: number): Promise<Result<void>>;
+  /**
+   * «Переснять обороты набора» (M4.5, KTD3): отброс прохода оборотов набора — деструктивно, по
+   * явному действию; гарды те же, что у `keepSetBacks`. После успеха набор снова ждёт обороты.
+   */
+  rescanSetBacks(set: number): Promise<Result<void>>;
   /**
    * Пакетное сохранение в папку (M3, U4): документы ленты (или вся лента одним файлом) в PDF по
    * одному, best-effort. «Сохранено» — только когда записаны все файлы пакета и журнал не
@@ -864,6 +878,33 @@ export function createPassService(
       return assembled;
     },
 
+    async keepSetBacks(set) {
+      if (saving) {
+        return conflict('saving');
+      }
+      if (run !== null) {
+        return conflict('passRunning');
+      }
+      const kept = await store.keepSetBacks(set);
+      notify();
+      return kept;
+    },
+
+    async rescanSetBacks(set) {
+      // Отброс прохода меняет ленту: посреди записи PDF и прохода — отказ (KTD-9). Оценки
+      // отброшенных страниц уходят вместе с ними.
+      if (saving) {
+        return conflict('saving');
+      }
+      if (run !== null) {
+        return conflict('passRunning');
+      }
+      const rescanned = await store.rescanSetBacks(set);
+      blank.prune();
+      notify();
+      return rescanned;
+    },
+
     async setEdits(edits, rotate180) {
       // Запись PDF читает ленту по снимку: правка посреди неё сделала бы файл и отметку
       // «сохранено» неправдой, а повтор неудавшихся — гонкой с лентой (KTD-9).
@@ -873,16 +914,7 @@ export function createPassService(
       if (run !== null) {
         return conflict('passRunning');
       }
-      // Хранилище держит флаг 180° картой по проходам оборотов (M4.5, KTD4); мост до U4 M4.5
-      // несёт один флаг — на обороты основной пачки.
-      const backs = passesByKind(
-        store.snapshot()?.passes ?? [],
-        (pass) => pass.pages.length > 0,
-      ).backs;
-      if (backs === null && rotate180) {
-        return conflict('noBacksPass');
-      }
-      const set = await store.setEdits(edits, backs === null ? {} : { [backs.number]: rotate180 });
+      const set = await store.setEdits(edits, rotate180);
       notify();
       return set.ok ? ok({ seq }) : set;
     },

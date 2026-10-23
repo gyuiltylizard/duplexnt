@@ -12,6 +12,7 @@ import {
   type EditState,
   type HistoryMove,
 } from '../state/history';
+import { rolesOf } from '../state/screen';
 import { NO_SELECTION, pruned, selectionOf, single, type Selection } from '../state/selection';
 
 // Проводка правок редактора (план M3, U7; KTD-3, KTD-3a; журнал M3, сессия 3): undo-стек и
@@ -124,7 +125,11 @@ export function useEditorEdits({
     const settle = (): void => {
       setPending((previous) => (previous?.id === id ? null : previous));
     };
-    window.api.setEdits({ edits: target.edits, rotate180: target.rotate180 }).then(
+    // Мост несёт флаги 180° картой по проходам оборотов (M4.5, KTD4); история редактора до U7
+    // держит один флаг — на обороты основной пачки.
+    const backs = rolesOf(session.passes).backs;
+    const rotate180 = backs === null || !target.rotate180 ? {} : { [backs.number]: true };
+    window.api.setEdits({ edits: target.edits, rotate180 }).then(
       (result) => {
         if (!result.ok) {
           // Шаг в историю не попадает, снимок не меняется (handoff M3, гейтинг).

@@ -199,18 +199,23 @@ export const edits = (change: Partial<SessionEdits>): SessionEdits => ({
  */
 export function applied(
   snapshot: Snapshot,
-  state: EditState,
+  /** Состояние правок или запрос моста (`lastSent`): карта флагов по проходам (M4.5, KTD4). */
+  state: EditState | Parameters<Api['setEdits']>[0],
   blank: BlankVerdicts = NO_VERDICTS,
 ): Snapshot {
   const session = snapshot.session;
   if (session === null) {
     throw new Error('в фикстуре нет сессии');
   }
+  const flagOf = (number: number): boolean =>
+    typeof state.rotate180 === 'boolean' ? state.rotate180 : (state.rotate180[number] ?? false);
   const next: SessionSnapshot = {
     ...session,
     edits: state.edits,
     passes: session.passes.map((pass) =>
-      pass.kind === 'backs' ? { ...pass, rotate180: state.rotate180 } : pass,
+      pass.kind === 'backs' || pass.kind === 'addedBacks'
+        ? { ...pass, rotate180: flagOf(pass.number) }
+        : pass,
     ),
   };
   return {
@@ -238,8 +243,8 @@ export function deferredSetEdits() {
   };
 }
 
-/** Последнее, что ушло в `setEdits`. */
-export function lastSent(api: Api): EditState {
+/** Последнее, что ушло в `setEdits` — запрос моста: флаги 180° картой по проходам (M4.5, KTD4). */
+export function lastSent(api: Api): Parameters<Api['setEdits']>[0] {
   const calls = vi.mocked(api.setEdits).mock.calls;
   const state = calls[calls.length - 1]?.[0];
   if (state === undefined) {
