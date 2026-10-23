@@ -47,11 +47,13 @@ const pass = (number: number, segments: ReturnType<typeof segment>[], extra: obj
   segments,
   kind: number === 1 ? 'fronts' : 'backs',
   after: null,
+  pair: null,
+  backsDecision: null,
   rotate180: false,
   ...extra,
 });
 const journalOf = (passes: ReturnType<typeof pass>[], extra: object = {}) => ({
-  version: 6,
+  version: 7,
   sessionId: SESSION,
   nextPass: passes.length + 1,
   passes,
@@ -70,9 +72,16 @@ function omit<T extends object, K extends keyof T>(value: T, ...keys: K[]): Omit
   ) as Omit<T, K>;
 }
 
+/** Журнал версии 6 (M4): тот же состав без ролей пары — ссылки пары и решения по оборотам. */
+const journalV6Of = (passes: ReturnType<typeof pass>[], extra: object = {}) => ({
+  ...journalOf(passes, extra),
+  version: 6,
+  passes: passes.map((one) => omit(one, 'pair', 'backsDecision')),
+});
+
 /** Журнал версии 4 (M3.5): тот же состав без записи сборки и границы наборов. */
 const journalV4Of = (passes: ReturnType<typeof pass>[], extra: object = {}) => ({
-  ...omit(journalOf(passes, extra), 'assembled', 'blankMode'),
+  ...omit(journalV6Of(passes, extra), 'assembled', 'blankMode'),
   version: 4,
   edits: omit(EMPTY_EDITS, 'divider', 'notBlank'),
 });
@@ -81,7 +90,7 @@ const journalV4Of = (passes: ReturnType<typeof pass>[], extra: object = {}) => (
 const journalV3Of = (passes: ReturnType<typeof pass>[], extra: object = {}) => ({
   ...journalV4Of(passes, extra),
   version: 3,
-  passes: passes.map((one) => omit(one, 'kind', 'after')),
+  passes: passes.map((one) => omit(one, 'kind', 'after', 'pair', 'backsDecision')),
 });
 
 /** Журнал версии 2 (M2): тот же состав без правок редактора. */
@@ -94,7 +103,7 @@ const journalV2Of = (passes: ReturnType<typeof pass>[], extra: object = {}) => (
 const journalV1Of = (passes: ReturnType<typeof pass>[], extra: object = {}) => ({
   ...omit(journalV3Of(passes, extra), 'backsDeclined', 'saved', 'edits'),
   version: 1,
-  passes: passes.map((one) => omit(one, 'rotate180', 'kind', 'after')),
+  passes: passes.map((one) => omit(one, 'rotate180', 'kind', 'after', 'pair', 'backsDecision')),
 });
 
 const page = (number: number): Uint8Array => Uint8Array.of(0xff, 0xd8, number, 0xff, 0xd9);
@@ -155,7 +164,7 @@ describe('сверка при запуске: таблица плана', () => 
 
   it('маркер версии новее понятного → ничего не трогается; режим отказа (AE9)', async () => {
     const { root } = await seed(
-      { ...journalOf([pass(1, [segment(1, 'running', 2)])]), version: 7 },
+      { ...journalOf([pass(1, [segment(1, 'running', 2)])]), version: 8 },
       [...pagesOfFirstSegment(3)],
     );
     const before = await dirSnapshot(root);
@@ -185,7 +194,7 @@ describe('сверка при запуске: таблица плана', () => 
     expect(session).toMatchObject({ backsDeclined: false, saved: false });
     expect(session?.passes[0]).toMatchObject({ rotate180: false, kind: 'fronts', after: null });
     const journal = await journalOnDisk(layout);
-    expect(journal.version).toBe(6);
+    expect(journal.version).toBe(7);
     expect(journal).toMatchObject({
       backsDeclined: false,
       saved: false,
@@ -210,7 +219,7 @@ describe('сверка при запуске: таблица плана', () => 
 
     expect(session).toMatchObject({ saved: true, edits: EMPTY_EDITS });
     const journal = await journalOnDisk(layout);
-    expect(journal).toMatchObject({ version: 6, saved: true, edits: EMPTY_EDITS });
+    expect(journal).toMatchObject({ version: 7, saved: true, edits: EMPTY_EDITS });
 
     const before = await dirSnapshot(root);
     await reconciled(root);
@@ -227,7 +236,7 @@ describe('сверка при запуске: таблица плана', () => 
 
     expect(session).toMatchObject({ saved: true, edits: EMPTY_EDITS, assembled: null });
     const journal = await journalOnDisk(layout);
-    expect(journal).toMatchObject({ version: 6, saved: true, edits: EMPTY_EDITS, assembled: null });
+    expect(journal).toMatchObject({ version: 7, saved: true, edits: EMPTY_EDITS, assembled: null });
 
     const before = await dirSnapshot(root);
     await reconciled(root);
@@ -253,7 +262,7 @@ describe('сверка при запуске: таблица плана', () => 
       [3, 'added', null],
     ]);
     const journal = await journalOnDisk(layout);
-    expect(journal.version).toBe(6);
+    expect(journal.version).toBe(7);
     expect(rolesOf(journal.passes)).toEqual(rolesOf(session?.passes ?? []));
     expect(journal.passes[1]).toMatchObject({ rotate180: true });
 
@@ -387,7 +396,7 @@ describe('сверка при запуске: таблица плана', () => 
     const { root, layout } = await seed(
       {
         ...journalOf([pass(1, [segment(1, 'running', 1)])], { deletions: ['p01-s02-'] }),
-        version: 7,
+        version: 8,
       },
       [pageName(1, 1, 1), pageName(1, 2, 1)],
     );
@@ -1141,7 +1150,7 @@ describe('сверка при запуске: режим пустых оборо
   it('журнал версии 5 переписывается текущей версией: режим «оставлять», пометок нет', async () => {
     const { root, layout } = await seed(
       {
-        ...omit(journalOf([pass(1, [segment(1, 'completed', 2)])], { saved: true }), 'blankMode'),
+        ...omit(journalV6Of([pass(1, [segment(1, 'completed', 2)])], { saved: true }), 'blankMode'),
         version: 5,
         edits: omit(EMPTY_EDITS, 'notBlank'),
       },
@@ -1153,7 +1162,7 @@ describe('сверка при запуске: режим пустых оборо
     expect(notices).toEqual([]);
     expect(session).toMatchObject({ saved: true, blankMode: 'keep', edits: EMPTY_EDITS });
     const journal = await journalOnDisk(layout);
-    expect(journal).toMatchObject({ version: 6, blankMode: 'keep', edits: EMPTY_EDITS });
+    expect(journal).toMatchObject({ version: 7, blankMode: 'keep', edits: EMPTY_EDITS });
 
     const before = await dirSnapshot(root);
     await reconciled(root);

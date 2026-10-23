@@ -46,6 +46,8 @@ function makeSnapshot(fronts: number): Snapshot {
           scanner: null,
           kind: 'fronts',
           after: null,
+          pair: null,
+          backsDecision: null,
           rotate180: false,
           pages: Array.from({ length: fronts }, (_, index) => ({
             key: `p01-s01-${String(index + 1).padStart(4, '0')}`,

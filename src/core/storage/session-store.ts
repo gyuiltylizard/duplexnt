@@ -268,6 +268,8 @@ function passSnapshotsOf(journal: Journal, lost: ReadonlySet<string>): PassSnaps
     number: pass.number,
     kind: pass.kind,
     after: pass.after,
+    pair: pass.pair,
+    backsDecision: pass.backsDecision,
     state: passStateOf(pass),
     paramsKnown: pass.origin !== null,
     scanner: pass.origin === null ? null : scannerInfoOf(pass.origin.scanner),
@@ -637,10 +639,13 @@ export function createSessionStore(
         if (!segment.ok) {
           return segment;
         }
+        const kind = intent?.kind ?? nextKindOf(base);
         const pass: JournalPass = {
           number,
-          kind: intent?.kind ?? nextKindOf(base),
+          kind,
           after: intent?.after ?? null,
+          pair: null,
+          backsDecision: kind === 'addedFronts' ? 'none' : null,
           accepted: false,
           origin,
           nextSegment: segment.value + 1,

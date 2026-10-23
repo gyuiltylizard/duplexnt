@@ -32,6 +32,8 @@ export const passOf = (
   scanner: null,
   kind: number === 1 ? 'fronts' : 'backs',
   after: null,
+  pair: null,
+  backsDecision: null,
   rotate180: false,
   pages: pagesOf(number, count),
   ...extra,

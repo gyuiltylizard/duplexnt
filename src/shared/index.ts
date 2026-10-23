@@ -75,12 +75,16 @@ export {
 } from './scan-params';
 
 export {
+  addedSetsOf,
+  BACKS_DECISIONS,
   PASS_KINDS,
   passesByKind,
+  type AddedSet,
   type AssembledDocument,
   type AssembledPage,
   type AssemblyMode,
   type AssemblyReport,
+  type BacksDecision,
   type SetsLayout,
   type PageAngle,
   type PageSnapshot,

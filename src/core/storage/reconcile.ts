@@ -114,10 +114,15 @@ function adopt(
     }
     const pass = passes.find((it) => it.number === group.pass);
     if (pass === undefined) {
+      // Усыновление пары не создаёт (M4.5, R22): при ожидающем наборе очередь даёт его обороты,
+      // но у файлов без записи ни ссылки пары, ни ожидаемого числа нет — они односторонний набор.
+      const queued = nextKindOf({ ...journal, passes });
       const fresh: JournalPass = {
         number: group.pass,
-        kind: nextKindOf({ ...journal, passes }),
+        kind: queued === 'addedBacks' ? 'added' : queued,
         after: null,
+        pair: null,
+        backsDecision: null,
         accepted: false,
         origin: null,
         nextSegment: group.segment + 1,

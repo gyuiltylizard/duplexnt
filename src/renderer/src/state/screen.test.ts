@@ -16,6 +16,8 @@ function makePass(overrides: Partial<PassSnapshot>): PassSnapshot {
     scanner: null,
     kind: 'fronts',
     after: null,
+    pair: null,
+    backsDecision: null,
     rotate180: false,
     pages: [{ key: 'p01-s01-0001', number: 1, lost: false }],
     ...overrides,

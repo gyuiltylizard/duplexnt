@@ -7,7 +7,13 @@ import {
   type ReactNode,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { DomainError, SessionSnapshot, StartPassRequest, StartupNotice } from '@shared';
+import type {
+  AddedPassIntent,
+  DomainError,
+  SessionSnapshot,
+  StartPassRequest,
+  StartupNotice,
+} from '@shared';
 import { NoticesBar } from './components/NoticesBar';
 import { Toast, type ToastAction } from './components/Toast';
 import { DeviceModal } from './modals/DeviceModal';
@@ -69,7 +75,7 @@ interface Launch {
   /** Порядковый номер запуска за процесс — ключ `EditorScreen` после посадки. */
   readonly epoch: number;
   /** Намерение запуска: добавленный набор или проход по политике ядра (`null`). */
-  readonly kind: 'added' | null;
+  readonly kind: AddedPassIntent['kind'] | null;
   /** `null` — запуск без сессии (с `setup`): посадки не будет. */
   readonly sessionId: string | null;
   readonly keysBefore: ReadonlySet<string>;

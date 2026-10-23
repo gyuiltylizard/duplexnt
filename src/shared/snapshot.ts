@@ -26,17 +26,30 @@ export interface PageSnapshot {
 
 /**
  * Роль прохода, записанная в журнале явно (M3.5; ADR 0004, амендмент 2026-10-07): лицевые,
- * обороты или добавленный однопроходный набор. Роль действует только у прохода хотя бы с одной
- * страницей: пустой (прерванный до первой страницы) роли не имеет при любом `kind`.
+ * обороты, добавленный односторонний набор; с M4.5 (амендмент 2026-10-23) — лица и обороты
+ * двустороннего добавленного набора. Роль действует только у прохода хотя бы с одной страницей:
+ * пустой (прерванный до первой страницы) роли не имеет при любом `kind`.
  */
-export const PASS_KINDS = ['fronts', 'backs', 'added'] as const;
+export const PASS_KINDS = ['fronts', 'backs', 'added', 'addedFronts', 'addedBacks'] as const;
 export type PassKind = (typeof PASS_KINDS)[number];
+
+/**
+ * Решение по оборотам двустороннего добавленного набора — поле прохода его лиц (M4.5, KTD1):
+ * «ждём или они есть», «обороты не нужны» (набор остаётся односторонним), «оставить как есть»
+ * (несовпадение принято — модалка набора больше не показывается). Durable, обратной записи нет.
+ */
+export const BACKS_DECISIONS = ['none', 'declined', 'kept'] as const;
+export type BacksDecision = (typeof BACKS_DECISIONS)[number];
 
 export interface PassesByKind<T> {
   readonly fronts: T | null;
   readonly backs: T | null;
-  /** Добавленные наборы в порядке проходов (по возрастанию номера). */
+  /** Односторонние добавленные наборы в порядке проходов (по возрастанию номера). */
   readonly added: readonly T[];
+  /** Лица двусторонних добавленных наборов (M4.5), по возрастанию номера. */
+  readonly addedFronts: readonly T[];
+  /** Обороты двусторонних добавленных наборов (M4.5), по возрастанию номера. */
+  readonly addedBacks: readonly T[];
 }
 
 /**
@@ -55,7 +68,58 @@ export function passesByKind<T extends { readonly kind: PassKind }>(
     fronts: counted.find((pass) => pass.kind === 'fronts') ?? null,
     backs: counted.find((pass) => pass.kind === 'backs') ?? null,
     added: counted.filter((pass) => pass.kind === 'added'),
+    addedFronts: counted.filter((pass) => pass.kind === 'addedFronts'),
+    addedBacks: counted.filter((pass) => pass.kind === 'addedBacks'),
   };
+}
+
+/**
+ * Добавленный набор «ДN» (M4.5, KTD2): одна нумерация и один идентификатор для ядра, моста и
+ * renderer. Односторонний набор — проход `added`; двусторонний — проход лиц `addedFronts` и его
+ * обороты `addedBacks` со ссылкой `pair`. Номера — проходов, не объекты: набор переживает мост.
+ */
+export interface AddedSet {
+  /** Номер «ДN» с единицы — по порядку номера прохода лиц среди всех добавленных наборов. */
+  readonly set: number;
+  /** Номер прохода лиц набора (`added` или `addedFronts`). */
+  readonly fronts: number;
+  /** Номер прохода оборотов набора со страницами; `null` — оборотов нет (или ещё нет). */
+  readonly backs: number | null;
+  /** Решение по оборотам (`backsDecision` прохода лиц); у одностороннего — `null`. */
+  readonly decision: BacksDecision | null;
+  readonly sides: 'one' | 'two';
+}
+
+/**
+ * Добавленные наборы по проходам со страницами — единственное место нумерации «ДN» (M4.5, KTD2).
+ * Обороты набора со ссылкой на проход лиц, которого среди лиц со страницами нет, — осиротевшие:
+ * в наборы не входят (сборка ставит их в конец ленты стороной «оборот»). Проход оборотов на
+ * одну пару со страницами — не больше одного (схема журнала): берётся он.
+ */
+export function addedSetsOf<
+  T extends {
+    readonly number: number;
+    readonly kind: PassKind;
+    readonly pair: number | null;
+    readonly backsDecision: BacksDecision | null;
+  },
+>(passes: readonly T[], hasPages: (pass: T) => boolean): AddedSet[] {
+  const { added, addedFronts, addedBacks } = passesByKind(passes, hasPages);
+  return [...added, ...addedFronts]
+    .sort((left, right) => left.number - right.number)
+    .map((fronts, index) => {
+      if (fronts.kind === 'added') {
+        return { set: index + 1, fronts: fronts.number, backs: null, decision: null, sides: 'one' };
+      }
+      const backs = addedBacks.find((pass) => pass.pair === fronts.number) ?? null;
+      return {
+        set: index + 1,
+        fronts: fronts.number,
+        backs: backs === null ? null : backs.number,
+        decision: fronts.backsDecision ?? 'none',
+        sides: 'two',
+      };
+    });
 }
 
 export interface PassSnapshot {
@@ -63,9 +127,17 @@ export interface PassSnapshot {
   readonly kind: PassKind;
   /**
    * Якорь вставки добавленного набора: ключ страницы, после которой встают его страницы в
-   * автопорядке; `null` — в конец ленты. Осмыслен только у `added`, у остальных всегда `null`.
+   * автопорядке; `null` — в конец ленты. Осмыслен только у `added` и `addedFronts`, у остальных
+   * всегда `null`. Блок двустороннего набора встаёт по якорю прохода его лиц.
    */
   readonly after: string | null;
+  /**
+   * Номер парного прохода лиц набора (M4.5; ADR 0004, амендмент 2026-10-23): осмыслен только у
+   * `addedBacks`, у остальных всегда `null`.
+   */
+  readonly pair: number | null;
+  /** Решение по оборотам набора: только у `addedFronts`, у остальных всегда `null`. */
+  readonly backsDecision: BacksDecision | null;
   readonly state: PassState;
   /**
    * `false` — журнал пересобран по именам файлов: сканер и параметры прохода неизвестны,
@@ -76,7 +148,8 @@ export interface PassSnapshot {
   readonly scanner: ScannerInfo | null;
   /**
    * Повернуть страницы прохода на 180° при показе и в PDF (M2, KTD-2). Осмыслен на проходе
-   * оборотов (`kind: 'backs'`); исходники не меняются.
+   * оборотов — основной пачки (`backs`) или набора (`addedBacks`, M4.5: у каждой пары свой);
+   * исходники не меняются.
    */
   readonly rotate180: boolean;
   readonly pages: readonly PageSnapshot[];

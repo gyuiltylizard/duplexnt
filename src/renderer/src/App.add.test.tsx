@@ -19,6 +19,8 @@ describe('M3.5: посадка добавленного набора (KTD-7; han
       number,
       kind,
       after: null,
+      pair: null,
+      backsDecision: null,
       state: 'completed',
       paramsKnown: true,
       scanner: null,

@@ -42,6 +42,8 @@ export function makePass(overrides: Partial<PassSnapshot>): PassSnapshot {
     scanner: null,
     kind: 'fronts',
     after: null,
+    pair: null,
+    backsDecision: null,
     rotate180: false,
     pages: pages(3),
     ...overrides,

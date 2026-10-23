@@ -175,6 +175,8 @@ describe('подпись ленты и состояние снимка', () => {
       scanner: null,
       kind: number === 1 ? 'fronts' : 'backs',
       after: null,
+      pair: null,
+      backsDecision: null,
       rotate180: false,
       pages: keys.map((key, index) => ({ key, number: index + 1, lost: false })),
       ...extra,

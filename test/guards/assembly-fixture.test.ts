@@ -23,6 +23,8 @@ const passOf = (
   number,
   kind,
   after: null,
+  pair: null,
+  backsDecision: null,
   state: 'completed',
   paramsKnown: true,
   scanner: null,
