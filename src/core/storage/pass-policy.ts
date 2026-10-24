@@ -186,3 +186,12 @@ export function planPass(state: PolicyState, request: StartPassRequest): Result<
   const pair = kind === 'addedBacks' ? (pendingPairOf(journal)?.fronts ?? null) : null;
   return ok({ kind, resumed: false, expected: expectedOf(journal, kind, pair), pair });
 }
+
+/**
+ * «Остановить» на первом сегменте оборотов набора после первой страницы оставляет полученное
+ * прерванным проходом (решение автора на приёмке M4.5, 2026-10-24): лица набора уже приняты, «в
+ * лоток легли не те листы» здесь почти не бывает, а плашка даёт досканировать или оставить как
+ * есть. Обороты основной пачки, лица и досканирование — по общему правилу: отмена отбрасывает.
+ */
+export const stopKeepsPages = (kind: PassKind, resumed: boolean, pages: number): boolean =>
+  kind === 'addedBacks' && !resumed && pages > 0;

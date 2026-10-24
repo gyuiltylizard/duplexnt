@@ -45,14 +45,15 @@ const start = (): HTMLElement => screen.getByRole('button', { name: 'Начат�
 afterEach(cleanup);
 
 describe('модалка add: состояние по умолчанию', () => {
-  it('S1: «Двустороннее сканирование» и «После текущей» выбраны, сводка называет сценарий и якорь, фокус — «Отмена»', () => {
+  it('S1: «Двустороннее сканирование» и «В конец документа» выбраны (решение автора на приёмке M4.5), сводка называет сценарий и якорь, фокус — «Отмена»', () => {
     renderModal();
 
     expect(screen.getByRole('dialog', { name: 'Добавить страницы к документу' })).toBeDefined();
     expect(twoSided().getAttribute('aria-checked')).toBe('true');
     expect(oneSided().getAttribute('aria-checked')).toBe('false');
-    expect(radio('После текущей страницы').getAttribute('aria-checked')).toBe('true');
-    expect(summary()).toBe('Двустороннее · после стр. 7 (оборот листа 4)');
+    expect(radio('В конец документа').getAttribute('aria-checked')).toBe('true');
+    expect(radio('После текущей страницы').getAttribute('aria-checked')).toBe('false');
+    expect(summary()).toBe('Двустороннее · в конец документа «Акт приёма-передачи», после стр. 9');
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Отмена' }));
   });
 
@@ -81,6 +82,7 @@ describe('модалка add: состояние по умолчанию', () =>
     expect(screen.getByText('Сканер не подключён — подключите его в настройках')).toBeDefined();
     expect(start().hasAttribute('disabled')).toBe(true);
     fireEvent.click(oneSided());
+    fireEvent.click(radio('После текущей страницы'));
     expect(summary()).toBe('Одностороннее · после стр. 7 (оборот листа 4)');
   });
 });
@@ -90,9 +92,9 @@ describe('модалка add: выбор и сводка', () => {
     renderModal();
 
     fireEvent.click(oneSided());
-    expect(summary()).toBe('Одностороннее · после стр. 7 (оборот листа 4)');
-    fireEvent.click(radio('В конец документа'));
     expect(summary()).toBe('Одностороннее · в конец документа «Акт приёма-передачи», после стр. 9');
+    fireEvent.click(radio('После текущей страницы'));
+    expect(summary()).toBe('Одностороннее · после стр. 7 (оборот листа 4)');
   });
 
   it('пустая лента: «После текущей» недоступна с причиной, выбран конец, сводка — «в конец ленты»', () => {
@@ -130,8 +132,8 @@ describe('модалка add: выбор и сводка', () => {
 
     expect(twoSided().tabIndex).toBe(0);
     expect(oneSided().tabIndex).toBe(-1);
-    expect(radio('После текущей страницы').tabIndex).toBe(0);
-    expect(radio('В конец документа').tabIndex).toBe(-1);
+    expect(radio('В конец документа').tabIndex).toBe(0);
+    expect(radio('После текущей страницы').tabIndex).toBe(-1);
   });
 });
 
@@ -139,6 +141,7 @@ describe('модалка add: запуск и отмена', () => {
   it('«Начать скан» закрывает модалку и зовёт запуск с намерением пары и якорем текущей', () => {
     const { onStart, onClose } = renderModal();
 
+    fireEvent.click(radio('После текущей страницы'));
     fireEvent.click(start());
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(onStart).toHaveBeenCalledExactlyOnceWith('addedFronts', 'p02-s01-0009');
@@ -285,10 +288,12 @@ describe('модалка add в режиме наборов (M3.6, KTD11; M4.5, 
       endKind: 'set',
     });
 
-    expect(summary()).toBe('Одностороннее · после стр. 4 (оборотная, 1-я в наборе оборотов)');
     expect(screen.queryByRole('radio', { name: 'В конец документа' })).toBeNull();
-    fireEvent.click(radio('В конец набора'));
+    expect(radio('В конец набора').getAttribute('aria-checked')).toBe('true');
     expect(summary()).toBe('Одностороннее · в конец набора оборотов, после стр. 6');
+    fireEvent.click(radio('После текущей страницы'));
+    expect(summary()).toBe('Одностороннее · после стр. 4 (оборотная, 1-я в наборе оборотов)');
+    fireEvent.click(radio('В конец набора'));
     fireEvent.click(start());
     expect(onStart).toHaveBeenCalledExactlyOnceWith('added', 'b1');
   });

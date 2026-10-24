@@ -30,10 +30,10 @@ import { until, untilScored } from '../support/until';
 // порядком подачи [12, 11, 10] — лист i набора: лицо 6 + i, оборот 9 + i. Счёт листов для
 // `fault.sheet` сквозной: 1–6 — основной документ, 7–9 — лица набора, 10–12 — его обороты.
 // «Остановить» отбрасывает полученные страницы прохода — так велит спека (`docs/duplexnt.md`,
-// «Отмена прохода пользователем…», «Исходные сканы не теряются от сбоя») и UI_SPEC, «Отмена»: на
-// первом сегменте лиц набор уходит целиком, на первом сегменте оборотов набор снова ждёт обороты,
-// при досканировании уходит только досканированное. Прерванный проход со страницами дают обрыв и
-// закрытие окна. План R5/R7 уточнён по спеке (решение автора 2026-10-24).
+// «Отмена прохода пользователем…») и UI_SPEC, «Отмена»: на первом сегменте лиц набор уходит
+// целиком, при досканировании уходит только досканированное. Исключение — первый сегмент оборотов
+// набора: до первой страницы набор снова ждёт обороты, после — полученное остаётся прерванным
+// проходом с плашкой (решение автора на приёмке 2026-10-24). План R5/R7 уточнён.
 
 // Сбои этого файла — `gone` (ответ `410` сразу), от тишины между страницами тесты не зависят:
 // ожидание страницы взято с запасом, чтобы под нагрузкой основная пара не обрывалась сама.
@@ -484,7 +484,7 @@ describe('двусторонний набор: обрывы, «Останови�
     expect(await pageFilesOf(root, 'p03-')).toEqual([]);
   }, 20_000);
 
-  it('«Остановить» на первом сегменте оборотов набора со страницей — по спеке проход снят, набор снова ждёт обороты (экран flip набора, R7)', async () => {
+  it('«Остановить» на первом сегменте оборотов набора со страницей — полученное остаётся прерванным проходом, плашка: «Оставить как есть» → kept (R7, решение автора на приёмке)', async () => {
     const { root, service } = await connect(
       { ...SCENARIOS['added-pair'], pageDelayMs: 150 },
       { jobLimits: { ...FAST, pageIdleTimeoutMs: 3000 } },
@@ -494,17 +494,22 @@ describe('двусторонний набор: обрывы, «Останови�
     const backs = service.startPass(null);
     await until(() => service.snapshot().pass?.pages === 1);
     unwrap(await service.stopPass());
-    expect(unwrap(await backs)).toMatchObject({ end: 'stopped' });
+    const report = unwrap(await backs);
+    expect(report).toMatchObject({ end: 'interrupted' });
+    expect(report.pages).toBeGreaterThan(0);
 
-    const snapshot = service.snapshot();
-    expect(passesOf(snapshot).map(([number, kind]) => [number, kind])).toEqual([
-      [1, 'fronts'],
-      [2, 'backs'],
-      [3, 'addedFronts'],
-    ]);
-    expect(snapshot.assembly?.report.pendingSet).toBe(1);
-    expect(snapshot).toMatchObject({ canResume: false, canAccept: false });
-    expect(await pageFilesOf(root, 'p04-')).toEqual([]);
+    let snapshot = service.snapshot();
+    expect(passesOf(snapshot).at(-1)).toEqual([4, 'addedBacks', 'interrupted', 3, null]);
+    expect(snapshot.assembly?.report.pendingSet).toBeNull();
+    expect(snapshot).toMatchObject({ canResume: true, canAccept: true });
+    expect(await pageFilesOf(root, 'p04-')).toHaveLength(report.pages);
+
+    unwrap(await service.acceptPass());
+    snapshot = service.snapshot();
+    expect(snapshot.assembly?.report.sets[0]).toMatchObject({
+      backs: report.pages,
+      decision: report.pages === 3 ? 'none' : 'kept',
+    });
   }, 20_000);
 
   it('«Остановить» при досканировании оборотов набора отбрасывает только досканированное — проход снова прерван с прежней страницей', async () => {

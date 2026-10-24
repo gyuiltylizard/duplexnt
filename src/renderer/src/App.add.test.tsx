@@ -285,6 +285,7 @@ describe('M3.5: посадка добавленного набора (KTD-7; han
       fireEvent.click(await screen.findByRole('option', { name: /Страница 3/ }));
       fireEvent.click(screen.getByRole('button', { name: 'Добавить' }));
       fireEvent.click(oneSided());
+      fireEvent.click(screen.getByRole('radio', { name: 'После текущей страницы' }));
       fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
       expect(startPass).toHaveBeenCalledExactlyOnceWith({ kind: 'added', after: 'p01-s01-0002' });
 

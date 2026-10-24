@@ -157,8 +157,8 @@ export function AddModal({
   const twoSidedDisabled = mode === 'sets';
   const enabled = (value: Kind): boolean => value !== 'twoSided' || !twoSidedDisabled;
   const [kind, setKind] = useState<Kind>(twoSidedDisabled ? 'oneSided' : 'twoSided');
-  // Место по умолчанию — после текущей, если она есть; пустая лента — только «в конец».
-  const [place, setPlace] = useState<Place>(current === null ? 'end' : 'after');
+  // Место по умолчанию — «В конец документа» (решение автора на приёмке M4.5, 2026-10-24).
+  const [place, setPlace] = useState<Place>('end');
 
   const ready = scanner.kind === 'ready';
   let placeText: string;

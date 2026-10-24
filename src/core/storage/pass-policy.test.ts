@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { EMPTY_EDITS, ok as okOf, type AddedPassIntent, type BacksDecision } from '@shared';
 import { ORIGIN } from '../../../test/support/session-store';
 import { JOURNAL_VERSION, type Journal, type JournalPass } from './journal';
-import { locatePass, planPass, resumable, type PolicyState } from './pass-policy';
+import { locatePass, planPass, resumable, stopKeepsPages, type PolicyState } from './pass-policy';
 
 // Политика запуска — чистые запросы над журналом (M3.5, KTD-5; M4.5, R11, KTD2). Сценарии через
 // хранилище с файлами — в `session-store.flags.test.ts` (очередь M2–M3.5) и
@@ -174,5 +174,16 @@ describe('политика запуска: пара добавленного н�
     expect(locatePass(journal, 'p02-s02-0001')).toBeNull();
     expect(locatePass(journal, 'лист 2')).toBeNull();
     expect(locatePass(null, 'p01-s01-0001')).toBeNull();
+  });
+});
+
+describe('«Остановить» оставляет полученное (M4.5, приёмка 2026-10-24)', () => {
+  it('только первый сегмент оборотов набора со страницами', () => {
+    expect(stopKeepsPages('addedBacks', false, 1)).toBe(true);
+    expect(stopKeepsPages('addedBacks', false, 0)).toBe(false);
+    expect(stopKeepsPages('addedBacks', true, 2)).toBe(false);
+    for (const kind of ['fronts', 'backs', 'added', 'addedFronts'] as const) {
+      expect(stopKeepsPages(kind, false, 2)).toBe(false);
+    }
   });
 });

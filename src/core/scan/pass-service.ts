@@ -34,7 +34,12 @@ import {
   type ScanJobEnd,
   type ScanJobLimits,
 } from '../escl/scan-job';
-import { buildScanSettings, DEFAULT_SCAN_PARAMS, resolveScanParams } from '../escl/scan-settings';
+import {
+  buildScanSettings,
+  DEFAULT_SCAN_PARAMS,
+  resolveScanParams,
+  unsupportedField,
+} from '../escl/scan-settings';
 import { blankRatio, type BlankDetector } from '../detect/blank';
 import { parseStatus } from '../escl/status';
 import { createTransport, type ScannerTransport } from '../escl/transport';
@@ -43,6 +48,7 @@ import { writeBatch } from '../pdf/save-batch';
 import { createBlankScores, type BlankScores } from '../storage/blank-scores';
 import type { PassOrigin } from '../storage/journal';
 import { layoutOf } from '../storage/layout';
+import { stopKeepsPages } from '../storage/pass-policy';
 import { openSessionStore } from '../storage/reconcile';
 import type { PageInfo, SessionStore, SessionStoreOptions } from '../storage/session-store';
 import {
@@ -227,11 +233,16 @@ interface Run {
   readonly expected: number | null;
   phase: PassProgress['phase'];
   pages: number;
-  /** Чем оборван: «Остановить» удаляет сегмент, закрытие окна оставляет его прерванным. */
+  /** Чем оборван: «Остановить» удаляет сегмент (кроме `stopKeepsPages`), закрытие окна — нет. */
   intent: 'stop' | 'shutdown' | null;
   /** Итог запуска — для «Остановить», которое его дожидается. */
   done: Promise<Result<PassReport>>;
 }
+
+/** Отмена оставляет сегмент прерванным: закрытие окна и `stopKeepsPages` (M4.5, приёмка). */
+const cancelKeeps = (current: Run, pages: number): boolean =>
+  current.intent === 'shutdown' ||
+  (current.intent === 'stop' && stopKeepsPages(current.kind, current.resumed, pages));
 
 const conflict = (reason: SessionConflictReason): Result<never> => ({
   ok: false,
@@ -244,19 +255,6 @@ export function interruptionError(end: ScanJobEnd): DomainError | null {
     return null;
   }
   return end.reason.source === 'device' ? end.reason.error : storageFailure(end.reason.error);
-}
-
-function unsupportedField(
-  params: ScanParams,
-  options: ConnectedScanner['options'],
-): 'colorMode' | 'resolution' | 'paperSize' | null {
-  if (!options.colorModes.includes(params.colorMode)) {
-    return 'colorMode';
-  }
-  if (!options.resolutions.includes(params.resolution)) {
-    return 'resolution';
-  }
-  return options.paperSizes.includes(params.paperSize) ? null : 'paperSize';
 }
 
 export function createPassService(
@@ -538,7 +536,7 @@ export function createPassService(
       case 'empty':
         return discard();
       case 'canceled':
-        return current.intent === 'shutdown' ? finish('interrupted') : discard();
+        return cancelKeeps(current, pages) ? finish('interrupted') : discard();
       case 'interrupted':
         return pages === 0 && !current.resumed ? discard() : finish('interrupted');
     }
@@ -673,8 +671,9 @@ export function createPassService(
         return fail('scanNoPaper');
       }
       if (end.kind === 'canceled' && current.intent !== 'shutdown') {
-        // «Остановить», которое не удалось довести: сегмент остался прерванным, страницы целы.
-        return settleError === null
+        // «Остановить»: сегмент убран — «остановлен»; оставлен (`stopKeepsPages`) или не убран
+        // из-за сбоя — прерван, страницы целы.
+        return settleError === null && !cancelKeeps(current, report.pages)
           ? ok({ end: 'stopped', pages: 0, error: null })
           : ok({ end: 'interrupted', pages: report.pages, error: settleError });
       }

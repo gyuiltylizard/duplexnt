@@ -153,6 +153,7 @@ describe('«+ Добавить»: якорь из видимой ленты (S2,
     // Лента 1л 1о 2л 2о 3л 3о: третья — лицо листа 2.
     fireEvent.click(option(2));
     fireEvent.click(addButton());
+    fireEvent.click(screen.getByRole('radio', { name: 'После текущей страницы' }));
     expect(summary()).toBe('Двустороннее · после стр. 3 (лицо листа 2)');
     fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
     expect(onAdd).toHaveBeenCalledExactlyOnceWith('addedFronts', 'p01-s01-0002');
@@ -170,6 +171,7 @@ describe('«+ Добавить»: якорь из видимой ленты (S2,
     // Текущая после Ctrl-кликов — последняя добавленная в выделение: пятая (3л).
     expect(screen.getByText('5 из 6')).toBeDefined();
     fireEvent.click(addButton());
+    fireEvent.click(screen.getByRole('radio', { name: 'После текущей страницы' }));
     expect(summary()).toBe('Двустороннее · после стр. 5 (лицо листа 3)');
     fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
     expect(onAdd).toHaveBeenCalledExactlyOnceWith('addedFronts', 'p01-s01-0003');

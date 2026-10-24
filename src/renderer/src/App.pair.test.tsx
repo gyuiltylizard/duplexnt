@@ -227,6 +227,7 @@ describe('M4.5: посадка пары набора (KTD7; handoff S6, S10)', (
         .getByRole('radio', { name: /Двустороннее сканирование/u })
         .getAttribute('aria-checked'),
     ).toBe('true');
+    fireEvent.click(screen.getByRole('radio', { name: 'После текущей страницы' }));
     fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
     expect(startPass).toHaveBeenCalledExactlyOnceWith({
       kind: 'addedFronts',
