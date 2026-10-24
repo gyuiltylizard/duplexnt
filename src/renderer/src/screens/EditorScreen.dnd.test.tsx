@@ -85,7 +85,7 @@ describe('editor M3: перетаскивание (S6)', () => {
     fireEvent.dragEnd(option(0), { dataTransfer: transfer });
     expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({
       edits: edits({ order: [B3, F2, F1, B2, F3, B1] }),
-      rotate180: false,
+      rotate180: {},
     });
     expect(document.querySelector('.thumb--dragging')).toBeNull();
     expect(document.querySelector('.thumb__drop')).toBeNull();
@@ -108,7 +108,7 @@ describe('editor M3: перетаскивание (S6)', () => {
     dragAndDrop(option(3), option(0), 'before');
     expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({
       edits: edits({ order: [B3, B2, F1, F2, F3, B1] }),
-      rotate180: false,
+      rotate180: {},
     });
 
     await settle();
@@ -281,7 +281,7 @@ describe('editor M3: границы документов (S1, S2, S5, S7)', () =
     fireEvent.click(bar);
     expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({
       edits: edits({ cuts: [2], names: ['', ''] }),
-      rotate180: false,
+      rotate180: {},
     });
     expect(selectedKeys()).toEqual([F1]);
 
@@ -375,7 +375,7 @@ describe('editor M3: границы документов (S1, S2, S5, S7)', () =
     );
     expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({
       edits: edits({ cuts: [3], names: ['', ''] }),
-      rotate180: false,
+      rotate180: {},
     });
 
     await settle();
@@ -404,7 +404,7 @@ describe('editor M3: границы документов (S1, S2, S5, S7)', () =
     fireEvent.click(button('Убрать границу перед документом 2'));
     expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({
       edits: edits({ cuts: [4], names: ['Акт', ''] }),
-      rotate180: false,
+      rotate180: {},
     });
   });
 });
@@ -426,7 +426,7 @@ describe('editor M3: имя документа (S3)', () => {
     fireEvent.keyDown(field, { key: 'Enter' });
     expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({
       edits: edits({ names: ['Акт'] }),
-      rotate180: false,
+      rotate180: {},
     });
     // До снимка поле показывает отправленное, а не прежнее; фокус — на карточке текущей.
     expect(field.value).toBe('Акт');
@@ -479,7 +479,7 @@ describe('editor M3: имя документа (S3)', () => {
     fireEvent.blur(field);
     expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({
       edits: edits({ names: ['Опись'] }),
-      rotate180: false,
+      rotate180: {},
     });
   });
 
@@ -616,19 +616,20 @@ describe('editor M3: плашка правок и полный откат (S14)'
 
     fireEvent.click(button('Вернуть'));
     fireEvent.click(button('Вернуть всё'));
-    expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({ edits: EMPTY_EDITS, rotate180: false });
+    expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({ edits: EMPTY_EDITS, rotate180: {} });
     expect(screen.queryByRole('dialog')).toBeNull();
     await settle();
     expect(onToast).toHaveBeenCalledExactlyOnceWith('Всё возвращено как после сканирования');
 
-    rerender(applied(edited, lastSent(api)));
+    rerender(applied(edited, { edits: EMPTY_EDITS, rotate180: false }));
     expect(screen.queryByText('Есть ручные правки')).toBeNull();
     // Плашка исчезла — фокус клавиатуры на текущей странице, а не на body.
     expect(document.activeElement?.getAttribute('role')).toBe('option');
 
     ctrlZ();
     expect(api.setEdits).toHaveBeenCalledTimes(2);
-    expect(lastSent(api)).toEqual(editedState);
+    // Мост несёт флаг 180° картой по проходам оборотов (M4.5, KTD4): проход №2.
+    expect(lastSent(api)).toEqual({ edits: editedState.edits, rotate180: { 2: true } });
   });
 });
 

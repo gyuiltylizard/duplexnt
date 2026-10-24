@@ -19,6 +19,8 @@ describe('M3.5: посадка добавленного набора (KTD-7; han
       number,
       kind,
       after: null,
+      pair: null,
+      backsDecision: null,
       state: 'completed',
       paramsKnown: true,
       scanner: null,
@@ -84,6 +86,10 @@ describe('M3.5: посадка добавленного набора (KTD-7; han
       });
     };
   }
+
+  /** Карточка одностороннего сканирования (M4.5): сценарии этого файла — про набор M3.5. */
+  const oneSided = (): HTMLElement =>
+    screen.getByRole('radio', { name: /Одностороннее сканирование/u });
 
   const toastNodes = (): HTMLElement[] =>
     screen.queryAllByRole('status').filter((element) => element.classList.contains('toast'));
@@ -156,6 +162,7 @@ describe('M3.5: посадка добавленного набора (KTD-7; han
 
     fireEvent.click(await screen.findByRole('option', { name: /Страница 3/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Добавить' }));
+    fireEvent.click(oneSided());
     fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
     await act(async () => {
       await Promise.resolve();
@@ -173,6 +180,7 @@ describe('M3.5: посадка добавленного набора (KTD-7; han
 
     for (let attempt = 0; attempt < 2; attempt += 1) {
       fireEvent.click(await screen.findByRole('button', { name: 'Добавить' }));
+      fireEvent.click(oneSided());
       fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
     }
     expect(startPass).toHaveBeenCalledTimes(1);
@@ -186,6 +194,7 @@ describe('M3.5: посадка добавленного набора (KTD-7; han
     vi.mocked(window.api.startPass).mockImplementation(startPass);
     render(<App />);
     fireEvent.click(await screen.findByRole('button', { name: 'Добавить' }));
+    fireEvent.click(oneSided());
     fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
 
     await push({
@@ -275,6 +284,8 @@ describe('M3.5: посадка добавленного набора (KTD-7; han
       // Текущая — третья: якорь и выделение после отказа должны остаться её.
       fireEvent.click(await screen.findByRole('option', { name: /Страница 3/ }));
       fireEvent.click(screen.getByRole('button', { name: 'Добавить' }));
+      fireEvent.click(oneSided());
+      fireEvent.click(screen.getByRole('radio', { name: 'После текущей страницы' }));
       fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
       expect(startPass).toHaveBeenCalledExactlyOnceWith({ kind: 'added', after: 'p01-s01-0002' });
 

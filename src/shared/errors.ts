@@ -103,6 +103,14 @@ export const SESSION_CONFLICT_REASONS = [
   'blankPending',
   /** Документ целиком из скрытых пустых оборотов: номера — в `documents` (M4, KTD4). */
   'documentBlank',
+  /** Набора «ДN» с оборотами, по которым можно решать, нет (M4.5, KTD3). */
+  'noPendingSet',
+  /** Лица и обороты набора сошлись или решение уже принято: решать нечего (M4.5, KTD3). */
+  'setNotMismatched',
+  /** Двусторонний набор в режиме раздельных наборов не добавляется — сначала собрать (M4.5, R3). */
+  'pairInSets',
+  /** Набор ждёт обороты: новый набор не начинается, очередь даёт его обороты (M4.5, R11). */
+  'pairPending',
 ] as const;
 
 export type SessionConflictReason = (typeof SESSION_CONFLICT_REASONS)[number];

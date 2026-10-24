@@ -2,16 +2,13 @@ import { join } from 'node:path';
 import {
   EMPTY_EDITS,
   fail,
+  isBacksKind,
   ok,
   sameEdits,
   sessionConflict,
   type AddedPassIntent,
   type BlankMode,
-  type DomainError,
-  type PassKind,
-  type PassSnapshot,
   type Result,
-  type SessionConflictReason,
   type SessionEdits,
   type SessionSnapshot,
   type StartPassRequest,
@@ -20,20 +17,23 @@ import {
   autoDividerOf,
   baseAssembly,
   baseKeysOf,
-  editsContextOf,
   frozenSequenceOf,
   setsLayoutOf,
 } from '../scan/assembly';
-import { rebaseEdits, visibleKeysOf } from '../scan/edits';
+import { visibleKeysOf } from '../scan/edits';
 import { isTempName, removeByPrefix, renameWithRetry, writeStreamAtomic } from './atomic-file';
 import {
+  isVacant,
   JOURNAL_VERSION,
   journalSchema,
   newJournal,
   nextKindOf,
+  NOTHING_LOST,
   pageCountOf,
   pagesOf,
+  passSnapshotsOf,
   passStateOf,
+  pendingPairOf,
   rolesOf,
   runningSegmentOf,
   withLastPass,
@@ -58,10 +58,21 @@ import {
   pageFileName,
   pageKey,
   PAGES_DIR_NAME,
-  parsePageKey,
   segmentPrefix,
   thumbsDirOf,
 } from './layout';
+import {
+  checkIntent,
+  conflict,
+  locatePass,
+  planPass,
+  REFUSAL,
+  resumable,
+  type PassPlan,
+  type PolicyState,
+} from './pass-policy';
+import { withRebasedEdits } from './rebase';
+import { setDecisionsOf, withDecision } from './set-decisions';
 import {
   fsErrorCode,
   isMissing,
@@ -73,7 +84,6 @@ import {
   type StorageFs,
   type StorageOptions,
 } from './storage-fs';
-import { scannerInfoOf } from './stored-scanner';
 import { isSetAsideName, setAside, writeVersioned } from './versioned-file';
 
 // Хранилище сессии: журнал, страницы, проходы и сегменты (ADR 0004 с амендментом; план M1, U13).
@@ -125,14 +135,7 @@ export const NO_SESSION: SessionState = {
   unpreserved: false,
 };
 
-/** Что начнёт `startPass` по запросу — ответ `planPass` (M3.5, KTD-5). */
-export interface PassPlan {
-  readonly kind: PassKind;
-  /** Досканирование прерванного последнего прохода, а не новый проход. */
-  readonly resumed: boolean;
-  /** Ожидаемое число страниц: у оборотов — страницы лицевых; иначе `null` (M2, R2). */
-  readonly expected: number | null;
-}
+export type { PassPlan } from './pass-policy';
 
 export interface SegmentStart {
   readonly pass: number;
@@ -209,14 +212,35 @@ export interface SessionStore {
   /** «Оставить как есть»: прерванный проход принят. */
   acceptPass(): Promise<Result<void>>;
   /**
-   * Правки редактора (M3, KTD-3): итоговое состояние целиком и поворот оборотов на 180° (флаг
-   * прохода `kind: 'backs'` — M3.5, KTD-4) — одной записью журнала, чтобы
-   * «Вернуть» был одним шагом. Правка снимает отметку о сохранении; во время
-   * прохода отклоняется. Нормализация — забота хранилища, не вызывающего.
+   * Правки редактора (M3, KTD-3): итоговое состояние целиком и флаги поворота на 180° по
+   * проходам оборотов — основной пачки и наборов (M4.5, KTD4; номер прохода → флаг, не названные
+   * — `false`) — одной записью журнала, чтобы «Вернуть» был одним шагом. Номер прохода не роли
+   * оборотов — `noBacksPass`. Правка снимает отметку о сохранении; во время прохода отклоняется.
+   * Нормализация — забота хранилища, не вызывающего.
    */
-  setEdits(edits: SessionEdits, rotate180: boolean): Promise<Result<void>>;
-  /** «Обороты не нужны» (M2, KTD-6): durable-отметка, `flip` больше не показывается. */
+  setEdits(
+    edits: SessionEdits,
+    rotate180: Readonly<Record<number, boolean>>,
+  ): Promise<Result<void>>;
+  /**
+   * «Обороты не нужны» (M2, KTD-6): durable-отметка, `flip` больше не показывается. Адресуется
+   * набору, ждущему обороты, если он есть (M4.5, KTD3: `backsDecision: 'declined'` на его
+   * лицах), иначе сессии.
+   */
   declineBacks(): Promise<Result<void>>;
+  /**
+   * «Оставить как есть» для набора «ДN» с несовпавшими оборотами (M4.5, KTD3): durable
+   * `backsDecision: 'kept'`, модалка набора больше не показывается. Отказы: `noPendingSet`,
+   * `setNotMismatched` (числа равны или решение уже есть).
+   */
+  keepSetBacks(set: number): Promise<Result<void>>;
+  /**
+   * «Переснять обороты набора» (M4.5, KTD3; ADR 0004, амендмент 2026-10-23): проход оборотов
+   * набора отбрасывается целиком — запись журнала с пометками об удалении раньше файлов, затем
+   * удаление страниц и производного; правки по исчезнувшим ключам чистит нормализация. После
+   * этого набор снова ждёт обороты. Отказы — как у `keepSetBacks`.
+   */
+  rescanSetBacks(set: number): Promise<Result<void>>;
   /**
    * «Собрать документ» (M3.6, R12, R13; KTD5): в режиме раздельных наборов с равными ненулевыми
    * видимыми числами групп пишет запись сборки (R7), обнуляет порядок и границу, снимает
@@ -240,11 +264,6 @@ export interface SessionStore {
   readPage(key: string): Promise<Result<Uint8Array>>;
 }
 
-const conflict = (reason: SessionConflictReason): Result<never> => ({
-  ok: false,
-  error: sessionConflict(reason),
-});
-const REFUSAL: DomainError = { code: 'storageIncompatible' };
 const unavailable = (reason: 'unknown' | 'lost'): Result<never> =>
   fail('pageUnavailable', { reason });
 
@@ -253,67 +272,6 @@ const runningSegment = (number: number): JournalSegment => ({
   state: 'running',
   pageCount: 0,
 });
-
-/**
- * Пустая сессия равна отсутствию сессии (ADR 0004, амендмент): журнал без единой записи о
- * странице и без идущего сегмента. На диске он может остаться ради пометки об удалении или до
- * следующего запуска — для вызывающего сессии нет.
- */
-const isVacant = (journal: Journal): boolean =>
-  pageCountOf(journal) === 0 && runningSegmentOf(journal) === null;
-
-/** Проходы журнала, как их видит снимок; `lost` — ключи страниц без файлов. */
-function passSnapshotsOf(journal: Journal, lost: ReadonlySet<string>): PassSnapshot[] {
-  return journal.passes.map((pass) => ({
-    number: pass.number,
-    kind: pass.kind,
-    after: pass.after,
-    state: passStateOf(pass),
-    paramsKnown: pass.origin !== null,
-    scanner: pass.origin === null ? null : scannerInfoOf(pass.origin.scanner),
-    rotate180: pass.rotate180,
-    pages: pagesOf(pass).map(({ key, number }) => ({ key, number, lost: lost.has(key) })),
-  }));
-}
-
-const NOTHING_LOST: ReadonlySet<string> = new Set();
-
-/**
- * Журнал с правками в каноническом виде против своих страниц (M3, KTD-3a, KTD-10; M3.6, R8).
- * Запись сборки чистится от исчезнувших ключей всегда — до раннего выхода. Если состав страниц
- * изменился относительно `previous` не через правку (досканирование, отброс сегмента, сверка),
- * разрезы и граница наборов переезжают вслед за страницами; правки исчезнувших ключей
- * вычищаются. Пустые правки уже канонические — на каждой странице прохода их не пересчитывают.
- */
-export function withRebasedEdits(previous: Journal | null, next: Journal): Journal {
-  let cleaned = next;
-  if (next.assembled !== null) {
-    const alive = new Set(next.passes.flatMap((pass) => pagesOf(pass).map((page) => page.key)));
-    const assembled = next.assembled.filter((key) => alive.has(key));
-    if (assembled.length !== next.assembled.length) {
-      cleaned = { ...next, assembled };
-    }
-  }
-  if (sameEdits(cleaned.edits, EMPTY_EDITS)) {
-    return cleaned;
-  }
-  // Ключи «до» и «после» — по раскладке, в которой лента окажется после идущего прохода
-  // (`settled`): новый ключ встаёт в явный порядок за соседом по будущей группе. Контекст
-  // нормализации — по настоящему режиму (идёт проход — переходный).
-  const before =
-    previous === null
-      ? null
-      : baseKeysOf(baseAssembly(passSnapshotsOf(previous, NOTHING_LOST), previous.assembled, true));
-  const passes = passSnapshotsOf(cleaned, NOTHING_LOST);
-  const base = baseAssembly(passes, cleaned.assembled);
-  const edits = rebaseEdits(
-    before,
-    baseKeysOf(baseAssembly(passes, cleaned.assembled, true)),
-    cleaned.edits,
-    editsContextOf(base, passes, cleaned.edits),
-  );
-  return { ...cleaned, edits };
-}
 
 const isJournalFile = (name: string): boolean =>
   name === JOURNAL_FILE_NAME ||
@@ -432,92 +390,8 @@ export function createSessionStore(
     return fail('storageFailed', { reason: 'segmentLimit' });
   }
 
-  function resumable(): Result<JournalPass & { readonly origin: PassOrigin }> {
-    if (incompatible) {
-      return { ok: false, error: REFUSAL };
-    }
-    const pass = journal?.passes.at(-1);
-    if (journal === null || pass === undefined || isVacant(journal)) {
-      return conflict('noSession');
-    }
-    const state = passStateOf(pass);
-    if (state === 'running') {
-      return conflict('passRunning');
-    }
-    if (state !== 'interrupted') {
-      return conflict('notInterrupted');
-    }
-    const { origin } = pass;
-    return origin === null ? conflict('paramsUnknown') : ok({ ...pass, origin });
-  }
-
-  /** Намерение добавленного набора: сессия есть, якорь — её страница (R9). */
-  function checkIntent(intent: AddedPassIntent | null): Result<void> {
-    if (intent === null) {
-      return ok(undefined);
-    }
-    if (journal === null || isVacant(journal)) {
-      return conflict('noSession');
-    }
-    return intent.after !== null && locate(intent.after) === null
-      ? fail('invalidInput', { field: 'after' })
-      : ok(undefined);
-  }
-
-  function planPass(request: StartPassRequest): Result<PassPlan> {
-    if (incompatible) {
-      return { ok: false, error: REFUSAL };
-    }
-    if (runningSegmentOf(journal) !== null) {
-      return conflict('passRunning');
-    }
-    const last = journal?.passes.at(-1);
-    if (request !== null) {
-      const checked = checkIntent(request);
-      if (!checked.ok) {
-        return checked;
-      }
-      if (last !== undefined && passStateOf(last) === 'interrupted') {
-        return conflict('passInterrupted');
-      }
-      return ok({ kind: 'added', resumed: false, expected: null });
-    }
-    if (journal === null || last === undefined || isVacant(journal)) {
-      return ok({ kind: 'fronts', resumed: false, expected: null });
-    }
-    const roles = rolesOf(journal);
-    const frontsPages = roles.fronts === null ? null : pagesOf(roles.fronts).length;
-    const target = resumable();
-    if (target.ok) {
-      const { kind } = last;
-      return ok({ kind, resumed: true, expected: kind === 'backs' ? frontsPages : null });
-    }
-    if (
-      target.error.code !== 'sessionConflict' ||
-      target.error.details?.reason !== 'notInterrupted'
-    ) {
-      return target;
-    }
-    // Последний проход завершён или принят — очередь оборотов (`nextKindOf`); «добавленный» без
-    // намерения — значит, оборотов нет по отказу или они уже есть.
-    const kind = nextKindOf(journal);
-    if (kind === 'added') {
-      return conflict(journal.backsDeclined ? 'backsDeclined' : 'backsPresent');
-    }
-    return ok({ kind, resumed: false, expected: kind === 'backs' ? frontsPages : null });
-  }
-
-  function locate(key: string): JournalPass | null {
-    const address = parsePageKey(key);
-    if (address === null || journal === null) {
-      return null;
-    }
-    const pass = journal.passes.find((it) => it.number === address.pass);
-    const segment = pass?.segments.find((it) => it.number === address.segment);
-    return pass !== undefined && segment !== undefined && address.index <= segment.pageCount
-      ? pass
-      : null;
-  }
+  /** Состояние для политики запуска (`./pass-policy.ts`) — журнал в памяти и режим отказа. */
+  const state = (): PolicyState => ({ journal, incompatible });
 
   // Переименование каталога сессии и очистка. Пофайлового удаления взамен нет: не
   // переименовался — сессия остаётся целой.
@@ -567,6 +441,14 @@ export function createSessionStore(
     }
   }
 
+  // Решения по оборотам набора «ДN» (M4.5, KTD3) — своим модулем, на очереди и `commit` хранилища.
+  const sets = setDecisionsOf({
+    journal: () => journal,
+    commit,
+    settleReads,
+    removeMarked,
+  });
+
   return {
     incompatible,
 
@@ -589,14 +471,14 @@ export function createSessionStore(
 
     revision: () => revision,
 
-    planPass,
+    planPass: (request) => planPass(state(), request),
 
     beginPass: (origin, intent, blankMode = 'keep') =>
       mutating(async () => {
         if (runningSegmentOf(journal) !== null) {
           return conflict('passRunning');
         }
-        const checked = checkIntent(intent);
+        const checked = checkIntent(state(), intent);
         if (!checked.ok) {
           return checked;
         }
@@ -637,10 +519,14 @@ export function createSessionStore(
         if (!segment.ok) {
           return segment;
         }
+        const kind = intent?.kind ?? nextKindOf(base);
         const pass: JournalPass = {
           number,
-          kind: intent?.kind ?? nextKindOf(base),
+          kind,
           after: intent?.after ?? null,
+          // Обороты набора ссылаются на лица ожидающего набора из того же журнала (M4.5, KTD1).
+          pair: kind === 'addedBacks' ? (pendingPairOf(base)?.fronts ?? null) : null,
+          backsDecision: kind === 'addedFronts' ? 'none' : null,
           accepted: false,
           origin,
           nextSegment: segment.value + 1,
@@ -657,13 +543,13 @@ export function createSessionStore(
       }),
 
     resumeTarget() {
-      const target = resumable();
+      const target = resumable(state());
       return target.ok ? ok(target.value.origin) : target;
     },
 
     resumePass: () =>
       mutating(async () => {
-        const target = resumable();
+        const target = resumable(state());
         if (!target.ok || journal === null) {
           return target.ok ? conflict('noSession') : target;
         }
@@ -828,11 +714,27 @@ export function createSessionStore(
         if (pass === undefined || journal === null || isVacant(journal)) {
           return conflict('noSession');
         }
-        const state = passStateOf(pass);
-        if (state !== 'interrupted') {
-          return conflict(state === 'running' ? 'passRunning' : 'notInterrupted');
+        const passState = passStateOf(pass);
+        if (passState !== 'interrupted') {
+          return conflict(passState === 'running' ? 'passRunning' : 'notInterrupted');
         }
-        return commit(withLastPass(journal, { ...pass, accepted: true }), 'must');
+        let accepted = withLastPass(journal, { ...pass, accepted: true });
+        // Принятые короткие обороты набора — то же «оставить как есть» (M4.5, R15): модалка
+        // несовпадения набора после них не показывается.
+        const setFronts = accepted.passes.find(
+          (it) =>
+            pass.kind === 'addedBacks' && it.number === pass.pair && it.kind === 'addedFronts',
+        );
+        // Пустой прерванный проход роли не занимает: принятый без страниц набор ждёт дальше
+        // (ревью сессий 1–2), иначе «оставить как есть» запирало бы набор без оборотов.
+        if (
+          setFronts?.backsDecision === 'none' &&
+          pagesOf(pass).length > 0 &&
+          pagesOf(pass).length !== pagesOf(setFronts).length
+        ) {
+          accepted = withDecision(accepted, setFronts, 'kept');
+        }
+        return commit(accepted, 'must');
       }),
 
     setEdits: (edits, rotate180) =>
@@ -844,19 +746,33 @@ export function createSessionStore(
         if (runningSegmentOf(journal) !== null) {
           return conflict('passRunning');
         }
-        const { backs } = rolesOf(journal);
-        if (backs === null && rotate180) {
+        // Флаг адресует проход оборотов — основной пачки или набора (M4.5, KTD4); чужой номер,
+        // проход другой роли или без страниц (роли не занимает) — отказ целиком, без частичной
+        // записи.
+        const isBacks = (pass: JournalPass): boolean =>
+          isBacksKind(pass.kind) && pagesOf(pass).length > 0;
+        const current = journal;
+        const addressed = Object.keys(rotate180).map(Number);
+        if (
+          addressed.some((number) => {
+            const pass = current.passes.find((it) => it.number === number);
+            return pass === undefined || !isBacks(pass);
+          })
+        ) {
           return conflict('noBacksPass');
         }
+        const passes = journal.passes.map((pass) =>
+          isBacks(pass) ? { ...pass, rotate180: rotate180[pass.number] ?? false } : pass,
+        );
         // Сравнение — после нормализации: состояние, которое приводится к записанному, правкой
         // не считается и отметку о сохранении не снимает. Страницы те же — переносить нечего.
         const normalized = withRebasedEdits(null, { ...journal, edits }).edits;
-        if ((backs?.rotate180 ?? false) === rotate180 && sameEdits(journal.edits, normalized)) {
+        const flagsSame = passes.every(
+          (pass, index) => pass.rotate180 === current.passes[index]?.rotate180,
+        );
+        if (flagsSame && sameEdits(journal.edits, normalized)) {
           return ok(undefined);
         }
-        const passes = journal.passes.map((pass) =>
-          pass === backs ? { ...pass, rotate180 } : pass,
-        );
         // Правка меняет вывод: сохранённый PDF устарел (M3, R8).
         return commit({ ...journal, passes, edits: normalized, saved: false }, 'must');
       }),
@@ -869,24 +785,36 @@ export function createSessionStore(
         if (runningSegmentOf(journal) !== null) {
           return conflict('passRunning');
         }
+        // Пустой проход оборотов (прерван до первой страницы) роли не занимает и отказу не
+        // мешает — но остаться прерванным он не должен: иначе «досканировать» снова начало бы
+        // обороты вопреки отказу, а добавление ждало бы «оставить как есть». Страниц и файлов
+        // у него нет — запись просто уходит, как при «Остановить» на пустом сегменте.
+        const current = journal;
+        const last = current.passes.at(-1);
+        const trimmedOf = (kind: 'backs' | 'addedBacks'): Journal =>
+          last?.kind === kind && pagesOf(last).length === 0 ? withLastPass(current, null) : current;
+        // Набор, ждущий обороты, — адресат отказа (M4.5, KTD3): экран `flip` один, команда одна.
+        const pending = pendingPairOf(journal);
+        if (pending !== null) {
+          const trimmed = trimmedOf('addedBacks');
+          const fronts = trimmed.passes.find((pass) => pass.number === pending.fronts);
+          return fronts === undefined
+            ? conflict('noPendingSet')
+            : commit(withDecision(trimmed, fronts, 'declined'), 'must');
+        }
         if (rolesOf(journal).backs !== null) {
           return conflict('backsPresent');
         }
         if (journal.backsDeclined) {
           return ok(undefined);
         }
-        // Пустой проход оборотов (прерван до первой страницы) роли не занимает и отказу не
-        // мешает — но остаться прерванным он не должен: иначе «досканировать» снова начало бы
-        // обороты вопреки отказу, а добавление ждало бы «оставить как есть». Страниц и файлов
-        // у него нет — запись просто уходит, как при «Остановить» на пустом сегменте.
-        const last = journal.passes.at(-1);
-        const trimmed =
-          last?.kind === 'backs' && pagesOf(last).length === 0
-            ? withLastPass(journal, null)
-            : journal;
         // Вывод не меняется (оборотов и не было) — отметка о сохранении остаётся.
-        return commit({ ...trimmed, backsDeclined: true }, 'must');
+        return commit({ ...trimmedOf('backs'), backsDeclined: true }, 'must');
       }),
+
+    keepSetBacks: (set) => mutating(() => sets.keepSetBacks(set)),
+
+    rescanSetBacks: (set) => mutating(() => sets.rescanSetBacks(set)),
 
     assemble: () =>
       mutating(async () => {
@@ -958,7 +886,7 @@ export function createSessionStore(
       }),
 
     pageInfo(key) {
-      const pass = locate(key);
+      const pass = locatePass(journal, key);
       if (pass === null || journal === null || lost.has(key)) {
         return null;
       }
@@ -970,7 +898,7 @@ export function createSessionStore(
     },
 
     readPage(key) {
-      if (closing || locate(key) === null) {
+      if (closing || locatePass(journal, key) === null) {
         return Promise.resolve(unavailable('unknown'));
       }
       if (lost.has(key)) {

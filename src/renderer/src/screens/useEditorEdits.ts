@@ -124,7 +124,12 @@ export function useEditorEdits({
     const settle = (): void => {
       setPending((previous) => (previous?.id === id ? null : previous));
     };
-    window.api.setEdits({ edits: target.edits, rotate180: target.rotate180 }).then(
+    // Мост несёт флаги 180° картой по проходам оборотов (M4.5, KTD4): только включённые — не
+    // названный проход ядро считает выключенным, «Вернуть» — пустая карта.
+    const rotate180: Record<number, boolean> = Object.fromEntries(
+      [...target.rotate180].filter(([, on]) => on),
+    );
+    window.api.setEdits({ edits: target.edits, rotate180 }).then(
       (result) => {
         if (!result.ok) {
           // Шаг в историю не попадает, снимок не меняется (handoff M3, гейтинг).

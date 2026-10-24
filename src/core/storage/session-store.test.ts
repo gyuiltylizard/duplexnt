@@ -41,6 +41,8 @@ describe('хранилище сессии: проход', () => {
         segments: [{ number: 1, state: 'completed', pageCount: 3 }],
         kind: 'fronts',
         after: null,
+        pair: null,
+        backsDecision: null,
         rotate180: false,
       },
     ]);
@@ -57,6 +59,8 @@ describe('хранилище сессии: проход', () => {
           scanner: { name: 'Test Scanner', scheme: 'https', host: 'scanner.test', port: 443 },
           kind: 'fronts',
           after: null,
+          pair: null,
+          backsDecision: null,
           rotate180: false,
           pages: [
             { key: 'p01-s01-0001', number: 1, lost: false },

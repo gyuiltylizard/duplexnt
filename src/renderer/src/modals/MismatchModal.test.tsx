@@ -13,6 +13,8 @@ function report(
   return {
     mode: 'sets',
     groups: { fronts, backs, divider: fronts },
+    sets: [],
+    pendingSet: null,
     fronts,
     backs,
     backsState: 'completed',

@@ -32,18 +32,37 @@ export const passOf = (
   scanner: null,
   kind: number === 1 ? 'fronts' : 'backs',
   after: null,
+  pair: null,
+  backsDecision: null,
   rotate180: false,
   pages: pagesOf(number, count),
   ...extra,
 });
 
-/** Добавленный набор: проход `number` из `count` страниц с якорем `after`. */
+/** Добавленный односторонний набор: проход `number` из `count` страниц с якорем `after`. */
 export const addedOf = (
   number: number,
   count: number,
   after: string | null,
   extra: Partial<PassSnapshot> = {},
 ): PassSnapshot => passOf(number, count, { kind: 'added', after, ...extra });
+
+/** Лица двустороннего добавленного набора (M4.5): якорь `after`, решение по оборотам «ждём». */
+export const setFrontsOf = (
+  number: number,
+  count: number,
+  after: string | null,
+  extra: Partial<PassSnapshot> = {},
+): PassSnapshot =>
+  passOf(number, count, { kind: 'addedFronts', after, backsDecision: 'none', ...extra });
+
+/** Обороты двустороннего добавленного набора: проход `number` со ссылкой на лица `pair`. */
+export const setBacksOf = (
+  number: number,
+  pair: number,
+  count: number,
+  extra: Partial<PassSnapshot> = {},
+): PassSnapshot => passOf(number, count, { kind: 'addedBacks', pair, ...extra });
 
 export const sessionOf = (
   passes: PassSnapshot[],

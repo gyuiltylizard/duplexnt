@@ -1,12 +1,13 @@
 import { useId, useState, type MouseEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import type {
-  AssembledPage,
-  AssemblyMode,
-  BlankSummary,
-  PassKind,
-  SessionAssembly,
-  SetsLayout,
+import {
+  isPairKind,
+  type AssembledPage,
+  type AssemblyMode,
+  type BlankSummary,
+  type PassKind,
+  type SessionAssembly,
+  type SetsLayout,
 } from '@shared';
 import type { TFunction } from 'i18next';
 import { noteOf, toneOf, whatOf } from '../state/page-text';
@@ -202,8 +203,11 @@ function Details({
   const { t } = useTranslation();
   const bodyId = useId();
 
-  const title = t('inspector.title', { page: position, what: whatOf(t, entry, mode) });
-  const note = noteOf(t, entry, mode, frontsOnly);
+  const title = t('inspector.title', {
+    page: position,
+    what: whatOf(t, entry, mode, origin),
+  });
+  const note = noteOf(t, entry, mode, frontsOnly, origin);
   const back = entry.side === 'back';
   const content = contentText(t, entry, notBlank);
 
@@ -232,6 +236,38 @@ function Details({
           })}
         />
         <Fact name={t('inspector.fact.origin')} value={originText} />
+      </>
+    );
+  } else if (entry.addedSet !== null && isPairKind(origin)) {
+    // S8 M4.5: страница двустороннего набора — набор, лист внутри набора (в подблоках его
+    // нет), сторона и проход пары.
+    facts = (
+      <>
+        <Fact
+          name={t('inspector.fact.set')}
+          value={t('inspector.fact.setValue', { set: entry.addedSet })}
+        />
+        <Fact
+          name={t('inspector.fact.sheet')}
+          value={
+            entry.sheet === null
+              ? t('inspector.fact.sheetNone')
+              : t('inspector.fact.sheetValue', { sheet: entry.sheet })
+          }
+        />
+        <Fact
+          name={t('inspector.fact.side')}
+          value={back ? t('inspector.fact.back') : t('inspector.fact.front')}
+        />
+        <Fact
+          name={t('inspector.fact.origin')}
+          value={t(
+            origin === 'addedBacks'
+              ? 'inspector.fact.originSetBacks'
+              : 'inspector.fact.originSetFronts',
+            { set: entry.addedSet },
+          )}
+        />
       </>
     );
   } else if (entry.addedSet !== null) {

@@ -1,15 +1,23 @@
 import {
+  addedSetReportOf,
+  addedSetsOf,
   blankFlagOf,
   blankSummaryOf,
   EMPTY_EDITS,
+  hasPages,
+  isAnchoredKind,
+  isBacksKind,
   NO_VERDICTS,
+  pendingSetOf,
   sameEdits,
+  type AddedSetReport,
   type AssembledDocument,
   type AssembledPage,
   type AssemblyMode,
   type BlankFlag,
   type BlankSummary,
   type BlankVerdicts,
+  type PageSnapshot,
   type PassSnapshot,
   type SessionAssembly,
   type SessionSnapshot,
@@ -31,6 +39,8 @@ export const NO_EDITS_ASSEMBLY: Omit<SessionAssembly, 'report'> = {
   blank: NO_BLANK,
 };
 
+const isBacksRole = (pass: PassSnapshot): boolean => isBacksKind(pass.kind);
+
 /** Режим сборки без правок (M3.6, R4): как считает ядро, с идущим проходом оборотов — пары. */
 function modeOf(session: SessionSnapshot): AssemblyMode {
   if (session.assembled !== null) {
@@ -43,7 +53,7 @@ function modeOf(session: SessionSnapshot): AssemblyMode {
   return backs.pages.length === (fronts?.pages.length ?? 0) ? 'pairs' : 'sets';
 }
 
-interface MirrorPage extends Omit<AssembledPage, 'side' | 'sheet' | 'blank'> {
+interface MirrorPage extends Omit<AssembledPage, 'side' | 'blank'> {
   readonly group: 'fronts' | 'backs' | null;
   readonly ofBacks: boolean;
 }
@@ -75,48 +85,129 @@ function withBlankFlags(
   return { order, summary: blankSummaryOf(session.blankMode, flags) };
 }
 
-/** Блоки добавленных наборов — по якорю, без якоря в конец; группа — группа якоря. */
+const frontOf = (
+  page: PageSnapshot,
+  group: MirrorPage['group'],
+  sheet: number | null = null,
+  addedSet: number | null = null,
+): MirrorPage => ({
+  key: page.key,
+  sheet,
+  angle: 0,
+  lost: page.lost,
+  addedSet,
+  group,
+  ofBacks: false,
+});
+
+const backOf = (
+  page: PageSnapshot,
+  pass: PassSnapshot,
+  group: MirrorPage['group'],
+  sheet: number | null = null,
+  addedSet: number | null = null,
+): MirrorPage => ({
+  key: page.key,
+  sheet,
+  angle: pass.rotate180 ? 180 : 0,
+  lost: page.lost,
+  addedSet,
+  group,
+  ofBacks: true,
+});
+
+/** Блок набора «ДN» (M4.5): чередование при равном числе страниц, иначе подблоки лиц и оборотов. */
+function setBlockOf(fronts: PassSnapshot, backs: PassSnapshot | null, set: number): MirrorPage[] {
+  if (backs === null) {
+    return fronts.pages.map((page) => frontOf(page, null, null, set));
+  }
+  if (backs.pages.length === fronts.pages.length) {
+    const n = fronts.pages.length;
+    return fronts.pages.flatMap((front, index) => {
+      const back = backs.pages[n - 1 - index];
+      return back === undefined
+        ? [frontOf(front, null, index + 1, set)]
+        : [frontOf(front, null, index + 1, set), backOf(back, backs, null, index + 1, set)];
+    });
+  }
+  return [
+    ...fronts.pages.map((page) => frontOf(page, null, null, set)),
+    ...[...backs.pages].reverse().map((page) => backOf(page, backs, null, null, set)),
+  ];
+}
+
+/** Блоки добавленных наборов — по якорю лиц, без якоря в конец; группа — группа якоря. */
 function placeAdded(
   order: MirrorPage[],
-  added: readonly PassSnapshot[],
+  passes: readonly PassSnapshot[],
   end: 'fronts' | 'backs' | null,
+  include: (set: number) => boolean = () => true,
 ): void {
-  added.forEach((pass, index) => {
-    const anchor = pass.after === null ? -1 : order.findIndex((page) => page.key === pass.after);
+  const byNumber = new Map(passes.map((pass) => [pass.number, pass]));
+  for (const set of addedSetsOf(passes, hasPages)) {
+    const fronts = byNumber.get(set.fronts);
+    if (fronts === undefined || !include(set.set)) {
+      continue;
+    }
+    const backs = set.backs === null ? null : (byNumber.get(set.backs) ?? null);
+    const anchor =
+      fronts.after === null ? -1 : order.findIndex((page) => page.key === fronts.after);
     const group = anchor === -1 ? end : (order[anchor]?.group ?? null);
-    const block = pass.pages.map((page): MirrorPage => ({
-      key: page.key,
-      angle: 0,
-      lost: page.lost,
-      addedSet: index + 1,
-      group,
-      ofBacks: false,
-    }));
+    const block = setBlockOf(fronts, backs, set.set).map((page) => ({ ...page, group }));
     order.splice(anchor === -1 ? order.length : anchor + 1, 0, ...block);
-  });
+  }
+}
+
+/** Осиротевшие обороты набора (лиц нет) — в конец стороной «оборот», порядком документа, без тега. */
+function placeOrphans(
+  order: MirrorPage[],
+  passes: readonly PassSnapshot[],
+  group: MirrorPage['group'],
+): void {
+  const paired = new Set(addedSetsOf(passes, hasPages).map((set) => set.backs));
+  for (const pass of rolesOf(passes).addedBacks) {
+    if (!paired.has(pass.number)) {
+      order.push(...[...pass.pages].reverse().map((page) => backOf(page, pass, group)));
+    }
+  }
+}
+
+/** Отчёт по наборам «ДN» и набор, ждущий обороты, — как в ядре (M4.5, KTD5). */
+function setsReportOf(passes: readonly PassSnapshot[]): {
+  readonly sets: AddedSetReport[];
+  readonly pendingSet: number | null;
+} {
+  const byNumber = new Map(passes.map((pass) => [pass.number, pass]));
+  return {
+    sets: addedSetsOf(passes, hasPages).map((set) =>
+      addedSetReportOf(set, byNumber.get(set.fronts), byNumber.get(set.backs ?? -1) ?? null),
+    ),
+    pendingSet: pendingSetOf(passes, hasPages, (pass) => pass.state)?.set ?? null,
+  };
 }
 
 /**
  * ТОЛЬКО ДЛЯ ТЕСТОВ renderer: упрощённое зеркало базового порядка ядра (M2, KTD-4; M3.5, KTD-2;
- * M3.6, KTD2) — пары: лицевые по порядку, обороты обратным порядком от последнего листа, непарными
- * остаются младшие листы, лишние обороты — в конце; раздельные наборы: лица, затем обороты обратным
- * порядком подачи, граница — число лиц; собрано: лента по записи, новые ключи — за предыдущей
- * страницей своего прохода, добавленные — по якорю, иначе в конец; затем блоки добавленных
- * наборов по возрастанию номера прохода, каждый сразу за якорем, без якоря — в конец. Правки не
- * применяются: ленту с правками renderer получает из снимка готовой (M3, KTD-2), и тесты с
- * правками строят сборку сами. Настоящая функция живёт в `src/core/scan/assembly.ts` и недоступна
- * renderer'у границей слоёв; расхождение ловит табличный тест
- * `test/guards/assembly-fixture.test.ts` на одних данных.
+ * M3.6, KTD2; M4.5, KTD5) — пары: лицевые по порядку, обороты обратным порядком от последнего
+ * листа, непарными остаются младшие листы, лишние обороты — в конце; раздельные наборы: лица,
+ * затем обороты обратным порядком подачи, граница — число лиц; собрано: лента по записи, новые
+ * ключи — за предыдущей страницей своего прохода, набор целиком вне записи — блоком по якорю,
+ * иначе в конец; затем блоки добавленных наборов по номеру «ДN», каждый сразу за якорем лиц, без
+ * якоря — в конец; двусторонний набор чередуется при равном числе страниц, иначе подблоки;
+ * осиротевшие обороты набора — в конец. Правки не применяются: ленту с правками renderer
+ * получает из снимка готовой (M3, KTD-2), и тесты с правками строят сборку сами. Настоящая
+ * функция живёт в `src/core/scan/assembly.ts` и недоступна renderer'у границей слоёв;
+ * расхождение ловит табличный тест `test/guards/assembly-fixture.test.ts` на одних данных.
  */
 export function assemblyOf(
   session: SessionSnapshot,
   blank: BlankVerdicts = NO_VERDICTS,
 ): SessionAssembly {
-  const { fronts: frontsPass, backs: backsPass, added } = rolesOf(session.passes);
+  const { passes } = session;
+  const { fronts: frontsPass, backs: backsPass } = rolesOf(passes);
   const fronts = frontsPass?.pages ?? [];
   const backs = backsPass?.pages ?? [];
   const n = fronts.length;
-  const backAngle = backsPass?.rotate180 === true ? 180 : 0;
   const mode = modeOf(session);
   const report = {
     mode,
@@ -125,29 +216,14 @@ export function assemblyOf(
     backsState: backsPass?.state ?? null,
     backsDeclined: session.backsDeclined,
     mismatch: mode === 'sets',
+    ...setsReportOf(passes),
   };
-  const front = (page: PassSnapshot['pages'][number], group: MirrorPage['group']): MirrorPage => ({
-    key: page.key,
-    angle: 0,
-    lost: page.lost,
-    addedSet: null,
-    group,
-    ofBacks: false,
-  });
-  const back = (page: PassSnapshot['pages'][number], group: MirrorPage['group']): MirrorPage => ({
-    key: page.key,
-    angle: backAngle,
-    lost: page.lost,
-    addedSet: null,
-    group,
-    ofBacks: true,
-  });
 
   const order: MirrorPage[] = [];
   let sets: SetsLayout | null = null;
-  let placed: (MirrorPage & Pick<AssembledPage, 'side' | 'sheet'>)[];
+  let placed: (MirrorPage & Pick<AssembledPage, 'side'>)[];
   if (mode === 'assembled') {
-    const counted = session.passes.filter((pass) => pass.pages.length > 0);
+    const counted = passes.filter(hasPages);
     const known = new Map(
       counted.flatMap((pass) =>
         pass.pages.map((page, index) => [
@@ -156,40 +232,73 @@ export function assemblyOf(
         ]),
       ),
     );
-    const addedIndex = new Map(added.map((pass, index) => [pass.number, index + 1]));
+    const addedSetByKey = new Map(
+      addedSetsOf(passes, hasPages).flatMap((set) =>
+        [set.fronts, set.backs].flatMap((number) =>
+          (counted.find((pass) => pass.number === number)?.pages ?? []).map(
+            (page): [string, number] => [page.key, set.set],
+          ),
+        ),
+      ),
+    );
     const pageOf = (key: string): MirrorPage => {
       const origin = known.get(key);
-      const ofBacks = origin?.pass.kind === 'backs';
+      const ofBacks = origin !== undefined && isBacksRole(origin.pass);
       return {
         key,
-        angle: ofBacks ? backAngle : 0,
+        sheet: null,
+        angle: ofBacks && origin.pass.rotate180 ? 180 : 0,
         lost: origin?.page.lost ?? false,
-        addedSet: origin === undefined ? null : (addedIndex.get(origin.pass.number) ?? null),
+        addedSet: addedSetByKey.get(key) ?? null,
         group: null,
         ofBacks,
       };
     };
     const record = (session.assembled ?? []).filter((key) => known.has(key));
     order.push(...record.map(pageOf));
+    const inRecord = new Set(record);
+    const outside = new Set(
+      addedSetsOf(passes, hasPages)
+        .filter((set) =>
+          [set.fronts, set.backs].every(
+            (number) =>
+              number === null ||
+              (counted.find((pass) => pass.number === number)?.pages ?? []).every(
+                (page) => !inRecord.has(page.key),
+              ),
+          ),
+        )
+        .map((set) => set.set),
+    );
+    const blockPasses = new Set(
+      addedSetsOf(passes, hasPages)
+        .filter((set) => outside.has(set.set))
+        .flatMap((set) => [set.fronts, set.backs]),
+    );
     for (const pass of counted) {
+      if (blockPasses.has(pass.number)) {
+        continue;
+      }
       for (const page of pass.pages) {
         if (order.some((one) => one.key === page.key)) {
           continue;
         }
         const previous = known.get(page.key)?.previous ?? null;
         const after = previous === null ? -1 : order.findIndex((one) => one.key === previous);
+        const anchored = isAnchoredKind(pass.kind);
         const anchor =
-          after === -1 && pass.kind === 'added' && pass.after !== null
+          after === -1 && anchored && pass.after !== null
             ? order.findIndex((one) => one.key === pass.after)
             : after;
         order.splice(anchor === -1 ? order.length : anchor + 1, 0, pageOf(page.key));
       }
     }
+    placeAdded(order, passes, null, (set) => outside.has(set));
     const positions = new Map(record.map((key, index) => [key, index]));
     placed = order.map((page) => {
       const position = positions.get(page.key);
       return position === undefined
-        ? { ...page, side: page.ofBacks ? 'back' : 'front', sheet: null }
+        ? { ...page, side: page.ofBacks ? 'back' : 'front' }
         : {
             ...page,
             side: position % 2 === 0 ? 'front' : 'back',
@@ -197,9 +306,12 @@ export function assemblyOf(
           };
     });
   } else if (mode === 'sets') {
-    order.push(...fronts.map((page) => front(page, 'fronts')));
-    order.push(...[...backs].reverse().map((page) => back(page, 'backs')));
-    placeAdded(order, added, 'backs');
+    order.push(...fronts.map((page) => frontOf(page, 'fronts', page.number)));
+    if (backsPass !== null) {
+      order.push(...[...backs].reverse().map((page) => backOf(page, backsPass, 'backs')));
+    }
+    placeAdded(order, passes, 'backs');
+    placeOrphans(order, passes, 'backs');
     const divider = order.filter((page) => page.group === 'fronts').length;
     sets = { fronts: divider, backs: order.length - divider, divider };
     placed = order.map((page, index) =>
@@ -208,27 +320,22 @@ export function assemblyOf(
         : { ...page, side: 'back', sheet: index - divider + 1 },
     );
   } else {
-    const sheets = new Map<string, number | null>();
     fronts.forEach((page, index) => {
       const sheet = index + 1;
-      order.push(front(page, null));
-      sheets.set(page.key, sheet);
+      order.push(frontOf(page, null, sheet));
       const pair = backs[n - sheet];
-      if (pair !== undefined) {
-        order.push(back(pair, null));
-        sheets.set(pair.key, sheet);
+      if (pair !== undefined && backsPass !== null) {
+        order.push(backOf(pair, backsPass, null, sheet));
       }
     });
-    for (const extra of backs.slice(n)) {
-      order.push(back(extra, null));
-      sheets.set(extra.key, null);
+    if (backsPass !== null) {
+      for (const extra of backs.slice(n)) {
+        order.push(backOf(extra, backsPass, null));
+      }
     }
-    placeAdded(order, added, null);
-    placed = order.map((page) => ({
-      ...page,
-      side: page.ofBacks ? 'back' : 'front',
-      sheet: sheets.get(page.key) ?? null,
-    }));
+    placeAdded(order, passes, null);
+    placeOrphans(order, passes, null);
+    placed = order.map((page) => ({ ...page, side: page.ofBacks ? 'back' : 'front' }));
   }
 
   const flagged = withBlankFlags(
@@ -251,7 +358,7 @@ export function assemblyOf(
     documents: [{ name: '', start: 0, count: placed.length }],
     sets,
     orderEdited: false,
-    hasEdits: backAngle !== 0,
+    hasEdits: passes.some((pass) => isBacksRole(pass) && hasPages(pass) && pass.rotate180),
     deleted: 0,
     report: { ...report, groups: sets },
     blank: flagged.summary,
@@ -274,9 +381,7 @@ export function assemblyWithEditsOf(
   const { edits } = session;
   // Сторона по проходу — для флага пустого оборота: страница прохода оборотов и после правок она же.
   const backsKeys = new Set(
-    session.passes
-      .filter((pass) => pass.kind === 'backs')
-      .flatMap((pass) => pass.pages.map((page) => page.key)),
+    session.passes.filter(isBacksRole).flatMap((pass) => pass.pages.map((page) => page.key)),
   );
   const byKey = new Map(auto.order.map((entry) => [entry.key, entry]));
   const explicit = edits.order.flatMap((key) => byKey.get(key) ?? []);
@@ -312,7 +417,7 @@ export function assemblyWithEditsOf(
     order = ordered.map((entry) => {
       const position = positions.get(entry.key);
       return position === undefined
-        ? { ...entry, sheet: null }
+        ? entry
         : {
             ...entry,
             side: position % 2 === 0 ? 'front' : 'back',

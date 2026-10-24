@@ -126,7 +126,7 @@ describe('«Добавить» — полный путь через эмулят
 
     // AE3: ручной порядок — третий лист в начало; затем добавление после лица 2.
     const manual: SessionEdits = { ...EMPTY_EDITS, order: [F3, F1, A1, F2, B2, B3] };
-    unwrap(await service.setEdits(manual, false));
+    unwrap(await service.setEdits(manual, {}));
     expect(unwrap(await service.startPass({ kind: 'added', after: F2 }))).toMatchObject({
       end: 'completed',
       pages: 1,
@@ -155,7 +155,7 @@ describe('«Добавить» — полный путь через эмулят
     unwrap(
       await service.setEdits(
         { ...manual, order: [F3, F1, A1, F2, A2, B2, B3], deleted: [A2], divider: 3 },
-        false,
+        {},
       ),
     );
     expect(service.snapshot().assembly?.sets).toEqual({ fronts: 3, backs: 3, divider: 3 });

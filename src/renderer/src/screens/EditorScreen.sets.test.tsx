@@ -185,7 +185,7 @@ describe('перенос через границу (S2–S3, R18; KTD8)', () => 
     fireEvent.dragEnd(option(2), { dataTransfer: transfer });
     expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({
       edits: edits({ order: [F1, F2, B2, B1, F3], divider: 2 }),
-      rotate180: false,
+      rotate180: {},
     });
 
     await settle();
@@ -211,7 +211,7 @@ describe('перенос через границу (S2–S3, R18; KTD8)', () => 
     fireEvent.drop(option(3), { dataTransfer: transfer });
     expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({
       edits: edits({ divider: 2 }),
-      rotate180: false,
+      rotate180: {},
     });
   });
 
@@ -239,7 +239,7 @@ describe('перенос через границу (S2–S3, R18; KTD8)', () => 
     // Оборот 1 — последний: встаёт к границе, граница +1.
     expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({
       edits: edits({ order: [F1, F2, F3, B1, B2], divider: 4 }),
-      rotate180: false,
+      rotate180: {},
     });
   });
 
@@ -256,7 +256,7 @@ describe('перенос через границу (S2–S3, R18; KTD8)', () => 
     // Цель — лицо 2: обе в лицах; граница = 3 − 1 (из лиц) + 2.
     expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({
       edits: edits({ order: [F2, F1, B1, F3, B2], divider: 4 }),
-      rotate180: false,
+      rotate180: {},
     });
   });
 
@@ -279,7 +279,7 @@ describe('перенос через границу (S2–S3, R18; KTD8)', () => 
     fireEvent.drop(zone, { dataTransfer: transfer });
     expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({
       edits: edits({ deleted: [B2, B1], order: [F2, F3, F1], divider: 2 }),
-      rotate180: false,
+      rotate180: {},
     });
     await settle();
     rerender(applied(snapshot, lastSent(api)));
@@ -335,7 +335,7 @@ describe('тулбар режима и «Собрать документ» (S4�
     fireEvent.keyDown(document.body, { key: 'Delete' });
     expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({
       edits: edits({ deleted: ['p02-s01-0001'] }),
-      rotate180: false,
+      rotate180: {},
     });
     await settle();
     rerender(applied(snapshot, lastSent(api)));
@@ -560,7 +560,7 @@ describe('инспектор до сборки (S8–S9, R22–R23)', () => {
     expect(screen.getByRole('radio', { name: 'В конец набора' })).toBeDefined();
     fireEvent.click(screen.getByRole('radio', { name: 'В конец набора' }));
     expect(document.querySelector('.add-modal__summary')?.textContent).toBe(
-      'Один проход · в конец набора оборотов, после стр. 5',
+      'Одностороннее · в конец набора оборотов, после стр. 5',
     );
   });
 

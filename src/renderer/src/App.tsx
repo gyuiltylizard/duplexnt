@@ -7,29 +7,39 @@ import {
   type ReactNode,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { DomainError, SessionSnapshot, StartPassRequest, StartupNotice } from '@shared';
+import {
+  isMainKind,
+  type AddedPassIntent,
+  type DomainError,
+  type SessionSnapshot,
+  type StartPassRequest,
+  type StartupNotice,
+} from '@shared';
 import { NoticesBar } from './components/NoticesBar';
 import { Toast, type ToastAction } from './components/Toast';
 import { DeviceModal } from './modals/DeviceModal';
 import { MismatchModal } from './modals/MismatchModal';
+import { SetMismatchModal } from './modals/SetMismatchModal';
 import { EditorScreen } from './screens/EditorScreen';
 import { FlipScreen } from './screens/FlipScreen';
 import { IncompatibleScreen } from './screens/IncompatibleScreen';
 import { MergeScreen, MERGE_PAUSE_DECLINED_MS, MERGE_PAUSE_MS } from './screens/MergeScreen';
 import { ScanScreen } from './screens/ScanScreen';
 import { SetupScreen } from './screens/SetupScreen';
-import { assemblyLanded, mismatchDue } from './state/assembly-outcome';
+import { assemblyLanded, mismatchDue, pairLanded, setMismatchDue } from './state/assembly-outcome';
 import { errorTextInline } from './state/error-text';
 import { createSnapshotStore } from './state/snapshot-store';
 import { screenOf, type Screen } from './state/screen';
+import { landingOf, useSetLanding } from './state/useSetLanding';
 import './app.css';
 
 // Каркас интерфейса M1 (U20): экран выводится из снимка, своего состояния сессии у renderer
 // нет (KTD-23). Здесь живёт то, что переживает смену экрана: закрытые уведомления запуска,
 // единственный тост (новый гасит предыдущий сменой `key`), модалка `device`, отказ последнего
 // запуска прохода (экран на время запуска уходит и возвращается, S6), пауза `merge` поверх
-// `screenOf` (M2, KTD-5), подтверждение модалки `mismatch` (M2, KTD-8) и память о последнем
-// запуске прохода — ради посадки добавленного набора (M3.5, KTD-7).
+// `screenOf` (M2, KTD-5), подтверждение модалки `mismatch` (M2, KTD-8), память о последнем
+// запуске прохода — ради посадки добавленного набора (M3.5, KTD-7) — и посадка пары набора
+// «ДN» с модалкой несовпадения набора (M4.5, KTD7).
 
 interface ToastState {
   /** Идентичность тоста — `key` элемента: новый ключ перезапускает срок показа. */
@@ -68,8 +78,8 @@ interface Landing {
 interface Launch {
   /** Порядковый номер запуска за процесс — ключ `EditorScreen` после посадки. */
   readonly epoch: number;
-  /** Намерение запуска: добавленный набор или проход по политике ядра (`null`). */
-  readonly kind: 'added' | null;
+  /** Намерение запуска: добавленный набор, лица пары или проход по политике ядра (`null`). */
+  readonly kind: AddedPassIntent['kind'] | null;
   /** `null` — запуск без сессии (с `setup`): посадки не будет. */
   readonly sessionId: string | null;
   readonly keysBefore: ReadonlySet<string>;
@@ -82,6 +92,12 @@ const NO_LANDING: Landing = { key: null, added: 0 };
 /** Место посадки набора: с какого запуска и на какой странице `EditorScreen` смонтирован. */
 interface Seat {
   readonly epoch: number;
+  readonly key: string;
+}
+
+/** Отложенный тост посадки пары: какой набор и с какого снимка; текст — в момент показа. */
+interface SetToast {
+  readonly set: number;
   readonly key: string;
 }
 
@@ -125,8 +141,12 @@ export function App(): ReactNode {
   // прийти пачкой, и кадр `scan` между `flip` и `editor` легко пропустить. После добавленного
   // прохода паузы нет (M3.5, R15): по роли последнего прохода сессии (досканирование набора
   // идёт без намерения) и по намерению запуска — проход без страниц ядро из журнала
-  // выбрасывает, и последним снова становится проход оборотов.
+  // выбрасывает, и последним снова становится проход оборотов; «Остановить» на лицах набора до
+  // первой страницы (M4.5, AE12) — тот же случай. Пара набора (M4.5, R9) — своя пауза ниже.
   const [mergeHoldMs, setMergeHoldMs] = useState<number | null>(null);
+  // Чья пара на экране паузы: основного документа (`null`) или набора «ДN». Живёт отдельно от
+  // таймера: по истечении паузы экран может ждать оценок пустых оборотов — и остаётся про набор.
+  const [mergeSet, setMergeSet] = useState<number | null>(null);
   // Ожидание оценок пустых оборотов (M4, KTD6; handoff M4, S12; решение автора 2026-10-22):
   // по истечении паузы экран держится, пока `blank.pending` не станет 0, — без потолка. Флаг
   // ставится вместе с паузой и снимается корректировкой при рендере, как только ждать нечего.
@@ -135,22 +155,48 @@ export function App(): ReactNode {
   const screen = snapshot === null ? null : screenOf(snapshot);
   const session = snapshot?.session ?? null;
   const lastPass = session?.passes.at(-1);
+  const transitionReport = snapshot?.assembly?.report;
   if (screen !== previousScreen) {
     setPreviousScreen(screen);
-    const transitionReport = snapshot?.assembly?.report;
     if (
       screen === 'editor' &&
       (previousScreen === 'scan' || previousScreen === 'flip') &&
       transitionReport !== undefined &&
       assemblyLanded(transitionReport) &&
-      lastPass?.kind !== 'added' &&
-      !(launch?.kind === 'added' && launch.sessionId === session?.id)
+      lastPass !== undefined &&
+      isMainKind(lastPass.kind) &&
+      !(launch !== null && launch.kind !== null && launch.sessionId === session?.id)
     ) {
       setMergeHoldMs(transitionReport.backsDeclined ? MERGE_PAUSE_DECLINED_MS : MERGE_PAUSE_MS);
+      setMergeSet(null);
       // Ждать оценок есть смысл, когда они прячут страницы: в режиме наборов ничего не скрыто
       // (R15), статус про пустые там не рисуется — держать экран нечем объяснить (ревью).
       setMergeBlankWait(transitionReport.mode !== 'sets');
     }
+  }
+
+  // Посадка пары набора (M4.5, KTD7; handoff M4.5, S6, S10): пара закрыта — обороты набора
+  // завершены, приняты или не нужны — и снимок вернул в `editor`: пауза `merge` по набору (после
+  // отказа — короткая, как у основной), текущая на первой показанной странице набора и один тост
+  // «добавлено N» (скрытые названы) — после паузы и после модалки несовпадения, если та нужна.
+  // Ключ `EditorScreen` — номер снимка посадки: экран монтируется заново, как после кадра `scan`.
+  // Отложенный тост помнит свой набор: «Переснять» снимает посадку — тост уже не про ту ленту.
+  // Число страниц и скрытых считается при показе, по ленте после оценок: на кадре посадки
+  // поздние вердикты детектора ещё не пришли.
+  const [setToastPending, setSetToastPending] = useState<SetToast | null>(null);
+  const setLanding = useSetLanding(snapshot, screen);
+  if (setLanding !== null && snapshot !== null && session !== null) {
+    const { set, key } = setLanding;
+    setMergeHoldMs(set.decision === 'declined' ? MERGE_PAUSE_DECLINED_MS : MERGE_PAUSE_MS);
+    setMergeSet(set.set);
+    setMergeBlankWait(transitionReport?.mode !== 'sets');
+    if (key !== null) {
+      setSeat({ epoch: snapshot.seq, key });
+    }
+    setSetToastPending({
+      set: set.set,
+      key: `set:${session.id}:${String(set.set)}:${String(snapshot.seq)}`,
+    });
   }
   const blankPending = snapshot?.assembly?.blank.pending ?? 0;
   if (mergeBlankWait && blankPending === 0) {
@@ -163,7 +209,8 @@ export function App(): ReactNode {
   // монтируется заново, как и после кадра `scan`) и тост «Добавлено N»; ключ тоста — номер
   // запуска, поэтому повторный рендер той же посадки (StrictMode) тост не перезапускает.
   // Прерван — тоста нет, его место занимает плашка S4; у прохода другой роли посадки нет — там
-  // пауза `merge`. Пока страниц нет (кадр до первой страницы) — запуск ждёт снимка или ответа.
+  // пауза `merge` (у лиц и оборотов пары — посадка по снимку выше). Пока страниц нет (кадр до
+  // первой страницы) — запуск ждёт снимка или ответа.
   if (
     launch !== null &&
     launch.landed === null &&
@@ -291,8 +338,8 @@ export function App(): ReactNode {
     startPass(null);
   }, [startPass]);
   const startAdded = useCallback(
-    (after: string | null) => {
-      startPass({ kind: 'added', after });
+    (kind: AddedPassIntent['kind'], after: string | null) => {
+      startPass({ kind, after });
     },
     [startPass],
   );
@@ -352,6 +399,38 @@ export function App(): ReactNode {
       ? session.id
       : null;
   const showMismatch = mismatchSessionId !== null && mismatchConfirmedFor !== mismatchSessionId;
+  // Модалка несовпадения набора (M4.5, R15; KTD7): пока обороты набора не сошлись и решения нет
+  // — на каждом входе в `editor`, в том числе после перезапуска; закрывает её только решение,
+  // после которого предикат ложен. Подтверждения за процесс нет — оно и не нужно.
+  const mismatchedSet =
+    screen === 'editor' && !merging && assembly !== null ? setMismatchDue(assembly.report) : null;
+  // Тост посадки пары выходит, когда редактор виден без паузы и модалки набора (S10).
+  const pendingSet =
+    setToastPending === null
+      ? undefined
+      : assembly?.report.sets.find((set) => set.set === setToastPending.set);
+  if (setToastPending !== null && (pendingSet === undefined || !pairLanded(pendingSet))) {
+    setSetToastPending(null);
+  } else if (
+    setToastPending !== null &&
+    pendingSet !== undefined &&
+    assembly !== null &&
+    screen === 'editor' &&
+    !merging &&
+    mismatchedSet === null
+  ) {
+    const { shown, hidden } = landingOf(assembly.order, pendingSet);
+    setToast({
+      key: setToastPending.key,
+      text:
+        hidden > 0
+          ? t('toast.addedHidden', { shown, count: hidden })
+          : t('toast.added', { count: shown }),
+      durationMs: undefined,
+      action: undefined,
+    });
+    setSetToastPending(null);
+  }
 
   return (
     <div className="app">
@@ -376,7 +455,7 @@ export function App(): ReactNode {
           onOpenDevice={openDevice}
         />
       )}
-      {merging && <MergeScreen assembly={assembly} />}
+      {merging && <MergeScreen assembly={assembly} set={mergeSet} />}
       {screen === 'editor' && !merging && session !== null && (
         <EditorScreen
           key={seat?.epoch ?? 0}
@@ -398,6 +477,7 @@ export function App(): ReactNode {
           }}
         />
       )}
+      {mismatchedSet !== null && <SetMismatchModal set={mismatchedSet} />}
       {/* `device` открывается и из `editor` (ссылка в плашке S17), и из `flip` (плашка
           отказа запуска оборотов — иначе из него не выбраться к подключению). */}
       {deviceModal !== null && (screen === 'setup' || screen === 'editor' || screen === 'flip') && (

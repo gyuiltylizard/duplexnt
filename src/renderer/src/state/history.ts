@@ -1,5 +1,4 @@
-import { sameEdits, type SessionEdits, type SessionSnapshot } from '@shared';
-import { rolesOf } from './screen';
+import { hasPages, isBacksKind, sameEdits, type SessionEdits, type SessionSnapshot } from '@shared';
 
 // Undo/redo редактора (план M3, U6; KTD-3, KTD-3a): эфемерный стек в памяти запуска, без
 // предела глубины. Настоящее в стеке не хранится — это всегда правки последнего снимка
@@ -7,10 +6,14 @@ import { rolesOf } from './screen';
 // будущее попадают только состояния, уже нормализованные ядром. Ctrl+Z шлёт `setEdits` с
 // состоянием из прошлого; каждая правка — один шаг, групповая тоже (R7).
 
-/** Состояние правок целиком — то, что уходит одним `setEdits` (KTD-3). */
+/**
+ * Состояние правок целиком — то, что уходит одним `setEdits` (KTD-3). Флаги 180° — картой по
+ * проходам оборотов (M4.5, KTD4): у основной пачки и у каждого двустороннего набора свой; не
+ * названный проход — выключен.
+ */
 export interface EditState {
   readonly edits: SessionEdits;
-  readonly rotate180: boolean;
+  readonly rotate180: ReadonlyMap<number, boolean>;
 }
 
 /**
@@ -36,12 +39,31 @@ export interface HistoryMove {
   readonly keys: readonly string[];
 }
 
-export const sameState = (left: EditState, right: EditState): boolean =>
-  left.rotate180 === right.rotate180 && sameEdits(left.edits, right.edits);
+/** Карты флагов равны по смыслу: не названный проход — выключен (пустая карта = все `false`). */
+const sameFlags = (
+  left: ReadonlyMap<number, boolean>,
+  right: ReadonlyMap<number, boolean>,
+): boolean =>
+  [...new Set([...left.keys(), ...right.keys()])].every(
+    (pass) => (left.get(pass) ?? false) === (right.get(pass) ?? false),
+  );
 
-/** Правки снимка как состояние стека: тумблер — у прохода оборотов (роль по `kind`, KTD-4). */
+export const sameState = (left: EditState, right: EditState): boolean =>
+  sameFlags(left.rotate180, right.rotate180) && sameEdits(left.edits, right.edits);
+
+/**
+ * Правки снимка как состояние стека: флаги 180° — у проходов оборотов со страницами (роль по
+ * `kind`, KTD-4; обороты набора — тоже, M4.5).
+ */
 export function editStateOf(session: SessionSnapshot): EditState {
-  return { edits: session.edits, rotate180: rolesOf(session.passes).backs?.rotate180 ?? false };
+  return {
+    edits: session.edits,
+    rotate180: new Map(
+      session.passes
+        .filter((pass) => isBacksKind(pass.kind) && hasPages(pass))
+        .map((pass) => [pass.number, pass.rotate180]),
+    ),
+  };
 }
 
 /**

@@ -9,8 +9,13 @@ import type { EditState } from './history';
 // наборов (M3.6, KTD8) — тоже позиция, но её жест задаёт явно: группа перенесённых — группа
 // страницы-цели, а не «та же, что была».
 
-/** «Вернуть»: правок нет, поворот оборотов выключен (R9). */
-export const REVERTED: EditState = { edits: EMPTY_EDITS, rotate180: false };
+/** «Вернуть»: правок нет, поворот оборотов выключен у всех пачек — пустая карта (R9; M4.5, KTD4). */
+export const REVERTED: EditState = { edits: EMPTY_EDITS, rotate180: new Map() };
+
+/** Тумблер 180° (M4.5, KTD4): флаг прохода оборотов `pass` — одной пачки; остальные как были. */
+export function rotatedBacks(state: EditState, pass: number, on: boolean): EditState {
+  return { edits: state.edits, rotate180: new Map(state.rotate180).set(pass, on) };
+}
 
 /** Куда бросили: перед страницей под курсором или после неё (половина миниатюры, KTD-8). */
 export type DropSide = 'before' | 'after';

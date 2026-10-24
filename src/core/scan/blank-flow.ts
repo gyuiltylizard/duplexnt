@@ -13,15 +13,18 @@ import {
 // скрытых. Чистые функции — служба только зовёт их.
 
 /**
- * Страницы, которые получают оценку (KTD9): только проход оборотов, только не потерянные, и
- * только при режиме сессии ≠ «Оставлять». Лица и добавленные наборы не оцениваются.
+ * Страницы, которые получают оценку (KTD9; M4.5, KTD6): проходы роли «обороты» — основной пачки
+ * и добавленных наборов, — только не потерянные, и только при режиме сессии ≠ «Оставлять». Лица
+ * и односторонние добавленные наборы не оцениваются.
  */
 export function pagesToScore(session: SessionSnapshot | null): readonly PageSnapshot[] {
   if (session === null || session.blankMode === 'keep') {
     return [];
   }
-  const backs = passesByKind(session.passes, (pass) => pass.pages.length > 0).backs;
-  return (backs?.pages ?? []).filter((page) => !page.lost);
+  const { backs, addedBacks } = passesByKind(session.passes, (pass) => pass.pages.length > 0);
+  return [...(backs === null ? [] : [backs]), ...addedBacks]
+    .flatMap((pass) => pass.pages)
+    .filter((page) => !page.lost);
 }
 
 /** Документы без скрытых пустых оборотов (R10): режутся по полной ленте, пишутся без них. */

@@ -25,6 +25,7 @@ import {
   parseInput,
   saveDocumentsRequestSchema,
   scanParamsSchema,
+  setDecisionRequestSchema,
   setEditsRequestSchema,
   startPassRequestSchema,
 } from './schemas';
@@ -239,6 +240,15 @@ export function createCommands(context: CommandContext): Commands {
         return request.ok
           ? service.setEdits(request.value.edits, request.value.rotate180)
           : request;
+      },
+      // Решения по оборотам набора «ДN» (M4.5, KTD3): номер — из отчёта сборки, проверяет ядро.
+      keepSetBacks: async (rawRequest) => {
+        const request = parseInput(setDecisionRequestSchema, rawRequest);
+        return request.ok ? done(() => service.keepSetBacks(request.value.set)) : request;
+      },
+      rescanSetBacks: async (rawRequest) => {
+        const request = parseInput(setDecisionRequestSchema, rawRequest);
+        return request.ok ? done(() => service.rescanSetBacks(request.value.set)) : request;
       },
 
       // Папка пакета живёт здесь, как поиск устройств: её выбирает main, пишет служба. В снимок

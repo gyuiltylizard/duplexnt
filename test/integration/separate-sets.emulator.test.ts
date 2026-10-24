@@ -173,13 +173,13 @@ describe('раздельные наборы — полный путь через
       order: [F1, F2, F3, B_SECOND, A1, B_FIRST],
       divider: 2,
     };
-    unwrap(await service.setEdits(across, false));
+    unwrap(await service.setEdits(across, {}));
     snapshot = service.snapshot();
     expect(snapshot.assembly?.sets).toEqual({ fronts: 2, backs: 4, divider: 2 });
     expect(shapeOf(snapshot)).toEqual(['1л', '2л', '1о', '2о', '3о', '4о']);
     expect(snapshot.session?.edits.divider).toBe(2);
     expect(snapshot.assembly).toMatchObject({ hasEdits: true, orderEdited: true });
-    unwrap(await service.setEdits({ ...across, divider: 3 }, false));
+    unwrap(await service.setEdits({ ...across, divider: 3 }, {}));
     snapshot = service.snapshot();
     expect(snapshot.assembly?.sets).toEqual({ fronts: 3, backs: 3, divider: 3 });
     // Порядок явный — граница хранится явно и при равенстве авто (ревью #4).
@@ -210,22 +210,19 @@ describe('раздельные наборы — полный путь через
 
     // AE5 / AE6: после сборки правки обычные; «Вернуть» — к записи сборки.
     unwrap(
-      await service.setEdits(
-        { ...EMPTY_EDITS, deleted: [B_SECOND], rotations: { [F2]: 90 } },
-        false,
-      ),
+      await service.setEdits({ ...EMPTY_EDITS, deleted: [B_SECOND], rotations: { [F2]: 90 } }, {}),
     );
     snapshot = service.snapshot();
     expect(keysOf(snapshot)).toEqual([F1, F2, A1, F3, B_FIRST]);
     expect(snapshot.session?.saved).toBe(false);
-    unwrap(await service.setEdits(EMPTY_EDITS, false));
+    unwrap(await service.setEdits(EMPTY_EDITS, {}));
     expect(keysOf(service.snapshot())).toEqual([F1, B_SECOND, F2, A1, F3, B_FIRST]);
   });
 
   it('AE7: перезапуск до сборки — граница и правки живы, модалка уместна; после сборки — запись жива, режим «собрано»', async () => {
     const { service, restart } = await connect(SCENARIOS['separate-sets-missing']);
     await scanned(service, 3, 2);
-    unwrap(await service.setEdits({ ...EMPTY_EDITS, deleted: [F1], divider: 1 }, true));
+    unwrap(await service.setEdits({ ...EMPTY_EDITS, deleted: [F1], divider: 1 }, { 2: true }));
 
     const second = await restart();
     let snapshot = second.snapshot();
@@ -240,9 +237,16 @@ describe('раздельные наборы — полный путь через
 
     // Уравнять: лицо 3 — в обороты не нужно; наоборот, вернуть границу 2 и удалить лишний
     // оборот: 2/1 → удалить F3 → 1/1? Проще: граница 2 (F2, F3 | обороты) и удалить один оборот.
-    unwrap(await second.setEdits({ ...EMPTY_EDITS, deleted: [F1, B_FIRST], divider: 2 }, true));
+    unwrap(
+      await second.setEdits({ ...EMPTY_EDITS, deleted: [F1, B_FIRST], divider: 2 }, { 2: true }),
+    );
     expect(second.snapshot().assembly?.sets).toEqual({ fronts: 2, backs: 1, divider: 2 });
-    unwrap(await second.setEdits({ ...EMPTY_EDITS, deleted: [F1, B_FIRST, F3], divider: 1 }, true));
+    unwrap(
+      await second.setEdits(
+        { ...EMPTY_EDITS, deleted: [F1, B_FIRST, F3], divider: 1 },
+        { 2: true },
+      ),
+    );
     expect(second.snapshot().assembly?.sets).toEqual({ fronts: 1, backs: 1, divider: 1 });
     unwrap(await second.assemble());
     snapshot = second.snapshot();
@@ -257,7 +261,7 @@ describe('раздельные наборы — полный путь через
     expect(snapshot.assembly?.report).toMatchObject({ mode: 'assembled', mismatch: false });
     expect(shapeOf(snapshot)).toEqual(['1л', '1о']);
     // «Вернуть» после перезапуска — к записи: удалённые на местах, листы по позиции.
-    unwrap(await third.setEdits(EMPTY_EDITS, false));
+    unwrap(await third.setEdits(EMPTY_EDITS, {}));
     expect(keysOf(third.snapshot())).toEqual([F1, F2, F3, B_SECOND, B_FIRST]);
   });
 
@@ -280,7 +284,7 @@ describe('раздельные наборы — полный путь через
       error: { details: { reason: 'setsUnequal' } },
     });
 
-    unwrap(await service.setEdits({ ...EMPTY_EDITS, deleted: [B_FIRST] }, false));
+    unwrap(await service.setEdits({ ...EMPTY_EDITS, deleted: [B_FIRST] }, {}));
     expect(service.snapshot().assembly?.sets).toEqual({ fronts: 2, backs: 2, divider: 2 });
     unwrap(await service.assemble());
     snapshot = service.snapshot();
@@ -325,7 +329,7 @@ describe('раздельные наборы — полный путь через
     await expectAssembledFixtures(root, snapshot, [1, 2, 3, 5, 6]);
 
     // Оборота листа 1 нет — удалить лицо 1, собрать: 2 листа.
-    unwrap(await service.setEdits({ ...EMPTY_EDITS, deleted: [F1] }, false));
+    unwrap(await service.setEdits({ ...EMPTY_EDITS, deleted: [F1] }, {}));
     unwrap(await service.assemble());
     snapshot = service.snapshot();
     expect(snapshot.session?.assembled).toEqual([F1, F2, 'p02-s02-0001', F3, B_FIRST]);
@@ -370,7 +374,7 @@ describe('раздельные наборы — полный путь через
       order: [F1, F2, F3, B_SECOND, B_FIRST],
       divider: 2,
     };
-    unwrap(await service.setEdits(across, false));
+    unwrap(await service.setEdits(across, {}));
     const before = service.snapshot();
 
     const added = service.startPass({ kind: 'added', after: F1 });
@@ -441,7 +445,7 @@ describe('раздельные наборы — полный путь через
     expect(snapshot.assembly?.documents).toEqual([{ name: '', start: 0, count: 5 }]);
     const journal = await journalOnDisk(root);
     expect(journal).toMatchObject({
-      version: 6,
+      version: 7,
       assembled: null,
       edits: { divider: null, cuts: [], names: [''] },
     });

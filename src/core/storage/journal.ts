@@ -1,11 +1,17 @@
 import { z } from 'zod';
 import {
+  addedSetsOf,
+  BACKS_DECISIONS,
+  isAnchoredKind,
   BLANK_MODES,
   EMPTY_EDITS,
   PASS_KINDS,
   passesByKind,
+  pendingSetOf,
+  type AddedSet,
   type PassesByKind,
   type PassKind,
+  type PassSnapshot,
   type PassState,
 } from '@shared';
 import { scanParamsSchema } from '../escl/scan-settings';
@@ -18,7 +24,7 @@ import {
   SESSION_ID,
   type PageAddress,
 } from './layout';
-import { storedScannerSchema } from './stored-scanner';
+import { scannerInfoOf, storedScannerSchema } from './stored-scanner';
 import { parseVersioned, type VersionedParse } from './versioned-file';
 
 // Журнал сессии — один JSON-документ, который целиком переписывается атомарно (ADR 0004,
@@ -32,8 +38,10 @@ import { parseVersioned, type VersionedParse } from './versioned-file';
 // несовпадении проходов из проходов не следует (амендмент 2026-10-19).
 // Оценки детектора пустых страниц (M4) — выводимое: в журнале их нет, схема их не принимает;
 // режим сессии `blankMode` и пометки `edits.notBlank` — решения (амендмент 2026-10-22).
+// «Набор ждёт обороты» (M4.5) — выводимое из ролей, ссылки пары и решения по оборотам набора
+// (`pendingPairOf`); в журнале его нет (амендмент 2026-10-23).
 
-export const JOURNAL_VERSION = 6;
+export const JOURNAL_VERSION = 7;
 
 const segmentSchema = z.strictObject({
   number: z.number().int().min(1).max(MAX_SEGMENT_NUMBER),
@@ -76,15 +84,34 @@ const passV3Fields = {
   rotate180: z.boolean(),
 };
 
+// Роли проходов версий 4–6: лицевые, обороты, добавленный односторонний набор.
+const PASS_KINDS_V4_TO_V6 = ['fronts', 'backs', 'added'] as const;
+
 // Проход версии 4 (M3.5; амендмент ADR 0004 от 2026-10-07): роль записана явно, у добавленного
 // набора — якорь вставки. Якорь только у `added`; у основных проходов всегда `null`.
+const passV4Fields = {
+  ...passV3Fields,
+  after: pageKeySchema.nullable(),
+};
+
+const passV4toV6Schema = z
+  .strictObject({ ...passV4Fields, kind: z.enum(PASS_KINDS_V4_TO_V6) })
+  .refine((pass) => pass.kind === 'added' || pass.after === null);
+
+// Проход версии 7 (M4.5; амендмент ADR 0004 от 2026-10-23): роли пары добавленного набора,
+// ссылка оборотов набора на проход его лиц и решение по оборотам — на проходе лиц. Поля
+// согласованы с ролью: якорь — у `added` и `addedFronts`; `pair` — только у `addedBacks`;
+// `backsDecision` — только у `addedFronts`.
 const passSchema = z
   .strictObject({
-    ...passV3Fields,
+    ...passV4Fields,
     kind: z.enum(PASS_KINDS),
-    after: pageKeySchema.nullable(),
+    pair: z.number().int().min(1).max(MAX_PASS_NUMBER).nullable(),
+    backsDecision: z.enum(BACKS_DECISIONS).nullable(),
   })
-  .refine((pass) => pass.kind === 'added' || pass.after === null);
+  .refine((pass) => isAnchoredKind(pass.kind) || pass.after === null)
+  .refine((pass) => (pass.pair !== null) === (pass.kind === 'addedBacks'))
+  .refine((pass) => (pass.backsDecision !== null) === (pass.kind === 'addedFronts'));
 
 const passV3Schema = z.strictObject(passV3Fields);
 
@@ -143,6 +170,27 @@ const rolesHold = (journal: {
   return of('fronts') <= 1 && of('backs') <= 1;
 };
 
+// Пары (M4.5): оборотов набора со страницами на один проход лиц — не больше одного; ссылка пары
+// на проход, который в журнале есть, ведёт к лицам набора. Ссылка на отсутствующий проход
+// допустима — осиротевшие обороты (сегмент отброшен, журнал пересобран): их ставит сборка.
+const pairsHold = (journal: {
+  readonly passes: readonly (CountedPass & {
+    readonly number: number;
+    readonly kind: PassKind;
+    readonly pair: number | null;
+  })[];
+}): boolean => {
+  const backs = journal.passes.filter((pass) => pass.kind === 'addedBacks');
+  const pairs = backs.filter(hasPages).map((pass) => pass.pair);
+  return (
+    new Set(pairs).size === pairs.length &&
+    backs.every((pass) => {
+      const fronts = journal.passes.find((it) => it.number === pass.pair);
+      return fronts === undefined || fronts.kind === 'addedFronts';
+    })
+  );
+};
+
 const editsSchema = editsSchemaOf();
 
 /** Ключи записи сборки не повторяются: страница в ленте ровно один раз. */
@@ -167,7 +215,7 @@ const journalV2Fields = {
 const journalV3Fields = { ...journalV2Fields, edits: editsV4Schema };
 
 // Журнал версии 4 (M3.5): роль прохода и якорь записаны явно.
-const journalV4Fields = { ...journalV3Fields, passes: z.array(passSchema) };
+const journalV4Fields = { ...journalV3Fields, passes: z.array(passV4toV6Schema) };
 
 // Журнал версии 5 (M3.6; амендмент ADR 0004 от 2026-10-19): запись сборки на сессии и граница
 // наборов в правках. `assembled` — зафиксированная командой «Собрать документ» последовательность
@@ -181,13 +229,27 @@ const journalV5Fields = {
 
 // Журнал версии 6 (M4; амендмент ADR 0004 от 2026-10-22): режим пустых оборотов на сессии и
 // пометки «не пустая» в правках. Оценок детектора в журнале нет — они производное.
+const journalV6Fields = {
+  ...journalV5Fields,
+  edits: editsSchema,
+  blankMode: z.enum(BLANK_MODES),
+};
+
+// Журнал версии 7 (M4.5; амендмент ADR 0004 от 2026-10-23): роли пары добавленного набора,
+// ссылка пары и решение по оборотам набора на проходах. «Набор ждёт обороты» выводится.
 export const journalSchema = z
   .strictObject({
     version: z.literal(JOURNAL_VERSION),
-    ...journalV5Fields,
-    edits: editsSchema,
-    blankMode: z.enum(BLANK_MODES),
+    ...journalV6Fields,
+    passes: z.array(passSchema),
   })
+  .refine(countersHold)
+  .refine(rolesHold)
+  .refine(pairsHold)
+  .refine(assembledUnique);
+
+const journalV6Schema = z
+  .strictObject({ version: z.literal(6), ...journalV6Fields })
   .refine(countersHold)
   .refine(rolesHold)
   .refine(assembledUnique);
@@ -226,11 +288,22 @@ type JournalV2 = z.infer<typeof journalV2Schema>;
 type JournalV3 = z.infer<typeof journalV3Schema>;
 type JournalV4 = z.infer<typeof journalV4Schema>;
 type JournalV5 = z.infer<typeof journalV5Schema>;
+type JournalV6 = z.infer<typeof journalV6Schema>;
 
-/** Чтение v5: режим «оставлять» — старые сессии ничего не скрывают; пометок нет (M4, R2, R8). */
-const upgradeToV6 = (journal: JournalV5): Journal => ({
+/**
+ * Чтение v6: пар нет — добавленные наборы прежних сессий остаются односторонними, ссылка пары и
+ * решение по оборотам у всех проходов `null` (M4.5, R21).
+ */
+const upgradeToV7 = (journal: JournalV6): Journal => ({
   ...journal,
   version: JOURNAL_VERSION,
+  passes: journal.passes.map((pass) => ({ ...pass, pair: null, backsDecision: null })),
+});
+
+/** Чтение v5: режим «оставлять» — старые сессии ничего не скрывают; пометок нет (M4, R2, R8). */
+const upgradeToV6 = (journal: JournalV5): JournalV6 => ({
+  ...journal,
+  version: 6,
   edits: { ...journal.edits, notBlank: [] },
   blankMode: 'keep',
 });
@@ -275,7 +348,7 @@ const upgradeToV2 = (journal: z.infer<typeof journalV1Schema>): JournalV2 => ({
 });
 
 /**
- * Разбор журнала: текущая версия, затем прежние цепочкой дефолтов (v1 → … → v5 → v6).
+ * Разбор журнала: текущая версия, затем прежние цепочкой дефолтов (v1 → … → v6 → v7).
  * Несовместимость (маркер новее, неизвестное поле) решается по текущей схеме и прежние не
  * пробует: файл с неизвестным полем несовместим при любой версии.
  */
@@ -284,27 +357,36 @@ export function parseJournal(bytes: Uint8Array): VersionedParse<Journal> {
   if (current.kind !== 'unreadable') {
     return current;
   }
+  const v6 = parseVersioned(bytes, journalV6Schema, JOURNAL_VERSION);
+  if (v6.kind === 'ok') {
+    return { kind: 'ok', value: upgradeToV7(v6.value) };
+  }
   const v5 = parseVersioned(bytes, journalV5Schema, JOURNAL_VERSION);
   if (v5.kind === 'ok') {
-    return { kind: 'ok', value: upgradeToV6(v5.value) };
+    return { kind: 'ok', value: upgradeToV7(upgradeToV6(v5.value)) };
   }
   const v4 = parseVersioned(bytes, journalV4Schema, JOURNAL_VERSION);
   if (v4.kind === 'ok') {
-    return { kind: 'ok', value: upgradeToV6(upgradeToV5(v4.value)) };
+    return { kind: 'ok', value: upgradeToV7(upgradeToV6(upgradeToV5(v4.value))) };
   }
   const v3 = parseVersioned(bytes, journalV3Schema, JOURNAL_VERSION);
   if (v3.kind === 'ok') {
-    return { kind: 'ok', value: upgradeToV6(upgradeToV5(upgradeToV4(v3.value))) };
+    return { kind: 'ok', value: upgradeToV7(upgradeToV6(upgradeToV5(upgradeToV4(v3.value)))) };
   }
   const v2 = parseVersioned(bytes, journalV2Schema, JOURNAL_VERSION);
   if (v2.kind === 'ok') {
-    return { kind: 'ok', value: upgradeToV6(upgradeToV5(upgradeToV4(upgradeToV3(v2.value)))) };
+    return {
+      kind: 'ok',
+      value: upgradeToV7(upgradeToV6(upgradeToV5(upgradeToV4(upgradeToV3(v2.value))))),
+    };
   }
   const v1 = parseVersioned(bytes, journalV1Schema, JOURNAL_VERSION);
   return v1.kind === 'ok'
     ? {
         kind: 'ok',
-        value: upgradeToV6(upgradeToV5(upgradeToV4(upgradeToV3(upgradeToV2(v1.value))))),
+        value: upgradeToV7(
+          upgradeToV6(upgradeToV5(upgradeToV4(upgradeToV3(upgradeToV2(v1.value))))),
+        ),
       }
     : current;
 }
@@ -360,15 +442,43 @@ export function pagesOf(pass: JournalPass): JournalPage[] {
 export const rolesOf = (journal: Journal): PassesByKind<JournalPass> =>
   passesByKind(journal.passes, hasPages);
 
+/** Добавленные наборы «ДN» журнала (shared `addedSetsOf` над записями журнала; M4.5, KTD2). */
+export const addedSetsOfJournal = (journal: Journal): AddedSet[] =>
+  addedSetsOf(journal.passes, hasPages);
+
+/** Набор, ждущий обороты (M4.5): номер «ДN», проход лиц и ожидаемое число страниц оборотов. */
+export interface PendingPair {
+  readonly set: number;
+  readonly fronts: number;
+  readonly expected: number;
+}
+
+/**
+ * Набор, ждущий обороты, — выводится из фактов журнала, отдельно не хранится (амендмент
+ * 2026-10-23): лица двустороннего набора со страницами, завершённые или принятые, с решением
+ * `none` и без прохода оборотов со страницами — правило `pendingSetOf` из shared.
+ */
+export function pendingPairOf(journal: Journal): PendingPair | null {
+  const set = pendingSetOf(journal.passes, hasPages, passStateOf);
+  const fronts = journal.passes.find((pass) => pass.number === set?.fronts);
+  return set === null || fronts === undefined
+    ? null
+    : { set: set.set, fronts: set.fronts, expected: pagesOf(fronts).length };
+}
+
 /**
  * Роль следующего прохода без явного намерения — для нового прохода и для усыновлённых сверкой
  * (амендмент 2026-10-07): лицевые, пока их нет; обороты, пока их нет и от них не отказались;
- * иначе — добавленный набор без якоря.
+ * обороты ожидающего набора (M4.5, R11); иначе — добавленный набор без якоря.
  */
 export function nextKindOf(journal: Journal): PassKind {
   const { fronts, backs } = rolesOf(journal);
   if (fronts === null) {
     return 'fronts';
+  }
+  // Набор, ждущий обороты, — раньше очереди основной пачки (R11): его `flip` уже на экране.
+  if (pendingPairOf(journal) !== null) {
+    return 'addedBacks';
   }
   return backs === null && !journal.backsDeclined ? 'backs' : 'added';
 }
@@ -392,6 +502,32 @@ export function runningSegmentOf(journal: Journal | null): RunningSegment | null
   }
   const segment = lastSegmentOf(pass);
   return segment.state === 'running' ? { pass, segment } : null;
+}
+
+/**
+ * Пустая сессия равна отсутствию сессии (ADR 0004, амендмент): журнал без единой записи о
+ * странице и без идущего сегмента. На диске он может остаться ради пометки об удалении или до
+ * следующего запуска — для вызывающего сессии нет.
+ */
+export const isVacant = (journal: Journal): boolean =>
+  pageCountOf(journal) === 0 && runningSegmentOf(journal) === null;
+
+export const NOTHING_LOST: ReadonlySet<string> = new Set();
+
+/** Проходы журнала, как их видит снимок; `lost` — ключи страниц без файлов. */
+export function passSnapshotsOf(journal: Journal, lost: ReadonlySet<string>): PassSnapshot[] {
+  return journal.passes.map((pass) => ({
+    number: pass.number,
+    kind: pass.kind,
+    after: pass.after,
+    pair: pass.pair,
+    backsDecision: pass.backsDecision,
+    state: passStateOf(pass),
+    paramsKnown: pass.origin !== null,
+    scanner: pass.origin === null ? null : scannerInfoOf(pass.origin.scanner),
+    rotate180: pass.rotate180,
+    pages: pagesOf(pass).map(({ key, number }) => ({ key, number, lost: lost.has(key) })),
+  }));
 }
 
 /** Журнал с заменённым последним проходом; `null` убирает проход. */

@@ -232,7 +232,7 @@ describe('пустые обороты — полный путь через эм�
   it('AE6: пометка «не пустая» возвращает страницу в файл и переживает перезапуск; «Вернуть» снимает', async () => {
     const { service, root, restart } = await blankBacks('hide');
 
-    unwrap(await service.setEdits({ ...EMPTY_EDITS, notBlank: [backOf(4)] }, false));
+    unwrap(await service.setEdits({ ...EMPTY_EDITS, notBlank: [backOf(4)] }, {}));
     let snapshot = service.snapshot();
     expect(snapshot.assembly?.blank).toMatchObject({ found: 2, hidden: 2 });
     expect(hiddenOf(snapshot)).toEqual([backOf(9), backOf(12)]);
@@ -248,7 +248,7 @@ describe('пустые обороты — полный путь через эм�
     expect(pdf).toHaveLength(22);
     expect(pdf[7]).toBe(BLANK);
 
-    unwrap(await second.setEdits(EMPTY_EDITS, false));
+    unwrap(await second.setEdits(EMPTY_EDITS, {}));
     expect(hiddenOf(second.snapshot())).toEqual(HIDDEN_12);
   });
 
@@ -323,7 +323,7 @@ describe('пустые обороты — полный путь через эм�
     unwrap(
       await service.setEdits(
         { ...EMPTY_EDITS, cuts: [position, position + 1], names: ['', 'Приложение', ''] },
-        false,
+        {},
       ),
     );
     expect(service.snapshot().assembly?.documents.map((doc) => doc.count)).toEqual([7, 1, 16]);
@@ -377,7 +377,7 @@ describe('пустые обороты — полный путь через эм�
       expect(hiddenOf(snapshot)).toEqual([]);
 
       unwrap(await service.acceptPass());
-      unwrap(await service.setEdits({ ...EMPTY_EDITS, deleted: [front(12)] }, false));
+      unwrap(await service.setEdits({ ...EMPTY_EDITS, deleted: [front(12)] }, {}));
       expect(service.snapshot().assembly?.sets).toEqual({ fronts: 11, backs: 11, divider: 11 });
       unwrap(await service.assemble());
       snapshot = service.snapshot();

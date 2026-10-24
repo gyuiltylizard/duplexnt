@@ -13,11 +13,11 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  type AddedPassIntent,
   type AssembledDocument,
   type AssembledPage,
   type BlankSummary,
   type DomainError,
-  type PassKind,
   type SessionEdits,
   type SessionSnapshot,
   type Snapshot,
@@ -37,6 +37,7 @@ import {
   renamed,
   REVERTED,
   rotated,
+  rotatedBacks,
   withCut,
   withoutCut,
   type DropSide,
@@ -46,7 +47,9 @@ import {
 import { toneOf } from '../state/page-text';
 import { errorTextInline } from '../state/error-text';
 import type { EditState } from '../state/history';
+import { originKindOf, originsOf } from '../state/origins';
 import { rolesOf } from '../state/screen';
+import { rotateRowOf, useRotateTarget } from '../state/useRotateTarget';
 import {
   afterRemoval,
   collapsed,
@@ -101,8 +104,8 @@ export interface EditorScreenProps {
   readonly resumeFailure: DomainError | null;
   /** «Досканировать остаток»: тот же `startPass` — сессия есть, ядро продолжит проход. */
   readonly onResume: () => void;
-  /** «Начать скан» из модалки `add`: `startPass` с намерением и якорем (M3.5, KTD-5). */
-  readonly onAdd: (after: string | null) => void;
+  /** «Начать скан» из модалки `add`: `startPass` с намерением и якорем (M3.5, KTD-5; M4.5, R4). */
+  readonly onAdd: (kind: AddedPassIntent['kind'], after: string | null) => void;
   /** Ссылка «подключите заново» в отказе досканирования (S17). */
   readonly onOpenDevice: (initialAddress?: string) => void;
   /**
@@ -201,14 +204,9 @@ export function EditorScreen({
   // Режим сборки и группы — из ядра (M3.6, R10): renderer ничего не считает сам.
   const mode = snapshot.assembly?.report.mode ?? 'pairs';
   const sets = snapshot.assembly?.sets ?? null;
-  // Происхождение страницы — проход по ключу: тег «об» и факт «Откуда» (R11, R23).
-  const origins = useMemo(
-    () =>
-      new Map<string, PassKind>(
-        session.passes.flatMap((pass) => pass.pages.map((page) => [page.key, pass.kind] as const)),
-      ),
-    [session.passes],
-  );
+  // Происхождение страницы — роль прохода по ключу: тег «об», факт «Откуда» и слова страницы пары
+  // (R11, R23; M4.5).
+  const origins = useMemo(() => originsOf(session.passes), [session.passes]);
 
   const [modal, setModal] = useState<EditorModal | null>(null);
   /** Идёт запись пакета (модалка `save`): правки заблокированы (KTD-9). */
@@ -656,13 +654,14 @@ export function EditorScreen({
     };
   }, []);
 
-  // Тумблер 180° — у прохода оборотов (роль по `kind`, не номер — KTD-4), включая прерванный
-  // и принятый; без прохода оборотов тумблера нет (S7). Правило роли — одно на renderer.
-  const backsPass = rolesOf(session.passes).backs;
+  // Тумблер 180° — у прохода оборотов пачки текущей страницы (M4.5, KTD4; R16): основной
+  // документ или набор «ДN», роль по `kind` (KTD-4). Тумблер — правка (KTD-3, S15): шаг undo с
+  // текущими правками снимка; при отказе команда ничего не меняет, чекбокс вернётся по снимку.
+  const rotateTarget = useRotateTarget(session.passes, currentEntry?.addedSet);
   const setRotate = (event: ChangeEvent<HTMLInputElement>): void => {
-    // Тумблер — правка (KTD-3, S15): шаг undo с текущими правками снимка. Снимок — источник
-    // правды: при отказе команда не меняет ничего, и чекбокс вернётся сам.
-    edits.edit({ edits: edits.current.edits, rotate180: event.target.checked }, []);
+    if (rotateTarget !== null && rotateTarget.kind !== 'none') {
+      edits.edit(rotatedBacks(edits.current, rotateTarget.pass, event.target.checked), []);
+    }
   };
 
   // Сохранение и закрытие сессии (S16–S18) — хук; модалка `save` закрывается до тоста.
@@ -756,6 +755,7 @@ export function EditorScreen({
           visible,
           mode,
           sets,
+          origin: originKindOf(origins, currentEntry?.key),
           after: selection.current === null ? undefined : withTails([selection.current]).at(-1),
           numberOf,
         })
@@ -856,11 +856,7 @@ export function EditorScreen({
               reveal={reveal}
               toggleRef={blankToggleRef}
               onReveal={setReveal}
-              rotate={
-                backsPass === null
-                  ? null
-                  : { checked: backsPass.rotate180, disabled: saving, onChange: setRotate }
-              }
+              rotate={rotateRowOf(t, rotateTarget, edits.current.rotate180, saving, setRotate)}
             />
           }
         />
@@ -927,10 +923,10 @@ export function EditorScreen({
             documents={shownDocuments}
             entry={currentEntry}
             position={currentIndex + 1}
-            origin={currentEntry === undefined ? null : (origins.get(currentEntry.key) ?? null)}
+            origin={originKindOf(origins, currentEntry?.key)}
             currentDocument={currentDocument}
             names={names}
-            frontsOnly={backsPass === null}
+            frontsOnly={rolesOf(session.passes).backs === null}
             notBlank={currentEntry !== undefined && notBlank.includes(currentEntry.key)}
             locked={locked}
             onPickDocument={pickDocument}
@@ -988,6 +984,7 @@ export function EditorScreen({
       {anchors !== null && (
         <AddModal
           scanner={snapshot.scanner}
+          mode={mode}
           current={anchors.current}
           end={anchors.end}
           endKind={anchors.endKind}

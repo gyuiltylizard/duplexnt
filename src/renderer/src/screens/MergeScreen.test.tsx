@@ -1,4 +1,10 @@
-import type { AssembledPage, AssemblyReport, BlankSummary, SessionAssembly } from '@shared';
+import type {
+  AddedSetReport,
+  AssembledPage,
+  AssemblyReport,
+  BlankSummary,
+  SessionAssembly,
+} from '@shared';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import '../i18n';
@@ -9,6 +15,8 @@ function report(overrides: Partial<AssemblyReport>): AssemblyReport {
   return {
     mode: 'pairs',
     groups: null,
+    sets: [],
+    pendingSet: null,
     fronts: 12,
     backs: 12,
     backsState: 'completed',
@@ -23,6 +31,8 @@ const sets = (fronts: number, backs: number, extra: Partial<AssemblyReport> = {}
   report({
     mode: 'sets',
     groups: { fronts, backs, divider: fronts },
+    sets: [],
+    pendingSet: null,
     fronts,
     backs,
     mismatch: true,
@@ -198,5 +208,123 @@ describe('экран merge', () => {
 
     expect(screen.queryByRole('button')).toBeNull();
     expect(document.activeElement).toBe(screen.getByRole('main'));
+  });
+});
+
+// — M4.5 (R9; handoff M4.5, S6): пауза по набору «ДN» —
+
+describe('экран merge для набора (M4.5)', () => {
+  const setReport = (overrides: Partial<AddedSetReport>): AddedSetReport => ({
+    set: 1,
+    fronts: 3,
+    backs: 3,
+    backsState: 'completed',
+    decision: 'none',
+    mismatch: false,
+    sides: 'two',
+    ...overrides,
+  });
+
+  /** Пары 12+12 и блок набора «Д1» из `pages` страниц (чередование или подблоки — задаёт тест). */
+  function withSet(set: AddedSetReport, blank: BlankSummary = NO_BLANK): SessionAssembly {
+    const base = assemblyFor(report({ sets: [set] }), blank);
+    const block: AssembledPage[] = [];
+    const push = (side: AssembledPage['side'], sheet: number | null, key: string): void => {
+      block.push({ key, side, sheet, angle: 0, lost: false, addedSet: 1, blank: null });
+    };
+    if (set.mismatch) {
+      for (let index = 1; index <= set.fronts; index += 1) {
+        push('front', null, `sf${String(index)}`);
+      }
+      for (let index = set.backs; index >= 1; index -= 1) {
+        push('back', null, `sb${String(index)}`);
+      }
+    } else {
+      for (let sheet = 1; sheet <= set.fronts; sheet += 1) {
+        push('front', sheet, `sf${String(sheet)}`);
+        if (sheet <= set.backs) {
+          push('back', sheet, `sb${String(sheet)}`);
+        }
+      }
+    }
+    return { ...base, order: [...base.order.slice(0, 4), ...block, ...base.order.slice(4)] };
+  }
+
+  it('совпало: ряды «лица набора» и «обороты набора», ряд «документ» — чередование блока набора, статус по набору', () => {
+    const view = render(<MergeScreen assembly={withSet(setReport({}))} set={1} />);
+
+    expect(screen.getByText('лица набора 1→3')).toBeDefined();
+    expect(screen.getByText('обороты набора 3→1')).toBeDefined();
+    expect(screen.queryByText('лица 1→12')).toBeNull();
+    expect(view.container.querySelectorAll('.merge-screen__cell--front').length).toBe(3);
+    const docCells = view.container.querySelectorAll('.merge-screen__cells--document > *');
+    expect(docCells.length).toBe(6);
+    expect(docCells[1]?.className).toContain('doc-cell--back');
+    expect(screen.getByRole('status').textContent).toBe('набор Д1: совпало пар 3');
+    expect(screen.getByText('Порядок восстановлен: лист N ← лицо N + оборот N')).toBeDefined();
+  });
+
+  it('не сошлось: формула набора, ряда «документ» нет, статус называет числа', () => {
+    const view = render(
+      <MergeScreen assembly={withSet(setReport({ backs: 2, mismatch: true }))} set={1} />,
+    );
+
+    expect(screen.getByRole('status').textContent).toBe('набор Д1: не сошлось — лиц 3, оборотов 2');
+    expect(
+      screen.getByText(
+        'Обороты набора не сошлись — лица и обороты лежат рядом, набор поправите в редакторе',
+      ),
+    ).toBeDefined();
+    expect(view.container.querySelector('.merge-screen__row--document')).toBeNull();
+    expect(view.container.querySelectorAll('.merge-screen__cell--back').length).toBe(2);
+  });
+
+  it('обороты приняты коротким — свой статус', () => {
+    render(
+      <MergeScreen
+        assembly={withSet(
+          setReport({ backs: 2, backsState: 'accepted', decision: 'kept', mismatch: true }),
+        )}
+        set={1}
+      />,
+    );
+
+    expect(screen.getByRole('status').textContent).toBe(
+      'набор Д1: обороты приняты коротким — лиц 3, оборотов 2',
+    );
+  });
+
+  it('«Обороты не нужны» для набора: без ряда оборотов и формулы, статус со страницами', () => {
+    const view = render(
+      <MergeScreen
+        assembly={withSet(setReport({ backs: 0, backsState: null, decision: 'declined' }))}
+        set={1}
+      />,
+    );
+
+    expect(screen.getByRole('status').textContent).toBe('набор Д1: обороты не нужны · страниц: 3');
+    expect(screen.queryByText(/обороты набора/)).toBeNull();
+    expect(screen.queryByText(/Порядок восстановлен/)).toBeNull();
+    expect(view.container.querySelector('.merge-screen__cell--back')).toBeNull();
+  });
+
+  it('хвост про пустые обороты — по сводке сессии, как у основной пачки', () => {
+    render(
+      <MergeScreen
+        assembly={withSet(setReport({}), { mode: 'hide', found: 1, hidden: 1, pending: 0 })}
+        set={1}
+      />,
+    );
+
+    expect(screen.getByRole('status').textContent).toBe(
+      'набор Д1: совпало пар 3 · пустых оборотов: 1',
+    );
+  });
+
+  it('без набора — экран основной пачки, как раньше', () => {
+    render(<MergeScreen assembly={withSet(setReport({}))} set={null} />);
+
+    expect(screen.getByText('лица 1→12')).toBeDefined();
+    expect(screen.getByRole('status').textContent).toBe('совпало пар: 12');
   });
 });

@@ -17,6 +17,7 @@ import {
   type SetsLayout,
 } from '@shared';
 import type { DropSide, SetSide } from '../state/edits';
+import { originKindOf } from '../state/origins';
 import { single, type Selection } from '../state/selection';
 import type { ShownDocument } from '../state/shown';
 import { toneOf } from '../state/page-text';
@@ -160,7 +161,7 @@ export interface EditorRailProps {
   readonly allHidden: boolean;
   /** Группы ленты в режиме раздельных наборов (M3.6, R17); `null` — группы документов. */
   readonly sets: SetsLayout | null;
-  /** Происхождение страницы по ключу — тег «об» по проходу, не по группе (R11). */
+  /** Происхождение страницы по ключу — тег «об» и слова пары по проходу, не по группе (R11). */
   readonly origins: ReadonlyMap<string, PassKind>;
   /** Имена по умолчанию — плейсхолдеры полей имени (S3). */
   readonly defaultNames: readonly string[];
@@ -394,7 +395,7 @@ export function EditorRail({
       key={entry.key}
       sessionId={sessionId}
       pageKey={entry.key}
-      backsOrigin={origins.get(entry.key) === 'backs'}
+      origin={originKindOf(origins, entry.key)}
       side={entry.side}
       sheet={entry.sheet}
       angle={entry.angle}

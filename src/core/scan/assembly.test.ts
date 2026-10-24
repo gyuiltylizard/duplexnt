@@ -368,6 +368,18 @@ describe('сборка: добавленные наборы по якорям (M
     expect(assembleSession(added).report).toEqual({
       ...assembleSession(plain).report,
       groups: { fronts: 4, backs: 2, divider: 4 },
+      // Односторонний набор в отчёте наборов (M4.5): без оборотов и решения.
+      sets: [
+        {
+          set: 1,
+          fronts: 1,
+          backs: 0,
+          backsState: null,
+          decision: null,
+          mismatch: false,
+          sides: 'one',
+        },
+      ],
     });
     expect(shape(added)).toEqual(['1л', 'Д1.1', '3л', '4л', '1о', '2о']);
   });

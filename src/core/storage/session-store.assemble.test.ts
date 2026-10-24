@@ -44,7 +44,7 @@ describe('хранилище сессии: «Собрать документ» (
       order: [F(2), F(1)],
       divider: 2,
     };
-    ok(await store.setEdits(edits, true));
+    ok(await store.setEdits(edits, { 2: true }));
     ok(await store.markSaved());
     // Лента: F2 F1 [F3] | B2 A1 [B1] — 2/2; при явном порядке граница хранится явно (ревью #4).
     expect(store.snapshot()?.edits.divider).toBe(2);
@@ -99,7 +99,7 @@ describe('хранилище сессии: «Собрать документ» (
       error: { details: { reason: 'setsUnequal' } },
     });
 
-    ok(await store.setEdits({ ...EMPTY_EDITS, deleted: [F(1), F(2), F(3), B(1), B(2)] }, false));
+    ok(await store.setEdits({ ...EMPTY_EDITS, deleted: [F(1), F(2), F(3), B(1), B(2)] }, {}));
     expect(await store.assemble()).toMatchObject({
       ok: false,
       error: { details: { reason: 'setsUnequal' } },
@@ -108,7 +108,7 @@ describe('хранилище сессии: «Собрать документ» (
 
   it('уравнять можно и удалением: 3/2 → удалено лицо → 2/2 → сборка', async () => {
     const { store } = await mismatched();
-    ok(await store.setEdits({ ...EMPTY_EDITS, deleted: [F(2)] }, false));
+    ok(await store.setEdits({ ...EMPTY_EDITS, deleted: [F(2)] }, {}));
 
     expect(await store.assemble()).toMatchObject({ ok: true });
     // Удалённая F2 — сразу за своим видимым предшественником F1.

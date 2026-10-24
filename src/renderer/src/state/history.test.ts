@@ -17,9 +17,10 @@ import {
 // как один шаг, перебазирование на снимок без роста стека, очистка при изменении ленты вне
 // правок (решение автора, журнал M3).
 
+/** Состояние с правками; `rotate180` — флаг оборотов основной пачки (проход №2, M4.5 KTD4). */
 const state = (edits: Partial<SessionEdits>, rotate180 = false): EditState => ({
   edits: { ...EMPTY_EDITS, ...edits },
-  rotate180,
+  rotate180: rotate180 ? new Map([[2, true]]) : new Map(),
 });
 
 const S0 = state({});
@@ -175,6 +176,8 @@ describe('подпись ленты и состояние снимка', () => {
       scanner: null,
       kind: number === 1 ? 'fronts' : 'backs',
       after: null,
+      pair: null,
+      backsDecision: null,
       rotate180: false,
       pages: keys.map((key, index) => ({ key, number: index + 1, lost: false })),
       ...extra,
@@ -242,8 +245,10 @@ describe('подпись ленты и состояние снимка', () => {
     const fronts = pass(1, ['f1']);
     const added = pass(2, ['a1'], { kind: 'added', after: 'f1' });
     const backs = pass(3, ['b1'], { kind: 'backs', rotate180: true });
-    expect(editStateOf(session({ passes: [fronts, added, backs] })).rotate180).toBe(true);
-    expect(editStateOf(session({ passes: [fronts, added] })).rotate180).toBe(false);
+    expect(editStateOf(session({ passes: [fronts, added, backs] })).rotate180).toEqual(
+      new Map([[3, true]]),
+    );
+    expect(editStateOf(session({ passes: [fronts, added] })).rotate180).toEqual(new Map());
   });
 
   it('состояние стека — правки снимка и тумблер прохода оборотов', () => {
@@ -253,10 +258,10 @@ describe('подпись ленты и состояние снимка', () => {
       passes: [pass(1, ['f1', 'f2']), pass(2, ['b1', 'b2'], { rotate180: true })],
     });
 
-    expect(editStateOf(rotatedBacks)).toEqual({ edits, rotate180: true });
+    expect(editStateOf(rotatedBacks)).toEqual({ edits, rotate180: new Map([[2, true]]) });
     expect(editStateOf(session({ passes: [pass(1, ['f1'])] }))).toEqual({
       edits: EMPTY_EDITS,
-      rotate180: false,
+      rotate180: new Map(),
     });
   });
 });

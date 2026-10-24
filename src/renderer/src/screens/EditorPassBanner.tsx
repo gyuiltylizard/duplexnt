@@ -1,12 +1,24 @@
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { DomainError, ErrorCode, ScannerInfo, SessionSnapshot, Snapshot } from '@shared';
+import {
+  isPairKind,
+  isMainKind,
+  type DomainError,
+  type ErrorCode,
+  type PassSnapshot,
+  type ScannerInfo,
+  type SessionSnapshot,
+  type Snapshot,
+} from '@shared';
+import type { TFunction } from 'i18next';
 import { errorText, errorTextInline } from '../state/error-text';
 import { addressOf, reconnectAddress } from '../state/scanner-address';
+import { setOfPass } from '../state/screen';
 
 // Плашка прерванного прохода в `editor` (план M1, U24; handoff U19, S17): досканировать остаток,
 // оставить как есть или начать новое сканирование; отказы — строкой под кнопками. У прерванного
-// добавленного набора — свои заголовок и текст (M3.5, handoff S4); остальное общее.
+// добавленного набора — свои заголовок и текст (M3.5, handoff S4); у прерванных лиц и оборотов
+// двустороннего набора «ДN» — свои заголовки (M4.5, R5, R7; handoff M4.5, S10); остальное общее.
 
 /**
  * Коды отказа досканирования, которые лечатся повторным подключением (S17). Список шире, чем
@@ -26,6 +38,23 @@ export interface EditorPassBannerProps {
   readonly onResume: () => void;
   readonly onOpenDevice: (initialAddress?: string) => void;
   readonly onNewScan: () => void;
+}
+
+/** Заголовок плашки по роли прерванного прохода; у набора «ДN» — с его номером и ожиданием. */
+function titleOf(t: TFunction, session: SessionSnapshot, last: PassSnapshot, lastNumber: number) {
+  if (last.kind === 'added') {
+    return t('editor.interrupted.titleAdded', { last: lastNumber });
+  }
+  if (isPairKind(last.kind)) {
+    const set = setOfPass(session.passes, last.number);
+    const setNumber = set?.set ?? 0;
+    if (last.kind === 'addedFronts') {
+      return t('editor.interrupted.titleSetFronts', { set: setNumber, last: lastNumber });
+    }
+    const expected = session.passes.find((pass) => pass.number === set?.fronts)?.pages.length ?? 0;
+    return t('editor.interrupted.titleSetBacks', { set: setNumber, last: lastNumber, expected });
+  }
+  return t('editor.interrupted.title', { last: lastNumber });
 }
 
 export function EditorPassBanner({
@@ -77,12 +106,15 @@ export function EditorPassBanner({
   // Текст без кнопки досканирования объясняет почему; при «подключён не тот (или никакой)»
   // ссылка ведёт в `device` с адресом сканера прохода — иначе из `editor` в модалку не
   // попасть и проход не досканировать (тупик, ревью сессии 9; текст ссылки — Copy).
-  const added = last.kind === 'added';
   let text: ReactNode;
   if (snapshot.canResume) {
-    text = t(added ? 'editor.interrupted.textAdded' : 'editor.interrupted.text', {
-      next: lastNumber + 1,
-    });
+    const key =
+      last.kind === 'added'
+        ? 'editor.interrupted.textAdded'
+        : isMainKind(last.kind)
+          ? 'editor.interrupted.text'
+          : 'editor.interrupted.textSet';
+    text = t(key, { next: lastNumber + 1 });
   } else if (last.paramsKnown) {
     text = (
       <>
@@ -130,9 +162,7 @@ export function EditorPassBanner({
         <span className="kicker kicker--warning">{t('editor.interrupted.kicker')}</span>
       </div>
       <h2 id="pass-banner-title" className="pass-banner__title">
-        {t(added ? 'editor.interrupted.titleAdded' : 'editor.interrupted.title', {
-          last: lastNumber,
-        })}
+        {titleOf(t, session, last, lastNumber)}
       </h2>
       <p className="pass-banner__text">{text}</p>
       <div className="pass-banner__actions">

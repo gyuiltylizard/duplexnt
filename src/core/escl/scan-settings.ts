@@ -40,6 +40,20 @@ export function scanOptionsOf(capabilities: ScannerCapabilities): ScanOptions {
   };
 }
 
+/** Первый параметр, которого нет среди вариантов устройства; `null` — все поддержаны. */
+export function unsupportedField(
+  params: ScanParams,
+  options: ScanOptions,
+): 'colorMode' | 'resolution' | 'paperSize' | null {
+  if (!options.colorModes.includes(params.colorMode)) {
+    return 'colorMode';
+  }
+  if (!options.resolutions.includes(params.resolution)) {
+    return 'resolution';
+  }
+  return options.paperSizes.includes(params.paperSize) ? null : 'paperSize';
+}
+
 // Параметры по умолчанию и правило KTD-13 переехали в `@shared/scan-params` (U22): ими пользуется
 // и «Сбросить параметры» в интерфейсе. Реэкспорт — чтобы клиент сканера брал их по-прежнему здесь.
 export { DEFAULT_SCAN_PARAMS, resolveScanParams } from '@shared';

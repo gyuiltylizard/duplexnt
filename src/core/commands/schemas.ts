@@ -11,12 +11,14 @@ import {
   type ProbeRequest,
   type Result,
   type SaveDocumentsRequest,
+  type SetDecisionRequest,
   type SetEditsRequest,
   type StartPassRequest,
 } from '@shared';
 import { DEVICE_PATH_MAX_LENGTH } from '../escl/device-path';
 import { scanParamsSchema } from '../escl/scan-settings';
 import { editsSchemaOf, pageKeySchema } from '../storage/edits-schema';
+import { MAX_PASS_NUMBER } from '../storage/layout';
 
 // Схемы входа команд моста (ADR 0005; план M1, KTD-39). Строгие и без приведения типов: лишнее
 // поле и «почти подходящий» тип — отказ, а не молчаливая починка. Типы запросов объявлены в
@@ -30,15 +32,24 @@ export const probeRequestSchema = z.strictObject({
 export const noRequestSchema = z.undefined();
 
 /**
- * Запуск прохода (M3.5, KTD-5): `null` — проход по очереди; намерение добавленного набора с
- * якорем — ключом страницы или `null`. Принадлежность якоря сессии проверяет служба (R9).
+ * Запуск прохода (M3.5, KTD-5; M4.5, R4): `null` — проход по очереди; намерение добавленного
+ * набора — одностороннего или лиц двустороннего — с якорем ключом страницы или `null`.
+ * Принадлежность якоря сессии проверяет служба (R9).
  */
 export const startPassRequestSchema = z
   .strictObject({
-    kind: z.literal('added'),
+    kind: z.enum(['added', 'addedFronts']),
     after: pageKeySchema.nullable(),
   })
   .nullable() satisfies z.ZodType<StartPassRequest>;
+
+/** Номер прохода или набора «ДN» в запросе: целое в пределах счётчика проходов. */
+const PASS_NUMBER_KEY = /^[1-9]\d{0,3}$/;
+
+/** Решение по оборотам набора «ДN» (M4.5, KTD3): сам номер проверяет ядро (`noPendingSet`). */
+export const setDecisionRequestSchema = z.strictObject({
+  set: z.number().int().min(1).max(MAX_PASS_NUMBER),
+}) satisfies z.ZodType<SetDecisionRequest>;
 
 const ADDRESS_MAX_LENGTH = 1024;
 /** Идентификатор найденного устройства: метка поиска и номер записи (./../discovery/mdns.ts). */
@@ -66,9 +77,21 @@ export const connectScannerRequestSchema = z.discriminatedUnion('kind', [
  */
 export const MAX_EDIT_ITEMS = 10_000;
 
+/**
+ * Флаги 180° по проходам оборотов (M4.5, KTD4): ключи — номера проходов (JSON несёт их
+ * строками), значения — флаги; роль прохода проверяет хранилище (`noBacksPass`).
+ */
+const rotate180Schema = z
+  .record(z.string().regex(PASS_NUMBER_KEY), z.boolean())
+  .refine(
+    (flags) =>
+      Object.keys(flags).length <= MAX_EDIT_ITEMS &&
+      Object.keys(flags).every((key) => Number(key) <= MAX_PASS_NUMBER),
+  );
+
 export const setEditsRequestSchema = z.strictObject({
   edits: editsSchemaOf(MAX_EDIT_ITEMS),
-  rotate180: z.boolean(),
+  rotate180: rotate180Schema,
 }) satisfies z.ZodType<SetEditsRequest>;
 
 /**

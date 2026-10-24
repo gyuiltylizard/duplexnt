@@ -28,20 +28,20 @@ describe('хранилище сессии: флаги журнала v2 (M2, U1)
   it('тумблер 180° (setEdits) ставит флаг на проход оборотов, идемпотентен, переживает запись', async () => {
     const { store, journalOnDisk } = await twoPasses();
 
-    ok(await store.setEdits(EMPTY_EDITS, true));
-    ok(await store.setEdits(EMPTY_EDITS, true));
+    ok(await store.setEdits(EMPTY_EDITS, { 2: true }));
+    ok(await store.setEdits(EMPTY_EDITS, { 2: true }));
 
     expect(store.snapshot()?.passes.map((pass) => pass.rotate180)).toEqual([false, true]);
     expect((await journalOnDisk()).passes.map((pass) => pass.rotate180)).toEqual([false, true]);
 
-    ok(await store.setEdits(EMPTY_EDITS, false));
+    ok(await store.setEdits(EMPTY_EDITS, {}));
     expect(store.snapshot()?.passes.map((pass) => pass.rotate180)).toEqual([false, false]);
   });
 
   it('тумблер 180° без прохода оборотов — noBacksPass; без сессии — noSession', async () => {
     const { store, accept } = await setup();
 
-    expect(await store.setEdits(EMPTY_EDITS, true)).toMatchObject({
+    expect(await store.setEdits(EMPTY_EDITS, { 2: true })).toMatchObject({
       ok: false,
       error: { code: 'sessionConflict', details: { reason: 'noSession' } },
     });
@@ -49,7 +49,7 @@ describe('хранилище сессии: флаги журнала v2 (M2, U1)
     ok(await store.beginPass(ORIGIN, null));
     await accept(1, 2);
     ok(await store.endSegment('completed'));
-    expect(await store.setEdits(EMPTY_EDITS, true)).toMatchObject({
+    expect(await store.setEdits(EMPTY_EDITS, { 2: true })).toMatchObject({
       ok: false,
       error: { code: 'sessionConflict', details: { reason: 'noBacksPass' } },
     });
@@ -68,7 +68,7 @@ describe('хранилище сессии: флаги журнала v2 (M2, U1)
     await accept(4, 5);
     ok(await store.endSegment('completed'));
 
-    ok(await store.setEdits(EMPTY_EDITS, true));
+    ok(await store.setEdits(EMPTY_EDITS, { 3: true }));
 
     const passes = store.snapshot()?.passes ?? [];
     expect(passes.map((pass) => [pass.number, pass.rotate180])).toEqual([
@@ -104,7 +104,7 @@ describe('хранилище сессии: флаги журнала v2 (M2, U1)
     expect((await journalOnDisk()).saved).toBe(true);
 
     // «Сохранил → включил тумблер» — индикация несохранённого возвращается (AE12).
-    ok(await store.setEdits(EMPTY_EDITS, true));
+    ok(await store.setEdits(EMPTY_EDITS, { 2: true }));
     expect(store.snapshot()?.saved).toBe(false);
 
     ok(await store.markSaved());
@@ -129,7 +129,7 @@ describe('хранилище сессии: флаги журнала v2 (M2, U1)
     const revision = store.revision();
 
     // «Пока PDF собирался и писался» — пользователь щёлкнул тумблер поворота.
-    ok(await store.setEdits(EMPTY_EDITS, true));
+    ok(await store.setEdits(EMPTY_EDITS, { 2: true }));
     ok(await store.markSaved(revision));
 
     expect(store.snapshot()?.saved).toBe(false);
@@ -143,7 +143,7 @@ describe('хранилище сессии: флаги журнала v2 (M2, U1)
     const { store, accept } = await twoPasses();
     const before = store.revision();
 
-    ok(await store.setEdits(EMPTY_EDITS, true));
+    ok(await store.setEdits(EMPTY_EDITS, { 2: true }));
     expect(store.revision()).toBeGreaterThan(before);
 
     const afterToggle = store.revision();
@@ -154,7 +154,7 @@ describe('хранилище сессии: флаги журнала v2 (M2, U1)
 
   it('новая сессия не наследует флаги закрытой', async () => {
     const { store, accept } = await twoPasses();
-    ok(await store.setEdits(EMPTY_EDITS, true));
+    ok(await store.setEdits(EMPTY_EDITS, { 2: true }));
     ok(await store.markSaved());
     ok(await store.closeSession());
 
@@ -193,7 +193,7 @@ describe('хранилище сессии: правки редактора (M3, 
     const { store, calls, journalOnDisk } = await twoPasses();
     const renamesBefore = calls.filter(isJournalRename).length;
 
-    ok(await store.setEdits(EDITS, true));
+    ok(await store.setEdits(EDITS, { 2: true }));
 
     expect(calls.filter(isJournalRename).length - renamesBefore).toBe(1);
     expect(store.snapshot()?.edits).toEqual(EDITS);
@@ -204,15 +204,15 @@ describe('хранилище сессии: правки редактора (M3, 
 
   it('правка снимает отметку «сохранено»; то же состояние повторно — ни записи, ни снятия', async () => {
     const { store, calls } = await twoPasses();
-    ok(await store.setEdits(EDITS, false));
+    ok(await store.setEdits(EDITS, {}));
     ok(await store.markSaved());
     const renamesBefore = calls.filter(isJournalRename).length;
 
-    ok(await store.setEdits(EDITS, false));
+    ok(await store.setEdits(EDITS, {}));
     expect(store.snapshot()?.saved).toBe(true);
     expect(calls.filter(isJournalRename).length).toBe(renamesBefore);
 
-    ok(await store.setEdits(EMPTY_EDITS, false));
+    ok(await store.setEdits(EMPTY_EDITS, {}));
     expect(store.snapshot()).toMatchObject({ saved: false, edits: EMPTY_EDITS });
   });
 
@@ -220,7 +220,7 @@ describe('хранилище сессии: правки редактора (M3, 
     const { store, pageFiles, journalOnDisk } = await twoPasses();
     const before = await pageFiles();
 
-    ok(await store.setEdits({ ...EMPTY_EDITS, deleted: ['p01-s01-0001', 'p02-s01-0002'] }, false));
+    ok(await store.setEdits({ ...EMPTY_EDITS, deleted: ['p01-s01-0001', 'p02-s01-0002'] }, {}));
 
     expect(await pageFiles()).toEqual(before);
     expect((await journalOnDisk()).deletions).toEqual([]);
@@ -232,7 +232,7 @@ describe('хранилище сессии: правки редактора (M3, 
     ok(await store.beginPass(ORIGIN, null));
     await accept(1, 2);
 
-    expect(await store.setEdits(EDITS, false)).toMatchObject({
+    expect(await store.setEdits(EDITS, {})).toMatchObject({
       ok: false,
       error: { code: 'sessionConflict', details: { reason: 'passRunning' } },
     });
@@ -241,7 +241,7 @@ describe('хранилище сессии: правки редактора (M3, 
 
   it('без сессии — noSession; поворот без прохода оборотов — noBacksPass, без поворота — можно', async () => {
     const { store, accept } = await setup();
-    expect(await store.setEdits(EDITS, false)).toMatchObject({
+    expect(await store.setEdits(EDITS, {})).toMatchObject({
       ok: false,
       error: { code: 'sessionConflict', details: { reason: 'noSession' } },
     });
@@ -249,12 +249,12 @@ describe('хранилище сессии: правки редактора (M3, 
     ok(await store.beginPass(ORIGIN, null));
     await accept(1, 2);
     ok(await store.endSegment('completed'));
-    expect(await store.setEdits(EMPTY_EDITS, true)).toMatchObject({
+    expect(await store.setEdits(EMPTY_EDITS, { 2: true })).toMatchObject({
       ok: false,
       error: { code: 'sessionConflict', details: { reason: 'noBacksPass' } },
     });
     const fronts: SessionEdits = { ...EMPTY_EDITS, rotations: { 'p01-s01-0001': 270 } };
-    ok(await store.setEdits(fronts, false));
+    ok(await store.setEdits(fronts, {}));
     expect(store.snapshot()?.edits).toEqual(fronts);
   });
 
@@ -270,14 +270,14 @@ describe('хранилище сессии: правки редактора (M3, 
     ok(await store.endSegment('completed'));
     failWrites = true;
 
-    expect(await store.setEdits(EDITS, false)).toMatchObject({ ok: false });
+    expect(await store.setEdits(EDITS, {})).toMatchObject({ ok: false });
     expect(store.snapshot()?.edits).toEqual(EMPTY_EDITS);
     expect(store.unsaved()).toBe(false);
   });
 
   it('новая сессия не наследует правки закрытой', async () => {
     const { store, accept } = await twoPasses();
-    ok(await store.setEdits(EDITS, true));
+    ok(await store.setEdits(EDITS, { 2: true }));
     ok(await store.closeSession());
 
     ok(await store.beginPass(ORIGIN, null));
@@ -297,7 +297,7 @@ describe('хранилище сессии: правки редактора (M3, 
     ok(await store.endSegment('completed'));
     const divided: SessionEdits = { ...EMPTY_EDITS, divider: 1 };
 
-    ok(await store.setEdits(divided, false));
+    ok(await store.setEdits(divided, {}));
     expect(store.snapshot()).toMatchObject({ edits: divided, assembled: null });
     expect(await journalOnDisk()).toMatchObject({ edits: divided, assembled: null });
 
@@ -318,7 +318,7 @@ describe('хранилище сессии: правки редактора (M3, 
     ok(await store.endSegment('interrupted'));
     // Лица переставлены вручную: f2 f1 f3 | b1 — порядок явный.
     const swapped = ['p01-s01-0002', 'p01-s01-0001', 'p01-s01-0003', 'p02-s01-0001'];
-    ok(await store.setEdits({ ...EMPTY_EDITS, order: swapped }, false));
+    ok(await store.setEdits({ ...EMPTY_EDITS, order: swapped }, {}));
 
     ok(await store.resumePass());
     await accept(5, 5);
@@ -348,9 +348,7 @@ describe('хранилище сессии: правки редактора (M3, 
     ok(await store.beginPass(ORIGIN, null));
     await accept(4, 4);
     ok(await store.endSegment('interrupted'));
-    ok(
-      await store.setEdits({ ...EMPTY_EDITS, cuts: [2], names: ['', 'Третий'], divider: 4 }, false),
-    );
+    ok(await store.setEdits({ ...EMPTY_EDITS, cuts: [2], names: ['', 'Третий'], divider: 4 }, {}));
     expect(store.snapshot()?.edits).toEqual({ ...EMPTY_EDITS, divider: 4 });
 
     ok(await store.resumePass());
@@ -378,7 +376,7 @@ describe('хранилище сессии: правки редактора (M3, 
           divider: null,
           notBlank: [],
         },
-        false,
+        {},
       ),
     );
 
@@ -397,10 +395,10 @@ describe('хранилище сессии: правки редактора (M3, 
 
   it('состояние, которое нормализуется к записанному, — не правка: «сохранено» не снимается', async () => {
     const { store } = await twoPasses();
-    ok(await store.setEdits({ ...EMPTY_EDITS, cuts: [2], names: ['', 'Б'] }, false));
+    ok(await store.setEdits({ ...EMPTY_EDITS, cuts: [2], names: ['', 'Б'] }, {}));
     ok(await store.markSaved());
 
-    ok(await store.setEdits({ ...EMPTY_EDITS, cuts: [0, 2], names: ['', '', 'Б'] }, false));
+    ok(await store.setEdits({ ...EMPTY_EDITS, cuts: [0, 2], names: ['', '', 'Б'] }, {}));
 
     expect(store.snapshot()?.saved).toBe(true);
   });
@@ -416,7 +414,7 @@ describe('хранилище сессии: правки редактора (M3, 
       cuts: [1],
       names: ['', 'Хвост'],
     };
-    ok(await store.setEdits(manual, false));
+    ok(await store.setEdits(manual, {}));
 
     ok(await store.resumePass());
     await accept(3, 4);
@@ -452,7 +450,7 @@ describe('хранилище сессии: правки редактора (M3, 
       cuts: [2],
       names: ['А', 'Б'],
     };
-    ok(await store.setEdits(manual, false));
+    ok(await store.setEdits(manual, {}));
 
     ok(await store.beginPass(ORIGIN, { kind: 'added', after: 'p01-s01-0001' }));
     await accept(4, 5);
@@ -481,13 +479,13 @@ describe('хранилище сессии: правки редактора (M3, 
   it('углы в другом порядке ключей — не правка: «сохранено» не снимается', async () => {
     const { store } = await twoPasses();
     const rotations = { 'p01-s01-0001': 90, 'p02-s01-0001': 180 } as const;
-    ok(await store.setEdits({ ...EMPTY_EDITS, rotations }, false));
+    ok(await store.setEdits({ ...EMPTY_EDITS, rotations }, {}));
     ok(await store.markSaved());
 
     ok(
       await store.setEdits(
         { ...EMPTY_EDITS, rotations: { 'p02-s01-0001': 180, 'p01-s01-0001': 90 } },
-        false,
+        {},
       ),
     );
 
@@ -589,7 +587,7 @@ describe('хранилище сессии: роль прохода и добав
     await accept(3, 3);
     ok(await store.endSegment('completed'));
 
-    expect(await store.setEdits(EMPTY_EDITS, true)).toMatchObject({
+    expect(await store.setEdits(EMPTY_EDITS, { 2: true })).toMatchObject({
       ok: false,
       error: { code: 'sessionConflict', details: { reason: 'noBacksPass' } },
     });
@@ -607,7 +605,7 @@ describe('хранилище сессии: роль прохода и добав
       [2, 'backs', null],
     ]);
 
-    expect(await store.setEdits(EMPTY_EDITS, true)).toMatchObject({
+    expect(await store.setEdits(EMPTY_EDITS, { 2: true })).toMatchObject({
       ok: false,
       error: { code: 'sessionConflict', details: { reason: 'noBacksPass' } },
     });
@@ -638,7 +636,7 @@ describe('хранилище сессии: роль прохода и добав
       divider: null,
       notBlank: [],
     };
-    ok(await store.setEdits(edits, false));
+    ok(await store.setEdits(edits, {}));
     const keysBefore = visibleKeys(store);
 
     ok(await store.beginPass(ORIGIN, { kind: 'added', after: 'p01-s01-0001' }));
@@ -668,12 +666,16 @@ describe('хранилище сессии: политика запуска planP
 
   it('пустая сессия — лицевые; после лицевых — обороты с «из M»; после отказа — backsDeclined', async () => {
     const { store, accept } = await setup();
-    expect(store.planPass(null)).toEqual(ok2({ kind: 'fronts', resumed: false, expected: null }));
+    expect(store.planPass(null)).toEqual(
+      ok2({ kind: 'fronts', resumed: false, expected: null, pair: null }),
+    );
 
     ok(await store.beginPass(ORIGIN, null));
     await accept(1, 3);
     ok(await store.endSegment('completed'));
-    expect(store.planPass(null)).toEqual(ok2({ kind: 'backs', resumed: false, expected: 3 }));
+    expect(store.planPass(null)).toEqual(
+      ok2({ kind: 'backs', resumed: false, expected: 3, pair: null }),
+    );
 
     ok(await store.declineBacks());
     expect(store.planPass(null)).toMatchObject({
@@ -681,7 +683,9 @@ describe('хранилище сессии: политика запуска planP
       error: { code: 'sessionConflict', details: { reason: 'backsDeclined' } },
     });
     // Добавленный набор отказ от оборотов не держит.
-    expect(store.planPass(ADDED)).toEqual(ok2({ kind: 'added', resumed: false, expected: null }));
+    expect(store.planPass(ADDED)).toEqual(
+      ok2({ kind: 'added', resumed: false, expected: null, pair: null }),
+    );
   });
 
   it('при лицевых и оборотах — backsPresent без намерения, added с намерением', async () => {
@@ -698,7 +702,7 @@ describe('хранилище сессии: политика запуска planP
       error: { code: 'sessionConflict', details: { reason: 'backsPresent' } },
     });
     expect(store.planPass({ kind: 'added', after: 'p02-s01-0001' })).toEqual(
-      ok2({ kind: 'added', resumed: false, expected: null }),
+      ok2({ kind: 'added', resumed: false, expected: null, pair: null }),
     );
     expect(store.planPass({ kind: 'added', after: 'p09-s01-0001' })).toMatchObject({
       ok: false,
@@ -715,19 +719,25 @@ describe('хранилище сессии: политика запуска planP
     await accept(4, 4);
     ok(await store.endSegment('interrupted'));
 
-    expect(store.planPass(null)).toEqual(ok2({ kind: 'backs', resumed: true, expected: 3 }));
+    expect(store.planPass(null)).toEqual(
+      ok2({ kind: 'backs', resumed: true, expected: 3, pair: null }),
+    );
     expect(store.planPass(ADDED)).toMatchObject({
       ok: false,
       error: { code: 'sessionConflict', details: { reason: 'passInterrupted' } },
     });
 
     ok(await store.acceptPass());
-    expect(store.planPass(ADDED)).toEqual(ok2({ kind: 'added', resumed: false, expected: null }));
+    expect(store.planPass(ADDED)).toEqual(
+      ok2({ kind: 'added', resumed: false, expected: null, pair: null }),
+    );
     // Прерванный добавленный досканируется без «из M».
     ok(await store.beginPass(ORIGIN, ADDED));
     await accept(5, 5);
     ok(await store.endSegment('interrupted'));
-    expect(store.planPass(null)).toEqual(ok2({ kind: 'added', resumed: true, expected: null }));
+    expect(store.planPass(null)).toEqual(
+      ok2({ kind: 'added', resumed: true, expected: null, pair: null }),
+    );
   });
 
   it('без сессии добавлять не к чему; идущий проход — passRunning', async () => {
@@ -798,7 +808,7 @@ describe('хранилище сессии: режим пустых оборот�
     ok(
       await store.setEdits(
         { ...EMPTY_EDITS, notBlank: ['p02-s01-0002', 'p02-s01-0002', 'p09-s01-0001'] },
-        false,
+        {},
       ),
     );
 
@@ -806,7 +816,7 @@ describe('хранилище сессии: режим пустых оборот�
     expect((await journalOnDisk()).edits.notBlank).toEqual(['p02-s01-0002']);
     // Та же пометка повторно — не правка: «сохранено» не снимается.
     ok(await store.markSaved());
-    ok(await store.setEdits({ ...EMPTY_EDITS, notBlank: ['p02-s01-0002'] }, false));
+    ok(await store.setEdits({ ...EMPTY_EDITS, notBlank: ['p02-s01-0002'] }, {}));
     expect(store.snapshot()?.saved).toBe(true);
   });
 });

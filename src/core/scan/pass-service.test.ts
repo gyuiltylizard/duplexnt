@@ -516,7 +516,7 @@ describe('служба прохода: команды оборотов (M2, U3)'
     ]);
     const service = await openPassService(root);
 
-    expect(await service.setEdits(EMPTY_EDITS, true)).toEqual({
+    expect(await service.setEdits(EMPTY_EDITS, { 3: true })).toEqual({
       ok: true,
       value: { seq: service.snapshot().seq },
     });
@@ -537,7 +537,7 @@ describe('служба прохода: команды оборотов (M2, U3)'
     await seedSession(root, [{ number: 1, pages: 2 }]);
     const service = await openPassService(root);
 
-    expect(await service.setEdits(EMPTY_EDITS, true)).toEqual({
+    expect(await service.setEdits(EMPTY_EDITS, { 2: true })).toEqual({
       ok: false,
       error: { code: 'sessionConflict', details: { reason: 'noBacksPass' } },
     });
@@ -595,7 +595,7 @@ describe('служба прохода: правки редактора (M3, U3)'
     );
     const service = await openPassService(root);
 
-    expect(await service.setEdits(EDITS, true)).toEqual({
+    expect(await service.setEdits(EDITS, { 2: true })).toEqual({
       ok: true,
       value: { seq: service.snapshot().seq },
     });
@@ -622,7 +622,7 @@ describe('служба прохода: правки редактора (M3, U3)'
     await seedSession(root, [{ number: 1, pages: 3 }]);
     const service = await openPassService(root);
 
-    await service.setEdits({ ...EMPTY_EDITS, cuts: [0, 2], names: ['Пусто', 'А', 'Б'] }, false);
+    await service.setEdits({ ...EMPTY_EDITS, cuts: [0, 2], names: ['Пусто', 'А', 'Б'] }, {});
 
     expect(service.snapshot().session?.edits).toEqual({
       ...EMPTY_EDITS,
@@ -638,12 +638,12 @@ describe('служба прохода: правки редактора (M3, U3)'
     const service = await openPassService(root, { onChange: (seq) => seen.push(seq) });
     const split: SessionEdits = { ...EMPTY_EDITS, cuts: [1], names: ['', ''] };
 
-    expect(await service.setEdits(split, false)).toEqual({ ok: true, value: { seq: seen.at(-1) } });
+    expect(await service.setEdits(split, {})).toEqual({ ok: true, value: { seq: seen.at(-1) } });
     const first = service.snapshot().seq;
     expect(first).toBe(seen.at(-1));
 
     // Те же правки ещё раз: журнал не меняется, а снимок с новым номером всё равно уходит.
-    expect(await service.setEdits(split, false)).toEqual({ ok: true, value: { seq: first + 1 } });
+    expect(await service.setEdits(split, {})).toEqual({ ok: true, value: { seq: first + 1 } });
     expect(seen.at(-1)).toBe(first + 1);
   });
 
@@ -668,7 +668,7 @@ describe('служба прохода: правки редактора (M3, U3)'
 
     const pass = service.startPass(null);
     expect(service.snapshot().pass).not.toBeNull();
-    expect(await service.setEdits(EDITS, false)).toEqual(
+    expect(await service.setEdits(EDITS, {})).toEqual(
       fail('sessionConflict', { reason: 'passRunning' }),
     );
     release();
@@ -683,10 +683,7 @@ describe('служба прохода: пакетное сохранение (M3
   async function fiveDocuments(root: string, extra: Record<string, unknown> = {}) {
     await seedSession(root, [{ number: 1, pages: 5, fixtures: [1, 2, 3, 4, 5] }], extra);
     const service = await openPassService(root);
-    await service.setEdits(
-      { ...EMPTY_EDITS, cuts: [1, 2, 3, 4], names: ['', '', '', '', ''] },
-      false,
-    );
+    await service.setEdits({ ...EMPTY_EDITS, cuts: [1, 2, 3, 4], names: ['', '', '', '', ''] }, {});
     return service;
   }
 
@@ -732,7 +729,7 @@ describe('служба прохода: пакетное сохранение (M3
     expect(again.snapshot().session?.passes).toHaveLength(2);
 
     // Правка после сохранения снимает отметку (KTD-7, AE12).
-    expect(await again.setEdits(EMPTY_EDITS, false)).toMatchObject({ ok: true });
+    expect(await again.setEdits(EMPTY_EDITS, {})).toMatchObject({ ok: true });
     expect(again.snapshot().session?.saved).toBe(false);
   });
 
@@ -788,10 +785,7 @@ describe('служба прохода: пакетное сохранение (M3
       }
     });
     const service = await openPassService(root, { fs, retry: { ceilingMs: 0 } });
-    await service.setEdits(
-      { ...EMPTY_EDITS, cuts: [1, 2, 3, 4], names: ['', '', '', '', ''] },
-      false,
-    );
+    await service.setEdits({ ...EMPTY_EDITS, cuts: [1, 2, 3, 4], names: ['', '', '', '', ''] }, {});
 
     const first = await service.saveDocuments(folder, {
       mode: 'separate',
@@ -858,7 +852,7 @@ describe('служба прохода: пакетное сохранение (M3
         divider: null,
         notBlank: [],
       },
-      false,
+      {},
     );
 
     const saved = await service.saveDocuments(folder, {
@@ -910,7 +904,7 @@ describe('служба прохода: пакетное сохранение (M3
     const root = await makeTempDataRoot();
     await seedSession(root, [{ number: 1, pages: 2 }]);
     const service = await openPassService(root);
-    await service.setEdits({ ...EMPTY_EDITS, deleted: ['p01-s01-0001', 'p01-s01-0002'] }, false);
+    await service.setEdits({ ...EMPTY_EDITS, deleted: ['p01-s01-0001', 'p01-s01-0002'] }, {});
 
     expect(
       await service.saveDocuments(await folderIn(root), {
@@ -947,7 +941,7 @@ describe('служба прохода: пакетное сохранение (M3
       }
     });
     const service = await openPassService(root, { fs, retry: { ceilingMs: 0 } });
-    await service.setEdits({ ...EMPTY_EDITS, cuts: [1], names: ['', ''] }, false);
+    await service.setEdits({ ...EMPTY_EDITS, cuts: [1], names: ['', ''] }, {});
     const request = { mode: 'separate', names: ['А', 'Б'], retry: false } as const;
     expect(await service.saveDocuments(folder, request)).toMatchObject({
       ok: true,
@@ -957,7 +951,7 @@ describe('служба прохода: пакетное сохранение (M3
     // Между попытками — правка: поворот первого документа.
     await service.setEdits(
       { ...EMPTY_EDITS, rotations: { 'p01-s01-0001': 180 }, cuts: [1], names: ['', ''] },
-      false,
+      {},
     );
     failWrite = false;
     expect(await service.saveDocuments(folder, { ...request, retry: true })).toEqual(
@@ -1028,9 +1022,7 @@ describe('служба прохода: пакетное сохранение (M3
     const request = { mode: 'single', names: ['А'], retry: false } as const;
     const saving = service.saveDocuments(folder, request);
     const busy = fail('sessionConflict', { reason: 'saving' });
-    expect(await service.setEdits({ ...EMPTY_EDITS, deleted: ['p01-s01-0001'] }, false)).toEqual(
-      busy,
-    );
+    expect(await service.setEdits({ ...EMPTY_EDITS, deleted: ['p01-s01-0001'] }, {})).toEqual(busy);
     // Второй пакет (двойной клик), закрытие сессии и новый проход — тоже ждут конца записи.
     expect(await service.saveDocuments(folder, request)).toEqual(busy);
     expect(await service.closeSession()).toEqual(busy);

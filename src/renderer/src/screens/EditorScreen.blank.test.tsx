@@ -286,7 +286,7 @@ describe('пустые обороты в редакторе (M4)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Это не пустая страница' }));
     expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({
       edits: { ...EMPTY_EDITS, notBlank: [B3] },
-      rotate180: false,
+      rotate180: {},
     });
     await settle();
     expect(onToast).toHaveBeenCalledWith('Страница возвращена в документ — Ctrl+Z отменит');
@@ -539,7 +539,7 @@ describe('пустые обороты в редакторе (M4)', () => {
     fireEvent.click(screen.getByRole('radio', { name: /После текущей страницы/u }));
     expect(screen.getByText(/после стр\. 1 \(лицо листа 1\)/u)).toBeDefined();
     fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
-    expect(onAdd).toHaveBeenCalledWith(B3);
+    expect(onAdd).toHaveBeenCalledWith('addedFronts', B3);
   });
 
   it('S16: номер «после стр. N» — по показанной ленте и при скрытых перед текущей (упрощение M4)', () => {
@@ -552,6 +552,6 @@ describe('пустые обороты в редакторе (M4)', () => {
     fireEvent.click(screen.getByRole('radio', { name: /После текущей страницы/u }));
     expect(screen.getByText(/после стр\. 4 \(лицо листа 3\)/u)).toBeDefined();
     fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
-    expect(onAdd).toHaveBeenCalledWith(B1);
+    expect(onAdd).toHaveBeenCalledWith('addedFronts', B1);
   });
 });

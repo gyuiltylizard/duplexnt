@@ -38,6 +38,8 @@ const PASS: JournalPass = {
   ],
   kind: 'fronts',
   after: null,
+  pair: null,
+  backsDecision: null,
   rotate180: false,
 };
 
@@ -82,8 +84,11 @@ function omit<T extends object, K extends keyof T>(value: T, ...keys: K[]): Omit
   ) as Omit<T, K>;
 }
 
+// Проход версии 6 (M4): без ролей пары — ссылки пары и решения по оборотам набора (M4.5).
+const V6_PASS = omit(PASS, 'pair', 'backsDecision');
+
 // Проход версии 3 (M3): без роли и якоря — роль выводилась по позиции.
-const V3_PASS = omit(PASS, 'kind', 'after');
+const V3_PASS = omit(V6_PASS, 'kind', 'after');
 
 /** Проход `number` из `pageCount` страниц одним завершённым сегментом. */
 const passAt = (number: number, pageCount: number, extra: Partial<JournalPass> = {}) => ({
@@ -92,13 +97,16 @@ const passAt = (number: number, pageCount: number, extra: Partial<JournalPass> =
   segments: [{ number: 1, state: 'completed' as const, pageCount }],
   ...extra,
 });
-/** То же для журнала v3: без `kind`/`after`. */
+/** То же для журнала v3: без `kind`/`after` и полей пары. */
 const v3PassAt = (number: number, pageCount: number, extra: object = {}) =>
-  omit({ ...passAt(number, pageCount), ...extra }, 'kind', 'after');
+  omit({ ...passAt(number, pageCount), ...extra }, 'kind', 'after', 'pair', 'backsDecision');
+
+// Журнал версии 6 (M4): тот же состав, у проходов нет ссылки пары и решения по оборотам.
+const V6_JOURNAL = { ...JOURNAL, version: 6, passes: [V6_PASS] };
 
 // Журнал версии 5 (M3.6): тот же состав без режима пустых оборотов и пометок «не пустая».
 const V5_JOURNAL = {
-  ...omit(JOURNAL, 'blankMode'),
+  ...omit(V6_JOURNAL, 'blankMode'),
   version: 5,
   edits: omit(EMPTY_EDITS, 'notBlank'),
 };
@@ -203,7 +211,7 @@ describe('журнал: чтение прежних версий (M2, R13; M3, R
     expect(parse(V2_JOURNAL)).toEqual({ kind: 'ok', value: JOURNAL });
   });
 
-  it('журнал v1 читается цепочкой v1 → v2 → v3 → v4 → v5 → v6 с дефолтами всех новых полей', () => {
+  it('журнал v1 читается цепочкой v1 → v2 → v3 → v4 → v5 → v6 → v7 с дефолтами всех новых полей', () => {
     expect(parse(V1_JOURNAL)).toEqual({ kind: 'ok', value: JOURNAL });
   });
 
@@ -246,11 +254,11 @@ describe('журнал: чтение прежних версий (M2, R13; M3, R
 
 describe('журнал: версия (KTD-35)', () => {
   it('маркер версии новее понятного — несовместимость, что бы ни лежало рядом', () => {
-    expect(parse({ ...JOURNAL, version: 7 })).toEqual({
+    expect(parse({ ...JOURNAL, version: 8 })).toEqual({
       kind: 'incompatible',
       reason: 'newerVersion',
     });
-    expect(parse({ version: 8, совсем: 'другая форма' })).toEqual({
+    expect(parse({ version: 9, совсем: 'другая форма' })).toEqual({
       kind: 'incompatible',
       reason: 'newerVersion',
     });

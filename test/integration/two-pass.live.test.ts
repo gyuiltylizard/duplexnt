@@ -94,14 +94,14 @@ describeLive('два прохода на живом сканере (AE2)', (host
 
       // AE8/AE12 без пересканирования: аварийный тумблер снимает отметку сохранения и кладёт
       // /Rotate 180 только на обороты; выключение возвращает.
-      unwrap(await service.setEdits(EMPTY_EDITS, true));
+      unwrap(await service.setEdits(EMPTY_EDITS, { 2: true }));
       expect(service.snapshot().session?.saved).toBe(false);
       const rotatedTarget = await saveOne('duplexnt-live-two-pass-rotated');
       const rotated = await PDFDocument.load(await readFile(rotatedTarget));
       for (const [index, page] of rotated.getPages().entries()) {
         expect(page.getRotation().angle, `страница ${index + 1}`).toBe(index % 2 === 1 ? 180 : 0);
       }
-      unwrap(await service.setEdits(EMPTY_EDITS, false));
+      unwrap(await service.setEdits(EMPTY_EDITS, {}));
 
       console.info(
         `[live] PDF сохранён: ${target} (${fronts.pages * 2} страниц). ` +

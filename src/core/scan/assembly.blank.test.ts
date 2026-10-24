@@ -1,6 +1,14 @@
 import { EMPTY_EDITS, type BlankFlag, type BlankMode, type SessionSnapshot } from '@shared';
 import { describe, expect, it } from 'vitest';
-import { addedOf, keyOf, pagesOf, passOf, sessionOf } from '../../../test/support/assembly';
+import {
+  addedOf,
+  keyOf,
+  pagesOf,
+  passOf,
+  sessionOf,
+  setBacksOf,
+  setFrontsOf,
+} from '../../../test/support/assembly';
 import { assembleSession } from './assembly';
 
 // Флаги пустых оборотов в ленте ядра (план M4, U4; R10, KTD4, KTD9): табличный тест режим ×
@@ -189,5 +197,85 @@ describe('сборка: флаги пустых оборотов (M4, R10)', () 
 
   it('без второго аргумента сборка — как до M4: флагов нет, при «Оставлять» ничего не ждёт', () => {
     expect(assembleSession(pairs('keep')).order.every((page) => page.blank === null)).toBe(true);
+  });
+});
+
+describe('сборка: флаги пустых оборотов набора (M4.5, R17, KTD6)', () => {
+  const SF = (index: number): string => keyOf(3, index);
+  const SB = (index: number): string => keyOf(4, index);
+
+  it('обороты набора оцениваются по режиму сессии: в чередовании «Скрывать» скрывает, лица набора без флага (AE7)', () => {
+    const session = sessionOf(
+      [passOf(1, 3), passOf(2, 3), setFrontsOf(3, 2, F(2)), setBacksOf(4, 3, 2)],
+      { blankMode: 'hide' },
+    );
+
+    expect(flagsOf(session, verdictsOf([SB(1), SF(1)], [SB(2)]))).toMatchObject({
+      [SF(1)]: null,
+      [SF(2)]: null,
+      [SB(1)]: 'hidden',
+      [SB(2)]: null,
+    });
+    expect(assembleSession(session, verdictsOf([SB(1)])).blank).toMatchObject({
+      found: 1,
+      hidden: 1,
+      pending: 4,
+    });
+  });
+
+  it('в подблоках несовпавшего набора скрытие действует: сборки впереди нет', () => {
+    const session = sessionOf(
+      [passOf(1, 3), passOf(2, 3), setFrontsOf(3, 3, F(2)), setBacksOf(4, 3, 2)],
+      { blankMode: 'hide' },
+    );
+
+    expect(flagsOf(session, verdictsOf([SB(2)], [SB(1)]))).toMatchObject({
+      [SB(2)]: 'hidden',
+      [SB(1)]: null,
+      [SF(3)]: null,
+    });
+  });
+
+  it('набор из одного листа с пустым оборотом при «Скрывать»: в ленте лицо, оборот скрыт, счётчик скрытых +1 (AE17)', () => {
+    const session = sessionOf(
+      [passOf(1, 3), passOf(2, 3), setFrontsOf(3, 1, F(2)), setBacksOf(4, 3, 1)],
+      { blankMode: 'hide' },
+    );
+    const assembly = assembleSession(session, verdictsOf([SB(1)]));
+
+    expect(assembly.order.find((page) => page.key === SB(1))?.blank).toBe('hidden');
+    expect(assembly.order.find((page) => page.key === SF(1))?.blank).toBeNull();
+    expect(assembly.blank).toMatchObject({ found: 1, hidden: 1 });
+  });
+
+  it('пометка «не пустая» снимает флаг с оборота набора; односторонний набор и лица оценок не получают (R17)', () => {
+    const session = sessionOf(
+      [
+        passOf(1, 3),
+        passOf(2, 3),
+        setFrontsOf(3, 1, F(2)),
+        setBacksOf(4, 3, 1),
+        addedOf(5, 1, F(1)),
+      ],
+      { blankMode: 'mark', edits: { ...EMPTY_EDITS, notBlank: [SB(1)] } },
+    );
+
+    expect(flagsOf(session, verdictsOf([SB(1), keyOf(5, 1), SF(1)]))).toMatchObject({
+      [SB(1)]: null,
+      [SF(1)]: null,
+      [keyOf(5, 1)]: null,
+    });
+    expect(assembleSession(session, verdictsOf([])).blank.pending).toBe(3);
+  });
+
+  it('в режиме раздельных наборов сессии оборот набора получает метку, не скрытие — как обороты основной пачки', () => {
+    // Пара существует до того, как сессия стала «раздельными наборами», только через правку журнала;
+    // правило одно на все обороты.
+    const session = sessionOf(
+      [passOf(1, 3), passOf(2, 2), setFrontsOf(3, 1, F(2)), setBacksOf(4, 3, 1)],
+      { blankMode: 'hide' },
+    );
+
+    expect(flagsOf(session, verdictsOf([SB(1)]))[SB(1)]).toBe('marked');
   });
 });

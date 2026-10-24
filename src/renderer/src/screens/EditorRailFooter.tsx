@@ -1,18 +1,15 @@
-import type { ChangeEvent, ReactNode, RefObject } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { BlankSummary } from '@shared';
+import type { RailRotate } from '../state/useRotateTarget';
 
 // Подвал ленты (handoff M4, S4–S6; R18): постоянное место трёх строк под миниатюрами — панель
 // выделения (при выделении больше одной страницы), переключатель «добавить пустые» со
 // счётчиком и тумблер 180°. Строки появляются и исчезают, лента над подвалом не сдвигается.
 // Переключатель и тумблер — свойства прохода оборотов; панель — выделения. Ни одной строки —
-// подвала нет. Только показ и клики: что показывать и что делать, решает экран.
-
-export interface RailRotate {
-  readonly checked: boolean;
-  readonly disabled: boolean;
-  readonly onChange: (event: ChangeEvent<HTMLInputElement>) => void;
-}
+// подвала нет. Только показ и клики: что показывать и что делать, решает экран. С M4.5 (R16;
+// handoff M4.5, S9) тумблер крутит обороты пачки текущей страницы: подпись цели — в месте
+// счётчика, недоступность с причиной там же.
 
 /** Панель выделения (S6): текст, «Выделить в документ» вне режима наборов, «Снять». */
 export interface RailSelection {
@@ -35,7 +32,7 @@ export interface EditorRailFooterProps {
   /** Чекбокс переключателя — туда уходит фокус, когда все страницы скрыты (S7). */
   readonly toggleRef: RefObject<HTMLInputElement | null>;
   readonly onReveal: (reveal: boolean) => void;
-  /** Тумблер 180° прохода оборотов (M2, S7); `null` — прохода оборотов нет. */
+  /** Тумблер 180° (M2, S7; M4.5, S9); `null` — оборотов нет ни у одной пачки. */
   readonly rotate: RailRotate | null;
 }
 
@@ -111,18 +108,30 @@ export function EditorRailFooter({
         </label>
       )}
       {rotate !== null && (
-        <label className="toggle-row" title={t('editor.rotateBacksTitle')}>
+        <label
+          className={rotate.unavailable ? 'toggle-row toggle-row--disabled' : 'toggle-row'}
+          title={
+            rotate.unavailable
+              ? t('editor.rotateTarget.noneTitle', { reason: rotate.target })
+              : t('editor.rotateBacksTitle')
+          }
+        >
           <span className="toggle">
             <input
               className="toggle__input"
               type="checkbox"
               checked={rotate.checked}
               disabled={rotate.disabled}
+              aria-label={t('editor.rotateBacks')}
+              aria-describedby="rotate-target"
               onChange={rotate.onChange}
             />
             <span className="toggle__track" aria-hidden="true" />
           </span>
           <span className="toggle-row__label">{t('editor.rotateBacks')}</span>
+          <span className="toggle-row__count" id="rotate-target">
+            {rotate.target}
+          </span>
         </label>
       )}
     </footer>
