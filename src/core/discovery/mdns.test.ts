@@ -131,6 +131,29 @@ describe('обнаружение по mDNS', () => {
     expect(JSON.stringify(scanner)).not.toContain('admin');
   });
 
+  it('записи для ядра несут UUID и путь, снимок для интерфейса от них не меняется', () => {
+    const { discovery, instances } = start(['192.0.2.2']);
+    instances[0]?.emit('uscans', announce());
+
+    expect(discovery.records()).toEqual([
+      {
+        uuid: UUID,
+        name: 'EPSON ET-3850 Series',
+        address: '192.0.2.10',
+        port: 443,
+        basePath: '/eSCL',
+        hasAdf: true,
+      },
+    ]);
+    expect(Object.keys(discovery.state().scanners[0] ?? {}).sort()).toEqual([
+      'address',
+      'hasAdf',
+      'id',
+      'name',
+      'port',
+    ]);
+  });
+
   it('идентификатор непрозрачен и ведёт к адресу подключения: схема не названа', () => {
     const { discovery, instances } = start(['192.0.2.2']);
     instances[0]?.emit('uscans', announce('192.0.2.10', []));

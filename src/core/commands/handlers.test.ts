@@ -86,6 +86,7 @@ function setup(
       id === 'abcdef01-1'
         ? { scheme: null, host: '127.0.0.1', port: 9443, basePath: '/eSCL' }
         : null,
+    records: () => [],
     stop,
   };
   const startDiscovery = vi.fn((options: { onChange?: () => void }) => {
@@ -556,6 +557,7 @@ describe('поиск устройств', () => {
         return {
           state: () => ({ scanners: [], failure: null }),
           addressOf: () => null,
+          records: () => [],
           stop: () => undefined,
         };
       },
