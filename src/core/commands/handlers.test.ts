@@ -464,6 +464,28 @@ describe('снимок и проход', () => {
     expect(service.checkRememberedScanner).toHaveBeenCalledOnce();
   });
 
+  it('проверка по «Повторить» прерывается dispose: поиск остановлен, записи нет (M5, R9)', async () => {
+    const commands = setup();
+    const { handlers, service } = commands;
+    const signals: (AbortSignal | undefined)[] = [];
+    service.checkRememberedScanner.mockImplementation(
+      (signal?: AbortSignal) =>
+        new Promise<void>((resolve) => {
+          signals.push(signal);
+          signal?.addEventListener('abort', () => {
+            resolve();
+          });
+        }),
+    );
+
+    const recheck = handlers.recheckScanner(undefined);
+    expect(signals[0]?.aborted).toBe(false);
+    commands.dispose();
+
+    expect(await recheck).toEqual(ok(undefined));
+    expect(signals[0]?.aborted).toBe(true);
+  });
+
   it('cancelConnect отменяет идущее подключение', async () => {
     const { handlers, cancel } = setup();
     expect(await handlers.cancelConnect(undefined)).toEqual(ok(undefined));

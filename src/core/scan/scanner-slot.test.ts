@@ -1,16 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import { fail, ok, type Result, type ScanParams } from '@shared';
 import { ET_3850, readFixture, readFixtureText } from '../../../test/support/fixtures';
+import {
+  network,
+  noSearch,
+  scriptedSearch,
+  virtualClock,
+  type Announcement,
+  type Step,
+} from '../../../test/support/uuid-search';
 import { parseCapabilities } from '../escl/capabilities';
 import type { ConnectedScanner } from '../escl/connect';
 import { DEFAULT_SCAN_PARAMS, scanOptionsOf } from '../escl/scan-settings';
 import type { BufferedResponse, ScannerTransport } from '../escl/transport';
 import type { Settings, SettingsStore } from '../storage/settings-store';
 import { scannerInfoOf, storedScannerOf, type StoredScanner } from '../storage/stored-scanner';
-import { createScannerSlot } from './scanner-slot';
+import { createScannerSlot, type ScannerSlot } from './scanner-slot';
 
 // Слот сканера напрямую (M5, U4): исходы проверки запомненного, гонка с ручным подключением,
-// сканер для снимка в каждом состоянии. Через службу и эмулятор — pass-service.test.ts и
+// запись нового адреса после переезда, сканер для снимка в каждом состоянии. Через службу и эмулятор — pass-service.test.ts и
 // test/integration/pass.emulator.test.ts.
 
 const CAPABILITIES = readFixtureText(...ET_3850, 'ScannerCapabilities.xml');
@@ -98,6 +106,7 @@ function slotOver(
   const slot = createScannerSlot({
     settings: settings.store,
     connector: scanner.connector,
+    search: noSearch,
     notify: () => {
       notified += 1;
     },
@@ -248,5 +257,104 @@ describe('слот сканера: подключение и параметры'
       params: PARAMS,
     });
     expect(notified()).toBe(1);
+  });
+});
+
+describe('слот сканера: переезд запомненного (M5, U4)', () => {
+  const OLD: Step = { afterMs: 0, answer: fail('scannerUnreachable', { reason: 'refused' }) };
+  const MOVED: Step = { afterMs: 800, answer: { fingerprint: FINGERPRINT } };
+  const FOUND: readonly Announcement[] = [{ at: 0, address: '192.0.2.30' }];
+
+  /** Старый адрес отказывает, сканер объявлен на новом; `onNotify` — после каждого уведомления. */
+  function moved(onNotify: (slot: ScannerSlot) => void = () => undefined) {
+    const time = virtualClock();
+    const net = network(time.clock, { '192.0.2.10:443': OLD, '192.0.2.30:443': MOVED });
+    const search = scriptedSearch(time.clock, FOUND);
+    const settings = settingsWith(REMEMBERED);
+    const slot: ScannerSlot = createScannerSlot({
+      settings: settings.store,
+      connector: net.connector,
+      search: search.start,
+      notify: () => {
+        onNotify(slot);
+      },
+      isPassRunning: () => false,
+    });
+    return { time, net, search, settings, slot };
+  }
+
+  const relocated = { ...REMEMBERED, host: '192.0.2.30' };
+
+  it('AE1: найден на новом адресе — «готов», новый адрес запомнен', async () => {
+    const { time, slot, settings } = moved();
+
+    await time.run(slot.check());
+
+    expect(slot.current()).toMatchObject({
+      kind: 'ready',
+      connected: { profile: { host: '192.0.2.30' } },
+    });
+    expect(settings.remembered).toEqual([relocated]);
+  });
+
+  it('AE4: поиск нашёл сканер после ручного подключения — слот и настройки у ручного', async () => {
+    const { time, slot, settings, search } = moved();
+    const manual = connectedAt('192.0.2.20');
+    // Проба кандидата идёт 0,8 с: пользователь подключает сканер посередине.
+    void time.clock.sleep(400).then(() => slot.use(manual));
+
+    await time.run(slot.check());
+
+    expect(search.ends).toEqual(['stopped']);
+    expect(slot.current()).toMatchObject({ kind: 'ready', connected: manual });
+    expect(settings.remembered).toEqual([storedScannerOf(manual)]);
+  });
+
+  it('AE4: ручное подключение сразу после находки — в настройках итог ручного', async () => {
+    const manual = connectedAt('192.0.2.20');
+    let manualDone = Promise.resolve();
+    let found = false;
+    // Подключение — прямо на уведомлении «готов»: раньше следующего тика не бывает.
+    const { time, slot, settings } = moved((current) => {
+      if (!found && current.current().kind === 'ready') {
+        found = true;
+        manualDone = current.use(manual);
+      }
+    });
+
+    await time.run(slot.check());
+    await manualDone;
+
+    // Очередь настроек FIFO: запись поиска поставлена раньше и проигрывает ручной.
+    expect(settings.remembered).toEqual([relocated, storedScannerOf(manual)]);
+    expect(settings.store.get().scanner).toEqual(storedScannerOf(manual));
+    expect(slot.current()).toMatchObject({ kind: 'ready', connected: manual });
+  });
+
+  it('повторный вызов во время проверки — та же проверка, один поиск', async () => {
+    const { time, slot, search } = moved();
+
+    const first = slot.check();
+    const second = slot.check();
+    expect(second).toBe(first);
+    await time.run(first);
+
+    expect(search.starts).toHaveLength(1);
+    expect(slot.current()).toMatchObject({ kind: 'ready' });
+  });
+
+  it('отмена сигналом во время поиска — поиск остановлен, записи нет', async () => {
+    const { time, slot, search, settings, net } = moved();
+    const closing = new AbortController();
+    void time.clock.sleep(400).then(() => {
+      closing.abort();
+    });
+
+    await time.run(slot.check(closing.signal));
+
+    expect(search.ends).toEqual(['canceled']);
+    expect(net.open()).toBe(0);
+    expect(settings.remembered).toEqual([]);
+    expect(slot.current()).toMatchObject({ kind: 'unreachable', error: { code: 'canceled' } });
   });
 });

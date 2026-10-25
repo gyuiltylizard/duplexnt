@@ -129,13 +129,17 @@ async function start(): Promise<void> {
     isPassRunning: () => service.snapshot().pass !== null,
     interrupt: (deadlineMs) => service.interrupt(deadlineMs),
   });
+  // Стартовая проверка может искать сканер по сети: выход её прерывает — сокеты закрыты,
+  // настройки после закрытия не пишутся (M5, R9).
+  const startupCheck = new AbortController();
   app.on('will-quit', () => {
+    startupCheck.abort();
     commands.dispose();
   });
 
   loadRenderer(window);
   // Запомненный сканер проверяется после открытия окна: интерфейс видит «проверяем…» в снимке.
-  void service.checkRememberedScanner();
+  void service.checkRememberedScanner(startupCheck.signal);
 }
 
 if (acquireSingleInstance(app, () => mainWindow)) {

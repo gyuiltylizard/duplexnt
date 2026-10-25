@@ -35,6 +35,7 @@ import {
 } from '../escl/scan-job';
 import { buildScanSettings } from '../escl/scan-settings';
 import { blankRatio, type BlankDetector } from '../detect/blank';
+import { findByUuid } from '../discovery/find-by-uuid';
 import { parseStatus } from '../escl/status';
 import { createTransport, type ScannerTransport } from '../escl/transport';
 import { assemblePdf, type PdfPageInput } from '../pdf/assemble';
@@ -44,6 +45,7 @@ import type { PassOrigin } from '../storage/journal';
 import { layoutOf } from '../storage/layout';
 import { stopKeepsPages } from '../storage/pass-policy';
 import { openSessionStore } from '../storage/reconcile';
+import type { StartUuidSearch } from '../storage/remembered-search';
 import type { PageInfo, SessionStore, SessionStoreOptions } from '../storage/session-store';
 import { openSettingsStore, type SettingsStore } from '../storage/settings-store';
 import { sameScanner, storedScannerOf, type StoredScanner } from '../storage/stored-scanner';
@@ -83,6 +85,8 @@ export interface PassServiceOptions extends SessionStoreOptions {
   readonly onChange?: (seq: number) => void;
   /** Детектор пустых страниц (M4, KTD3); по умолчанию — настоящий на `sharp`. */
   readonly blankDetector?: BlankDetector;
+  /** Поиск запомненного сканера по UUID (M5, KTD9); по умолчанию — настоящий, по mDNS. */
+  readonly findByUuid?: StartUuidSearch;
 }
 
 export interface PassService {
@@ -260,6 +264,7 @@ export function createPassService(
   const scanner = createScannerSlot({
     settings,
     connector,
+    search: options.findByUuid ?? findByUuid,
     notify,
     isPassRunning: () => run !== null,
   });

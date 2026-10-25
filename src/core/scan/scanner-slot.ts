@@ -8,6 +8,7 @@ import {
 } from '@shared';
 import type { ConnectedScanner, ConnectorOptions } from '../escl/connect';
 import { DEFAULT_SCAN_PARAMS, resolveScanParams, unsupportedField } from '../escl/scan-settings';
+import type { StartUuidSearch } from '../storage/remembered-search';
 import { checkRememberedScanner, type SettingsStore } from '../storage/settings-store';
 import { scannerInfoOf, storedScannerOf, type StoredScanner } from '../storage/stored-scanner';
 
@@ -29,6 +30,8 @@ export type ScannerSlotState =
 export interface ScannerSlotDependencies {
   readonly settings: SettingsStore;
   readonly connector: ConnectorOptions;
+  /** Поиск запомненного по UUID, когда сохранённый адрес молчит (M5, KTD9). */
+  readonly search: StartUuidSearch;
   /** Снимок изменился. */
   readonly notify: () => void;
   /** Идёт проход: проверка его не трогает. */
@@ -39,7 +42,10 @@ export interface ScannerSlot {
   current(): ScannerSlotState;
   /** Сканер для снимка. */
   state(): ScannerState;
-  /** Проверка запомненного сканера; исход — в слоте. */
+  /**
+   * Проверка запомненного сканера; исход — в слоте. Найденный на новом адресе запоминается.
+   * Вызов во время идущей проверки возвращает её же (KTD5).
+   */
   check(signal?: AbortSignal): Promise<void>;
   /**
    * Сканер подключён явным действием пользователя: запоминается, параметры сверяются (KTD-13).
@@ -54,10 +60,12 @@ export interface ScannerSlot {
 export function createScannerSlot({
   settings,
   connector,
+  search,
   notify,
   isPassRunning,
 }: ScannerSlotDependencies): ScannerSlot {
   let scanner: ScannerSlotState = { kind: 'none' };
+  let running: Promise<void> | null = null;
 
   // Запомненные параметры — для рядов настройки, пока сканер не подтверждён (S2–S4).
   const rememberedParams = (): ScanParams => settings.get().params ?? DEFAULT_SCAN_PARAMS;
@@ -96,43 +104,69 @@ export function createScannerSlot({
     }
   };
 
+  async function verify(
+    checking: ScannerSlotState,
+    signal: AbortSignal | undefined,
+  ): Promise<void> {
+    const checked = await checkRememberedScanner(settings.get(), connector, signal, search);
+    // Пока шла проверка, пользователь подключил сканер сам: его выбор не перезаписывается (R8).
+    if (scanner !== checking) {
+      return;
+    }
+    let relocated: Promise<unknown> | null = null;
+    switch (checked.state) {
+      case 'none':
+        scanner = { kind: 'none' };
+        break;
+      case 'ready':
+        scanner = { kind: 'ready', connected: checked.connected, params: checked.params };
+        // Новый адрес встаёт в очередь настроек в том же тике, что сверка слота: очередь FIFO,
+        // и ручное подключение, пришедшее позже, всегда побеждает (KTD5, KTD7). После закрытия
+        // приложения настройки не пишутся (R9).
+        if (checked.relocated && signal?.aborted !== true) {
+          relocated = settings.rememberScanner(storedScannerOf(checked.connected));
+        }
+        break;
+      case 'unreachable':
+        scanner = { kind: 'unreachable', stored: checked.scanner, error: checked.error };
+        break;
+      case 'otherDevice':
+        scanner = { kind: 'otherDevice', stored: checked.scanner, error: checked.error };
+        break;
+    }
+    notify();
+    // Отказ записи, как у подключения, не отменяет «готов»: адрес остаётся в памяти.
+    await relocated;
+  }
+
   return {
     current: () => scanner,
     state,
 
-    async check(signal) {
+    check(signal) {
       // Повторная проверка не трогает ни идущий проход, ни рабочее подключение (ревью
       // сессии 9): интерфейс зовёт её только из «не отвечает», но ядро проверяет само.
       if (isPassRunning() || scanner.kind === 'ready') {
-        return;
+        return Promise.resolve();
+      }
+      // Второй поиск рядом с идущим не нужен: исход у них один (KTD5).
+      if (running !== null && scanner.kind === 'checking') {
+        return running;
       }
       const remembered = settings.get().scanner;
       if (remembered === null) {
-        return;
+        return Promise.resolve();
       }
       const checking: ScannerSlotState = { kind: 'checking', stored: remembered };
       scanner = checking;
       notify();
-      const checked = await checkRememberedScanner(settings.get(), connector, signal);
-      // Пока шла проверка, пользователь подключил сканер сам: его выбор не перезаписывается.
-      if (scanner !== checking) {
-        return;
-      }
-      switch (checked.state) {
-        case 'none':
-          scanner = { kind: 'none' };
-          break;
-        case 'ready':
-          scanner = { kind: 'ready', connected: checked.connected, params: checked.params };
-          break;
-        case 'unreachable':
-          scanner = { kind: 'unreachable', stored: checked.scanner, error: checked.error };
-          break;
-        case 'otherDevice':
-          scanner = { kind: 'otherDevice', stored: checked.scanner, error: checked.error };
-          break;
-      }
-      notify();
+      const current = verify(checking, signal).finally(() => {
+        if (running === current) {
+          running = null;
+        }
+      });
+      running = current;
+      return current;
     },
 
     async use(connected) {
