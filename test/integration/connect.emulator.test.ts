@@ -115,6 +115,23 @@ describe('подключение против эмулятора', () => {
     expect(errorOf(result)).toEqual({ code: 'scannerNoAdf' });
   });
 
+  it('capabilities занят дважды — подключение пережидает и проходит (M5, KTD6)', async () => {
+    const emulator = await startTestEmulator({ scenario: { busyCapabilities: 2 } });
+
+    // Пауза укорочена: ожидание идёт на настоящих часах, проверяется его ход, а не длительность.
+    const result = await createConnector({ busyWait: { retryDelayMs: 20 } }).connect(
+      address(`127.0.0.1:${emulator.port}`),
+    );
+
+    expect(errorOf(result)).toBeNull();
+    expect(result.ok && result.value.profile.scheme).toBe('https');
+    expect(emulator.requests()).toEqual([
+      'GET /eSCL/ScannerCapabilities 503',
+      'GET /eSCL/ScannerCapabilities 503',
+      'GET /eSCL/ScannerCapabilities 200',
+    ]);
+  });
+
   it('базовый путь не тот — «не сканер eSCL»', async () => {
     const emulator = await startTestEmulator();
 

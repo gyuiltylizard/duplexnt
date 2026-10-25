@@ -13,14 +13,9 @@ import {
 import { probeScanner, type ConnectedScanner, type ConnectorOptions } from '../escl/connect';
 import { resolveScanParams, scanParamsSchema } from '../escl/scan-settings';
 import { layoutOf } from './layout';
+import { classifyProbe } from './probe-outcome';
 import { ioOf, isMissing, serialQueue, storageFailure, type StorageOptions } from './storage-fs';
-import {
-  profileOf,
-  sameScanner,
-  storedScannerOf,
-  storedScannerSchema,
-  type StoredScanner,
-} from './stored-scanner';
+import { profileOf, storedScannerSchema, type StoredScanner } from './stored-scanner';
 import {
   fitsSchema,
   parseVersioned,
@@ -210,16 +205,6 @@ export type RememberedScanner =
       readonly error: DomainError | null;
     };
 
-// «Не отвечает», а не «другое устройство»: сбой сети, отмена, ответ `5xx` (сканер занят или
-// просыпается) и ответ, который не дочитался или не разобрался, — так ведёт себя и тот же сканер.
-function isSilence({ code, details }: DomainError): boolean {
-  if (code === 'scannerUnreachable' || code === 'canceled' || code === 'scannerBadResponse') {
-    return true;
-  }
-  const status = details?.status;
-  return code === 'notEsclScanner' && typeof status === 'number' && status >= 500;
-}
-
 /**
  * Проверка запомненного сканера запросом capabilities. Идёт по запомненной схеме: закрытый порт
  * HTTPS — «не отвечает», а не повод попробовать HTTP (KTD-8). Настройки не меняет ни при каком
@@ -235,14 +220,19 @@ export async function checkRememberedScanner(
   if (scanner === null) {
     return { state: 'none' };
   }
-  const probed = await probeScanner(profileOf(scanner), options, signal);
+  const probed = await probeScanner(
+    profileOf(scanner),
+    options,
+    signal === undefined ? {} : { signal },
+  );
+  // Слот по классу исхода (M5, KTD1): ответ чужого — «другое устройство», молчание, занятость,
+  // невнятный ответ и отмена — «не отвечает», так ведёт себя и тот же сканер.
+  const outcome = classifyProbe(scanner, probed);
   if (!probed.ok) {
     const { error } = probed;
-    // Всё, кроме молчания, — ответ кого-то другого: чужой сертификат, не сканер, сканер без
-    // автоподачи.
-    return { state: isSilence(error) ? 'unreachable' : 'otherDevice', scanner, error };
+    return { state: outcome === 'foreign' ? 'otherDevice' : 'unreachable', scanner, error };
   }
-  if (!sameScanner(scanner, storedScannerOf(probed.value))) {
+  if (outcome === 'foreign') {
     return { state: 'otherDevice', scanner, error: null };
   }
   return {

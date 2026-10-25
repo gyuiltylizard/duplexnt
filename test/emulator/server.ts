@@ -148,6 +148,7 @@ export async function startEmulator(options: EmulatorOptions = {}): Promise<Emul
   let sheetsUsed = 0;
   let faultFired = false;
   let busyPostsLeft = scenario.busyPosts;
+  let busyCapabilitiesLeft = scenario.busyCapabilities;
   let busyUntil = 0;
   let jam = false;
   let jobs: Job[] = [];
@@ -299,6 +300,11 @@ export async function startEmulator(options: EmulatorOptions = {}): Promise<Emul
     };
 
     if (path === `${basePath}/ScannerCapabilities` && method === 'GET') {
+      if (busyCapabilitiesLeft > 0) {
+        busyCapabilitiesLeft -= 1;
+        busy();
+        return;
+      }
       xml(readFixture(...DEVICE_DIRS[scenario.device], 'ScannerCapabilities.xml'));
       return;
     }
@@ -602,6 +608,7 @@ export async function startEmulator(options: EmulatorOptions = {}): Promise<Emul
       sheetsUsed = 0;
       faultFired = false;
       busyPostsLeft = scenario.busyPosts;
+      busyCapabilitiesLeft = scenario.busyCapabilities;
       busyUntil = 0;
       jam = false;
       jobs = [];

@@ -384,17 +384,42 @@ describe('запомненный сканер при запуске', () => {
     expect(profiles.map((profile) => profile.scheme)).toEqual(['https']);
   });
 
+  /** Часы без настоящего ожидания: «занят» пережидается мгновенно (M5, KTD6). */
+  const instantClock = {
+    now: (() => {
+      let now = 0;
+      return () => (now += 1000);
+    })(),
+    sleep: () => Promise.resolve(),
+  };
+
   it.each([
-    ['таймаут', fail('scannerUnreachable', { reason: 'timeout' }), 'unreachable'],
-    ['проверка отменена', fail('canceled'), 'unreachable'],
-    // Тот же сканер, пока занят или просыпается, — не «другое устройство».
-    ['сканер занят: 503', ok({ status: 503 }), 'unreachable'],
-    ['сбой сканера: 500', ok({ status: 500 }), 'unreachable'],
-    ['ответ не разобран', fail('scannerBadResponse', { reason: 'tooLarge' }), 'unreachable'],
-    ['по адресу не сканер: 404', ok({ status: 404 }), 'otherDevice'],
-    ['по адресу не сканер: HTML', ok({ status: 200 }), 'otherDevice'],
-    ['сертификат сменился', fail('scannerCertificateChanged'), 'otherDevice'],
-  ] as const)('%s → %s', async (_title, reply, state) => {
+    [
+      'таймаут',
+      fail('scannerUnreachable', { reason: 'timeout' }),
+      'unreachable',
+      'scannerUnreachable',
+    ],
+    ['проверка отменена', fail('canceled'), 'unreachable', 'canceled'],
+    // Тот же сканер, пока занят или просыпается, — не «другое устройство». «Занят» пережидается
+    // до потолка, причина остаётся в снимке (M5, R11).
+    ['сканер занят: 503 до потолка', ok({ status: 503 }), 'unreachable', 'scannerBusy'],
+    ['сбой сканера: 500', ok({ status: 500 }), 'unreachable', 'notEsclScanner'],
+    [
+      'ответ не разобран',
+      fail('scannerBadResponse', { reason: 'tooLarge' }),
+      'unreachable',
+      'scannerBadResponse',
+    ],
+    ['по адресу не сканер: 404', ok({ status: 404 }), 'otherDevice', 'notEsclScanner'],
+    ['по адресу не сканер: HTML', ok({ status: 200 }), 'otherDevice', 'notEsclScanner'],
+    [
+      'сертификат сменился',
+      fail('scannerCertificateChanged'),
+      'otherDevice',
+      'scannerCertificateChanged',
+    ],
+  ] as const)('%s → %s', async (_title, reply, state, code) => {
     const { store, scanner } = await remembered();
     const answer = reply.ok
       ? ok({
@@ -406,14 +431,14 @@ describe('запомненный сканер при запуске', () => {
         })
       : reply;
 
-    const check = await checkRememberedScanner(
-      store.get(),
-      deviceAt(() => answer),
-    );
+    const check = await checkRememberedScanner(store.get(), {
+      ...deviceAt(() => answer),
+      clock: instantClock,
+    });
 
     expect(check).toMatchObject({ state, scanner });
     // Причина — кодом: интерфейс и тесты не гадают по состоянию.
-    expect(check).toHaveProperty('error.code');
+    expect(check).toHaveProperty('error.code', code);
   });
 
   it('сканер без автоподачи на адресе запомненного — другое устройство', async () => {
