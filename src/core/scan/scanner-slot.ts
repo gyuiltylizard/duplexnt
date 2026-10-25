@@ -160,13 +160,13 @@ export function createScannerSlot({
       const checking: ScannerSlotState = { kind: 'checking', stored: remembered };
       scanner = checking;
       notify();
-      const current = verify(checking, signal).finally(() => {
-        if (running === current) {
+      const inflight = verify(checking, signal).finally(() => {
+        if (running === inflight) {
           running = null;
         }
       });
-      running = current;
-      return current;
+      running = inflight;
+      return inflight;
     },
 
     async use(connected) {

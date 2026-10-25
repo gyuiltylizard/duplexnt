@@ -1,8 +1,9 @@
 import { fail, ok, type Result } from '../../src/shared';
-import type {
-  UuidSearch,
-  UuidSearchEnd,
-  UuidSearchOptions,
+import {
+  UUID_SEARCH_WINDOW_MS,
+  type UuidSearch,
+  type UuidSearchEnd,
+  type UuidSearchOptions,
 } from '../../src/core/discovery/find-by-uuid';
 import type { ProbeClock } from '../../src/core/escl/connect';
 import type {
@@ -210,7 +211,7 @@ export function scriptedSearch(clock: ProbeClock, announcements: readonly Announ
         }
       });
     }
-    void clock.sleep(options.windowMs ?? 8000, accepting.signal).then(() => {
+    void clock.sleep(options.windowMs ?? UUID_SEARCH_WINDOW_MS, accepting.signal).then(() => {
       finish('window');
     });
     return {

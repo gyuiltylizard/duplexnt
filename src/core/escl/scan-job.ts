@@ -129,7 +129,7 @@ export interface ScanJobRequest {
   readonly clock?: ScanJobClock;
 }
 
-const realClock: ScanJobClock = {
+export const realClock: ScanJobClock = {
   now: Date.now,
   sleep: (ms, signal) =>
     delay(ms, undefined, signal === undefined ? {} : { signal }).catch(() => undefined),

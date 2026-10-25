@@ -1,4 +1,5 @@
 import { setTimeout as delay } from 'node:timers/promises';
+import type { ProbeClock } from '../escl/connect';
 import { startDiscovery, type Discovery, type DiscoveryOptions } from './mdns';
 
 // Поиск запомненного сканера по UUID (M5, KTD2). UUID — только ключ поиска: кандидат лишь говорит,
@@ -23,11 +24,8 @@ export interface UuidCandidate {
  */
 export type UuidSearchEnd = 'window' | 'noNetwork' | 'socket' | 'canceled' | 'stopped';
 
-/** Часы окна приёма — совместимы с `ProbeClock` пробы, чтобы проверка вела сроки одним швом. */
-export interface SearchClock {
-  /** Пауза, которую отмена обрывает досрочно. */
-  sleep(ms: number, signal?: AbortSignal): Promise<void>;
-}
+/** Часы окна приёма — часть `ProbeClock` пробы, чтобы проверка вела сроки одним швом. */
+export type SearchClock = Pick<ProbeClock, 'sleep'>;
 
 // Таймер окна не держит процесс живым — как повтор запроса в ./mdns.ts.
 const realSearchClock: SearchClock = {

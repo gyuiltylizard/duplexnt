@@ -1,7 +1,7 @@
-import { setTimeout as delay } from 'node:timers/promises';
 import { fail, ok, type Result, type ScanOptions } from '@shared';
 import { parseCapabilities, type ScannerCapabilities } from './capabilities';
 import { DEFAULT_BASE_PATH, normalizeBasePath } from './device-path';
+import { realClock, type ScanJobClock } from './scan-job';
 import { scanOptionsOf } from './scan-settings';
 import {
   createTransport,
@@ -100,18 +100,13 @@ export function parseScannerAddress(input: string): Result<ScannerAddress> {
   });
 }
 
-/** Часы ожидания «занят» — шов для тестов по образцу `ScanJobClock` (M5, KTD6). */
-export interface ProbeClock {
-  now(): number;
-  /** Пауза, которую отмена обрывает досрочно. */
-  sleep(ms: number, signal?: AbortSignal): Promise<void>;
-}
+/**
+ * Часы ожидания «занят» — те же, что у задания сканирования (M5, KTD6): общий шов часов, петли
+ * ожидания у пробы и задания свои.
+ */
+export type ProbeClock = ScanJobClock;
 
-export const realProbeClock: ProbeClock = {
-  now: Date.now,
-  sleep: (ms, signal) =>
-    delay(ms, undefined, signal === undefined ? {} : { signal }).catch(() => undefined),
-};
+export const realProbeClock: ProbeClock = realClock;
 
 export interface BusyWaitLimits {
   /** Пауза перед повтором `503`. `Retry-After` не читается. */
