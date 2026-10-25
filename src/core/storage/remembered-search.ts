@@ -111,11 +111,14 @@ async function locateWithSearch(
     !probed.ok && probed.error.code === 'canceled' && seen.expired && signal?.aborted !== true
       ? fail('scannerUnreachable', { reason: 'timeout' })
       : probed;
+  // Ответ старого адреса после старта поиска поиск останавливает; до старта — ничего не делает.
+  let stopSearch = (): void => undefined;
   const atOld = probeScanner(profileOf(scanner), connector, {
     signal: oldProbe.signal,
     // Любой HTTP-ответ, и `503` тоже, — сканер на месте: поиск не нужен (KTD3, R4).
     onResponse: () => {
       seen.answered = true;
+      stopSearch();
     },
   }).then(timedOut);
 
@@ -162,24 +165,26 @@ async function locateWithSearch(
     if (early !== null) {
       noteForeign(early);
     }
-    const oldIsOk = (): boolean => state.old !== null && classifyProbe(scanner, state.old) === 'ok';
+    // Старый адрес ответил, пока шёл поиск: сканер не переезжал, итог — его, даже «занят» (KTD3,
+    // R4). Поиск и начатая проба кандидата обрываются сразу, чужой кандидат итог не перебивает.
+    const stayed = (): boolean => early === null && seen.answered;
+    stopSearch = () => {
+      search.stop();
+      candidateProbes.abort();
+      wake();
+    };
     const settled =
       early !== null
         ? Promise.resolve()
         : atOld.then((probed) => {
             state.old = probed;
             noteForeign(probed);
-            // Старый адрес ответил, пока шёл поиск: сканер не переезжал.
-            if (oldIsOk()) {
-              search.stop();
-              candidateProbes.abort();
-            }
             wake();
           });
 
     // Кандидаты — по одному; начатая проба не прерывается новым кандидатом (KTD4).
     let confirmed: ConnectedScanner | null = null;
-    while (!oldIsOk()) {
+    while (!stayed()) {
       const next = candidateProbes.signal.aborted ? undefined : takeNext(queue, scanner.port);
       if (next !== undefined) {
         // Профиль запомненного с адресом кандидата; «занят» не пережидается — следующий (KTD4).
@@ -202,17 +207,20 @@ async function locateWithSearch(
         wake = resolve;
       });
     }
-    // Сокеты закрыты во всех исходах: поиск остановлен, пробы прерваны и дождались.
+    // Сокеты закрыты во всех исходах: поиск остановлен, пробы прерваны и дождались. Ответившую
+    // старую пробу не обрываем — она держит «проверяем…» до потолка ожидания (KTD3).
     search.stop();
     candidateProbes.abort();
-    oldProbe.abort();
+    if (!seen.answered) {
+      oldProbe.abort();
+    }
     await Promise.all([searched, settled]);
 
     if (signal?.aborted === true) {
       return locatedBy(scanner, fail('canceled'));
     }
     const old = state.old ?? fail('canceled');
-    if (oldIsOk()) {
+    if (stayed()) {
       return locatedBy(scanner, old);
     }
     if (confirmed !== null) {

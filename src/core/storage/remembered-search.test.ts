@@ -148,6 +148,48 @@ describe('проверка запомненного: поиск по UUID нах
   });
 });
 
+describe('проверка запомненного: старый адрес ответил после старта поиска (KTD3, R4)', () => {
+  // Первый ответ — 503 на 2 с, после порога поиска; дальше «занят» пережидается раз в секунду.
+  const busyFrom2s: readonly Step[] = [at(2000, status(503)), at(0, status(503))];
+
+  it('503 до потолка — поиск остановлен, проба не оборвана сроком, «занят»', async () => {
+    const { located, search, net, finishedAt } = await locate({ [OLD]: busyFrom2s });
+
+    expect(located).toEqual({ state: 'unreachable', error: { code: 'scannerBusy' } });
+    expect(search.starts).toHaveLength(1);
+    expect(search.ends).toEqual(['stopped']);
+    // Потолок ожидания «занят» — от первого 503, а не жёсткий срок проверки.
+    expect(finishedAt).toBe(17_000);
+    expect(finishedAt).toBeGreaterThan(CHECK_DEADLINE_MS);
+    expect(net.open()).toBe(0);
+  });
+
+  it('503, затем 200 — готов на старом; кандидат после ответа не пробуется', async () => {
+    const { located, search, net, finishedAt } = await locate(
+      { [OLD]: [at(2000, status(503)), at(1000, OURS)], '192.0.2.30:443': at(800, OURS) },
+      { announce: [{ at: 3000, address: '192.0.2.30' }] },
+    );
+
+    expect(located).toMatchObject({ state: 'ready', relocated: false });
+    expect(hostOf(located)).toBe('192.0.2.10');
+    expect(finishedAt).toBe(4000);
+    expect(search.ends).toEqual(['stopped']);
+    expect(net.requests).toEqual([OLD, OLD]);
+    expect(net.open()).toBe(0);
+  });
+
+  it('503 после отклонённого чужого кандидата — исход старого адреса, не «другое устройство»', async () => {
+    const { located, net } = await locate(
+      { [OLD]: busyFrom2s, '192.0.2.30:443': at(100, { fingerprint: OTHER_FINGERPRINT }) },
+      { announce: [{ at: 1600, address: '192.0.2.30' }] },
+    );
+
+    expect(net.requests).toContain('192.0.2.30:443');
+    expect(located).toEqual({ state: 'unreachable', error: { code: 'scannerBusy' } });
+    expect(net.open()).toBe(0);
+  });
+});
+
 describe('проверка запомненного: выбор кандидата (KTD4)', () => {
   it('кандидат с сохранёнными адресом и портом пропускается', async () => {
     const { located, net } = await locate(
@@ -210,6 +252,23 @@ describe('проверка запомненного: поиск ничего н�
       state: 'otherDevice',
       error: { code: 'scannerCertificateChanged' },
     });
+    expect(finishedAt).toBe(CHECK_DEADLINE_MS);
+    expect(net.open()).toBe(0);
+  });
+
+  it('кандидат с нашим сертификатом, но другим UUID — не подтверждён, «другое устройство»', async () => {
+    const { located, finishedAt, net } = await locate(
+      {
+        [OLD]: hangs,
+        '192.0.2.30:443': at(800, {
+          fingerprint: FINGERPRINT,
+          uuid: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+        }),
+      },
+      { announce: [{ at: 2000, address: '192.0.2.30' }] },
+    );
+
+    expect(located).toEqual({ state: 'otherDevice', error: null });
     expect(finishedAt).toBe(CHECK_DEADLINE_MS);
     expect(net.open()).toBe(0);
   });
