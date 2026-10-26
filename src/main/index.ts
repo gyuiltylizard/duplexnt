@@ -1,6 +1,22 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, protocol, session, shell } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  Menu,
+  protocol,
+  screen,
+  session,
+  shell,
+} from 'electron';
 import { join } from 'node:path';
-import { createCommands, createThumbnails, layoutOf, openPassService } from '@core';
+import {
+  createCommands,
+  createThumbnails,
+  layoutOf,
+  openPassService,
+  openWindowStateStore,
+} from '@core';
 import ru from '@locales/ru/common.json';
 import { APP_NAME, fail, ok, PAGE_IMAGE_SCHEME, type Result } from '@shared';
 import { registerBridge } from './bridge';
@@ -11,19 +27,29 @@ import { denyAllPermissions, installShellGuards } from './shell/guards';
 import { installShortcutGuard } from './shell/shortcuts';
 import { buildWebPreferences } from './shell/web-preferences';
 import { acquireSingleInstance } from './single-instance';
+import {
+  DEFAULT_WINDOW_SIZE,
+  placeWindow,
+  trackWindowState,
+  type WindowPlacement,
+} from './window-bounds';
 import { installWindowClose } from './window-close';
 
-function createWindow(): BrowserWindow {
+function createWindow({ bounds, maximized }: WindowPlacement): BrowserWindow {
   const window = new BrowserWindow({
-    width: 1100,
-    height: 760,
+    ...(bounds ?? DEFAULT_WINDOW_SIZE),
     show: false,
     title: APP_NAME,
     webPreferences: buildWebPreferences(join(__dirname, '../preload/index.js')),
   });
 
+  // Разворот показывает окно сам; границы до разворота остаются его «обычными» (B-3).
   window.once('ready-to-show', () => {
-    window.show();
+    if (maximized) {
+      window.maximize();
+    } else {
+      window.show();
+    }
   });
 
   // Сломанный preload иначе молчит: окно откроется, а моста в нём не будет.
@@ -68,10 +94,21 @@ function storageUnreadable(error: unknown): void {
 async function start(): Promise<void> {
   denyAllPermissions(session.defaultSession);
 
+  // Размер и место окна с прошлого запуска (B-3): мониторы известны только после `ready`.
+  const windowState = await openWindowStateStore(dataRoot);
+  const workAreas = screen.getAllDisplays().map((display) => display.workArea);
+
   // Мост регистрируется до загрузки страницы и получает окно: без него нечем проверить
   // отправителя. Обработчики зовут ядро с сырым входом — проверка входа живёт в ядре.
-  const window = createWindow();
+  const window = createWindow(placeWindow(windowState.get(), workAreas));
   mainWindow = window;
+  trackWindowState(window, (state) => {
+    void windowState.save(state).then((saved) => {
+      if (!saved.ok) {
+        console.error('[main] состояние окна не записано', saved.error);
+      }
+    });
+  });
   const send = createEventSender(window);
 
   let service;
