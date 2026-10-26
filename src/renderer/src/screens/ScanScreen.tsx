@@ -14,6 +14,7 @@ import { useFocusWhen } from '../components/useFocusWhen';
 import { useImageLoad } from '../components/useImageLoad';
 import { paramsLine } from '../state/params-line';
 import { setOfPass } from '../state/screen';
+import { useLeavingCard, useStripMotion } from './useStripMotion';
 import './scan-screen.css';
 
 // Экран `scan` (план M1, U23; UI_SPEC раздел 3; handoff U19, S12–S15, S19): тег прохода,
@@ -92,12 +93,16 @@ function StripCard({
 }): ReactNode {
   const { t } = useTranslation();
   const image = useImageLoad();
+  const cardRef = useRef<HTMLLIElement>(null);
+  useLeavingCard(cardRef);
 
   // Потерянная страница в ленте `scan` выглядит как не построившаяся миниатюра — номер на
   // месте; полная форма S18 — в ленте `editor`. Различается только подпись.
   if (page.lost || image.state === 'failed') {
     return (
       <li
+        ref={cardRef}
+        data-key={page.key}
         className="strip__card strip__card--failed"
         title={page.lost ? t('thumb.lostLabel', { number: page.number }) : t('thumb.failedTitle')}
       >
@@ -107,6 +112,8 @@ function StripCard({
   }
   return (
     <li
+      ref={cardRef}
+      data-key={page.key}
       className={image.state === 'loading' ? 'strip__card strip__card--loading' : 'strip__card'}
       aria-busy={image.state === 'loading' ? true : undefined}
     >
@@ -169,6 +176,11 @@ export function ScanScreen({ snapshot, pass, onStop }: ScanScreenProps): ReactNo
   const added = !isMainKind(pass.kind);
 
   const strip = pages.slice(-STRIP_SIZE);
+  const stripRef = useRef<HTMLUListElement>(null);
+  useStripMotion(
+    stripRef,
+    strip.map((page) => page.key),
+  );
   const sessionId = snapshot.session?.id;
 
   const stop = (): void => {
@@ -202,6 +214,7 @@ export function ScanScreen({ snapshot, pass, onStop }: ScanScreenProps): ReactNo
       {/* Лента занимает место с самого начала: первая миниатюра не расталкивает экран
           (смоук приёмки M1). Пустая — скрыта от скринридера. */}
       <ul
+        ref={stripRef}
         className="strip"
         aria-label={strip.length > 0 ? t('scan.strip.label') : undefined}
         aria-hidden={strip.length === 0 ? true : undefined}
