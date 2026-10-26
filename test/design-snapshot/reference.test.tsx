@@ -303,6 +303,7 @@ const WRAPPER_CSS = `/* СГЕНЕРИРОВАНО \`npm run design:snapshot\` �
 .ref-page {
   height: auto;
   min-height: 100%;
+  overflow: auto; /* у окна приложения прокрутки нет (base.css), у страницы референса — есть */
   padding: 16px 24px 40px;
   background: #d9d5cc;
 }
