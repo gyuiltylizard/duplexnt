@@ -18,6 +18,10 @@ import {
   openWindowStateStore,
 } from '@core';
 import ru from '@locales/ru/common.json';
+// Значок окна (B-7): заголовок, панель задач, Alt+Tab. Именно .ico, а не png 256: Windows берёт
+// кадр под поверхность — заголовку 16/24 достаётся оптически упрощённый мастер. `?asset` копирует
+// файл в сборку и даёт путь — нужно для `dev`; упакованное окно иначе взяло бы значок exe.
+import appIcon from '../../build/icon.ico?asset';
 import { APP_NAME, fail, ok, PAGE_IMAGE_SCHEME, type Result } from '@shared';
 import { registerBridge } from './bridge';
 import { resolveDataRoot } from './data-root';
@@ -40,6 +44,7 @@ function createWindow({ bounds, maximized }: WindowPlacement): BrowserWindow {
     ...(bounds ?? DEFAULT_WINDOW_SIZE),
     show: false,
     title: APP_NAME,
+    icon: appIcon,
     webPreferences: buildWebPreferences(join(__dirname, '../preload/index.js')),
   });
 

@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ru">
+  <meta charset="utf-8" /><title>Duplexn't — значок</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 40px;
+      background: #e4e0d7;
+      font:
+        12.5px/1.45 system-ui,
+        sans-serif;
+      color: #1c1a16;
+    }
+    .row {
+      display: flex;
+      gap: 24px;
+      align-items: flex-end;
+      padding: 16px 20px;
+      border-radius: 8px;
+      margin-top: 12px;
+    }
+    .row div {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      font:
+        10.5px ui-monospace,
+        monospace;
+    }
+    .l {
+      background: #f3f3f3;
+      color: #7c766b;
+    }
+    .d {
+      background: #202020;
+      color: #9b958a;
+    }
+  </style>
+  <h2 style="margin: 0 0 16px">Duplexn't — значок приложения</h2>
+  <img src="../../../build/icon.svg" width="256" height="256" alt="" />
+  <script>
+    const sizes = [256, 96, 64, 48, 40, 32, 24, 20, 16];
+    for (const cls of ['l', 'd']) {
+      const r = document.createElement('div');
+      r.className = 'row ' + cls;
+      for (const s of sizes) {
+        const c = document.createElement('div');
+        const i = new Image(s, s);
+        i.src = s <= 24 ? '../../../build/icon-small.svg' : '../../../build/icon.svg';
+        c.append(i, s + (s <= 24 ? ' · small' : ''));
+        r.append(c);
+      }
+      document.body.append(r);
+    }
+  </script>
+</html>

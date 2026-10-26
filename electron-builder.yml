@@ -29,6 +29,9 @@ asarUnpack:
 npmRebuild: false
 
 win:
+  # Значок «Монограмма D’» (B-7): многоразмерный .ico из buildResources — ресурс exe, ярлыки,
+  # «Пуск», установщик и деинсталлятор. Генерируется `npm run icons` из SVG-мастеров рядом.
+  icon: build/icon.ico
   target:
     - target: nsis
       arch:
