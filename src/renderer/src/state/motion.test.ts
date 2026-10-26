@@ -24,7 +24,10 @@ function stubAnimate() {
   return { animateFn, animations };
 }
 
-const flush = (): Promise<void> => new Promise((done) => queueMicrotask(done));
+const flush = (): Promise<void> =>
+  new Promise((done) => {
+    queueMicrotask(done);
+  });
 
 describe('основа движения (B-4)', () => {
   beforeEach(() => {
