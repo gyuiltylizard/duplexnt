@@ -1,33 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { animate, durationOf, easingOf, fadeOut, ghostOf, leaveWithGhost } from './motion';
-
-/** Подставной WAAPI: jsdom его не знает. Анимация завершается вызовом `finish()`. */
-function stubAnimate() {
-  const animations: { element: Element; keyframes: Keyframe[]; finish: () => void }[] = [];
-  const animateFn = vi.fn(function (this: Element, keyframes: Keyframe[]) {
-    const target = new EventTarget();
-    const animation = Object.assign(target, {
-      cancel: () => target.dispatchEvent(new Event('cancel')),
-    }) as unknown as Animation;
-    animations.push({
-      element: this,
-      keyframes,
-      finish: () => target.dispatchEvent(new Event('finish')),
-    });
-    return animation;
-  });
-  Object.defineProperty(Element.prototype, 'animate', {
-    configurable: true,
-    writable: true,
-    value: animateFn,
-  });
-  return { animateFn, animations };
-}
-
-const flush = (): Promise<void> =>
-  new Promise((done) => {
-    queueMicrotask(done);
-  });
+import { flushMicrotasks as flush, stubAnimate, unstubAnimate } from './motion-fixture';
 
 describe('основа движения (B-4)', () => {
   beforeEach(() => {
@@ -39,7 +12,7 @@ describe('основа движения (B-4)', () => {
   afterEach(() => {
     document.documentElement.removeAttribute('style');
     document.body.replaceChildren();
-    Reflect.deleteProperty(Element.prototype, 'animate');
+    unstubAnimate();
   });
 
   it('длительности и кривые — из токенов; токена нет — 0, то есть без анимации', () => {

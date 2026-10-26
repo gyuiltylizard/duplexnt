@@ -6,6 +6,22 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  /* B-4: опора для копии уходящего экрана; свой слой — копия ложится под экран, а не под фон. */
+  position: relative;
+  isolation: isolate;
+}
+
+/* Рамка экрана (B-4) — только для движения, раскладку не меняет. */
+.app__screen {
+  display: contents;
+}
+
+/* Копия уходящего экрана: под новым, ввод не принимает, снимается по концу растворения. */
+.app__leaving {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
 }
 
 /* — кнопки — */
