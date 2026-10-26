@@ -18,10 +18,11 @@ import {
   openWindowStateStore,
 } from '@core';
 import ru from '@locales/ru/common.json';
-// Значок окна (B-7): заголовок, панель задач, Alt+Tab. Именно .ico, а не png 256: Windows берёт
-// кадр под поверхность — заголовку 16/24 достаётся оптически упрощённый мастер. `?asset` копирует
+// Значок окна (B-7): заголовок, панель задач, Alt+Tab. Свой .ico, не значок exe: Electron берёт
+// из него кадры системных размеров (на 100 % — 16 и 32), а панель ужимает 32 до 24 px. Поэтому все
+// кадры — из оптически упрощённого мастера почти без полей (`WINDOW_ICON_SIZES`). `?asset` копирует
 // файл в сборку и даёт путь — нужно для `dev`; упакованное окно иначе взяло бы значок exe.
-import appIcon from '../../build/icon.ico?asset';
+import appIcon from '../../build/window-icon.ico?asset';
 import { APP_NAME, fail, ok, PAGE_IMAGE_SCHEME, type Result } from '@shared';
 import { registerBridge } from './bridge';
 import { resolveDataRoot } from './data-root';

@@ -2,7 +2,9 @@
 
 > **В репозитории (B-7):** мастера — `build/icon.svg` и `build/icon-small.svg` (байт в байт из
 > handoff'а); `build/icon.ico` генерирует `npm run icons` (`scripts/build-icons.ts`) — вместо
-> справочного `build-icons.mjs` ниже. MSIX-ассеты не генерируются: приложение ставится NSIS.
+> справочного `build-icons.mjs` ниже. Значок окна (заголовок, панель задач) — отдельный
+> `build/window-icon.ico`, все кадры из `icon-small.svg`: панель ужимает его кадр 32 до 24 px,
+> и поля сетки крупного мастера делали плитку меньше соседних. MSIX-ассеты не генерируются: приложение ставится NSIS.
 > Превью размеров — `app-icon-preview.html` рядом. Журнал — `docs/solutions/0012-b-7-app-icon.md`.
 
 ## Overview

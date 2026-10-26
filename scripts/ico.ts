@@ -15,6 +15,16 @@ export interface IcoFrame {
 export const ICON_SIZES = [16, 20, 24, 32, 40, 48, 64, 96, 256] as const;
 export const ICON_PATH = 'build/icon.ico';
 
+/**
+ * Значок окна — отдельный файл. Electron отдаёт окну кадры размеров `SM_CXSMICON` и `SM_CXICON`
+ * (на 100 % это 16 и 32), и панель задач ужимает «крупный» кадр до своих 24 px. Кадр 32 из
+ * icon.svg с полями сетки давал на панели плитку 21 px против 22–23 у соседей. Поэтому все кадры
+ * окна — из icon-small.svg: на панели и в заголовке значок и так мелкий. Размеры покрывают оба
+ * системных размера на масштабах 100–200 %.
+ */
+export const WINDOW_ICON_SIZES = [16, 20, 24, 28, 32, 40, 48, 56, 64] as const;
+export const WINDOW_ICON_PATH = 'build/window-icon.ico';
+
 const HEADER_SIZE = 6;
 const ENTRY_SIZE = 16;
 const BITMAPINFOHEADER_SIZE = 40;
