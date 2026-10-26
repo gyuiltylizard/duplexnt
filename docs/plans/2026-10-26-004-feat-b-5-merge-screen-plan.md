@@ -2,7 +2,7 @@
 title: 'feat: редизайн экрана merge (B-5)'
 type: feat
 date: 2026-10-26
-status: в работе # в работе → done; заморожен — готов, не начат
+status: done # в работе → done; заморожен — готов, не начат
 origin: docs/design/handoffs/2026-10-b5-merge.md
 ---
 
