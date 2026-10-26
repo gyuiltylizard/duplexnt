@@ -17,6 +17,7 @@
     "test": "vitest run --project node --project jsdom",
     "test:integration": "vitest run --project integration",
     "test:all": "npm run test && npm run test:integration",
+    "design:snapshot": "vitest run --project design",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "emulator": "node test/emulator/cli.ts",

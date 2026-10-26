@@ -224,6 +224,7 @@ export default defineConfig(
           './tsconfig.node.json',
           './tsconfig.web.json',
           './tsconfig.test.json',
+          './tsconfig.design.json',
         ],
         tsconfigRootDir: import.meta.dirname,
       },

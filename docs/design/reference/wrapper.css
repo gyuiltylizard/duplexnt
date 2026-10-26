@@ -1,0 +1,53 @@
+/* СГЕНЕРИРОВАНО `npm run design:snapshot` — оформление страницы референса (вкладки, кадр),
+   не стили приложения. Руками не править. */
+
+.ref-page {
+  height: auto;
+  min-height: 100%;
+  padding: 16px 24px 40px;
+  background: #d9d5cc;
+}
+
+.ref-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.ref-tab {
+  padding: 6px 12px;
+  border: 1px solid #b5afa4;
+  border-radius: 8px;
+  background: #f4f1ea;
+  font: 500 12.5px/1 'Golos Text', system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.ref-tab[aria-selected='true'] {
+  background: #2f2c27;
+  border-color: #2f2c27;
+  color: #fff;
+}
+
+.ref-note {
+  margin: 0 0 8px;
+  max-width: 1280px;
+  font: 400 12.5px/1.45 'Golos Text', system-ui, sans-serif;
+  color: #4a463f;
+}
+
+/* Окно приложения: transform делает кадр контейнером для position: fixed — модалки и тосты
+   ложатся в кадр, а не на всю страницу. */
+.ref-frame {
+  position: relative;
+  overflow: hidden;
+  transform: translateZ(0);
+  border-radius: 8px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  background: var(--color-bg-app);
+}
+
+.ref-root {
+  height: 100%;
+}

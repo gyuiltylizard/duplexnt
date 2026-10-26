@@ -1,6 +1,11 @@
 # Макет — замороженный артефакт дизайна, не наш код.
 docs/design/mock/
 
+# Генерирует `npm run design:snapshot` (B-6): форматирование дало бы diff при каждой
+# перегенерации.
+docs/design/reference/
+docs/design/handoff-template.md
+
 # Фикстуры — байт в байт (см. .gitattributes).
 test/fixtures/
 

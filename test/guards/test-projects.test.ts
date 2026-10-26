@@ -59,6 +59,9 @@ describe('тестовые прогоны', () => {
     expect(projectsOf('test/integration/imaging-probe.test.ts', TEST_PROJECTS)).toEqual([
       'integration',
     ]);
+    expect(projectsOf('test/design-snapshot/reference.test.tsx', TEST_PROJECTS)).toEqual([
+      'design',
+    ]);
   });
 
   it('скрипты package.json называют каждый проект, и только существующие', () => {
@@ -66,8 +69,9 @@ describe('тестовые прогоны', () => {
     const { scripts } = JSON.parse(readFileSync('package.json', 'utf8')) as {
       scripts: Record<string, string>;
     };
-    const named = [scripts.test, scripts['test:integration']].flatMap((script) =>
-      [...(script ?? '').matchAll(/--project (\S+)/g)].map((match) => match[1]),
+    // `design:snapshot` — отдельной командой: снимок пишет в docs/ и в `test:all` не входит (B-6).
+    const named = [scripts.test, scripts['test:integration'], scripts['design:snapshot']].flatMap(
+      (script) => [...(script ?? '').matchAll(/--project (\S+)/g)].map((match) => match[1]),
     );
 
     expect(named.sort()).toEqual(TEST_PROJECTS.map((project) => project.name).sort());

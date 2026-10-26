@@ -5,7 +5,7 @@
 // Пути — от корня репозитория, с прямыми слэшами.
 
 export interface TestProject {
-  readonly name: 'node' | 'jsdom' | 'integration';
+  readonly name: 'node' | 'jsdom' | 'integration' | 'design';
   readonly environment: 'node' | 'jsdom';
   readonly include: readonly string[];
   readonly exclude?: readonly string[];
@@ -27,5 +27,12 @@ export const TEST_PROJECTS: readonly TestProject[] = [
     name: 'integration',
     environment: 'node',
     include: ['test/integration/**/*.test.ts'],
+  },
+  // Снимок интерфейса для дизайн-агента (B-6): пишет в docs/design/reference/, поэтому ни в
+  // `test`, ни в `test:all` не входит — только `npm run design:snapshot`.
+  {
+    name: 'design',
+    environment: 'jsdom',
+    include: ['test/design-snapshot/**/*.test.tsx'],
   },
 ];
