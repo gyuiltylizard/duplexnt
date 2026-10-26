@@ -12,16 +12,23 @@ import {
 // под новым, `inert`; новый поверх проявляется за `--duration-screen`, затем копия снимается.
 // Направления нет. Новая смена во время перехода доводит текущую мгновенно: двух уходящих
 // экранов не бывает. Модалка, открытая поверх экрана, — его потомок и уходит вместе с ним.
+//
+// Был ли уход настоящим, видно только после коммита: StrictMode (dev) тут же «снимает» и снова
+// монтирует новый экран, а рамка при этом остаётся в DOM. Поэтому переход утверждается
+// микрозадачей — по тому, снята ли рамка, — а до тех пор ничего прежнего не трогает.
 
-/** Идущий переход: проявление нового экрана и отмена его копии-подложки. */
-let current: { fadeIn: Animation | null; dropGhost: () => void } | null = null;
-/** В этом коммите экран ушёл — следующий смонтированный проявляется. */
-let leftThisCommit = false;
+interface Transition {
+  fadeIn: Animation | null;
+  readonly dropGhost: () => void;
+}
 
-function finishCurrent(): void {
-  current?.fadeIn?.finish();
-  current?.dropGhost();
-  current = null;
+/** Утверждённый переход: его доводит следующая смена. */
+let current: Transition | null = null;
+/** Уходы этого коммита: проявление нового экрана записывается в каждый. */
+let leavingThisCommit: Transition[] = [];
+
+function screenDuration(): number {
+  return durationOf(prefersReducedMotion() ? '--duration-exit' : '--duration-screen');
 }
 
 export function ScreenFrame({ children }: { readonly children: ReactNode }): ReactNode {
@@ -30,35 +37,40 @@ export function ScreenFrame({ children }: { readonly children: ReactNode }): Rea
   useLayoutEffect(() => {
     const frame = frameRef.current;
     const screen = frame?.firstElementChild;
-    if (leftThisCommit && screen instanceof HTMLElement) {
-      leftThisCommit = false;
+    if (leavingThisCommit.length > 0 && screen instanceof HTMLElement) {
       const fadeIn = animate(screen, [{ opacity: 0 }, { opacity: 1 }], {
-        duration: durationOf(prefersReducedMotion() ? '--duration-exit' : '--duration-screen'),
+        duration: screenDuration(),
         easing: easingOf('--ease-standard'),
       });
-      if (current !== null) {
-        current.fadeIn = fadeIn;
+      for (const transition of leavingThisCommit) {
+        transition.fadeIn = fadeIn;
       }
     }
     return () => {
       const leaving = frame?.firstElementChild;
       const app = frame?.parentElement ?? null;
-      finishCurrent();
-      leftThisCommit = true;
       // Копия живёт, пока проявляется новый: «держится» на месте без изменений.
       const hold = (ghost: HTMLElement): Animation | null => {
         ghost.classList.add('app__leaving');
-        return animate(ghost, [{}, {}], {
-          duration: durationOf(prefersReducedMotion() ? '--duration-exit' : '--duration-screen'),
-        });
+        return animate(ghost, [{}, {}], { duration: screenDuration() });
       };
-      const dropGhost = leaveWithGhost(leaving instanceof HTMLElement ? leaving : null, hold, {
-        parent: app,
-        next: app?.firstChild ?? null,
-      });
-      current = { fadeIn: null, dropGhost };
+      const transition: Transition = {
+        fadeIn: null,
+        dropGhost: leaveWithGhost(leaving instanceof HTMLElement ? leaving : null, hold, {
+          parent: app,
+          next: app?.firstChild ?? null,
+        }),
+      };
+      leavingThisCommit.push(transition);
       queueMicrotask(() => {
-        leftThisCommit = false;
+        leavingThisCommit = [];
+        if (frame?.isConnected === true) {
+          return; // не уход — повторный монтаж StrictMode
+        }
+        // Новая смена во время перехода: прежний доводится мгновенно, его копия снимается.
+        current?.fadeIn?.finish();
+        current?.dropGhost();
+        current = transition;
       });
     };
   }, []);

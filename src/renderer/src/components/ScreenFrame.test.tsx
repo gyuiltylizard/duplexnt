@@ -80,6 +80,33 @@ describe('смена экранов — растворение (B-4)', () => {
     expect(firstFadeIn?.animation.playState).toBe('finished');
   });
 
+  it('StrictMode (dev): повторный монтаж нового экрана не отменяет переход — копия прежнего есть', async () => {
+    const { animations } = stubAnimate();
+    const view = render(
+      <StrictMode>
+        <Screens screen="setup" />
+      </StrictMode>,
+    );
+    await act(flushMicrotasks);
+
+    view.rerender(
+      <StrictMode>
+        <Screens screen="scan" />
+      </StrictMode>,
+    );
+    await act(flushMicrotasks);
+
+    const ghost = view.container.querySelector('.app__leaving');
+    expect(ghost?.classList.contains('setup-screen')).toBe(true);
+    expect(
+      animations.some(
+        (it) =>
+          it.element.classList.contains('scan-screen') &&
+          !it.element.classList.contains('app__leaving'),
+      ),
+    ).toBe(true);
+  });
+
   it('StrictMode (двойной монтаж dev) копий не оставляет', async () => {
     stubAnimate();
     const view = render(
