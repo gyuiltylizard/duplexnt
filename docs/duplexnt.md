@@ -601,6 +601,7 @@ npm run test              # чистая логика, интерфейс, ст�
 npm run test:integration  # sharp; с M1 — ядро против эмулятора сканера по настоящему HTTP
 npm run test:all          # оба зелёные = DoD вехи
 npm run tokens:sync       # перегенерировать tokens.css из docs/design/DESIGN_SYSTEM.md
+npm run icons             # build/icon.ico из SVG-мастеров build/icon*.svg (B-7); результат коммитится
 npm run design:snapshot   # референс интерфейса для дизайн-агента в docs/design/reference/ (B-6);
                           #   в test:all не входит — после вехи, менявшей UI
 node scripts/privacy-guard.ts   # полный прогон стража; --staged — то, что делает hook
