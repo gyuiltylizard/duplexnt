@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "types": ["node"],
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.design.tsbuildinfo"
+  },
+  "include": [
+    "test/design-snapshot/**/*",
+    "src/renderer/src/**/*",
+    "src/shared/**/*",
+    "locales/**/*.json",
+    "types/**/*"
+  ]
+}

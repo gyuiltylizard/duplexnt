@@ -1,5 +1,11 @@
-# Макет — замороженный артефакт дизайна, не наш код.
+# Исходный макет M0 — замороженный артефакт дизайна; мок дизайн-агента — его файлы, не наш код.
+docs/design/archive/
 docs/design/mock/
+
+# Генерирует `npm run design:snapshot` (B-6): форматирование дало бы diff при каждой
+# перегенерации.
+docs/design/reference/
+docs/design/handoff-template.md
 
 # Фикстуры — байт в байт (см. .gitattributes).
 test/fixtures/

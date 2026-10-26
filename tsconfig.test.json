@@ -11,5 +11,7 @@
     "*.config.ts",
     "src/core/**/*",
     "src/shared/**/*"
-  ]
+  ],
+  // Снимок дизайна рендерит renderer (DOM, JSX) — у него свой tsconfig.design.json (B-6).
+  "exclude": ["test/design-snapshot/**/*"]
 }

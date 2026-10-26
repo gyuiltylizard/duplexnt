@@ -1,0 +1,3528 @@
+/* СГЕНЕРИРОВАНО `npm run design:snapshot` из стилей src/renderer/src — руками не править. */
+
+/* ── styles/tokens.css ── */
+
+/*
+ * Токены дизайн-системы. СГЕНЕРИРОВАНО из блока `:root` в docs/design/DESIGN_SYSTEM.md —
+ * источник правды там. Руками не править: `npm run tokens:sync`.
+ * Расхождение с документом ловит test/design/tokens-drift.test.ts.
+ */
+:root {
+  /* — примитивы: цвет — */
+  --color-ink-900: #1c1a16;
+  --color-ink-700: #4a463f;
+  --color-ink-600: #6f6a60;
+  --color-ink-500: #7c766b;
+  --color-ink-400: #8b857a;
+  --color-ink-300: #9b958a;
+  --color-ink-200: #b5afa4;
+  --color-ink-100: #cfc9bd;
+  --color-sand-500: #e4e0d7;
+  --color-sand-400: #e8e4db;
+  --color-sand-300: #eceae3;
+  --color-sand-200: #efece5;
+  --color-sand-100: #f2efe8;
+  --color-sand-50: #f7f5f1;
+  --color-sand-25: #fbfaf7;
+  --color-white: #fff;
+  --color-green-600: #0f7a5a;
+  --color-green-700: #0a5b43;
+  --color-green-500: #2e7d4f;
+  --color-red-600: #a3352a;
+  --color-amber-600: #a06a2a;
+  --color-blue-600: #3f6ea8;
+  --color-violet-600: #6b4ea8;
+  --alpha-ink-10: rgba(28, 26, 22, 0.1);
+  --alpha-ink-13: rgba(28, 26, 22, 0.13);
+  --alpha-ink-14: rgba(28, 26, 22, 0.14);
+  --alpha-ink-16: rgba(28, 26, 22, 0.16);
+  --alpha-ink-20: rgba(28, 26, 22, 0.2);
+  --alpha-ink-25: rgba(28, 26, 22, 0.25);
+  --alpha-ink-28: rgba(28, 26, 22, 0.28);
+  --alpha-ink-34: rgba(28, 26, 22, 0.34);
+  --alpha-ink-45: rgba(28, 26, 22, 0.45);
+  --alpha-white-55: rgba(255, 255, 255, 0.55);
+  --alpha-green-8: rgba(15, 122, 90, 0.08);
+  --alpha-green-12: rgba(15, 122, 90, 0.12);
+  --alpha-green-40: rgba(15, 122, 90, 0.4);
+  --alpha-red-40: rgba(163, 53, 42, 0.4);
+  /* — семантика: цвет — */
+  --color-accent: var(--color-ink-700);
+  --color-link: var(--color-green-600);
+  --color-link-hover: var(--color-green-700);
+  --color-success: var(--color-green-500);
+  --color-danger: var(--color-red-600);
+  --color-warning: var(--color-amber-600);
+  --color-status-ready: var(--color-success);
+  --color-status-busy: var(--color-danger);
+  --color-status-unavailable: var(--color-ink-300);
+  --color-doc-1: var(--color-accent);
+  --color-doc-2: var(--color-amber-600);
+  --color-doc-3: var(--color-blue-600);
+  --color-doc-4: var(--color-violet-600);
+  --color-pass-1: var(--color-accent);
+  --color-pass-2: var(--color-amber-600);
+  --color-pass-3: var(--color-violet-600);
+  --color-text-primary: var(--color-ink-900);
+  --color-text-secondary: var(--color-ink-700);
+  --color-text-muted: var(--color-ink-600);
+  --color-text-subtle: var(--color-ink-500);
+  --color-text-hint: var(--color-ink-400);
+  --color-text-faint: var(--color-ink-300);
+  --color-text-ghost: var(--color-ink-200);
+  --color-text-on-inverse: var(--color-sand-50);
+  --color-text-on-inverse-muted: var(--color-ink-100);
+  --color-text-on-accent: var(--color-white);
+  --color-bg-canvas: var(--color-sand-500);
+  --color-bg-app: var(--color-sand-100);
+  --color-bg-surface: var(--color-sand-25);
+  --color-bg-elevated: var(--color-sand-50);
+  --color-bg-paper: var(--color-white);
+  --color-bg-panel: var(--color-sand-300);
+  --color-bg-toolbar: var(--color-sand-200);
+  --color-bg-well: var(--color-sand-400);
+  --color-bg-inverse: var(--color-ink-900);
+  --color-bg-tray: var(--color-ink-100);
+  --color-bg-selected: color-mix(in oklab, var(--color-accent) 9%, var(--color-bg-surface));
+  --color-bg-accent-soft: var(--alpha-green-8);
+  --color-bg-accent-hover: var(--alpha-green-12);
+  --color-bg-overlay: var(--alpha-ink-34);
+  --color-bg-nav: var(--alpha-white-55);
+  --color-bg-control-off: var(--alpha-ink-20);
+  --color-border-subtle: var(--alpha-ink-10);
+  --color-border-default: var(--alpha-ink-14);
+  --color-border-strong: var(--alpha-ink-16);
+  --color-border-emphasis: var(--alpha-ink-20);
+  --color-border-heavy: var(--alpha-ink-25);
+  --color-border-inverse: var(--color-ink-900);
+  --color-border-focus: var(--color-accent);
+  --color-border-accent-soft: var(--alpha-green-40);
+  --color-border-danger-soft: var(--alpha-red-40);
+  --color-glyph-soft: var(--alpha-ink-13);
+  --color-glyph: var(--alpha-ink-20);
+  --color-glyph-strong: var(--alpha-ink-28);
+  /* — типографика — */
+  --font-family-sans: 'Golos Text', system-ui, sans-serif;
+  --font-family-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-size-xxxs: 8.5px;
+  --font-size-xxs: 9.5px;
+  --font-size-xs: 10.5px;
+  --font-size-s: 11.5px;
+  --font-size-m: 12.5px;
+  --font-size-base: 13px;
+  --font-size-l: 14.5px;
+  --font-size-xl: 17px;
+  --font-size-2xl: 19px;
+  --font-size-3xl: 21px;
+  --font-size-4xl: 24px;
+  --font-size-display-s: 30px;
+  --font-size-display: 33px;
+  --leading-none: 1;
+  --leading-tight: 1.15;
+  --leading-snug: 1.2;
+  --leading-normal: 1.3;
+  --leading-relaxed: 1.45;
+  --leading-loose: 1.55;
+  --tracking-tight: -0.02em;
+  --tracking-snug: -0.01em;
+  --tracking-wide: 0.06em;
+  --tracking-caps: 0.12em;
+  /* — отступы — */
+  --space-px: 1px;
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 10px;
+  --space-6: 12px;
+  --space-7: 14px;
+  --space-8: 16px;
+  --space-9: 18px;
+  --space-10: 20px;
+  --space-11: 22px;
+  --space-12: 26px;
+  --space-13: 30px;
+  --space-14: 34px;
+  --space-15: 44px;
+  --space-16: 54px;
+  /* — размеры — */
+  --size-frame-w: 1280px;
+  --size-frame-h: 800px;
+  --size-rail: 288px;
+  --size-inspector: 300px;
+  --size-aside: 470px;
+  --size-toolbar: 50px;
+  --size-statusbar: 46px;
+  --size-modal-s: 500px;
+  --size-modal: 560px;
+  --size-thumb: 96px;
+  --size-label-col: 118px;
+  --size-list-row: 44px;
+  --size-control-w: 30px;
+  --size-control-h: 28px;
+  --size-step: 24px;
+  --size-badge: 20px;
+  --size-badge-s: 17px;
+  --size-check: 16px;
+  --size-toggle-w: 22px;
+  --size-toggle-h: 13px;
+  --size-toggle-knob: 9px;
+  --size-dot: 8px;
+  --size-scrollbar: 10px;
+  /* — радиусы, границы, тени — */
+  --radius-xs: 2px;
+  --radius-s: 4px;
+  --radius-m: 6px;
+  --radius-l: 8px;
+  --radius-xl: 12px;
+  --radius-round: 50%;
+  --border-width: 1px;
+  --border-width-dashed: 1.5px;
+  --border-width-thick: 3px;
+  --shadow-frame: 0 30px 70px rgba(28, 26, 22, 0.26);
+  --shadow-modal: 0 24px 60px rgba(28, 26, 22, 0.34);
+  --shadow-float: 0 12px 30px rgba(28, 26, 22, 0.3);
+  --shadow-paper: 0 8px 26px rgba(28, 26, 22, 0.16);
+  --shadow-button: 0 1px 2px rgba(28, 26, 22, 0.2);
+  --shadow-hairline: 0 1px 0 rgba(28, 26, 22, 0.08);
+  --shadow-ring-selected: 0 0 0 2px rgba(28, 26, 22, 0.45);
+  /* — движение, слои, прозрачность — */
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+  --duration-loop: 1200ms;
+  --duration-loop-long: 3800ms;
+  --delay-stagger: 200ms;
+  --ease-standard: ease;
+  --ease-loop: ease-in-out;
+  --z-raised: 3;
+  --z-tooltip: 6;
+  --opacity-soft: 0.85;
+  --opacity-disabled: 0.55;
+  --opacity-dragging: 0.45;
+}
+
+/* ── styles/base.css ── */
+
+/* Базовые стили документа. Значения — только переменные из tokens.css. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg-app);
+  color: var(--color-text-primary);
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--leading-relaxed);
+  -webkit-font-smoothing: antialiased;
+}
+
+code,
+pre,
+kbd,
+samp {
+  font-family: var(--font-family-mono);
+}
+
+/* ── app.css ── */
+
+/* Каркас интерфейса M1 (U20): примитивы по рецептам DESIGN_SYSTEM.md и CSS handoff'а U19.
+   Значения — только переменные из tokens.css; литералы геометрии иллюстраций и колонок —
+   осознанное исключение дизайн-системы («Открытые вопросы» 7). */
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* — кнопки — */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  white-space: nowrap;
+  cursor: pointer;
+  outline: none;
+  font-family: var(--font-family-sans);
+}
+
+.btn--primary {
+  background: var(--color-accent);
+  color: var(--color-text-on-accent);
+  border: 0;
+  border-radius: var(--radius-l);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-base);
+  line-height: var(--leading-none);
+  padding: var(--space-6) var(--space-9);
+}
+
+.btn--primary.btn--large {
+  font-size: var(--font-size-l);
+  padding: var(--space-8) var(--space-12);
+  box-shadow: var(--shadow-button);
+}
+
+.btn--primary.btn--large:hover {
+  filter: brightness(1.08);
+}
+
+/* Компактная первичная «+ Добавить сканер» */
+.btn--primary.btn--small {
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-m);
+  padding: var(--space-4) var(--space-6);
+  border-radius: var(--radius-m);
+}
+
+.btn--secondary {
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-l);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-base);
+  line-height: var(--leading-none);
+  padding: var(--space-6) var(--space-9);
+}
+
+.btn--secondary.btn--large {
+  font-size: var(--font-size-l);
+  padding: var(--space-8) var(--space-12);
+}
+
+.btn--tinted {
+  background: var(--color-bg-toolbar);
+  color: var(--color-text-primary);
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-m);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-m);
+  line-height: var(--leading-none);
+  padding: var(--space-4) var(--space-6);
+}
+
+.btn--ghost {
+  background: none;
+  border: 0;
+  padding: var(--space-2) var(--space-3);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-m);
+  line-height: var(--leading-none);
+  color: var(--color-accent);
+}
+
+.btn--ghost:hover {
+  text-decoration: underline;
+}
+
+.btn--icon {
+  width: var(--size-control-w);
+  height: var(--size-control-h);
+  padding: 0;
+  background: var(--color-bg-surface);
+  border: var(--border-width) solid var(--color-border-default);
+  border-radius: var(--radius-m);
+  font-size: var(--font-size-base);
+  color: var(--color-text-secondary);
+}
+
+.btn--link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--color-link);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.btn--link:hover {
+  color: var(--color-link-hover);
+}
+
+/* Недоступная кнопка и фокус (handoff U19; DESIGN_SYSTEM → «Открытые вопросы» 6).
+   `aria-disabled` — у кнопок, которые гаснут, не выбрасывая фокус (стрелки статус-бара). */
+.btn:disabled,
+.btn[aria-disabled='true'] {
+  opacity: var(--opacity-disabled);
+  cursor: default;
+  filter: none;
+  text-decoration: none;
+}
+
+/* Кольцо фокуса — одно на все фокусируемые элементы интерфейса. */
+.btn:focus-visible,
+.segment:focus-visible,
+.thumb:focus-visible,
+.device-item:focus-visible,
+.device-advanced__toggle:focus-visible,
+.rail__selection-group:focus-visible,
+.rail__selection-clear:focus-visible,
+.doc-group__unsplit:focus-visible,
+.doc-list__item:focus-visible,
+.details-toggle:focus-visible,
+.save-mode:focus-visible,
+.choice:focus-visible,
+.toast__action:focus-visible,
+.toggle__input:focus-visible + .toggle__track {
+  outline: var(--space-1) solid var(--color-border-focus);
+  outline-offset: var(--space-1);
+}
+
+/* — кикер и точка статуса — */
+
+.kicker {
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-xs);
+  line-height: var(--leading-none);
+  font-family: var(--font-family-mono);
+  letter-spacing: var(--tracking-caps);
+  color: var(--color-text-hint);
+}
+
+.kicker--warning {
+  color: var(--color-warning);
+}
+
+.kicker--accent {
+  color: var(--color-accent);
+}
+
+/* S5 M4.5: кикер набора на flip — цвет набора, как тег scan. */
+.kicker--added {
+  color: var(--color-pass-3);
+}
+
+.dot {
+  flex: none;
+  width: var(--size-dot);
+  height: var(--size-dot);
+  border-radius: var(--radius-round);
+}
+
+.dot--ready {
+  background: var(--color-status-ready);
+}
+
+.dot--danger {
+  background: var(--color-danger);
+}
+
+.dot--warning {
+  background: var(--color-warning);
+}
+
+.dot--accent {
+  background: var(--color-accent);
+}
+
+.dot--checking {
+  background: var(--color-text-faint);
+  animation: pulse var(--duration-loop) var(--ease-loop) infinite;
+}
+
+/* — плашки уведомлений (S6, S20) — */
+
+.notice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-4) var(--space-4) var(--space-6);
+  background: var(--color-bg-surface);
+  border: var(--border-width) solid var(--color-border-default);
+  border-radius: var(--radius-l);
+}
+
+.notice__text {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-s);
+  line-height: var(--leading-relaxed);
+  color: var(--color-text-secondary);
+  text-wrap: pretty;
+}
+
+.notice--warning .notice__text {
+  color: var(--color-warning);
+}
+
+.notice--danger .notice__text {
+  color: var(--color-danger);
+}
+
+.notices {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-6) var(--space-8) 0;
+}
+
+/* — скелетон — */
+
+.skeleton {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-xs);
+  background: var(--color-bg-surface);
+  animation: pulse var(--duration-loop) var(--ease-loop) infinite;
+}
+
+/* Поверх загружающейся картинки — в миниатюрах, превью и ленте `scan` (S19). */
+.skeleton--cover {
+  position: absolute;
+  inset: 0;
+  border-radius: 0;
+}
+
+/* — сегментированный выбор — */
+
+.segments {
+  display: flex;
+  flex-wrap: wrap; /* наборы приходят из capabilities — длинный ряд переносится */
+  gap: var(--space-2);
+}
+
+.segment {
+  font-family: var(--font-family-sans);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-s);
+  line-height: var(--leading-none);
+  padding: var(--space-4) var(--space-4);
+  border-radius: var(--radius-m);
+  border: var(--border-width) solid var(--color-border-default);
+  background: var(--color-bg-surface);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  outline: none;
+}
+
+.segment:hover {
+  border-color: var(--color-accent);
+}
+
+.segment--selected {
+  background: var(--color-bg-selected);
+  border-color: var(--color-border-focus);
+  color: var(--color-accent);
+}
+
+.segments[aria-disabled='true'] {
+  opacity: var(--opacity-disabled);
+}
+
+.segments[aria-disabled='true'] .segment {
+  cursor: default;
+}
+
+.segments[aria-disabled='true'] .segment:hover {
+  border-color: var(--color-border-default);
+}
+
+.segments[aria-disabled='true'] .segment--selected:hover {
+  border-color: var(--color-border-focus);
+}
+
+/* — поле ввода — */
+
+.input {
+  width: 100%;
+  background: var(--color-bg-surface);
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-l);
+  padding: var(--space-6) var(--space-6);
+  font-family: var(--font-family-mono);
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-base);
+  line-height: var(--leading-snug);
+  color: var(--color-text-primary);
+  outline: none;
+}
+
+.input--small {
+  border-color: var(--color-border-default);
+  border-radius: var(--radius-m);
+  padding: var(--space-4) var(--space-5);
+  font-size: var(--font-size-m);
+}
+
+.input:focus {
+  border-color: var(--color-border-focus);
+  background: var(--color-bg-paper);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.field__label {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-hint);
+}
+
+/* — модалка — */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--color-bg-overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal {
+  display: flex;
+  flex-direction: column;
+  width: var(--size-modal);
+  max-height: calc(100% - 60px); /* запас макета над и под окном — литерал геометрии */
+  background: var(--color-bg-elevated);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-modal);
+  overflow: hidden;
+  outline: none; /* контейнер принимает фокус, пока обе кнопки футера недоступны */
+}
+
+.modal--small {
+  width: var(--size-modal-s);
+}
+
+.modal__header {
+  padding: var(--space-11) var(--space-12) var(--space-8);
+  border-bottom: var(--border-width) solid var(--color-border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* Ряд «точка + кикер» — общий для шапки модалки и плашки прерванного прохода. */
+.modal__kicker,
+.pass-banner__kicker {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.modal__title {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-2xl);
+  line-height: var(--leading-snug);
+}
+
+.modal__subtitle {
+  margin: 0;
+  font-size: var(--font-size-m);
+  line-height: var(--leading-relaxed);
+  color: var(--color-text-muted);
+  text-wrap: pretty;
+}
+
+.modal__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-10) var(--space-12);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-9);
+}
+
+.modal__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.modal__footer {
+  background: var(--color-bg-panel);
+  border-top: var(--border-width) solid var(--color-border-subtle);
+  padding: var(--space-8) var(--space-12);
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+/* Футер с единственной кнопкой справа (`mismatch`). */
+.modal__footer--end {
+  justify-content: flex-end;
+}
+
+.modal__footer .btn--ghost {
+  font-size: var(--font-size-base);
+  color: var(--color-text-secondary);
+}
+
+.modal__footer .btn--ghost:hover {
+  color: var(--color-text-primary);
+}
+
+.modal__status {
+  flex: 1;
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-s);
+  line-height: var(--leading-relaxed);
+  color: var(--color-text-subtle);
+  text-wrap: pretty;
+}
+
+.modal__status--danger {
+  color: var(--color-danger);
+}
+
+.modal[aria-busy='true'] .modal__body {
+  opacity: var(--opacity-disabled);
+  pointer-events: none;
+}
+
+/* — тон документа (handoff M3): цвет берут значок, метка тулбара, кромка превью — */
+
+.doc-tone--1 {
+  --doc-color: var(--color-doc-1);
+}
+
+.doc-tone--2 {
+  --doc-color: var(--color-doc-2);
+}
+
+.doc-tone--3 {
+  --doc-color: var(--color-doc-3);
+}
+
+.doc-tone--4 {
+  --doc-color: var(--color-doc-4);
+}
+
+.doc-badge {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--size-badge);
+  height: var(--size-badge);
+  border-radius: var(--radius-m);
+  background: var(--doc-color);
+  color: var(--color-text-on-accent);
+  font: var(--font-weight-semibold) var(--font-size-xs) / var(--leading-none)
+    var(--font-family-mono);
+}
+
+.doc-badge--small {
+  width: var(--size-badge-s);
+  height: var(--size-badge-s);
+  border-radius: var(--radius-s);
+}
+
+/* — таблица фактов: ДЕТАЛИ инспектора и сводка `save` (handoff M3) — */
+
+.facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-px);
+  margin: 0;
+  overflow: hidden;
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-l);
+  background: var(--color-border-subtle);
+}
+
+.facts__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-5);
+  padding: var(--space-4) var(--space-6);
+  background: var(--color-bg-surface);
+}
+
+.facts__key {
+  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
+  color: var(--color-text-muted);
+}
+
+.facts__value {
+  margin: 0;
+  text-align: right;
+  font: var(--font-weight-medium) var(--font-size-m) / var(--leading-snug) var(--font-family-mono);
+  color: var(--color-text-primary);
+}
+
+/* — тост — */
+
+.toast {
+  max-width: calc(100vw - var(--space-16));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  position: fixed;
+  bottom: var(--space-12);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--color-bg-inverse);
+  border-radius: var(--radius-l);
+  box-shadow: var(--shadow-float);
+  padding: var(--space-6) var(--space-6) var(--space-6) var(--space-9);
+  display: flex;
+  align-items: center;
+  gap: var(--space-7);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-m);
+  color: var(--color-text-on-inverse);
+  white-space: nowrap;
+}
+
+/* Тост с действием (handoff M3, S18): текст режется, кнопка остаётся целой. */
+.toast__text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.toast__action {
+  flex: none;
+  padding: var(--space-4) var(--space-6);
+  border: 0;
+  border-radius: var(--radius-m);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  font: var(--font-weight-semibold) var(--font-size-m) / var(--leading-none) var(--font-family-sans);
+  cursor: pointer;
+}
+
+/* — карточка-радио «Что сканируем» (handoff M3.5, S2): рецепт дизайн-системы, впервые в коде — */
+.radio-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.radio-card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-6);
+  width: 100%;
+  padding: var(--space-6);
+  border: var(--border-width) solid var(--color-border-default);
+  border-radius: var(--radius-l);
+  background: var(--color-bg-surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.radio-card:hover:not([aria-disabled='true']) {
+  border-color: var(--color-accent);
+}
+.radio-card--selected {
+  background: var(--color-bg-selected);
+  border-color: var(--color-border-focus);
+}
+.radio-card__dot {
+  flex: none;
+  width: var(--size-check);
+  height: var(--size-check);
+  margin-top: var(--space-px);
+  border-radius: var(--radius-round);
+  border: var(--border-width) solid var(--color-border-heavy);
+  background: var(--color-bg-paper);
+}
+.radio-card--selected .radio-card__dot {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+}
+.radio-card__text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.radio-card__title {
+  font: var(--font-weight-medium) var(--font-size-base) / var(--leading-snug)
+    var(--font-family-sans);
+  color: var(--color-text-primary);
+}
+.radio-card__note {
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-relaxed)
+    var(--font-family-sans);
+  color: var(--color-text-muted);
+  text-wrap: pretty;
+}
+.radio-card:focus-visible {
+  outline: var(--space-1) solid var(--color-border-focus);
+  outline-offset: var(--space-1);
+}
+/* S2 M4.5: выключенная карточка — не кликается, причина читается. */
+.radio-card--disabled {
+  opacity: var(--opacity-disabled);
+  cursor: default;
+}
+.radio-card--disabled .radio-card__note {
+  color: var(--color-text-subtle);
+}
+
+/* — крупные сегменты «Куда вставить» (handoff M3.5, S2) — */
+.segments--wide {
+  gap: var(--space-4);
+}
+.segments--wide .segment {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+.segment--large {
+  font-size: var(--font-size-m);
+  line-height: var(--leading-normal);
+  padding: var(--space-6) var(--space-6);
+  border-radius: var(--radius-l);
+}
+/* Недоступный ряд гасит себя целиком выше — внутри него одиночное правило не складывается. */
+.segments:not([aria-disabled='true']) .segment[aria-disabled='true'] {
+  opacity: var(--opacity-disabled);
+  cursor: default;
+}
+.segments:not([aria-disabled='true']) .segment[aria-disabled='true']:hover {
+  border-color: var(--color-border-default);
+}
+
+/* — кикер-подсказка секции модалки и точка «сканера нет» — */
+.kicker--hint {
+  color: var(--color-text-hint);
+}
+.dot--faint {
+  background: var(--color-text-faint);
+}
+
+/* — карточки выбора `newscan` (handoff M3, S17) — */
+.choices {
+  gap: var(--space-4);
+  padding: var(--space-9) var(--space-12);
+}
+.choice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  width: 100%;
+  padding: var(--space-6);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-l);
+  background: var(--color-bg-surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.choice:hover:not(:disabled) {
+  border-color: var(--color-accent);
+}
+.choice:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: default;
+}
+.choice__sheet {
+  flex: none;
+  width: 30px;
+  height: 42px;
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-xs);
+  background: var(--color-bg-paper);
+}
+.choice__sheet--accent {
+  border-color: var(--color-accent);
+}
+.choice__text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.choice__title {
+  font: var(--font-weight-medium) var(--font-size-base) / var(--leading-snug)
+    var(--font-family-sans);
+}
+.choice__note {
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-relaxed)
+    var(--font-family-sans);
+  color: var(--color-text-muted);
+}
+.choice__arrow {
+  font: var(--font-weight-regular) var(--font-size-l) / var(--leading-none) var(--font-family-sans);
+  color: var(--color-text-faint);
+}
+
+/* — экран setup: колонка настройки + «Как это работает» (S1; M2 U8 вернул правую колонку) — */
+
+.setup-screen {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr var(--size-aside);
+}
+
+.setup-screen__column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-12);
+  width: 100%;
+  max-width: 520px; /* ширина колонки макета — литерал иллюстративной геометрии */
+  padding: 0 var(--space-16);
+  margin: 0 auto;
+  box-sizing: content-box;
+}
+
+.setup-screen__intro {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.setup-screen__title {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-display);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  text-wrap: balance;
+}
+
+.setup-screen__lead {
+  margin: 0;
+  font-size: var(--font-size-l);
+  line-height: var(--leading-loose);
+  color: var(--color-text-muted);
+  text-wrap: pretty;
+}
+
+/* — экран несовместимых данных (S22) — */
+
+.incompatible-screen {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.incompatible-screen__column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  max-width: 520px; /* та же колонка макета, что у setup */
+  padding: 0 var(--space-16);
+}
+
+.incompatible-screen__title {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-display-s);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  text-wrap: pretty;
+}
+
+.incompatible-screen__lead {
+  margin: 0;
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-l);
+  line-height: var(--leading-loose);
+  color: var(--color-text-muted);
+  text-wrap: pretty;
+}
+
+.incompatible-screen__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-10);
+  padding-top: var(--space-6);
+}
+
+.incompatible-screen__status {
+  margin: 0;
+  font-size: var(--font-size-s);
+  line-height: var(--leading-relaxed);
+  color: var(--color-danger);
+}
+
+/* — скрытый текст для скринридера (точка несохранённого S9) — */
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* — движение — */
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dot--checking,
+  .skeleton {
+    animation: none;
+  }
+
+  .skeleton {
+    opacity: var(--opacity-disabled);
+  }
+}
+
+/* ── screens/setup-screen.css ── */
+
+/* Экран `setup` (U22): группа параметров со строкой устройства — панели разделены волосяными
+   линиями (`gap: 1px` поверх тонированной подложки, принцип 1 дизайн-системы). Строка
+   устройства — CSS handoff'а U19 (S2–S5). */
+
+.params {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-px);
+  background: var(--color-border-subtle);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-l);
+  overflow: hidden;
+}
+
+.device-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  padding: var(--space-7) var(--space-8);
+  background: var(--color-bg-surface);
+}
+
+.device-row__name {
+  font: var(--font-weight-medium) var(--font-size-base) / var(--leading-snug)
+    var(--font-family-sans);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.device-row__none {
+  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
+  color: var(--color-text-subtle);
+}
+
+.device-row__status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* Базовый цвет — «готов»; остальные состояния переопределяют модификатором строки. */
+.device-row__status-text {
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-snug) var(--font-family-mono);
+  white-space: nowrap;
+  color: var(--color-status-ready);
+}
+
+.device-row--checking .device-row__status-text {
+  color: var(--color-text-subtle);
+}
+
+.device-row--unreachable .device-row__status-text {
+  color: var(--color-danger);
+}
+
+.device-row--changed .device-row__status-text {
+  color: var(--color-warning);
+}
+
+.device-row__spacer {
+  flex: 1;
+}
+
+.device-row__scheme {
+  font: var(--font-weight-medium) var(--font-size-xxs) / var(--leading-none) var(--font-family-mono);
+  letter-spacing: var(--tracking-caps);
+  color: var(--color-text-faint);
+  border: var(--border-width) solid var(--color-border-default);
+  border-radius: var(--radius-s);
+  padding: var(--space-1) var(--space-2);
+}
+
+.param-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  padding: var(--space-5) var(--space-8);
+  background: var(--color-bg-surface);
+}
+
+.param-row__label {
+  flex: none;
+  width: var(--size-label-col);
+  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
+  color: var(--color-text-muted);
+}
+
+.params__footer {
+  display: flex;
+  padding: var(--space-4) var(--space-8);
+  background: var(--color-bg-panel);
+}
+
+.params__footer .btn--ghost {
+  color: var(--color-text-subtle);
+}
+
+.params__footer .btn--ghost:hover:not(:disabled) {
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+
+.setup-screen__launch {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-5);
+}
+
+.setup-screen__hint {
+  margin: 0;
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-relaxed)
+    var(--font-family-sans);
+  color: var(--color-text-subtle);
+}
+
+/* — правая колонка «Как это работает» (M2 U8, тексты макета) — */
+
+.setup-screen__aside {
+  background: var(--color-bg-well);
+  border-left: var(--border-width) solid var(--color-border-subtle);
+  padding: 0 var(--space-15);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-11);
+}
+
+.howto {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.howto__step {
+  display: flex;
+  gap: var(--space-8);
+  padding: var(--space-6) 0;
+  border-bottom: var(--border-width) solid var(--color-border-subtle);
+}
+
+.howto__num {
+  flex: none;
+  width: var(--size-step);
+  height: var(--size-step);
+  border-radius: var(--radius-round);
+  border: var(--border-width) solid var(--color-border-emphasis);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: var(--font-weight-medium) var(--font-size-m) / var(--leading-none) var(--font-family-mono);
+  color: var(--color-text-muted);
+}
+
+.howto__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.howto__title {
+  font: var(--font-weight-medium) var(--font-size-base) / var(--leading-normal)
+    var(--font-family-sans);
+}
+
+.howto__text {
+  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-relaxed)
+    var(--font-family-sans);
+  color: var(--color-text-subtle);
+  text-wrap: pretty;
+}
+
+/* ── screens/scan-screen.css ── */
+
+/* Экран `scan` (U23): тег, иллюстрация подачи, счётчик, лента, «Остановить» — по рецепту
+   «Индикатор прогресса прохода» дизайн-системы и CSS handoff'а U19 (S12–S15, S19).
+   Геометрия иллюстрации и карточек — литералы макета (осознанное исключение DS). */
+
+.scan-screen {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-14);
+  padding: var(--space-15);
+  outline: none; /* контейнер принимает фокус в S15 — кольцо ему не нужно */
+}
+
+.scan-screen__tag {
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius-m);
+  background: var(--color-accent);
+  font-family: var(--font-family-mono);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-xs);
+  line-height: var(--leading-normal);
+  letter-spacing: var(--tracking-caps);
+  color: var(--color-text-on-accent);
+}
+
+/* S3 M3.5: тег добавленного набора — цвет набора, чтобы он читался с первого кадра. */
+.scan-screen__tag--added {
+  background: var(--color-pass-3);
+}
+
+.scan-screen__stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-11);
+}
+
+.scan-screen__counter {
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-xl);
+  line-height: var(--leading-snug);
+  color: var(--color-text-primary);
+  text-align: center;
+  text-wrap: balance;
+}
+
+.scan-screen__meta {
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-m);
+  line-height: var(--leading-relaxed);
+  font-family: var(--font-family-mono);
+  color: var(--color-text-subtle);
+  text-align: center;
+}
+
+/* — иллюстрация подачи: стопка листов над лотком, полоса активности — */
+
+.feed {
+  position: relative;
+  width: 150px;
+  height: 186px;
+  flex: none;
+}
+
+.feed__sheet {
+  position: absolute;
+  width: 118px;
+  height: 150px;
+  border-radius: var(--radius-s);
+  background: var(--color-bg-paper);
+  border: var(--border-width) solid var(--color-border-strong);
+}
+
+.feed__sheet--back {
+  left: 14px;
+  top: 0;
+  box-shadow: var(--shadow-hairline);
+}
+
+.feed__sheet--mid {
+  left: 10px;
+  top: 6px;
+}
+
+.feed__sheet--moving {
+  left: 16px;
+  top: 12px;
+  animation: feed var(--duration-loop) var(--ease-loop) infinite;
+}
+
+.feed__tray {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 150px;
+  height: 30px;
+  border-radius: var(--radius-s);
+  background: var(--color-bg-tray);
+}
+
+.feed__bar {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  width: 126px;
+  height: 4px;
+  border-radius: var(--radius-xs);
+  background: var(--color-accent);
+  animation: pulse var(--duration-loop) var(--ease-loop) infinite;
+}
+
+/* S13: подача и полоса замирают, полоса приглушается */
+.feed--idle .feed__sheet--moving,
+.feed--idle .feed__bar {
+  animation: none;
+}
+
+.feed--idle .feed__bar {
+  opacity: var(--opacity-disabled);
+}
+
+/* — лента последних пяти: затухание к старому краю шагом 0,17 — */
+
+.strip {
+  display: flex;
+  gap: var(--space-4);
+  align-items: flex-end;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  height: 74px;
+}
+
+.strip__card {
+  position: relative;
+  width: 50px;
+  height: 70px;
+  border-radius: var(--radius-xs);
+  background: var(--color-bg-paper);
+  border: var(--border-width) solid var(--color-border-default);
+  overflow: hidden;
+}
+
+.strip__card:nth-last-child(2) {
+  opacity: 0.83;
+}
+
+.strip__card:nth-last-child(3) {
+  opacity: 0.66;
+}
+
+.strip__card:nth-last-child(4) {
+  opacity: 0.49;
+}
+
+.strip__card:nth-last-child(5) {
+  opacity: 0.32;
+}
+
+.strip__img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Миниатюра проявляется, а не вспыхивает (смоук приёмки M1). */
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+.strip__card--loading .strip__img {
+  opacity: 0;
+}
+
+.strip__card--loading + .strip__card--loading .skeleton {
+  animation-delay: var(--delay-stagger);
+}
+
+.strip__card--failed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-surface);
+}
+
+.strip__num {
+  font-family: var(--font-family-mono);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-xxs);
+  line-height: var(--leading-none);
+  color: var(--color-text-faint);
+}
+
+/* — движение — */
+
+@keyframes feed {
+  0% {
+    transform: translateY(-22px) scaleY(0.98);
+    opacity: 0;
+  }
+
+  25% {
+    opacity: 1;
+  }
+
+  100% {
+    transform: translateY(30px);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feed__sheet--moving,
+  .feed__bar {
+    animation: none;
+  }
+}
+
+/* ── screens/flip-screen.css ── */
+
+/* Экран `flip` (U8): инструкция разворота по макету и UI_SPEC раздел 4; дырки — handoff M2
+   (S1–S3). Геометрия иллюстрации — литералы макета (осознанное исключение DS). */
+
+.flip-screen {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-13);
+  padding: var(--space-14) var(--space-16);
+  outline: none; /* контейнер принимает фокус в S2 — кольцо ему не нужно */
+}
+
+.flip-screen__intro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.flip-screen__title {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-display-s);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  text-align: center;
+}
+
+.flip-screen__lead {
+  margin: 0;
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-l);
+  line-height: var(--leading-relaxed);
+  color: var(--color-text-muted);
+  max-width: 470px;
+  text-align: center;
+  text-wrap: pretty;
+}
+
+/* — карточка: иллюстрация + чеклист — */
+
+.flip-screen__card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-13);
+  padding: var(--space-12) var(--space-14);
+  background: var(--color-bg-surface);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-xl);
+}
+
+.flip-screen__demo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.flip-screen__caption {
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-s);
+  line-height: var(--leading-normal);
+  font-family: var(--font-family-mono);
+  color: var(--color-text-subtle);
+  text-align: center;
+}
+
+.flip-screen__divider {
+  width: var(--border-width);
+  height: 150px;
+  background: var(--color-border-subtle);
+}
+
+.flip-screen__checklist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  width: 250px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.flip-screen__check {
+  display: flex;
+  gap: var(--space-5);
+  align-items: flex-start;
+}
+
+.flip-screen__checkbox {
+  flex: none;
+  width: var(--size-check);
+  height: var(--size-check);
+  border-radius: var(--radius-s);
+  border: var(--border-width) solid var(--color-border-emphasis);
+  background: var(--color-bg-paper);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-xs);
+  line-height: var(--leading-none);
+  color: var(--color-accent);
+  margin-top: var(--space-px);
+}
+
+.flip-screen__check-text {
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-m);
+  line-height: var(--leading-relaxed);
+  color: var(--color-text-secondary);
+  text-wrap: pretty;
+}
+
+/* — иллюстрация turn180: лист с маркером «ВЕРХ» над лотком — */
+
+.turn {
+  position: relative;
+  width: 150px;
+  height: 186px;
+  flex: none;
+  overflow: hidden;
+}
+
+.turn__shadows {
+  position: absolute;
+  left: 18px;
+  top: 14px;
+  width: 114px;
+  height: 146px;
+  animation: turn180 var(--duration-loop-long) var(--ease-loop) infinite;
+}
+
+.turn__sheet {
+  position: absolute;
+  width: 114px;
+  height: 146px;
+  border-radius: var(--radius-s);
+  border: var(--border-width) solid var(--color-border-default);
+}
+
+.turn__sheet--under {
+  left: 4px;
+  top: 5px;
+  background: var(--color-bg-toolbar);
+}
+
+.turn__sheet--mid {
+  left: 2px;
+  top: 2px;
+  background: var(--color-bg-elevated);
+}
+
+.turn__front {
+  position: absolute;
+  left: 18px;
+  top: 14px;
+  width: 114px;
+  height: 146px;
+  border-radius: var(--radius-s);
+  background: var(--color-bg-paper);
+  border: var(--border-width) solid var(--color-border-strong);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-6) var(--space-5);
+  box-sizing: border-box;
+  animation: turn180 var(--duration-loop-long) var(--ease-loop) infinite;
+}
+
+.turn__arrow {
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-xl);
+  line-height: var(--leading-none);
+  color: var(--color-accent);
+}
+
+.turn__top {
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-xxs);
+  line-height: var(--leading-none);
+  font-family: var(--font-family-mono);
+  letter-spacing: var(--tracking-caps);
+  color: var(--color-accent);
+}
+
+.turn__lines {
+  align-self: stretch;
+  margin-top: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.turn__line {
+  height: 2px;
+  border-radius: var(--radius-xs);
+  background: var(--color-glyph-soft);
+}
+
+/* Ширины строк-имитаций — геометрия макета, вся в CSS. */
+.turn__line--1 {
+  width: 86%;
+}
+
+.turn__line--2 {
+  width: 72%;
+}
+
+.turn__line--3 {
+  width: 80%;
+}
+
+.turn__tray {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 150px;
+  height: 30px;
+  border-radius: var(--radius-s);
+  background: var(--color-bg-tray);
+  z-index: var(--z-raised);
+}
+
+/* — действия и строка статуса занятости (S2) — */
+
+.flip-screen__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.flip-screen__status {
+  margin: 0;
+  max-width: 470px;
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-m);
+  line-height: var(--leading-relaxed);
+  color: var(--color-text-muted);
+  text-align: center;
+  text-wrap: pretty;
+}
+
+/* — движение — */
+
+@keyframes turn180 {
+  0% {
+    transform: translateY(-10px) rotate(0) scale(0.98);
+    opacity: 0;
+  }
+
+  14% {
+    transform: translateY(0) rotate(0) scale(1);
+    opacity: 1;
+  }
+
+  24% {
+    transform: translateY(-7px) rotate(0) scale(1.03);
+    opacity: 1;
+  }
+
+  54% {
+    transform: translateY(-7px) rotate(180deg) scale(1.03);
+    opacity: 1;
+  }
+
+  64% {
+    transform: translateY(0) rotate(180deg) scale(1);
+    opacity: 1;
+  }
+
+  76% {
+    transform: translateY(0) rotate(180deg) scale(1);
+    opacity: 1;
+  }
+
+  94% {
+    transform: translateY(34px) rotate(180deg) scale(0.96);
+    opacity: 0;
+  }
+
+  100% {
+    transform: translateY(34px) rotate(180deg) scale(0.96);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Статичный кадр: лист уже развёрнут, подпись остаётся (handoff M2, «Движение»). */
+  .turn__shadows,
+  .turn__front {
+    animation: none;
+    transform: rotate(180deg);
+  }
+}
+
+/* ── screens/merge-screen.css ── */
+
+/* Экран `merge` (U9): процессная пауза по макету и UI_SPEC раздел 5; статусная строка — S4
+   handoff M2. Ширина диаграммы — литерал макета (осознанное исключение DS). */
+
+.merge-screen {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-12);
+  outline: none; /* контейнер принимает фокус — органов управления на экране нет */
+}
+
+.merge-screen__title {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-4xl);
+  line-height: var(--leading-snug);
+  letter-spacing: var(--tracking-snug);
+}
+
+.merge-screen__diagram {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  width: 560px;
+}
+
+.merge-screen__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.merge-screen__row--document {
+  padding-top: var(--space-3);
+}
+
+.merge-screen__row-label {
+  width: 96px;
+  flex: none;
+  font-family: var(--font-family-mono);
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-s);
+  line-height: var(--leading-none);
+  color: var(--color-text-subtle);
+}
+
+.merge-screen__row-label--strong {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+}
+
+.merge-screen__cells {
+  flex: 1;
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* Обороты пришли в обратном порядке — ряд заполняется с другого края. */
+.merge-screen__cells--reversed {
+  flex-direction: row-reverse;
+}
+
+.merge-screen__cells--document {
+  gap: var(--space-1);
+}
+
+.merge-screen__cell {
+  flex: 1;
+  height: 22px;
+  border-radius: var(--radius-s);
+}
+
+.merge-screen__cell--front {
+  background: var(--color-accent);
+  opacity: var(--opacity-soft);
+}
+
+.merge-screen__cell--back {
+  background: var(--color-warning);
+  opacity: var(--opacity-soft);
+  animation: pulse var(--duration-loop) var(--ease-loop) infinite;
+}
+
+.merge-screen__doc-cell {
+  flex: 1;
+  height: 22px;
+  border-radius: var(--radius-xs);
+  background: var(--color-pass-1);
+}
+
+.merge-screen__doc-cell--back {
+  background: var(--color-pass-2);
+}
+
+.merge-screen__footer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  align-items: center;
+}
+
+.merge-screen__formula {
+  margin: 0;
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-m);
+  line-height: var(--leading-relaxed);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.merge-screen__status {
+  margin: 0;
+  font-family: var(--font-family-mono);
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-s);
+  line-height: var(--leading-none);
+  color: var(--color-text-hint);
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .merge-screen__cell--back {
+    animation: none;
+  }
+}
+
+/* ── screens/editor-screen.css ── */
+
+/* Экран `editor` (U24; M2 U9; M3 U7–U8): тулбар с документом и правой зоной сохранения, лента
+   группами по документам, превью, статус-бар с поворотом и удалением, инспектор, плашка S17,
+   тумблер 180° внизу ленты — CSS handoff'ов U19 (S16–S19), M2 (S6–S9) и M3 (S1–S14). Сетка из
+   трёх колонок. Геометрия мок-листов — литералы макета (осознанное исключение DS). */
+
+.editor-screen {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* S1 M3: три колонки у тулбара и тела — правая зона тулбара встаёт над инспектором. */
+.editor-screen__toolbar,
+.editor-screen__body {
+  display: grid;
+  grid-template-columns: var(--size-rail) minmax(0, 1fr) var(--size-inspector);
+}
+
+.editor-screen__toolbar {
+  flex: none;
+  height: var(--size-toolbar);
+  border-bottom: var(--border-width) solid var(--color-border-subtle);
+  background: var(--color-bg-toolbar);
+}
+
+.editor-screen__toolbar-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-4);
+  padding: 0 var(--space-8);
+  border-left: var(--border-width) solid var(--color-border-subtle);
+}
+
+.editor-screen__unsaved {
+  flex: none;
+}
+
+.editor-screen__toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  /* B-3: поля уже, чем у правой зоны, — двум кнопкам по тексту нужен запас в 288 px. */
+  padding: 0 var(--space-5);
+  border-right: var(--border-width) solid var(--color-border-subtle);
+}
+
+/* B-3: ширина по тексту, а не поровну — поровну «↺ Новое сканирование» не влезала в свою
+   половину и вылезала за рамку. Текст длиннее зоны обрезается рамкой, а не выходит за неё. */
+.editor-screen__toolbar-left .btn--secondary {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--font-size-base);
+  padding: var(--space-5) var(--space-4);
+}
+
+/* S1 M3.5: «+ Добавить» рядом с «Новое сканирование»; причина недоступности — в title. */
+.editor-screen__toolbar-left .editor-screen__add {
+  color: var(--color-text-primary);
+}
+.editor-screen__toolbar-left .editor-screen__add:hover:not(:disabled) {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+.editor-screen__add:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: default;
+}
+.editor-screen__add-plus {
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-l);
+  line-height: var(--leading-none);
+}
+
+/* S5 M3.6: «Собрать документ» недоступна — как недоступная «+ Добавить». */
+.editor-screen__assemble:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: default;
+}
+
+.editor-screen__toolbar-center {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-5);
+  min-width: 0;
+  padding: 0 var(--space-8);
+}
+
+.editor-screen__doc-mark {
+  flex: none;
+  width: var(--size-dot);
+  height: var(--size-dot);
+  border-radius: var(--radius-xs);
+  background: var(--doc-color);
+}
+
+.editor-screen__doc-title {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--font-weight-semibold) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
+}
+
+.editor-screen__doc-pos {
+  white-space: nowrap;
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-snug) var(--font-family-mono);
+  color: var(--color-text-subtle);
+}
+
+/* S4 M3.6: тулбар режима наборов — точка и живые счётчики по центру. */
+.editor-screen__toolbar-center--sets {
+  gap: var(--space-4);
+}
+
+.editor-screen__sets-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--font-weight-medium) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
+  color: var(--color-text-secondary);
+}
+
+.editor-screen__split {
+  margin-left: auto;
+  background: var(--color-bg-surface);
+  color: var(--color-accent);
+}
+
+.editor-screen__split:hover {
+  border-color: var(--color-accent);
+}
+
+.editor-screen__body {
+  flex: 1;
+  min-height: 0;
+}
+
+/* — лента слева: группы документов, внизу — тумблер 180° (S7 M2) — */
+
+.rail {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-panel);
+  border-right: var(--border-width) solid var(--color-border-subtle);
+}
+
+.rail__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: var(--space-6) var(--space-7) var(--space-8);
+}
+
+/* — S5 M3: панель мультивыделения — с M4 в подвале ленты (S6 M4, R18): лента над ней не
+   сдвигается — */
+
+.rail__selection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-l);
+  background: var(--color-bg-inverse);
+}
+
+.rail__selection-text {
+  margin: 0;
+  font: var(--font-weight-medium) var(--font-size-s) / var(--leading-normal) var(--font-family-sans);
+  color: var(--color-text-on-inverse);
+}
+
+.rail__selection-actions {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.rail__selection-group {
+  flex: 1;
+  padding: var(--space-4);
+  border: 0;
+  border-radius: var(--radius-m);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-primary);
+  font: var(--font-weight-semibold) var(--font-size-s) / var(--leading-snug) var(--font-family-sans);
+  cursor: pointer;
+}
+
+.rail__selection-clear {
+  padding: var(--space-4) var(--space-3);
+  border: 0;
+  background: none;
+  color: var(--color-text-on-inverse-muted);
+  font: var(--font-weight-medium) var(--font-size-s) / var(--leading-snug) var(--font-family-sans);
+  cursor: pointer;
+}
+
+/* — S2 M3: группа документа — */
+
+.doc-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding-bottom: var(--space-8);
+}
+
+.doc-group__divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-1) 0 var(--space-5);
+}
+
+.doc-group__pill {
+  flex: none;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-xl);
+  background: var(--color-accent);
+  color: var(--color-text-on-accent);
+  white-space: nowrap;
+  font: var(--font-weight-semibold) var(--font-size-xxs) / var(--leading-none)
+    var(--font-family-mono);
+  letter-spacing: var(--tracking-wide);
+}
+
+.doc-group__rule {
+  flex: 1;
+  height: 0;
+  border-top: var(--border-width-dashed) dashed var(--color-accent);
+}
+
+.doc-group__unsplit {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--size-badge);
+  height: var(--size-badge);
+  padding: 0;
+  border: var(--border-width) solid var(--color-border-accent-soft);
+  border-radius: var(--radius-m);
+  background: none;
+  color: var(--color-accent);
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-none) var(--font-family-sans);
+  cursor: pointer;
+}
+
+.doc-group__unsplit:hover {
+  background: var(--color-bg-accent-hover);
+}
+
+.doc-group__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+/* S3: имя документа — поле без рамки, рамка на hover и фокусе. */
+.doc-group__name {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius-m);
+  background: none;
+  color: var(--color-text-primary);
+  font: var(--font-weight-semibold) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
+  outline: none;
+}
+
+.doc-group__name::placeholder {
+  color: var(--color-text-hint);
+}
+
+.doc-group__name:hover {
+  border-color: var(--color-border-strong);
+  background: var(--color-bg-surface);
+}
+
+.doc-group__name:focus {
+  border-color: var(--color-border-focus);
+  background: var(--color-bg-paper);
+}
+
+.doc-group__name:disabled {
+  border-color: transparent;
+  background: none;
+}
+
+.doc-group__count {
+  flex: none;
+  white-space: nowrap;
+  font: var(--font-weight-regular) var(--font-size-xs) / var(--leading-none) var(--font-family-mono);
+  color: var(--color-text-faint);
+}
+
+/* — S1 M3.6: группа набора — как группа документа без имени и пилюли — */
+
+.set-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding-bottom: var(--space-8);
+}
+
+.set-group__header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  padding: var(--space-2) var(--space-3);
+}
+
+.set-group__title {
+  margin: 0;
+  font: var(--font-weight-semibold) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
+  color: var(--color-text-primary);
+}
+
+.set-group__count {
+  white-space: nowrap;
+  font: var(--font-weight-regular) var(--font-size-xs) / var(--leading-none) var(--font-family-mono);
+  color: var(--color-text-faint);
+}
+
+/* — S2 M3.6: разделитель наборов — пунктир с подсказкой; цель дропа — */
+
+.set-divider {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-5) 0;
+}
+
+.set-divider__rule {
+  flex: 1;
+  height: 0;
+  border-top: var(--border-width-dashed) dashed var(--color-border-strong);
+}
+
+.set-divider__hint {
+  flex: none;
+  white-space: nowrap;
+  font: var(--font-weight-regular) var(--font-size-xs) / var(--leading-none) var(--font-family-mono);
+  color: var(--color-text-hint);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+/* Маркер дропа — горизонтальная линия над или под разделителем, как `.thumb__drop`, но лёжа. */
+.set-divider--drop-above::before,
+.set-divider--drop-below::after {
+  content: '';
+  position: absolute;
+  left: var(--space-2);
+  right: var(--space-2);
+  height: var(--border-width-thick);
+  border-radius: var(--radius-xs);
+  background: var(--color-accent);
+  pointer-events: none;
+}
+
+.set-divider--drop-above::before {
+  top: 0;
+}
+
+.set-divider--drop-below::after {
+  bottom: 0;
+}
+
+/* — S3 M3.6: пустая группа — зона дропа вместо сетки — */
+
+.set-group__drop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--size-thumb);
+  padding: var(--space-6);
+  border: var(--border-width-dashed) dashed var(--color-border-strong);
+  border-radius: var(--radius-l);
+  color: var(--color-text-hint);
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-snug) var(--font-family-sans);
+  text-align: center;
+}
+
+.set-group__drop--active {
+  border-color: var(--color-accent);
+  background: var(--color-bg-selected);
+}
+
+.rail__footer {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding: var(--space-5) var(--space-6);
+  background: var(--color-bg-panel);
+  border-top: var(--border-width) solid var(--color-border-subtle);
+}
+
+.thumbs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--size-thumb), 1fr));
+  gap: var(--space-6);
+  align-content: start;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* — миниатюра: выделение (S4), перетаскивание (S6), split-бар (S7) — */
+
+.thumb {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-l);
+  border: var(--border-width) solid var(--color-border-default);
+  background: var(--color-bg-surface);
+  cursor: pointer;
+}
+
+.thumb[draggable='true'] {
+  cursor: grab;
+}
+
+.thumb--selected {
+  background: var(--color-bg-selected);
+  border-color: var(--color-border-focus);
+}
+
+/* S4 M3: в выделении из нескольких — тёмная рамка и кольцо. */
+.thumb--in-selection {
+  background: var(--color-bg-selected);
+  border-color: var(--color-border-inverse);
+  box-shadow: var(--shadow-ring-selected);
+}
+
+.thumb__paper {
+  position: relative;
+  aspect-ratio: 1 / 1.414;
+  background: var(--color-bg-paper);
+  border: var(--border-width) solid var(--color-border-default);
+  border-radius: var(--radius-xs);
+  overflow: hidden;
+}
+
+.thumb__img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+.thumb--loading .thumb__img {
+  opacity: 0;
+}
+
+.thumb__label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--space-2);
+  font-family: var(--font-family-mono);
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-xxs);
+  line-height: var(--leading-normal);
+  letter-spacing: var(--tracking-wide);
+  color: var(--color-text-faint);
+}
+
+.thumb__foot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.thumb__num {
+  font-family: var(--font-family-mono);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-s);
+  line-height: var(--leading-none);
+  color: var(--color-text-muted);
+}
+
+.thumb--selected .thumb__num {
+  color: var(--color-accent);
+}
+
+/* Тег «об» у оборотов — цвет группы прохода (UI_SPEC раздел 6.2). */
+.thumb__tag {
+  font-family: var(--font-family-mono);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-xxs);
+  line-height: var(--leading-none);
+  letter-spacing: var(--tracking-wide);
+  color: var(--color-pass-2);
+}
+
+/* S5 M3.5: тег набора «Д1» — форма тега «об», цвет набора. */
+.thumb__tag--added {
+  color: var(--color-pass-3);
+}
+
+/* S4 M3: угол — только отображение, без анимации (KTD-4). Рамка карточки остаётся портретной,
+   чтобы сетка не прыгала; альбомная страница вписывается в неё уменьшенной (1 / 1,414 —
+   пропорция листа). */
+.thumb--angle-90 .thumb__img,
+.thumb--angle-270 .thumb__img {
+  object-fit: contain;
+}
+
+.thumb--angle-90 .thumb__img {
+  transform: rotate(90deg) scale(0.7071);
+}
+
+.thumb--angle-180 .thumb__img {
+  transform: rotate(180deg);
+}
+
+.thumb--angle-270 .thumb__img {
+  transform: rotate(270deg) scale(0.7071);
+}
+
+/* S6 M3: перетаскивание — полупрозрачная карточка и маркер вставки. */
+.thumb--dragging {
+  opacity: var(--opacity-dragging);
+}
+
+.thumb__drop {
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  width: var(--border-width-thick);
+  border-radius: var(--radius-xs);
+  background: var(--color-accent);
+  pointer-events: none;
+}
+
+/* Посередине зазора сетки (`gap: --space-6`). */
+.thumb__drop--before {
+  left: calc((var(--space-6) + var(--border-width-thick)) / -2);
+}
+
+.thumb__drop--after {
+  right: calc((var(--space-6) + var(--border-width-thick)) / -2);
+}
+
+/* S7 M3: split-бар — виден, пока указатель над ним. */
+.thumb__split {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-3);
+  right: var(--space-3);
+  z-index: var(--z-raised);
+  height: var(--space-13);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-m) var(--radius-m) var(--radius-s) var(--radius-s);
+  background: var(--color-accent);
+  color: var(--color-text-on-accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font: var(--font-weight-semibold) var(--font-size-xxxs) / var(--leading-tight)
+    var(--font-family-mono);
+  letter-spacing: var(--tracking-wide);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+.thumb__split:hover {
+  opacity: 1;
+}
+
+.thumb__split--remove {
+  background: var(--color-bg-inverse);
+}
+
+/* S18: потерянная страница — пунктир; S19: не построилась — сплошная рамка */
+.thumb--lost .thumb__paper {
+  background: var(--color-bg-surface);
+  border: var(--border-width-dashed) dashed var(--color-border-heavy);
+}
+
+.thumb--failed .thumb__paper {
+  background: var(--color-bg-surface);
+}
+
+.thumb--lost .thumb__num {
+  color: var(--color-text-faint);
+}
+
+/* — сцена: плашка S17, превью, статус-бар — */
+
+.stage {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--color-bg-well);
+}
+
+.pass-banner {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin: var(--space-8) var(--space-11) 0;
+  padding: var(--space-8) var(--space-9);
+  background: var(--color-bg-surface);
+  border: var(--border-width) solid var(--color-border-default);
+  border-radius: var(--radius-l);
+}
+
+/* `.pass-banner__kicker` — общий ряд «точка + кикер», правило в app.css. */
+
+.pass-banner__title {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-xl);
+  line-height: var(--leading-snug);
+  text-wrap: pretty;
+}
+
+.pass-banner__text {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-m);
+  line-height: var(--leading-relaxed);
+  color: var(--color-text-muted);
+  max-width: 520px;
+  text-wrap: pretty;
+}
+
+.pass-banner__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding-top: var(--space-2);
+}
+
+.pass-banner__status {
+  margin: 0;
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-s);
+  line-height: var(--leading-relaxed);
+  color: var(--color-text-subtle);
+}
+
+.pass-banner__status--danger {
+  color: var(--color-danger);
+}
+
+.preview {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-11);
+}
+
+.preview__paper {
+  position: relative;
+  height: 100%;
+  aspect-ratio: 1 / 1.414;
+  background: var(--color-bg-paper);
+  border: var(--border-width) solid var(--color-border-subtle);
+  box-shadow: var(--shadow-paper);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.preview__img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+.preview__paper--loading .preview__img {
+  opacity: 0;
+}
+
+.preview__corner {
+  position: absolute;
+  top: var(--space-15);
+  left: var(--space-15);
+  font-family: var(--font-family-mono);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-xxs);
+  line-height: var(--leading-none);
+  letter-spacing: var(--tracking-caps);
+  color: var(--color-text-ghost);
+}
+
+.preview__paper--lost {
+  background: var(--color-bg-surface);
+  border: var(--border-width-dashed) dashed var(--color-border-heavy);
+  box-shadow: none;
+}
+
+.preview__empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: var(--space-15);
+  font-family: var(--font-family-mono);
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-m);
+  line-height: var(--leading-loose);
+  color: var(--color-text-ghost);
+  text-align: center;
+}
+
+/* — S8 M3: превью под углом, начало документа — */
+
+.preview__paper--landscape {
+  width: 100%;
+  height: auto;
+  max-height: 100%;
+  aspect-ratio: 1.414 / 1;
+}
+
+/* Изображение в альбомной бумаге: рамка с переставленными сторонами, повёрнутая на месте. */
+.preview__paper--angle-90 .preview__img,
+.preview__paper--angle-270 .preview__img {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(100% / 1.414);
+  height: calc(100% * 1.414);
+}
+
+.preview__paper--angle-90 .preview__img {
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+
+.preview__paper--angle-180 .preview__img {
+  transform: rotate(180deg);
+}
+
+.preview__paper--angle-270 .preview__img {
+  transform: translate(-50%, -50%) rotate(270deg);
+}
+
+.preview__paper--doc-start {
+  border-top: var(--border-width-thick) solid var(--doc-color);
+}
+
+.preview__doc-start {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  z-index: var(--z-raised);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-s);
+  background: var(--color-bg-paper);
+  color: var(--doc-color);
+  font: var(--font-weight-medium) var(--font-size-xxs) / var(--leading-none) var(--font-family-mono);
+  letter-spacing: var(--tracking-caps);
+}
+
+/* — S10 M3: пустой редактор — */
+
+.stage__empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  padding: var(--space-11);
+  text-align: center;
+}
+
+.stage__empty-title {
+  margin: 0;
+  font: var(--font-weight-semibold) var(--font-size-xl) / var(--leading-snug)
+    var(--font-family-sans);
+}
+
+.stage__empty-text {
+  max-width: 420px;
+  margin: 0;
+  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-relaxed)
+    var(--font-family-sans);
+  color: var(--color-text-muted);
+  text-wrap: pretty;
+}
+
+.rail__empty {
+  margin: 0;
+  padding: var(--space-8) 0;
+  text-align: center;
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-relaxed)
+    var(--font-family-sans);
+  color: var(--color-text-subtle);
+}
+
+.stage__statusbar {
+  flex: none;
+  height: var(--size-statusbar);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  padding: 0 var(--space-6);
+  border-top: var(--border-width) solid var(--color-border-subtle);
+  background: var(--color-bg-toolbar);
+}
+
+.stage__counter {
+  font-family: var(--font-family-mono);
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-m);
+  line-height: var(--leading-none);
+  color: var(--color-text-secondary);
+  min-width: 96px;
+  text-align: center;
+}
+
+/* S9 M3: инструменты статус-бара. */
+.stage__divider {
+  width: var(--border-width);
+  height: 18px;
+  margin: 0 var(--space-3);
+  background: var(--color-border-default);
+}
+
+.stage__tool {
+  font-size: var(--font-size-l);
+}
+
+.stage__tool:hover:not(:disabled) {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.stage__tool--danger:hover:not(:disabled) {
+  border-color: var(--color-border-danger-soft);
+  color: var(--color-danger);
+}
+
+/* — S11–S13 M3: инспектор — */
+
+.inspector {
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-panel);
+  border-left: var(--border-width) solid var(--color-border-subtle);
+}
+
+.inspector__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding: var(--space-8);
+  border-bottom: var(--border-width) solid var(--color-border-subtle);
+}
+
+.inspector__section--details {
+  padding: var(--space-6) var(--space-8);
+}
+
+.inspector__section .kicker {
+  margin: 0;
+}
+
+.inspector__heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.inspector__meta {
+  font: var(--font-weight-regular) var(--font-size-xs) / var(--leading-none) var(--font-family-mono);
+  color: var(--color-text-faint);
+}
+
+.inspector__note {
+  margin: 0;
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-relaxed)
+    var(--font-family-sans);
+  color: var(--color-text-subtle);
+  text-wrap: pretty;
+}
+
+.details-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  width: 100%;
+  padding: var(--space-1) 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.details-toggle__rule {
+  flex: 1;
+  height: 0;
+  border-top: var(--border-width) solid var(--color-border-subtle);
+}
+
+.details-toggle__summary {
+  white-space: nowrap;
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-none) var(--font-family-mono);
+  color: var(--color-text-faint);
+}
+
+.details-toggle__arrow {
+  font: var(--font-weight-regular) var(--font-size-xs) / var(--leading-none) var(--font-family-sans);
+  color: var(--color-text-hint);
+}
+
+.details-toggle[aria-expanded='true'] .details-toggle__arrow {
+  transform: rotate(180deg);
+}
+
+.details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+/* Свёрнутые ДЕТАЛИ: без этого правила `hidden` проигрывает `display: flex`. */
+.details[hidden] {
+  display: none;
+}
+
+.details__title {
+  margin: 0;
+  font: var(--font-weight-semibold) var(--font-size-xl) / var(--leading-snug)
+    var(--font-family-sans);
+}
+
+.details__note {
+  margin: 0;
+  padding: var(--space-5) var(--space-6);
+  border-radius: var(--radius-l);
+  background: var(--color-bg-accent-soft);
+  color: var(--color-text-primary);
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-relaxed)
+    var(--font-family-sans);
+  text-wrap: pretty;
+}
+
+.doc-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.doc-list__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  width: 100%;
+  padding: var(--space-4) var(--space-6);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-l);
+  background: var(--color-bg-surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.doc-list__item[aria-current='true'] {
+  border-color: var(--color-border-focus);
+  background: var(--color-bg-paper);
+}
+
+.doc-list__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.doc-list__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--font-weight-medium) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
+}
+
+.doc-list__meta {
+  font: var(--font-weight-regular) var(--font-size-xs) / var(--leading-snug) var(--font-family-mono);
+  color: var(--color-text-hint);
+}
+
+.checks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.check__icon {
+  flex: none;
+  font: var(--font-weight-medium) var(--font-size-s) / var(--leading-relaxed)
+    var(--font-family-sans);
+  color: var(--color-accent);
+}
+
+.check--warning .check__icon {
+  color: var(--color-warning);
+}
+
+.check__text {
+  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-relaxed)
+    var(--font-family-sans);
+  color: var(--color-text-secondary);
+  text-wrap: pretty;
+}
+
+/* S7 M3.5: подсказка в пункте ПРОВЕРКИ про «+ Добавить». */
+.check__hint {
+  display: block;
+  margin-top: var(--space-1);
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-relaxed)
+    var(--font-family-sans);
+  color: var(--color-text-hint);
+}
+
+/* S14 M3: плашка правок — прижата к низу колонки. */
+.edits-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin: auto var(--space-8) var(--space-8);
+  padding: var(--space-4) var(--space-4) var(--space-4) var(--space-6);
+  border: var(--border-width) solid var(--color-border-default);
+  border-radius: var(--radius-l);
+  background: var(--color-bg-surface);
+}
+
+.edits-bar__text {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font: var(--font-weight-medium) var(--font-size-s) / var(--leading-snug) var(--font-family-sans);
+  color: var(--color-warning);
+}
+
+/* — тумблер «повернуть обороты на 180°» (S7) — рецепт «Переключатель» дизайн-системы — */
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  cursor: pointer;
+}
+
+.toggle-row__label {
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-xs);
+  line-height: var(--leading-snug);
+  color: var(--color-text-muted);
+}
+
+.toggle {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  width: var(--size-toggle-w);
+  height: var(--size-toggle-h);
+}
+
+.toggle__input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.toggle__track {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-l);
+  background: var(--color-bg-control-off);
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+
+.toggle__track::after {
+  content: '';
+  position: absolute;
+  top: var(--space-1);
+  left: var(--space-1);
+  width: var(--size-toggle-knob);
+  height: var(--size-toggle-knob);
+  border-radius: var(--radius-round);
+  background: var(--color-bg-paper);
+  transition: left var(--duration-fast) var(--ease-standard);
+}
+
+.toggle__input:checked + .toggle__track {
+  background: var(--color-accent);
+}
+
+.toggle__input:checked + .toggle__track::after {
+  left: calc(var(--size-toggle-w) - var(--size-toggle-knob) - var(--space-1));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thumb__split,
+  .toggle__track,
+  .toggle__track::after {
+    transition: none;
+  }
+}
+
+/* — M4 (handoff M4): пустые обороты — */
+
+/* S2: метка «ПУСТО» — по центру листа, пилюля на бумаге поверх скана. */
+.thumb__blank {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-s);
+  background: var(--color-bg-paper);
+  font: var(--font-weight-regular) var(--font-size-xxs) / var(--leading-none)
+    var(--font-family-mono);
+  letter-spacing: var(--tracking-wide);
+  color: var(--color-text-subtle);
+  pointer-events: none;
+}
+
+/* S3: показанная скрытая — пунктир и приглушённый лист; выделение поверх как у всех. */
+.thumb--hidden {
+  border-style: dashed;
+  border-color: var(--color-border-strong);
+}
+
+.thumb--hidden .thumb__paper {
+  opacity: var(--opacity-disabled);
+}
+
+/* S5: переключатель пустых — строка тумблера со счётчиком справа. */
+.toggle-row__count {
+  margin-left: auto;
+  white-space: nowrap;
+  font: var(--font-weight-regular) var(--font-size-xs) / var(--leading-none) var(--font-family-mono);
+  color: var(--color-text-subtle);
+}
+
+.toggle-row--disabled {
+  cursor: default;
+  opacity: var(--opacity-disabled);
+}
+
+.toggle-row--disabled .toggle__input {
+  cursor: default;
+}
+
+/* S8: пилюля «ПУСТАЯ СТОРОНА» — зеркально «НАЧАЛО ДОКУМЕНТА». */
+.preview__blank {
+  position: absolute;
+  top: var(--space-4);
+  left: var(--space-4);
+  z-index: var(--z-raised);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-s);
+  background: var(--color-bg-paper);
+  color: var(--color-text-subtle);
+  font: var(--font-weight-medium) var(--font-size-xxs) / var(--leading-none) var(--font-family-mono);
+  letter-spacing: var(--tracking-caps);
+}
+
+/* S9: секция «ПУСТОЙ ОБОРОТ» — как прочие секции инспектора; кнопка по ширине контента. */
+.inspector__blank-action {
+  align-self: flex-start;
+}
+
+/* ── modals/device-modal.css ── */
+
+/* Модалка `device` (U21): список найденных, адрес вручную, «Дополнительно».
+   Рецепты — DESIGN_SYSTEM «Элемент списка устройств» и CSS handoff'а U19 (S7–S9). */
+
+.device-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.device-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  padding: var(--space-6) var(--space-6);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-l);
+  background: var(--color-bg-surface);
+  cursor: pointer;
+  outline: none;
+}
+
+.device-item--selected {
+  background: var(--color-bg-selected);
+  border-color: var(--color-border-focus);
+}
+
+.device-item--disabled {
+  opacity: var(--opacity-disabled);
+  cursor: not-allowed;
+}
+
+.device-item__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.device-item__name {
+  font: var(--font-weight-medium) var(--font-size-base) / var(--leading-snug)
+    var(--font-family-sans);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.device-item__name--unnamed {
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-regular);
+}
+
+.device-item__address {
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-snug) var(--font-family-mono);
+  color: var(--color-text-faint);
+  white-space: nowrap;
+}
+
+.device-item__status {
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-snug) var(--font-family-mono);
+  color: var(--color-status-ready);
+  white-space: nowrap;
+}
+
+.device-item__status--no-adf {
+  color: var(--color-status-unavailable);
+}
+
+/* Три скелетона с пульсацией и сдвигом фазы — пока идёт поиск. */
+.device-skeleton {
+  height: var(--size-list-row);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-l);
+  background: var(--color-bg-surface);
+  animation: pulse var(--duration-loop) var(--ease-loop) infinite;
+}
+
+.device-skeleton:nth-child(2) {
+  animation-delay: var(--delay-stagger);
+}
+
+.device-skeleton:nth-child(3) {
+  animation-delay: calc(var(--delay-stagger) * 2);
+}
+
+/* Пустое состояние (S7) и сбой поиска (S8) — в области списка. */
+.device-list__empty {
+  margin: 0;
+  padding: var(--space-8) var(--space-6);
+  min-height: 132px; /* высота трёх скелетонов макета — литерал геометрии */
+  display: flex;
+  align-items: center;
+  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-relaxed)
+    var(--font-family-sans);
+  color: var(--color-text-subtle);
+  background: var(--color-bg-surface);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-l);
+  text-wrap: pretty;
+}
+
+.device-list__empty--danger {
+  color: var(--color-danger);
+}
+
+/* «Дополнительно»: схема — сегментированный выбор, порт и путь — мелкие поля. */
+.device-advanced__toggle {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: none;
+  border: 0;
+  padding: var(--space-2) 0;
+  font: var(--font-weight-medium) var(--font-size-m) / var(--leading-none) var(--font-family-sans);
+  color: var(--color-text-subtle);
+  cursor: pointer;
+}
+
+.device-advanced__toggle:hover {
+  color: var(--color-text-primary);
+}
+
+.device-advanced {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-6);
+}
+
+.device-advanced__port {
+  width: 96px; /* под пять цифр порта — литерал геометрии */
+}
+
+.device-advanced__path {
+  flex: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .device-skeleton {
+    animation: none;
+    opacity: var(--opacity-disabled);
+  }
+}
+
+/* ── modals/add-modal.css ── */
+
+/* Модалка add (handoff M3.5, S2): две секции с кикерами, строка сканера, сводка в футере. */
+
+.add-modal__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-9);
+}
+
+.add-modal__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.add-modal__section .kicker {
+  margin: 0;
+}
+
+/* Строка сканера — как строка устройства setup, но без действий. */
+.add-modal__scanner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin: 0;
+  padding: var(--space-4) var(--space-6);
+  border-radius: var(--radius-l);
+  background: var(--color-bg-surface);
+  border: var(--border-width) solid var(--color-border-subtle);
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-normal)
+    var(--font-family-mono);
+  color: var(--color-text-subtle);
+}
+
+.add-modal__scanner-name {
+  font: var(--font-weight-medium) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
+  color: var(--color-text-primary);
+}
+
+.add-modal__scanner--none .add-modal__scanner-status {
+  color: var(--color-text-muted);
+  font-family: var(--font-family-sans);
+}
+
+.add-modal__summary {
+  font-family: var(--font-family-mono);
+}
+
+/* ── modals/save-modal.css ── */
+
+/* Модалка `save` (план M3, U9; handoff M3, S16) — стили из handoff'а дословно. */
+
+.save-modal .kicker {
+  margin: 0;
+}
+.save-modal__modes {
+  display: flex;
+  gap: var(--space-4);
+}
+.save-mode {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-6);
+  border: var(--border-width) solid var(--color-border-default);
+  border-radius: var(--radius-l);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  text-align: left;
+  font: var(--font-weight-medium) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
+  cursor: pointer;
+}
+.save-mode:hover {
+  border-color: var(--color-accent);
+}
+.save-mode[aria-checked='true'] {
+  border-color: var(--color-border-focus);
+  background: var(--color-bg-selected);
+}
+.save-mode[aria-disabled='true'] {
+  opacity: var(--opacity-disabled);
+  cursor: default;
+}
+.save-mode[aria-disabled='true']:hover {
+  border-color: var(--color-border-default);
+}
+.save-mode__hint {
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-normal)
+    var(--font-family-sans);
+  color: var(--color-text-subtle);
+}
+
+.save-files,
+.save-result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: hidden;
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-l);
+  background: var(--color-border-subtle);
+}
+.save-files--scroll,
+.save-result {
+  max-height: 352px; /* десять строк — порог макета */
+  overflow-y: auto;
+}
+.save-file {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-6);
+  background: var(--color-bg-surface);
+}
+.save-file__name {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-3);
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius-m);
+  background: none;
+  color: var(--color-text-primary);
+  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
+  outline: none;
+}
+.save-file__name::placeholder {
+  color: var(--color-text-hint);
+}
+.save-file__name:hover,
+.save-file__name:focus {
+  background: var(--color-bg-paper);
+}
+.save-file__name:hover {
+  border-color: var(--color-border-strong);
+}
+.save-file__name:focus {
+  border-color: var(--color-border-focus);
+}
+.save-file__name:disabled {
+  border-color: transparent;
+  background: none;
+  color: var(--color-text-muted);
+}
+.save-file__ext,
+.save-file__meta {
+  flex: none;
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-snug) var(--font-family-mono);
+  color: var(--color-text-hint);
+}
+
+.save-folder {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-6);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-l);
+  background: var(--color-bg-surface);
+}
+.save-folder__icon {
+  flex: none;
+  width: 15px;
+  height: 12px;
+  border: var(--border-width) solid var(--color-border-heavy);
+  border-top-width: var(--border-width-thick);
+  border-radius: var(--radius-xs);
+}
+/* Длинный путь режется с начала — видна сама папка. */
+.save-folder__path {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-normal)
+    var(--font-family-sans);
+  color: var(--color-text-primary);
+}
+
+.save-result__row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-6);
+  background: var(--color-bg-surface);
+}
+.save-result__icon {
+  flex: none;
+  font: var(--font-weight-medium) var(--font-size-s) / var(--leading-relaxed)
+    var(--font-family-sans);
+  color: var(--color-success);
+}
+.save-result__row--failed .save-result__icon {
+  color: var(--color-danger);
+}
+.save-result__name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
+}
+.save-result__note {
+  display: block;
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-relaxed)
+    var(--font-family-sans);
+  color: var(--color-text-subtle);
+}
+.save-result__row--failed .save-result__note {
+  color: var(--color-danger);
+}
