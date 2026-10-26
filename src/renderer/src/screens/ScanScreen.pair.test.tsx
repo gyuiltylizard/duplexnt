@@ -169,7 +169,7 @@ describe('ScanScreen проходов набора (M4.5)', () => {
         onStop={vi.fn()}
       />,
     );
-    expect(screen.getByText(/^досканируем проход 2 · до обрыва было 1 · /)).toBeDefined();
-    expect(screen.getByText('ПРОХОД 2 · ОБОРОТЫ').className).toBe('scan-screen__tag');
+    expect(screen.getByText(/^досканируем обороты · до обрыва было 1 · /)).toBeDefined();
+    expect(screen.getByText('СКАНИРУЕМ ОБОРОТЫ').className).toBe('scan-screen__tag');
   });
 });

@@ -63,8 +63,11 @@ function setNumberOf(snapshot: Snapshot, pass: PassSnapshot | undefined): number
   return setOfPass(snapshot.session?.passes ?? [], pass.number)?.set ?? null;
 }
 
-/** Тег прохода по роли (KTD-4): у набора — с ролью пары (M4.5), у основной пачки — с номером. */
-function tagOf(t: TFunction, kind: PassProgress['kind'], number: number): string {
+/**
+ * Тег прохода по роли (KTD-4): у набора — с ролью пары (M4.5), у основной пачки — сторона без
+ * номера прохода (B-3, решение автора: номер пользователю ничего не говорит).
+ */
+function tagOf(t: TFunction, kind: PassProgress['kind']): string {
   switch (kind) {
     case 'added':
       return t('scan.tagAdded');
@@ -73,9 +76,9 @@ function tagOf(t: TFunction, kind: PassProgress['kind'], number: number): string
     case 'addedBacks':
       return t('scan.tagSetBacks');
     case 'backs':
-      return t('scan.tagBacks', { number });
+      return t('scan.tagBacks');
     case 'fronts':
-      return t('scan.tag', { number });
+      return t('scan.tag');
   }
 }
 
@@ -154,12 +157,14 @@ export function ScanScreen({ snapshot, pass, onStop }: ScanScreenProps): ReactNo
       resume = t('scan.resumeMetaSet', { set, count: prior });
     } else if (pass.kind === 'added') {
       resume = t('scan.resumeMetaAdded', { count: prior });
+    } else if (pass.kind === 'backs') {
+      resume = t('scan.resumeMetaBacks', { count: prior });
     } else {
-      resume = t('scan.resumeMeta', { number: running?.number ?? 1, count: prior });
+      resume = t('scan.resumeMeta', { count: prior });
     }
     meta = `${resume} · ${meta}`;
   }
-  const tag = tagOf(t, pass.kind, running?.number ?? 1);
+  const tag = tagOf(t, pass.kind);
   // Добавляем — односторонний набор или проход пары: тег на цвете набора (S3 M3.5, S3–S4 M4.5).
   const added = !isMainKind(pass.kind);
 

@@ -233,7 +233,7 @@ describe('M3.5: посадка добавленного набора (KTD-7; han
     };
     const push = liveApi(backs);
     render(<App />);
-    expect(await screen.findByText('ПРОХОД 2 · ОБОРОТЫ')).toBeDefined();
+    expect(await screen.findByText('СКАНИРУЕМ ОБОРОТЫ')).toBeDefined();
 
     vi.useFakeTimers();
     try {
@@ -311,7 +311,7 @@ describe('M3.5: посадка добавленного набора (KTD-7; han
     render(<App />);
 
     const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByText('В первом проходе 3 листа, во втором — 2')).toBeDefined();
+    expect(within(dialog).getByText('Лицевых сторон 3, оборотов — 2')).toBeDefined();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Понятно' }));
     expect(screen.queryByRole('dialog')).toBeNull();
     // Набор без якоря встал в конец — в группу оборотов: 3 против 3, лента в режиме наборов.

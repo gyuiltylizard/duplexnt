@@ -60,7 +60,7 @@ describe('каркас приложения', () => {
     render(<App />);
 
     expect((await screen.findByRole('status')).textContent).toBe('Отсканировано 7');
-    expect(screen.getByText('ПРОХОД 1 · ЛИЦЕВЫЕ СТОРОНЫ')).toBeDefined();
+    expect(screen.getByText('СКАНИРУЕМ ЛИЦЕВЫЕ СТОРОНЫ')).toBeDefined();
   });
 
   it('завершённый лицевой проход без оборотов — flip с запуском второго прохода', async () => {
@@ -851,7 +851,7 @@ describe('каркас приложения', () => {
     render(<App />);
 
     const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByText('В первом проходе 3 листа, во втором — 2')).toBeDefined();
+    expect(within(dialog).getByText('Лицевых сторон 3, оборотов — 2')).toBeDefined();
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Понятно' }));
     expect(screen.queryByRole('dialog')).toBeNull();

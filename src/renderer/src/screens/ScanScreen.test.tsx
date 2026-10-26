@@ -76,10 +76,10 @@ describe('экран scan', () => {
 
     expect(screen.getByRole('status').textContent).toBe('Отсканировано 7');
     expect(screen.getByText('300 dpi · оттенки серого · A4')).toBeDefined();
-    expect(screen.getByText('ПРОХОД 1 · ЛИЦЕВЫЕ СТОРОНЫ')).toBeDefined();
+    expect(screen.getByText('СКАНИРУЕМ ЛИЦЕВЫЕ СТОРОНЫ')).toBeDefined();
   });
 
-  it('проход оборотов: тег «ОБОРОТЫ» и счётчик «N из M» (роль — по expected, не по номеру)', () => {
+  it('проход оборотов: тег «ОБОРОТЫ» без номера прохода (B-3) и счётчик «N из M» (роль — по expected, не по номеру)', () => {
     const pass: PassProgress = {
       phase: 'scanning',
       resumed: false,
@@ -127,7 +127,7 @@ describe('экран scan', () => {
     });
     render(<ScanScreen snapshot={snapshot} pass={pass} onStop={vi.fn()} />);
 
-    expect(screen.getByText('ПРОХОД 3 · ОБОРОТЫ')).toBeDefined();
+    expect(screen.getByText('СКАНИРУЕМ ОБОРОТЫ')).toBeDefined();
     expect(screen.getByRole('status').textContent).toBe('Отсканировано 7 из 12');
   });
 
@@ -145,7 +145,7 @@ describe('экран scan', () => {
 
     const tag = screen.getByText('ДОБАВЛЯЕМ СТРАНИЦЫ');
     expect(tag.className).toBe('scan-screen__tag scan-screen__tag--added');
-    expect(screen.queryByText(/ПРОХОД/)).toBeNull();
+    expect(screen.queryByText(/СКАНИРУЕМ/)).toBeNull();
     expect(screen.getByRole('status').textContent).toBe('Отсканировано 2');
     expect(screen.getByText('300 dpi · оттенки серого · A4')).toBeDefined();
   });
@@ -317,7 +317,9 @@ describe('экран scan', () => {
 
     expect(screen.getByRole('status').textContent).toBe('Отсканировано 18');
     expect(
-      screen.getByText('досканируем проход 1 · до обрыва было 17 · 300 dpi · оттенки серого · A4'),
+      screen.getByText(
+        'досканируем лицевые стороны · до обрыва было 17 · 300 dpi · оттенки серого · A4',
+      ),
     ).toBeDefined();
   });
 
