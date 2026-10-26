@@ -59,7 +59,7 @@ export interface CommandContext {
 
 export interface Commands {
   readonly handlers: BridgeHandlers;
-  /** При выходе: поиск остановлен, идущее подключение отменено. */
+  /** При выходе: поиск остановлен, идущее подключение и проверка по «Повторить» отменены. */
   dispose(): void;
 }
 
@@ -104,6 +104,8 @@ export function createCommands(context: CommandContext): Commands {
   const { service } = context;
   const connector = context.connector ?? createConnector();
   const newDiscovery = context.startDiscovery ?? startDiscovery;
+  // Проверка по «Повторить» может искать сканер по сети: выход её прерывает (M5, R9).
+  const rechecks = new AbortController();
 
   let discovery: Discovery | null = null;
   let discoverySeq = 0;
@@ -213,7 +215,7 @@ export function createCommands(context: CommandContext): Commands {
       // Кнопка «Повторить» (U19, S3): исход — в снимке; гонку с ручным подключением служба
       // разводит сама — результат проверки не затирает сканер, подключённый за это время.
       recheckScanner: withoutRequest(async () => {
-        await service.checkRememberedScanner();
+        await service.checkRememberedScanner(rechecks.signal);
         return ok(undefined);
       }),
 
@@ -289,6 +291,7 @@ export function createCommands(context: CommandContext): Commands {
       stopDiscovery();
       discovery = null;
       connector.cancel();
+      rechecks.abort();
     },
   };
 }

@@ -10,17 +10,12 @@ import {
   type ScanParams,
   type StartupNotice,
 } from '@shared';
-import { probeScanner, type ConnectedScanner, type ConnectorOptions } from '../escl/connect';
+import type { ConnectedScanner, ConnectorOptions } from '../escl/connect';
 import { resolveScanParams, scanParamsSchema } from '../escl/scan-settings';
 import { layoutOf } from './layout';
+import { locateRemembered, type StartUuidSearch } from './remembered-search';
 import { ioOf, isMissing, serialQueue, storageFailure, type StorageOptions } from './storage-fs';
-import {
-  profileOf,
-  sameScanner,
-  storedScannerOf,
-  storedScannerSchema,
-  type StoredScanner,
-} from './stored-scanner';
+import { storedScannerSchema, type StoredScanner } from './stored-scanner';
 import {
   fitsSchema,
   parseVersioned,
@@ -192,11 +187,15 @@ export async function openSettingsStore(
 export type RememberedScanner =
   /** Сканер ещё не подключали. */
   | { readonly state: 'none' }
-  /** Отвечает то же устройство; параметры уже сверены с его capabilities (KTD-13). */
+  /**
+   * Отвечает то же устройство; параметры уже сверены с его capabilities (KTD-13). `relocated` —
+   * найдено поиском на новом адресе, его запоминает вызывающий (M5, KTD5).
+   */
   | {
       readonly state: 'ready';
       readonly connected: ConnectedScanner;
       readonly params: ScanParams;
+      readonly relocated: boolean;
     }
   /** Сканер молчит, занят или отвечает невнятно; причина — кодом. */
   | { readonly state: 'unreachable'; readonly scanner: StoredScanner; readonly error: DomainError }
@@ -210,44 +209,25 @@ export type RememberedScanner =
       readonly error: DomainError | null;
     };
 
-// «Не отвечает», а не «другое устройство»: сбой сети, отмена, ответ `5xx` (сканер занят или
-// просыпается) и ответ, который не дочитался или не разобрался, — так ведёт себя и тот же сканер.
-function isSilence({ code, details }: DomainError): boolean {
-  if (code === 'scannerUnreachable' || code === 'canceled' || code === 'scannerBadResponse') {
-    return true;
-  }
-  const status = details?.status;
-  return code === 'notEsclScanner' && typeof status === 'number' && status >= 500;
-}
-
 /**
  * Проверка запомненного сканера запросом capabilities. Идёт по запомненной схеме: закрытый порт
  * HTTPS — «не отвечает», а не повод попробовать HTTP (KTD-8). Настройки не меняет ни при каком
- * исходе: другое устройство на том же адресе запомненное не подменяет (R5) — новый отпечаток
- * запоминает только повторное подключение.
+ * исходе: другое устройство на том же адресе запомненное не подменяет (R5). С `search` молчащий
+ * или чужой адрес ведёт к поиску по UUID (M5, ./remembered-search.ts); найденный адрес
+ * запоминает вызывающий.
  */
 export async function checkRememberedScanner(
   settings: Settings,
   options: ConnectorOptions = {},
   signal?: AbortSignal,
+  search?: StartUuidSearch,
 ): Promise<RememberedScanner> {
   const { scanner } = settings;
   if (scanner === null) {
     return { state: 'none' };
   }
-  const probed = await probeScanner(profileOf(scanner), options, signal);
-  if (!probed.ok) {
-    const { error } = probed;
-    // Всё, кроме молчания, — ответ кого-то другого: чужой сертификат, не сканер, сканер без
-    // автоподачи.
-    return { state: isSilence(error) ? 'unreachable' : 'otherDevice', scanner, error };
-  }
-  if (!sameScanner(scanner, storedScannerOf(probed.value))) {
-    return { state: 'otherDevice', scanner, error: null };
-  }
-  return {
-    state: 'ready',
-    connected: probed.value,
-    params: resolveScanParams(settings.params, probed.value.options),
-  };
+  const located = await locateRemembered(scanner, options, signal, search);
+  return located.state === 'ready'
+    ? { ...located, params: resolveScanParams(settings.params, located.connected.options) }
+    : { ...located, scanner };
 }

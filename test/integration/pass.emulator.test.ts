@@ -23,6 +23,7 @@ import { startTestEmulator } from '../support/emulator';
 import { pageFixture } from '../support/fixtures';
 import { unwrap } from '../support/result';
 import { until } from '../support/until';
+import { noSearch } from '../support/uuid-search';
 import { fsError, interceptFs } from '../support/intercept-fs';
 import { makeTempDataRoot } from '../support/temp-data-root';
 
@@ -74,6 +75,7 @@ async function open(
     jobLimits: FAST,
     minFreeBytes: 1,
     retry: FAST_RETRY,
+    findByUuid: noSearch,
     ...options,
     onChange: () => {
       snapshots.push(service.snapshot());
@@ -815,6 +817,7 @@ describe('служба прохода: проверка запомненного
     const service = await openPassService(root, {
       jobLimits: FAST,
       connector: { createTransport: hold.create },
+      findByUuid: noSearch,
     });
     const checking = service.checkRememberedScanner();
     await until(hold.isHeld);

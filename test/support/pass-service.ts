@@ -13,6 +13,7 @@ import { startTestEmulator } from './emulator';
 import { unwrap } from './result';
 import { makeTempDataRoot } from './temp-data-root';
 import { untilScored } from './until';
+import { noSearch } from './uuid-search';
 
 // Общая обвязка тестов службы проходов на эмуляторе (M4.5, U8): эмулятор, служба на временном
 // корне, перезапуск, вступительные проходы, запись одним файлом. Вызывать изнутри `it(...)`.
@@ -33,7 +34,9 @@ export async function connectService(
   const snapshots: Snapshot[] = [];
   const open = async (options: Partial<PassServiceOptions> = extra): Promise<PassService> => {
     let opened: PassService | null = null;
+    // Проверка запомненного не открывает сокеты 5353: поиск по UUID — пустой (M5, KTD9).
     opened = await openPassService(root, {
+      findByUuid: noSearch,
       ...base,
       ...options,
       onChange: () => {

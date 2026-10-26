@@ -1,9 +1,11 @@
 import { fail, ok, type Result, type ScanOptions } from '@shared';
 import { parseCapabilities, type ScannerCapabilities } from './capabilities';
 import { DEFAULT_BASE_PATH, normalizeBasePath } from './device-path';
+import { realClock, type ScanJobClock } from './scan-job';
 import { scanOptionsOf } from './scan-settings';
 import {
   createTransport,
+  type BufferedResponse,
   type ScannerProfile,
   type ScannerTransport,
   type TransportLimits,
@@ -98,6 +100,25 @@ export function parseScannerAddress(input: string): Result<ScannerAddress> {
   });
 }
 
+/**
+ * Часы ожидания «занят» — те же, что у задания сканирования (M5, KTD6): общий шов часов, петли
+ * ожидания у пробы и задания свои.
+ */
+export type ProbeClock = ScanJobClock;
+
+export const realProbeClock: ProbeClock = realClock;
+
+export interface BusyWaitLimits {
+  /** Пауза перед повтором `503`. `Retry-After` не читается. */
+  readonly retryDelayMs: number;
+  /** Сколько ждать, пока устройство занято. */
+  readonly ceilingMs: number;
+}
+
+// Потолок короче, чем у задания (60 с): проба держит «проверяем…» и модалку подключения, а на GET
+// ET-3850 `503` не отдаёт вовсе (журнал M5, U1) — ожидание защитное, для других устройств.
+export const PROBE_BUSY_WAIT: BusyWaitLimits = { retryDelayMs: 1000, ceilingMs: 15_000 };
+
 export interface ConnectorOptions {
   /** Подмена транспорта — для тестов. */
   readonly createTransport?: (
@@ -105,6 +126,22 @@ export interface ConnectorOptions {
     limits?: Partial<TransportLimits>,
   ) => ScannerTransport;
   readonly limits?: Partial<TransportLimits>;
+  /** Часы ожидания «занят» — для тестов. */
+  readonly clock?: ProbeClock;
+  /** Пауза и потолок ожидания «занят»; по умолчанию — `PROBE_BUSY_WAIT`. */
+  readonly busyWait?: Partial<BusyWaitLimits>;
+}
+
+/** Параметры одной пробы — от того, кто её запускает. */
+export interface ProbeOptions {
+  readonly signal?: AbortSignal;
+  /**
+   * Первый HTTP-ответ с любым кодом, включая `503`: устройство на адресе живо. Вызывается один раз
+   * за пробу, до ожидания «занят» (M5, KTD3, KTD6).
+   */
+  readonly onResponse?: () => void;
+  /** `false` — режим кандидата поиска: `503` сразу даёт `scannerBusy`, без пауз (KTD4). */
+  readonly waitBusy?: boolean;
 }
 
 export interface Connector {
@@ -123,7 +160,8 @@ const NOT_XML_REASONS: ReadonlySet<unknown> = new Set<BadResponseReason>([
 ]);
 
 // Переход на HTTP — только при отказе соединения и сбое рукопожатия. Таймаут сюда не входит:
-// молчащий адрес по HTTP тоже промолчит, а пользователь прождёт вдвое дольше (KTD-8).
+// молчащий адрес по HTTP тоже промолчит, а пользователь прождёт вдвое дольше (KTD-8). «Занят»
+// тоже не входит: по HTTPS ответило устройство (M5, KTD6).
 const FALLBACK_REASONS: ReadonlySet<unknown> = new Set<UnreachableReason>(['refused', 'tls']);
 
 /**
@@ -133,21 +171,45 @@ const FALLBACK_REASONS: ReadonlySet<unknown> = new Set<UnreachableReason>(['refu
  *
  * Профиль без отпечатка — первое подключение: отпечаток берётся из ответа. Профиль с отпечатком —
  * запомненный сканер: другой сертификат на адресе транспорт отклоняет сам (KTD-40).
+ *
+ * `503` — устройство занято: запрос повторяется раз в секунду до потолка, затем `scannerBusy`
+ * (M5, KTD6). Петля своя, а не из `scan-job.ts`: потолки, причины и уведомления разные.
  */
 export async function probeScanner(
   profile: ScannerProfile,
   options: ConnectorOptions = {},
-  signal?: AbortSignal,
+  probe: ProbeOptions = {},
 ): Promise<Result<ConnectedScanner>> {
+  const { signal, onResponse, waitBusy = true } = probe;
+  const clock = options.clock ?? realProbeClock;
+  const busyWait = { ...PROBE_BUSY_WAIT, ...options.busyWait };
   const transport = (options.createTransport ?? createTransport)(profile, options.limits);
   try {
-    const response = await transport.request({
-      method: 'GET',
-      path: `${profile.basePath}/ScannerCapabilities`,
-      ...(signal === undefined ? {} : { signal }),
-    });
-    if (!response.ok) {
-      return response;
+    let busySince: number | null = null;
+    let response: Result<BufferedResponse>;
+    for (;;) {
+      response = await transport.request({
+        method: 'GET',
+        path: `${profile.basePath}/ScannerCapabilities`,
+        ...(signal === undefined ? {} : { signal }),
+      });
+      if (!response.ok) {
+        return response;
+      }
+      if (busySince === null) {
+        onResponse?.();
+      }
+      if (response.value.status !== 503) {
+        break;
+      }
+      busySince ??= clock.now();
+      if (!waitBusy || clock.now() - busySince + busyWait.retryDelayMs > busyWait.ceilingMs) {
+        return fail('scannerBusy');
+      }
+      await clock.sleep(busyWait.retryDelayMs, signal);
+      if (signal?.aborted === true) {
+        return fail('canceled');
+      }
     }
     if (response.value.status !== 200) {
       return fail('notEsclScanner', { status: response.value.status });
@@ -197,7 +259,7 @@ export function createConnector(options: ConnectorOptions = {}): Connector {
         fingerprint: null,
       },
       options,
-      signal,
+      { signal },
     );
 
   async function attempt(

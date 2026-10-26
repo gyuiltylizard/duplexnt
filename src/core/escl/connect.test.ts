@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { fail, ok, type DomainError, type Result } from '@shared';
 import { ET_3850, readFixture, readFixtureText } from '../../../test/support/fixtures';
-import { createConnector, parseScannerAddress, type ScannerAddress } from './connect';
+import {
+  createConnector,
+  parseScannerAddress,
+  probeScanner,
+  type ProbeClock,
+  type ScannerAddress,
+} from './connect';
 import type { BufferedResponse, ScannerProfile, ScannerTransport } from './transport';
 
 // Разбор ввода и правила выбора схемы — на подставном транспорте. Настоящая сеть — в
@@ -165,10 +171,11 @@ describe('подключение: профиль', () => {
     expect(fake.paths).toEqual(['/scan/eSCL/ScannerCapabilities']);
   });
 
+  // `503` — «занят», его пережидают (M5, KTD6); остальные `5xx` — по-прежнему «не сканер».
   it.each([
     [404, 'notEsclScanner'],
     [401, 'notEsclScanner'],
-    [503, 'notEsclScanner'],
+    [500, 'notEsclScanner'],
   ])('ответ %i вместо capabilities — %s; транспорт уничтожен', async (status, code) => {
     const fake = scripted([() => reply(status)]);
 
@@ -369,5 +376,156 @@ describe('подключение: одно за раз (KTD-39)', () => {
     });
 
     expect(await connector.connect(address('192.0.2.10'))).toEqual(fail('canceled'));
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+
+/** Часы без настоящего ожидания: пауза только сдвигает время и попадает в список. */
+function fakeClock(onSleep?: (ms: number) => void) {
+  let now = 0;
+  const sleeps: number[] = [];
+  const clock: ProbeClock = {
+    now: () => now,
+    sleep: (ms) => {
+      now += ms;
+      sleeps.push(ms);
+      onSleep?.(ms);
+      return Promise.resolve();
+    },
+  };
+  return { clock, sleeps };
+}
+
+const PROFILE: ScannerProfile = {
+  scheme: 'https',
+  host: '192.0.2.10',
+  port: 443,
+  basePath: '/eSCL',
+  fingerprint: FINGERPRINT,
+};
+
+const busyReplies = (count: number) => Array.from({ length: count }, () => () => reply(503));
+
+describe('проба: ожидание «занят» (M5, KTD6)', () => {
+  it('capabilities 503, 503, 200 — проба успешна после двух пауз по 1 с; транспорт один', async () => {
+    const fake = scripted([...busyReplies(2), () => reply(200, CAPABILITIES)]);
+    const { clock, sleeps } = fakeClock();
+
+    const result = await probeScanner(PROFILE, { ...fake, clock });
+
+    expect(result.ok).toBe(true);
+    expect(sleeps).toEqual([1000, 1000]);
+    expect(fake.paths).toEqual(Array(3).fill('/eSCL/ScannerCapabilities'));
+    expect(fake.closed()).toBe(1);
+  });
+
+  it('503 до потолка ~15 с — scannerBusy', async () => {
+    const fake = scripted(busyReplies(30));
+    const { clock, sleeps } = fakeClock();
+
+    const result = await probeScanner(PROFILE, { ...fake, clock });
+
+    expect(result).toEqual(fail('scannerBusy'));
+    // Повтор раз в секунду, пока следующая пауза не выводит за потолок.
+    expect(sleeps).toEqual(Array(15).fill(1000));
+    expect(fake.paths).toHaveLength(16);
+    expect(fake.closed()).toBe(1);
+  });
+
+  it('отмена во время паузы — canceled, дальнейших запросов нет', async () => {
+    const controller = new AbortController();
+    const fake = scripted(busyReplies(5));
+    const { clock } = fakeClock(() => {
+      controller.abort();
+    });
+
+    const result = await probeScanner(PROFILE, { ...fake, clock }, { signal: controller.signal });
+
+    expect(result).toEqual(fail('canceled'));
+    expect(fake.paths).toHaveLength(1);
+    expect(fake.closed()).toBe(1);
+  });
+
+  it('о первом HTTP-ответе проба сообщает сразу, итог — после повторов', async () => {
+    const events: string[] = [];
+    const fake = scripted([...busyReplies(2), () => reply(200, CAPABILITIES)]);
+    const { clock } = fakeClock(() => events.push('пауза'));
+    const createTransport = (profile: ScannerProfile): ScannerTransport => {
+      const transport = fake.createTransport(profile);
+      return {
+        ...transport,
+        request: (options) => {
+          events.push('запрос');
+          return transport.request(options);
+        },
+      };
+    };
+
+    const result = await probeScanner(
+      PROFILE,
+      { createTransport, clock },
+      { onResponse: () => events.push('ответ') },
+    );
+
+    expect(result.ok).toBe(true);
+    // Уведомление — одно, до первой паузы.
+    expect(events).toEqual(['запрос', 'ответ', 'пауза', 'запрос', 'пауза', 'запрос']);
+  });
+
+  it('без HTTP-ответа уведомления нет', async () => {
+    const fake = scripted([() => unreachable('timeout')]);
+    let responses = 0;
+
+    await probeScanner(PROFILE, fake, {
+      onResponse: () => {
+        responses += 1;
+      },
+    });
+
+    expect(responses).toBe(0);
+  });
+
+  it('режим кандидата (ожидание выключено): 503 — scannerBusy сразу, без пауз', async () => {
+    const fake = scripted(busyReplies(1));
+    const { clock, sleeps } = fakeClock();
+
+    const result = await probeScanner(PROFILE, { ...fake, clock }, { waitBusy: false });
+
+    expect(result).toEqual(fail('scannerBusy'));
+    expect(sleeps).toEqual([]);
+    expect(fake.paths).toHaveLength(1);
+  });
+
+  it.each([500, 502, 504])('ответ %i не пережидается — «не сканер» с кодом', async (status) => {
+    const fake = scripted([() => reply(status)]);
+    const { clock, sleeps } = fakeClock();
+
+    const result = await probeScanner(PROFILE, { ...fake, clock });
+
+    expect(result).toEqual(fail('notEsclScanner', { status }));
+    expect(sleeps).toEqual([]);
+  });
+
+  it('ручное подключение без схемы: 503 на HTTPS до потолка — scannerBusy, попытки HTTP нет', async () => {
+    const fake = scripted(busyReplies(30));
+    const { clock } = fakeClock();
+
+    const result = await createConnector({ ...fake, clock }).connect(address('192.0.2.10'));
+
+    expect(result).toEqual(fail('scannerBusy'));
+    expect(new Set(fake.targets())).toEqual(new Set(['https:443']));
+  });
+
+  it('cancel подключения во время ожидания «занят» — canceled без новых запросов', async () => {
+    const fake = scripted(busyReplies(5));
+    let connector: ReturnType<typeof createConnector> | null = null;
+    const { clock } = fakeClock(() => connector?.cancel());
+    connector = createConnector({ ...fake, clock });
+
+    const result = await connector.connect(address('192.0.2.10'));
+
+    expect(result).toEqual(fail('canceled'));
+    expect(fake.paths).toHaveLength(1);
   });
 });

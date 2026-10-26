@@ -66,6 +66,11 @@ export interface Scenario {
   readonly trayReportsLoaded: boolean | null;
   /** Сколько первых `POST` получают `503`; `Infinity` — занятость без конца. */
   readonly busyPosts: number;
+  /**
+   * Сколько первых `GET ScannerCapabilities` получают `503`; `Infinity` — занятость без конца. На
+   * ET-3850 не наблюдалось (журнал M5, U1) — ожидание в пробе защитное, для других устройств.
+   */
+  readonly busyCapabilities: number;
   /** `POST` получает `409` при любых параметрах. */
   readonly rejectSettings: boolean;
   /** Сколько `503` отдаёт `NextDocument` после страницы: перед следующей и перед концом. */
@@ -93,6 +98,7 @@ export const DEFAULT_SCENARIO: Scenario = {
   trays: null,
   trayReportsLoaded: null,
   busyPosts: 0,
+  busyCapabilities: 0,
   rejectSettings: false,
   notReady: { betweenPages: 1, beforeEnd: 4 },
   location: 'absolute',
@@ -115,6 +121,7 @@ export const SCENARIOS = {
   'pass-30': { sheets: 30 },
   'busy-then-ok': { busyPosts: 5 },
   'busy-forever': { busyPosts: Infinity },
+  'capabilities-busy': { busyCapabilities: 3 },
   'empty-tray': { sheets: 0 },
   'no-pages': { sheets: 0, trayReportsLoaded: true },
   'no-adf': { device: 'no-adf' },

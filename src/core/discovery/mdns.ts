@@ -207,6 +207,11 @@ export interface Discovery {
    * устройство без автоподачи: оно показывается, но не выбирается.
    */
   addressOf(id: string): ScannerAddress | null;
+  /**
+   * Записи поиска с UUID — только для ядра: по ним идёт поиск запомненного сканера (M5, KTD2).
+   * В интерфейс UUID не уходит — снимок для него собирает `state()`.
+   */
+  records(): readonly ScannerRecord[];
   /** Останавливает поиск и освобождает сокеты. Найденное остаётся доступным по идентификатору. */
   stop(): void;
 }
@@ -350,6 +355,7 @@ export function startDiscovery(options: DiscoveryOptions = {}): Discovery {
       // Схема не названа: HTTPS первым, HTTP — при отказе соединения, на том же порту.
       return { scheme: null, host: record.address, port: record.port, basePath: record.basePath };
     },
+    records: () => records,
     stop() {
       if (stopped) {
         return;

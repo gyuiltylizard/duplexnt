@@ -20,7 +20,6 @@ import {
   type SessionEdits,
   type StartPassRequest,
   type SetEditsReport,
-  type ScannerState,
   type Snapshot,
   type StartupNotice,
 } from '@shared';
@@ -34,13 +33,9 @@ import {
   type ScanJobEnd,
   type ScanJobLimits,
 } from '../escl/scan-job';
-import {
-  buildScanSettings,
-  DEFAULT_SCAN_PARAMS,
-  resolveScanParams,
-  unsupportedField,
-} from '../escl/scan-settings';
+import { buildScanSettings } from '../escl/scan-settings';
 import { blankRatio, type BlankDetector } from '../detect/blank';
+import { findByUuid } from '../discovery/find-by-uuid';
 import { parseStatus } from '../escl/status';
 import { createTransport, type ScannerTransport } from '../escl/transport';
 import { assemblePdf, type PdfPageInput } from '../pdf/assemble';
@@ -50,23 +45,16 @@ import type { PassOrigin } from '../storage/journal';
 import { layoutOf } from '../storage/layout';
 import { stopKeepsPages } from '../storage/pass-policy';
 import { openSessionStore } from '../storage/reconcile';
+import type { StartUuidSearch } from '../storage/remembered-search';
 import type { PageInfo, SessionStore, SessionStoreOptions } from '../storage/session-store';
-import {
-  checkRememberedScanner,
-  openSettingsStore,
-  type SettingsStore,
-} from '../storage/settings-store';
-import {
-  sameScanner,
-  scannerInfoOf,
-  storedScannerOf,
-  type StoredScanner,
-} from '../storage/stored-scanner';
+import { openSettingsStore, type SettingsStore } from '../storage/settings-store';
+import { sameScanner, storedScannerOf, type StoredScanner } from '../storage/stored-scanner';
 import { ioOf, storageFailure } from '../storage/storage-fs';
 import { pagePixelLimit } from '../storage/thumbnails';
 import { openUnclosedJobs, type UnclosedJobs } from '../storage/unclosed-jobs';
 import { assembleSession } from './assembly';
 import { blankRefusal, pagesToScore, shownSpansOf } from './blank-flow';
+import { createScannerSlot } from './scanner-slot';
 
 // Служба прохода (план M1, U17): связывает клиент сканера, хранилище сессии, настройки и
 // незакрытые задания в один сценарий и выдаёт снимок, из которого интерфейс выводит экран
@@ -97,6 +85,8 @@ export interface PassServiceOptions extends SessionStoreOptions {
   readonly onChange?: (seq: number) => void;
   /** Детектор пустых страниц (M4, KTD3); по умолчанию — настоящий на `sharp`. */
   readonly blankDetector?: BlankDetector;
+  /** Поиск запомненного сканера по UUID (M5, KTD9); по умолчанию — настоящий, по mDNS. */
+  readonly findByUuid?: StartUuidSearch;
 }
 
 export interface PassService {
@@ -208,17 +198,6 @@ interface Dependencies {
   readonly blank: BlankScores;
 }
 
-type ScannerSlot =
-  | { readonly kind: 'none' }
-  | { readonly kind: 'checking'; readonly stored: StoredScanner }
-  | { readonly kind: 'ready'; readonly connected: ConnectedScanner; readonly params: ScanParams }
-  | { readonly kind: 'unreachable'; readonly stored: StoredScanner; readonly error: DomainError }
-  | {
-      readonly kind: 'otherDevice';
-      readonly stored: StoredScanner;
-      readonly error: DomainError | null;
-    };
-
 /** Идущий запуск прохода. */
 interface Run {
   readonly controller: AbortController;
@@ -266,7 +245,6 @@ export function createPassService(
   const newTransport = (profile: ConnectedScanner['profile']): ScannerTransport =>
     (connector.createTransport ?? createTransport)(profile, connector.limits);
 
-  let scanner: ScannerSlot = { kind: 'none' };
   let run: Run | null = null;
   /** Сохранение PDF идёт: второй вызов — конфликт, а не два диалога и две записи в один путь. */
   let saving = false;
@@ -283,6 +261,13 @@ export function createPassService(
     seq += 1;
     options.onChange?.(seq);
   };
+  const scanner = createScannerSlot({
+    settings,
+    connector,
+    search: options.findByUuid ?? findByUuid,
+    notify,
+    isPassRunning: () => run !== null,
+  });
 
   // Оценка пустых страниц — только страницы прохода оборотов при режиме сессии ≠ «Оставлять»
   // (`pagesToScore`, KTD3, KTD9); приход вердикта — новый снимок. Оценка не бросает (сбой —
@@ -310,50 +295,14 @@ export function createPassService(
     detectBlank(page.key);
   }
 
-  // Запомненные параметры — для рядов настройки, пока сканер не подтверждён (S2–S4).
-  const rememberedParams = (): ScanParams => settings.get().params ?? DEFAULT_SCAN_PARAMS;
-
-  const scannerState = (): ScannerState => {
-    switch (scanner.kind) {
-      case 'none':
-        return { kind: 'none' };
-      case 'checking':
-        return {
-          kind: 'checking',
-          scanner: scannerInfoOf(scanner.stored),
-          params: rememberedParams(),
-        };
-      case 'ready':
-        return {
-          kind: 'ready',
-          scanner: scannerInfoOf(storedScannerOf(scanner.connected)),
-          options: scanner.connected.options,
-          params: scanner.params,
-        };
-      case 'unreachable':
-        return {
-          kind: 'unreachable',
-          scanner: scannerInfoOf(scanner.stored),
-          error: scanner.error,
-          params: rememberedParams(),
-        };
-      case 'otherDevice':
-        return {
-          kind: 'otherDevice',
-          scanner: scannerInfoOf(scanner.stored),
-          error: scanner.error,
-          params: rememberedParams(),
-        };
-    }
-  };
-
   // Досканировать можно только тот же сканер, что вёл проход (KTD-27).
   function resumeTarget(): Result<PassOrigin> {
     const target = store.resumeTarget();
-    if (!target.ok || scanner.kind !== 'ready') {
+    const current = scanner.current();
+    if (!target.ok || current.kind !== 'ready') {
       return target;
     }
-    return sameScanner(target.value.scanner, storedScannerOf(scanner.connected))
+    return sameScanner(target.value.scanner, storedScannerOf(current.connected))
       ? target
       : conflict('otherScanner');
   }
@@ -489,7 +438,7 @@ export function createPassService(
     const last = session?.passes.at(-1);
     return {
       seq,
-      scanner: scannerState(),
+      scanner: scanner.state(),
       session,
       assembly: session === null ? null : assembleSession(session, blank.verdicts()),
       pass:
@@ -503,7 +452,7 @@ export function createPassService(
               params: run.params,
               pages: run.pages,
             },
-      canResume: run === null && scanner.kind === 'ready' && resumeTarget().ok,
+      canResume: run === null && scanner.current().kind === 'ready' && resumeTarget().ok,
       canAccept: run === null && last?.state === 'interrupted',
       storage: { incompatible: store.incompatible, unsaved: store.unsaved() },
       notices,
@@ -699,10 +648,11 @@ export function createPassService(
     if (store.incompatible) {
       return fail('storageIncompatible');
     }
-    if (scanner.kind !== 'ready') {
+    const slot = scanner.current();
+    if (slot.kind !== 'ready') {
       return fail('scannerNotConnected');
     }
-    const { connected, params } = scanner;
+    const { connected, params } = slot;
     const stored = storedScannerOf(connected);
 
     // Политика — у хранилища (`planPass`, KTD-5), до сети: что начнётся и с какой ролью.
@@ -747,8 +697,7 @@ export function createPassService(
     const outcome = await current.done;
     if (!outcome.ok && outcome.error.code === 'scannerCertificateChanged') {
       // По адресу другое устройство (KTD-40): новый отпечаток запомнит только повторное подключение.
-      scanner = { kind: 'otherDevice', stored, error: outcome.error };
-      notify();
+      scanner.markOtherDevice(stored, outcome.error);
     }
     return outcome;
   }
@@ -758,69 +707,17 @@ export function createPassService(
 
     sessionId: () => store.snapshot()?.id ?? null,
 
-    async checkRememberedScanner(signal) {
-      // Повторная проверка не трогает ни идущий проход, ни рабочее подключение (ревью
-      // сессии 9): интерфейс зовёт её только из «не отвечает», но ядро проверяет само.
-      if (run !== null || scanner.kind === 'ready') {
-        return;
-      }
-      const remembered = settings.get().scanner;
-      if (remembered === null) {
-        return;
-      }
-      const checking: ScannerSlot = { kind: 'checking', stored: remembered };
-      scanner = checking;
-      notify();
-      const checked = await checkRememberedScanner(settings.get(), connector, signal);
-      // Пока шла проверка, пользователь подключил сканер сам: его выбор не перезаписывается.
-      if (scanner !== checking) {
-        return;
-      }
-      switch (checked.state) {
-        case 'none':
-          scanner = { kind: 'none' };
-          break;
-        case 'ready':
-          scanner = { kind: 'ready', connected: checked.connected, params: checked.params };
-          break;
-        case 'unreachable':
-          scanner = { kind: 'unreachable', stored: checked.scanner, error: checked.error };
-          break;
-        case 'otherDevice':
-          scanner = { kind: 'otherDevice', stored: checked.scanner, error: checked.error };
-          break;
-      }
-      notify();
-    },
+    checkRememberedScanner: (signal) => scanner.check(signal),
 
     async useScanner(connected) {
       if (run !== null) {
         return conflict('passRunning');
       }
-      scanner = {
-        kind: 'ready',
-        connected,
-        params: resolveScanParams(settings.get().params, connected.options),
-      };
-      notify();
-      // Отказ записи настроек подключения не отменяет: сканер остаётся в памяти до конца работы.
-      await settings.rememberScanner(storedScannerOf(connected));
+      await scanner.use(connected);
       return ok(undefined);
     },
 
-    async setParams(params) {
-      if (scanner.kind !== 'ready') {
-        return fail('scannerNotConnected');
-      }
-      const field = unsupportedField(params, scanner.connected.options);
-      if (field !== null) {
-        return fail('scanParamsUnsupported', { field });
-      }
-      scanner = { ...scanner, params };
-      notify();
-      await settings.setParams(params);
-      return ok(undefined);
-    },
+    setParams: (params) => scanner.setParams(params),
 
     async setBlankMode(mode) {
       // Не параметр устройства: сканер не нужен, по capabilities не сверяется (KTD1).

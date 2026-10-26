@@ -4,7 +4,7 @@ import * as http from 'node:http';
 import * as https from 'node:https';
 import type { AddressInfo } from 'node:net';
 import { ET_3850, fixturePath, readFixture, scanFixture } from '../support/fixtures.ts';
-import { createSelfSignedCert } from '../support/self-signed-cert.ts';
+import { createSelfSignedCert, type SelfSignedCert } from '../support/self-signed-cert.ts';
 import { scenarioOf, type Scenario, type TrayEntry } from './scenarios.ts';
 
 // Эмулятор сканера eSCL (план M1, U9): устройство для тестов и ручного смоука без бумаги.
@@ -64,6 +64,12 @@ export interface EmulatorOptions {
   readonly port?: number;
   /** HTTP вместо HTTPS — для проверки перехода на HTTP (KTD-8). */
   readonly http?: boolean;
+  /**
+   * Сертификат прошлого запуска (M5, KTD9): тот же сертификат на другом порту — то же устройство
+   * на новом адресе. По умолчанию — новый на каждый запуск, то есть другое устройство с тем же
+   * UUID: UUID у эмулятора один — из фикстуры capabilities.
+   */
+  readonly cert?: SelfSignedCert;
   /** Вызывается, когда обмен закончен, — для журнала в консоли. */
   readonly onExchange?: (exchange: EmulatorExchange) => void;
 }
@@ -75,6 +81,8 @@ export interface Emulator {
   readonly basePath: string;
   /** SHA-256 сертификата; `null` на HTTP. */
   readonly fingerprint: string | null;
+  /** Сертификат с ключом — для «переезда» в `cert` следующего запуска; `null` на HTTP. */
+  readonly cert: SelfSignedCert | null;
   /** Все запросы по порядку поступления. */
   readonly exchanges: readonly EmulatorExchange[];
   /** Запросы строками «метод путь статус»; идентификатор задания заменён на `<job>`. */
@@ -139,7 +147,7 @@ function traysOf(trays: readonly (readonly TrayEntry[])[]): TrayEntry[][] {
 export async function startEmulator(options: EmulatorOptions = {}): Promise<Emulator> {
   const basePath = '/eSCL';
   const collection = `${basePath}/ScanJobs`;
-  const cert = options.http === true ? null : createSelfSignedCert();
+  const cert = options.http === true ? null : (options.cert ?? createSelfSignedCert());
   const scheme = cert === null ? 'http' : 'https';
   const pages = pageFixtures();
 
@@ -148,6 +156,7 @@ export async function startEmulator(options: EmulatorOptions = {}): Promise<Emul
   let sheetsUsed = 0;
   let faultFired = false;
   let busyPostsLeft = scenario.busyPosts;
+  let busyCapabilitiesLeft = scenario.busyCapabilities;
   let busyUntil = 0;
   let jam = false;
   let jobs: Job[] = [];
@@ -299,6 +308,11 @@ export async function startEmulator(options: EmulatorOptions = {}): Promise<Emul
     };
 
     if (path === `${basePath}/ScannerCapabilities` && method === 'GET') {
+      if (busyCapabilitiesLeft > 0) {
+        busyCapabilitiesLeft -= 1;
+        busy();
+        return;
+      }
       xml(readFixture(...DEVICE_DIRS[scenario.device], 'ScannerCapabilities.xml'));
       return;
     }
@@ -591,6 +605,7 @@ export async function startEmulator(options: EmulatorOptions = {}): Promise<Emul
     port,
     basePath,
     fingerprint: cert?.fingerprint ?? null,
+    cert,
     exchanges,
     requests: () =>
       exchanges.map((it) => `${it.method} ${maskJob(it.path)} ${it.status ?? 'нет ответа'}`),
@@ -602,6 +617,7 @@ export async function startEmulator(options: EmulatorOptions = {}): Promise<Emul
       sheetsUsed = 0;
       faultFired = false;
       busyPostsLeft = scenario.busyPosts;
+      busyCapabilitiesLeft = scenario.busyCapabilities;
       busyUntil = 0;
       jam = false;
       jobs = [];
