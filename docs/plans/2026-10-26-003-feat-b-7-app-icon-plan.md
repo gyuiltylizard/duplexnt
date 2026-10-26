@@ -2,7 +2,7 @@
 title: 'feat: значок приложения и установщика (B-7)'
 type: feat
 date: 2026-10-26
-status: в работе # в работе → done; заморожен — готов, не начат
+status: done # в работе → done; заморожен — готов, не начат
 origin: docs/design/handoffs/app-icon.md
 ---
 
