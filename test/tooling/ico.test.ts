@@ -1,7 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { decodeIcoEntries, encodeIco, ICON_PATH, ICON_SIZES } from '../../scripts/ico';
+import {
+  decodeIcoEntries,
+  encodeIco,
+  ICON_PATH,
+  ICON_SIZES,
+  WINDOW_ICON_PATH,
+  WINDOW_ICON_SIZES,
+} from '../../scripts/ico';
 
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
@@ -71,5 +78,17 @@ describe('контейнер ICO (B-7)', () => {
         expect(view(entry.bytes).getInt32(4, true)).toBe(entry.size);
       }
     }
+  });
+
+  it('build/window-icon.ico: системные размеры 100–200 %, кадр 32 — плитка почти в край', () => {
+    const entries = decodeIcoEntries(new Uint8Array(readFileSync(resolve(WINDOW_ICON_PATH))));
+
+    expect(entries.map((entry) => entry.size)).toEqual([...WINDOW_ICON_SIZES]);
+    // Панель задач ужимает кадр 32 до 24 px. У icon.svg пиксель (1, 16) — прозрачное поле сетки,
+    // у icon-small.svg — уже плитка: значок на панели вровень с соседями.
+    const dib = entries.find((entry) => entry.size === 32)?.bytes ?? new Uint8Array();
+    const alphaAt = (x: number, y: number): number | undefined =>
+      dib[40 + ((31 - y) * 32 + x) * 4 + 3];
+    expect(alphaAt(1, 16)).toBe(255);
   });
 });
