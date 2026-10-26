@@ -162,6 +162,7 @@ const CSS_FILES = [
   'screens/scan-screen.css',
   'screens/flip-screen.css',
   'screens/merge-screen.css',
+  'screens/merge-sort.css',
   'screens/editor-screen.css',
   'modals/device-modal.css',
   'modals/add-modal.css',
@@ -518,11 +519,11 @@ describe('референс интерфейса (B-6)', () => {
         <MergeScreen assembly={assemblyOf(session)} />
       </div>,
     );
-    await screen.findByText('Сопоставляем проходы');
+    await screen.findByText(/^Сопоставляем лица и обороты/);
     await capture(container, {
       id: 'merge',
       title: 'merge',
-      note: 'Пауза ~1,6 с после второго прохода: лица и обороты сводятся в листы, затем editor. Редизайн — B-5.',
+      note: 'Пауза ~1,6 с после второго прохода: иллюстрация «пары» (B-5), строка состояния, затем editor.',
     });
   });
 

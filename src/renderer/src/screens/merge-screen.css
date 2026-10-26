@@ -1,5 +1,5 @@
-/* Экран `merge` (U9): процессная пауза по макету и UI_SPEC раздел 5; статусная строка — S4
-   handoff M2. Ширина диаграммы — литерал макета (осознанное исключение DS). */
+/* Экран `merge` (U9 M2; редизайн B-5 — handoff `2026-10-b5-merge.md`): процессная пауза —
+   заголовок, иллюстрация «сортировки» (merge-sort.css), одна строка состояния. */
 
 .merge-screen {
   flex: 1;
@@ -12,6 +12,26 @@
   outline: none; /* контейнер принимает фокус — органов управления на экране нет */
 }
 
+.merge-screen__head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+/* Тег набора (M4.5) — форма .scan-screen__tag, цвет набора. */
+.merge-screen__tag {
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius-m);
+  background: var(--color-pass-3);
+  font-family: var(--font-family-mono);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-xs);
+  line-height: var(--leading-normal);
+  letter-spacing: var(--tracking-caps);
+  color: var(--color-text-on-accent);
+}
+
 .merge-screen__title {
   margin: 0;
   font-weight: var(--font-weight-semibold);
@@ -20,109 +40,44 @@
   letter-spacing: var(--tracking-snug);
 }
 
-.merge-screen__diagram {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-6);
-  width: 560px;
-}
-
-.merge-screen__row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-6);
-}
-
-.merge-screen__row--document {
-  padding-top: var(--space-3);
-}
-
-.merge-screen__row-label {
-  width: 96px;
-  flex: none;
-  font-family: var(--font-family-mono);
-  font-weight: var(--font-weight-regular);
-  font-size: var(--font-size-s);
-  line-height: var(--leading-none);
-  color: var(--color-text-subtle);
-}
-
-.merge-screen__row-label--strong {
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-primary);
-}
-
-.merge-screen__cells {
-  flex: 1;
-  display: flex;
-  gap: var(--space-2);
-}
-
-/* Обороты пришли в обратном порядке — ряд заполняется с другого края. */
-.merge-screen__cells--reversed {
-  flex-direction: row-reverse;
-}
-
-.merge-screen__cells--document {
-  gap: var(--space-1);
-}
-
-.merge-screen__cell {
-  flex: 1;
-  height: 22px;
-  border-radius: var(--radius-s);
-}
-
-.merge-screen__cell--front {
-  background: var(--color-accent);
-  opacity: var(--opacity-soft);
-}
-
-.merge-screen__cell--back {
-  background: var(--color-warning);
-  opacity: var(--opacity-soft);
-  animation: pulse var(--duration-loop) var(--ease-loop) infinite;
-}
-
-.merge-screen__doc-cell {
-  flex: 1;
-  height: 22px;
-  border-radius: var(--radius-xs);
-  background: var(--color-pass-1);
-}
-
-.merge-screen__doc-cell--back {
-  background: var(--color-pass-2);
-}
-
-.merge-screen__footer {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  align-items: center;
-}
-
-.merge-screen__formula {
-  margin: 0;
-  font-weight: var(--font-weight-regular);
-  font-size: var(--font-size-m);
-  line-height: var(--leading-relaxed);
-  color: var(--color-text-muted);
-  text-align: center;
-}
-
+/* Строка состояния — единственный текст под иллюстрацией и первый сигнал о несовпадении:
+   --color-text-subtle, а не --color-text-hint, как было до B-5. */
 .merge-screen__status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--size-dot);
   margin: 0;
   font-family: var(--font-family-mono);
   font-weight: var(--font-weight-regular);
   font-size: var(--font-size-s);
-  line-height: var(--leading-none);
-  color: var(--color-text-hint);
+  line-height: var(--leading-normal);
+  color: var(--color-text-subtle);
   text-align: center;
+}
+
+.merge-screen__status--warning {
+  color: var(--color-warning);
+}
+
+.merge-screen__status .dot {
+  flex: none;
+}
+
+/* Хвост про пустые обороты: свой узел, при смене текста проявляется — основное не мигает. */
+.merge-screen__tail {
+  color: var(--color-text-hint);
+  animation: merge-tail-in var(--duration-fast) var(--ease-standard);
+}
+
+@keyframes merge-tail-in {
+  from {
+    opacity: 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .merge-screen__cell--back {
+  .merge-screen__tail {
     animation: none;
   }
 }
