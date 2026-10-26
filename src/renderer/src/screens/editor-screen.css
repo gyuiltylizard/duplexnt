@@ -41,13 +41,17 @@
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  padding: 0 var(--space-7);
+  /* B-3: поля уже, чем у правой зоны, — двум кнопкам по тексту нужен запас в 288 px. */
+  padding: 0 var(--space-5);
   border-right: var(--border-width) solid var(--color-border-subtle);
 }
 
+/* B-3: ширина по тексту, а не поровну — поровну «↺ Новое сканирование» не влезала в свою
+   половину и вылезала за рамку. Текст длиннее зоны обрезается рамкой, а не выходит за неё. */
 .editor-screen__toolbar-left .btn--secondary {
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
+  overflow: hidden;
   font-size: var(--font-size-base);
   padding: var(--space-5) var(--space-4);
 }
@@ -574,7 +578,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font: var(--font-weight-semibold) var(--font-size-xxs) / var(--leading-tight)
+  font: var(--font-weight-semibold) var(--font-size-xxxs) / var(--leading-tight)
     var(--font-family-mono);
   letter-spacing: var(--tracking-wide);
   cursor: pointer;

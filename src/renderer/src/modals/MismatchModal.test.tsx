@@ -35,7 +35,7 @@ describe('модалка mismatch (M3.6, S6: три исхода про режи
 
     expect(screen.getByRole('dialog')).toBeDefined();
     expect(screen.getByText('НЕ СХОДЯТСЯ ПРОХОДЫ')).toBeDefined();
-    expect(screen.getByText('В первом проходе 12 листов, во втором — 11')).toBeDefined();
+    expect(screen.getByText('Лицевых сторон 12, оборотов — 11')).toBeDefined();
     expect(text()).toContain('Документ пока не собран: лица и обороты лежат отдельными наборами');
     expect(text()).toContain('досканируйте недостающий кнопкой «+ Добавить»');
     expect(text()).toContain('нажмите «Собрать документ»');
@@ -50,9 +50,7 @@ describe('модалка mismatch (M3.6, S6: три исхода про режи
   it('оборотов больше: текст про двойной захват, лишний оборот в наборе и «Собрать документ»', () => {
     render(<MismatchModal report={report(12, 13)} onClose={vi.fn()} />);
 
-    expect(
-      screen.getByText('Во втором проходе страниц больше, чем листов: 13 против 12'),
-    ).toBeDefined();
+    expect(screen.getByText('Оборотов больше, чем лицевых сторон: 13 против 12')).toBeDefined();
     expect(text()).toContain('Найдите лишний оборот в наборе и удалите его');
     expect(text()).toContain('нажмите «Собрать документ»');
   });

@@ -6,3 +6,9 @@ export { handleProbe } from './probe/handle-probe';
 export { openPassService, type PassService, type PassServiceOptions } from './scan/pass-service';
 export { isPageKey, isSessionId, layoutOf } from './storage/layout';
 export { createThumbnails, type Thumbnails } from './storage/thumbnails';
+export {
+  openWindowStateStore,
+  type WindowBounds,
+  type WindowState,
+  type WindowStateStore,
+} from './storage/window-state';

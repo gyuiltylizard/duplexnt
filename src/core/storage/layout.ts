@@ -6,6 +6,7 @@ import { join } from 'node:path';
 //   <корень данных>/
 //     settings.json               настройки и запомненный сканер
 //     unclosed-jobs.json          незакрытые задания сканера
+//     window.json                 размер и положение окна (B-3): удобство, не данные
 //     session/                    текущая сессия — источник правды
 //       session.json              журнал; путь и имя поля маркера версии заморожены навсегда
 //       pages/
@@ -41,6 +42,7 @@ export interface DataLayout {
   readonly root: string;
   readonly settingsFile: string;
   readonly unclosedJobsFile: string;
+  readonly windowFile: string;
   readonly sessionDir: string;
   readonly journalFile: string;
   readonly pagesDir: string;
@@ -53,6 +55,7 @@ export function layoutOf(dataRoot: string): DataLayout {
     root: dataRoot,
     settingsFile: join(dataRoot, 'settings.json'),
     unclosedJobsFile: join(dataRoot, 'unclosed-jobs.json'),
+    windowFile: join(dataRoot, 'window.json'),
     sessionDir,
     journalFile: join(sessionDir, JOURNAL_FILE_NAME),
     pagesDir: join(sessionDir, PAGES_DIR_NAME),

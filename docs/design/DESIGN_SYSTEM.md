@@ -136,7 +136,8 @@ flip / merge / editor, модалки device / add / save / mismatch / newscan).
 | `--font-weight-regular`  | `400`                                                         | Абзацы, описания, поля ввода, стрелки-глифы                                                                       |
 | `--font-weight-medium`   | `500`                                                         | Кикеры, вторичные кнопки, названия элементов, метки                                                               |
 | `--font-weight-semibold` | `600`                                                         | Заголовки, первичные кнопки, названия документов, бейджи                                                          |
-| `--font-size-xxs`        | `9.5px`                                                       | Теги проходов, «ПУСТО», подпись «лицо/оборот», надпись на split-баре, угловая метка листа, «ВЕРХ»                 |
+| `--font-size-xxxs`       | `8.5px`                                                       | Только надпись на split-баре (B-3: на 9.5 px она впритык к краям миниатюры)                                       |
+| `--font-size-xxs`        | `9.5px`                                                       | Теги проходов, «ПУСТО», подпись «лицо/оборот», угловая метка листа, «ВЕРХ»                                        |
 | `--font-size-xs`         | `10.5px`                                                      | Кикеры капсом, счётчики страниц, номер бейджа документа, переключатель «добавить пустые», подписи полей адреса    |
 | `--font-size-s`          | `11.5px`                                                      | Метаданные mono, описания в карточках, тултип, панель выделения, сегменты параметров, плашка «Есть ручные правки» |
 | `--font-size-m`          | `12.5px`                                                      | Основной текст интерфейса: подписи, вторичные кнопки, поля ввода, лид-абзацы модалок, тост                        |
@@ -302,7 +303,7 @@ flip / merge / editor, модалки device / add / save / mismatch / newscan).
 
 ### Разделитель «Новый документ»
 
-**Split-бар на миниатюре** (появляется при hover, `z-index --z-raised`): `left/right/top --space-3`, высота 30 px, `border-radius --radius-m --radius-m --radius-s --radius-s`, padding `0 --space-2`, `--font-weight-semibold --font-size-xxs/--leading-normal --font-family-mono --tracking-wide`, текст `--color-text-on-accent`. Вариант «+ Новый документ»: фон `--color-accent`; «⤺ Убрать границу»: фон `--color-bg-inverse`.
+**Split-бар на миниатюре** (появляется при hover, `z-index --z-raised`): `left/right/top --space-3`, высота 30 px, `border-radius --radius-m --radius-m --radius-s --radius-s`, padding `0 --space-2`, `--font-weight-semibold --font-size-xxxs/--leading-normal --font-family-mono --tracking-wide`, текст `--color-text-on-accent`. Вариант «+ Новый документ»: фон `--color-accent`; «⤺ Убрать границу»: фон `--color-bg-inverse`.
 
 **Разделитель в панели**: строка `gap --space-3`, padding `--space-1 0 --space-5`. Пилюля: padding `--space-2 --space-4`, `--radius-xl`, фон `--color-accent`, текст `--color-text-on-accent` `--font-weight-semibold --font-size-xxs --font-family-mono --tracking-wide`. Линия: `border-top: --border-width-dashed dashed --color-accent`. Кнопка «✕»: `--size-badge`, `--radius-m`, граница `--color-border-accent-soft`, текст `--color-accent` `--font-size-s`; hover `background:--color-bg-accent-hover`.
 
@@ -481,6 +482,7 @@ flip / merge / editor, модалки device / add / save / mismatch / newscan).
   --font-weight-regular: 400;
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
+  --font-size-xxxs: 8.5px;
   --font-size-xxs: 9.5px;
   --font-size-xs: 10.5px;
   --font-size-s: 11.5px;
