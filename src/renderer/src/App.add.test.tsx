@@ -120,7 +120,7 @@ describe('M3.5: посадка добавленного набора (KTD-7; han
     expect(screen.getByText('ДОБАВЛЯЕМ СТРАНИЦЫ')).toBeDefined();
 
     await push(withAdded(3, 3));
-    expect(screen.queryByText('Сопоставляем проходы')).toBeNull();
+    expect(document.querySelector('.merge-screen')).toBeNull();
     expect(toasts()).toEqual(['Добавлено 2 стр.']);
     // Лента: 1л 1о 2л Д1.1 Д1.2 Д1.3 2о 3л 3о — первая новая страница на пятом месте.
     expect(currentKey()).toBe('p03-s01-0002');
@@ -212,7 +212,7 @@ describe('M3.5: посадка добавленного набора (KTD-7; han
     expect(screen.getByText('ДОБАВЛЯЕМ СТРАНИЦЫ')).toBeDefined();
     await push({ ...withAdded(3, 0), scanner: READY });
 
-    expect(screen.queryByText('Сопоставляем проходы')).toBeNull();
+    expect(document.querySelector('.merge-screen')).toBeNull();
     expect(screen.getByText('стр. 1 из 6')).toBeDefined();
     expect(toasts()).toEqual([
       'Не удалось начать: в лотке нет бумаги. Положите листы в автоподатчик и запустите ещё раз.',
@@ -238,7 +238,7 @@ describe('M3.5: посадка добавленного набора (KTD-7; han
     vi.useFakeTimers();
     try {
       await push(withAdded(2, 0));
-      expect(screen.getByText('Сопоставляем проходы')).toBeDefined();
+      expect(document.querySelector('.merge-screen')).not.toBeNull();
       act(() => {
         vi.advanceTimersByTime(1601);
       });
@@ -252,7 +252,7 @@ describe('M3.5: посадка добавленного набора (KTD-7; han
     const push = await launchedFromInterrupted();
 
     await push(withAdded(2, 3));
-    expect(screen.queryByText('Сопоставляем проходы')).toBeNull();
+    expect(document.querySelector('.merge-screen')).toBeNull();
     expect(toasts()).toEqual(['Добавлено 2 стр.']);
     expect(currentKey()).toBe('p03-s01-0002');
   });

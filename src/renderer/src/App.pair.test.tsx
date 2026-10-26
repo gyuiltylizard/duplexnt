@@ -109,8 +109,8 @@ const toastNodes = (): HTMLElement[] =>
   screen.queryAllByRole('status').filter((element) => element.classList.contains('toast'));
 const toasts = (): (string | null)[] => toastNodes().map((element) => element.textContent);
 const mergeStatus = (): string | null =>
-  screen.queryByText('Сопоставляем проходы')?.parentElement?.querySelector('.merge-screen__status')
-    ?.textContent ?? null;
+  document.querySelector('.merge-screen')?.querySelector('.merge-screen__status')?.textContent ??
+  null;
 const currentKey = (): string | null =>
   screen
     .getAllByRole('option')
@@ -153,11 +153,11 @@ describe('M4.5: посадка пары набора (KTD7; handoff S6, S10)', (
 
     await pushLanding(push, withSet(2, { count: 3 }), 1601, () => {
       expect(mergeStatus()).toBe('набор Д1: совпало пар 3');
-      expect(screen.getByText('лица набора 1→3')).toBeDefined();
-      expect(screen.getByText('обороты набора 3→1')).toBeDefined();
+      expect(document.querySelector('.merge-screen__tag')?.textContent).toBe('НАБОР Д1');
+      expect(document.querySelector('.sort')).not.toBeNull();
       expect(toasts()).toEqual([]);
     });
-    expect(screen.queryByText('Сопоставляем проходы')).toBeNull();
+    expect(document.querySelector('.merge-screen')).toBeNull();
     expect(toasts()).toEqual(['Добавлено 6 стр.']);
     // Лента: 1л 1о 2л [Д1: f1 b1 f2 b2 f3 b3] 2о 3л 3о — первая страница набора на четвёртом месте.
     expect(currentKey()).toBe('p03-s01-0001');
@@ -167,10 +167,10 @@ describe('M4.5: посадка пары набора (KTD7; handoff S6, S10)', (
     const [node] = toastNodes();
     await push(withSet(3, { count: 3 }));
     expect(toastNodes()).toEqual([node]);
-    expect(screen.queryByText('Сопоставляем проходы')).toBeNull();
+    expect(document.querySelector('.merge-screen')).toBeNull();
   });
 
-  it('лица набора завершены → flip набора без паузы и тоста; «Обороты не нужны» → короткая пауза и тост', async () => {
+  it('лица набора завершены → flip набора без паузы и тоста; «Обороты не нужны» → без паузы, сразу посадка и тост (B-5)', async () => {
     const fronts = {
       ...withSet(1, null),
       pass: {
@@ -189,16 +189,14 @@ describe('M4.5: посадка пары набора (KTD7; handoff S6, S10)', (
     await push(withSet(2, null));
     const kicker = screen.getByText('ДОБАВЛЯЕМ · ЛИЦА ГОТОВЫ: 3 листа');
     expect(kicker.className).toBe('kicker kicker--added');
-    expect(screen.queryByText('Сопоставляем проходы')).toBeNull();
+    expect(document.querySelector('.merge-screen')).toBeNull();
     expect(toasts()).toEqual([]);
 
     fireEvent.click(screen.getByRole('button', { name: 'Обороты не нужны' }));
     expect(window.api.declineBacks).toHaveBeenCalledTimes(1);
-    await pushLanding(push, withSet(3, null, 'declined'), 1201, () => {
-      expect(mergeStatus()).toBe('набор Д1: обороты не нужны · страниц: 3');
-      expect(screen.queryByText(/обороты набора/)).toBeNull();
-    });
-    expect(screen.queryByText('Сопоставляем проходы')).toBeNull();
+    // Решение автора на приёмке B-5: после «Обороты не нужны» сопоставлять нечего — паузы нет.
+    await push(withSet(3, null, 'declined'));
+    expect(document.querySelector('.merge-screen')).toBeNull();
     expect(toasts()).toEqual(['Добавлено 3 стр.']);
     expect(currentKey()).toBe('p03-s01-0001');
   });
@@ -249,7 +247,7 @@ describe('M4.5: посадка пары набора (KTD7; handoff S6, S10)', (
     expect(screen.getByText('ДОБАВЛЯЕМ · ЛИЦА')).toBeDefined();
     await push({ ...base, seq: 3 });
 
-    expect(screen.queryByText('Сопоставляем проходы')).toBeNull();
+    expect(document.querySelector('.merge-screen')).toBeNull();
     expect(toasts()).toEqual([]);
     expect(screen.getByText('стр. 1 из 6')).toBeDefined();
   });
@@ -272,7 +270,7 @@ describe('M4.5: посадка пары набора (KTD7; handoff S6, S10)', (
 
     await push({ ...pending, seq: 2 });
     expect(screen.getByText('ДОБАВЛЯЕМ · ЛИЦА ГОТОВЫ: 3 листа')).toBeDefined();
-    expect(screen.queryByText('Сопоставляем проходы')).toBeNull();
+    expect(document.querySelector('.merge-screen')).toBeNull();
     expect(toasts()).toEqual([]);
   });
 
@@ -283,12 +281,8 @@ describe('M4.5: посадка пары набора (KTD7; handoff S6, S10)', (
 
     await pushLanding(push, withSet(2, { count: 2 }), 1601, () => {
       expect(mergeStatus()).toBe('набор Д1: не сошлось — лиц 3, оборотов 2');
-      expect(
-        screen.getByText(
-          'Обороты набора не сошлись — лица и обороты лежат рядом, набор поправите в редакторе',
-        ),
-      ).toBeDefined();
-      expect(document.querySelector('.merge-screen__row--document')).toBeNull();
+      // B-5: несовпадение набора — янтарная строка; иллюстрация одна на все исходы.
+      expect(document.querySelector('.merge-screen__status--warning')).not.toBeNull();
     });
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByText('В наборе Д1 лиц 3, оборотов 2')).toBeDefined();
@@ -341,7 +335,7 @@ describe('M4.5: посадка пары набора (KTD7; handoff S6, S10)', (
       expect(mergeStatus()).toBe('набор Д1: совпало пар 3');
       expect(toasts()).toEqual([]);
     });
-    expect(screen.queryByText('Сопоставляем проходы')).toBeNull();
+    expect(document.querySelector('.merge-screen')).toBeNull();
     expect(toasts()).toEqual(['Добавлено 6 стр.']);
     expect(currentKey()).toBe('p03-s01-0001');
   });
@@ -376,7 +370,7 @@ describe('M4.5: посадка пары набора (KTD7; handoff S6, S10)', (
     expect(
       await screen.findByRole('dialog', { name: 'В наборе Д1 лиц 3, оборотов 2' }),
     ).toBeDefined();
-    expect(screen.queryByText('Сопоставляем проходы')).toBeNull();
+    expect(document.querySelector('.merge-screen')).toBeNull();
     expect(toasts()).toEqual([]);
   });
 
@@ -442,13 +436,13 @@ describe('M4.5: посадка пары набора (KTD7; handoff S6, S10)', (
     });
     // Пауза истекла, оценка ещё идёт: экран тот же — набор, не основной документ.
     expect(mergeStatus()).toBe('набор Д1: совпало пар 3 · ищем пустые обороты…');
-    expect(screen.getByText('лица набора 1→3')).toBeDefined();
+    expect(document.querySelector('.merge-screen__tag')?.textContent).toBe('НАБОР Д1');
     expect(toasts()).toEqual([]);
 
     await push(
       withSet(3, { count: 3 }, 'none', 'hide', new Map([...partial, ['p04-s01-0001', true]])),
     );
-    expect(screen.queryByText('Сопоставляем проходы')).toBeNull();
+    expect(document.querySelector('.merge-screen')).toBeNull();
     expect(toasts()).toEqual(['Добавлено 5 стр. — скрыт 1 пустой оборот']);
   });
 });

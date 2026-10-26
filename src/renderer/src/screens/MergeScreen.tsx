@@ -1,28 +1,24 @@
 import { useRef, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { AddedSetReport, AssembledPage, AssemblyReport, SessionAssembly } from '@shared';
+import type { AddedSetReport, AssemblyReport, SessionAssembly } from '@shared';
 import type { TFunction } from 'i18next';
 import { useFocusWhen } from '../components/useFocusWhen';
 import { assemblyOutcome } from '../state/assembly-outcome';
 import './merge-screen.css';
+import './merge-sort.css';
 
-// Экран `merge` (план M2, U9; UI_SPEC раздел 5; handoff M2, S4; M3.6, S7): процессная пауза без
-// органов управления, уходит сам по таймеру App (KTD-5). Диаграмма иллюстративна, статусная
-// строка — фактический результат сборки и первой сообщает о несовпадении. При несовпадении
-// (режим раздельных наборов) ряда «документ» нет: лица и обороты лежат отдельными наборами,
-// документ соберут в редакторе (R21). С M4 (S12) статус получает хвост про пустые обороты, а
-// App держит экран, пока оценки не пришли (решение автора: без потолка). С M4.5 (R9; handoff
-// M4.5, S6) та же пауза после пары набора «ДN»: ряды и статус называют набор, ряд «документ» —
-// чередование его блока; при несовпадении набора ряда «документ» нет, формула — про набор.
+// Экран `merge` (план M2, U9; UI_SPEC раздел 5; редизайн B-5 — handoff
+// `2026-10-b5-merge.md`): процессная пауза без органов управления, уходит сам по таймеру App
+// (KTD-5). Иллюстрация «сортировки» одна на все исходы — индикатор «идёт сборка», а не
+// рассказ об исходе: лица раскладываются, на каждое ложится его оборот, пары собираются в
+// стопку (решение автора на приёмке B-5: пауза короче цикла, и картинка несовпадения не
+// доигрывалась — о несовпадении сообщает модалка). Строка состояния — фактический результат
+// сборки. После «Обороты не нужны» экрана нет (App). С M4 (S12) у строки хвост про пустые
+// обороты, а App держит экран, пока оценки не пришли (решение автора: без потолка). С M4.5
+// (S6) та же пауза после пары набора «ДN»: тег и заголовок набора, статус по набору.
 
 /** Пауза `merge` (KTD-5, UI_SPEC раздел 9). */
 export const MERGE_PAUSE_MS = 1600;
-/** Пауза после «Обороты не нужны». */
-export const MERGE_PAUSE_DECLINED_MS = 1200;
-
-/** Потолок ячеек ряда: диаграмма — картинка процесса, числа несёт статусная строка. */
-const ROW_CELLS_MAX = 12;
-const DOC_CELLS_MAX = 24;
 
 export interface MergeScreenProps {
   readonly assembly: SessionAssembly;
@@ -30,40 +26,29 @@ export interface MergeScreenProps {
   readonly set?: number | null;
 }
 
-/** Что сопоставляем: числа, состояние оборотов и отказ — у основной пачки или у набора. */
+/** Что сопоставляем: основная пачка или набор. */
 interface Pack {
   readonly set: AddedSetReport | null;
-  readonly fronts: number;
-  readonly backs: number;
   readonly backsState: AssemblyReport['backsState'];
-  readonly declined: boolean;
+  /** Лица и обороты не сошлись (или приняты неравными) — строка янтарная. */
   readonly mismatch: boolean;
-  /** Страницы ряда «документ»: вся лента или блок набора. */
-  readonly pages: readonly AssembledPage[];
 }
 
 function packOf(assembly: SessionAssembly, setNumber: number | null): Pack {
   const { report } = assembly;
   const set = setNumber === null ? null : (report.sets.find((it) => it.set === setNumber) ?? null);
   if (set === null) {
+    const outcome = assemblyOutcome(report);
     return {
       set: null,
-      fronts: report.fronts,
-      backs: report.backs,
       backsState: report.backsState,
-      declined: report.backsDeclined,
-      mismatch: report.mode === 'sets',
-      pages: assembly.order,
+      mismatch: outcome === 'fewer' || outcome === 'extra' || outcome === 'accepted',
     };
   }
   return {
     set,
-    fronts: set.fronts,
-    backs: set.backs,
     backsState: set.backsState,
-    declined: set.decision === 'declined',
-    mismatch: set.mismatch,
-    pages: assembly.order.filter((page) => page.addedSet === set.set),
+    mismatch: set.mismatch || set.backsState === 'accepted',
   };
 }
 
@@ -80,13 +65,6 @@ function blankStatus(t: TFunction, assembly: SessionAssembly, pack: Pack): strin
     return t('merge.blank.scoring');
   }
   return blank.found === 0 ? t('merge.blank.none') : t('merge.blank.found', { count: blank.found });
-}
-
-/** Статусная строка: исход — общей классификацией, тот же, что увидит `mismatch` (KTD-8). */
-function statusText(t: TFunction, assembly: SessionAssembly, pack: Pack): string {
-  const status = pack.set === null ? outcomeText(t, assembly.report) : setOutcomeText(t, pack.set);
-  const blank = blankStatus(t, assembly, pack);
-  return blank === null ? status : t('merge.blank.join', { status, blank });
 }
 
 function outcomeText(t: TFunction, report: AssemblyReport): string {
@@ -120,48 +98,30 @@ function setOutcomeText(t: TFunction, set: AddedSetReport): string {
   return t('merge.status.setOk', { set: set.set, count: fronts });
 }
 
-/**
- * Строка-формула под схемой. При несовпадении документа ещё нет: у всей ленты лица и обороты
- * лежат отдельными наборами, у набора (S6 M4.5) — подблоками рядом, поэтому формулировки разные.
- */
-function formulaKeyOf(
-  pack: Pack,
-): 'merge.formula' | 'merge.formulaMismatch' | 'merge.formulaSetMismatch' {
-  if (!pack.mismatch) {
-    return 'merge.formula';
-  }
-  return pack.set === null ? 'merge.formulaMismatch' : 'merge.formulaSetMismatch';
-}
-
-function cells(count: number, max: number): number[] {
-  return Array.from({ length: Math.max(1, Math.min(count, max)) }, (_, index) => index);
-}
-
-/** Ряд диаграммы: подпись + ячейки одного прохода. */
-function Row({
-  label,
-  count,
-  side,
-}: {
-  readonly label: string;
-  readonly count: number;
-  readonly side: 'front' | 'back';
-}): ReactNode {
+/** Лист иллюстрации: три строки «текста», как у листов `feed` и `turn`. */
+function SortSheet({ className }: { readonly className: string }): ReactNode {
   return (
-    <div className="merge-screen__row">
-      <div className="merge-screen__row-label">{label}</div>
-      {/* Обороты пришли в обратном порядке — их ряд заполняется с другого края. */}
-      <div
-        className={
-          side === 'back'
-            ? 'merge-screen__cells merge-screen__cells--reversed'
-            : 'merge-screen__cells'
-        }
-      >
-        {cells(count, ROW_CELLS_MAX).map((index) => (
-          <span key={index} className={`merge-screen__cell merge-screen__cell--${side}`} />
-        ))}
-      </div>
+    <span className={`sort__sheet ${className}`}>
+      <span className="sort__line" />
+      <span className="sort__line" />
+      <span className="sort__line" />
+    </span>
+  );
+}
+
+/**
+ * Иллюстрация «сортировки» — одна на все исходы (индикатор сборки): шесть листов, число листов
+ * документа она не показывает — его несёт строка состояния.
+ */
+function Sort(): ReactNode {
+  return (
+    <div className="sort" aria-hidden="true">
+      <SortSheet className="sort__sheet--front sort__sheet--f1" />
+      <SortSheet className="sort__sheet--front sort__sheet--f2" />
+      <SortSheet className="sort__sheet--front sort__sheet--f3" />
+      <SortSheet className="sort__sheet--back sort__sheet--b1" />
+      <SortSheet className="sort__sheet--back sort__sheet--b2" />
+      <SortSheet className="sort__sheet--back sort__sheet--b3" />
     </div>
   );
 }
@@ -170,58 +130,41 @@ export function MergeScreen({ assembly, set = null }: MergeScreenProps): ReactNo
   const { t } = useTranslation();
   const screenRef = useRef<HTMLElement>(null);
   const pack = packOf(assembly, set);
-  const ofSet = pack.set !== null;
+  const title = pack.set === null ? t('merge.title') : t('merge.titleSet');
+  const warning = pack.mismatch;
+  const status = pack.set === null ? outcomeText(t, assembly.report) : setOutcomeText(t, pack.set);
+  const blank = blankStatus(t, assembly, pack);
 
   // Фокусируемых элементов нет — фокус на контейнере экрана (handoff, «Клавиатура»).
   useFocusWhen(screenRef, true);
 
   return (
-    <main className="merge-screen" ref={screenRef} tabIndex={-1}>
-      <h1 className="merge-screen__title">{t('merge.title')}</h1>
-
-      <div className="merge-screen__diagram" aria-hidden="true">
-        <Row
-          label={t(ofSet ? 'merge.rowSetFronts' : 'merge.rowFronts', { count: pack.fronts })}
-          count={pack.fronts}
-          side="front"
-        />
-        {!pack.declined && pack.backs > 0 && (
-          <Row
-            label={t(ofSet ? 'merge.rowSetBacks' : 'merge.rowBacks', { count: pack.backs })}
-            count={pack.backs}
-            side="back"
-          />
+    <main className="merge-screen" ref={screenRef} tabIndex={-1} aria-label={title}>
+      <div className="merge-screen__head">
+        {pack.set !== null && (
+          <div className="merge-screen__tag">{t('merge.setTag', { set: pack.set.set })}</div>
         )}
-        {/* S7 M3.6: при несовпадении документа ещё нет — ряд не рисуется; у набора (S6 M4.5)
-            несовпавший блок лежит подблоками — тоже без ряда. */}
-        {!pack.mismatch && (
-          <div className="merge-screen__row merge-screen__row--document">
-            <div className="merge-screen__row-label merge-screen__row-label--strong">
-              {t('merge.rowDocument')}
-            </div>
-            {/* Ряд «документ» — из настоящего порядка сборки, а не повтора правила KTD-4. */}
-            <div className="merge-screen__cells merge-screen__cells--document">
-              {pack.pages.slice(0, DOC_CELLS_MAX).map((page) => (
-                <span
-                  key={page.key}
-                  className={
-                    page.side === 'back'
-                      ? 'merge-screen__doc-cell merge-screen__doc-cell--back'
-                      : 'merge-screen__doc-cell'
-                  }
-                />
-              ))}
-            </div>
-          </div>
-        )}
+        <h1 className="merge-screen__title">{title}</h1>
       </div>
 
-      <footer className="merge-screen__footer">
-        {!pack.declined && <p className="merge-screen__formula">{t(formulaKeyOf(pack))}</p>}
-        <p className="merge-screen__status" role="status">
-          {statusText(t, assembly, pack)}
-        </p>
-      </footer>
+      <Sort />
+
+      <p
+        className={
+          warning ? 'merge-screen__status merge-screen__status--warning' : 'merge-screen__status'
+        }
+        role="status"
+        aria-live="polite"
+      >
+        {warning && <span className="dot dot--warning" aria-hidden="true" />}
+        <span className="merge-screen__main">{status}</span>
+        {/* Хвост — отдельным узлом с ключом по тексту: смена проявляется, основное не мигает. */}
+        {blank !== null && (
+          <span key={blank} className="merge-screen__tail">
+            {t('merge.blank.tail', { blank })}
+          </span>
+        )}
+      </p>
     </main>
   );
 }

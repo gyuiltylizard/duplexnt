@@ -23,7 +23,7 @@ import { SetMismatchModal } from './modals/SetMismatchModal';
 import { EditorScreen } from './screens/EditorScreen';
 import { FlipScreen } from './screens/FlipScreen';
 import { IncompatibleScreen } from './screens/IncompatibleScreen';
-import { MergeScreen, MERGE_PAUSE_DECLINED_MS, MERGE_PAUSE_MS } from './screens/MergeScreen';
+import { MergeScreen, MERGE_PAUSE_MS } from './screens/MergeScreen';
 import { ScanScreen } from './screens/ScanScreen';
 import { SetupScreen } from './screens/SetupScreen';
 import { assemblyLanded, mismatchDue, pairLanded, setMismatchDue } from './state/assembly-outcome';
@@ -163,11 +163,14 @@ export function App(): ReactNode {
       (previousScreen === 'scan' || previousScreen === 'flip') &&
       transitionReport !== undefined &&
       assemblyLanded(transitionReport) &&
+      // «Обороты не нужны» — сопоставлять нечего: сразу редактор, без паузы (решение автора на
+      // приёмке B-5, 2026-10-26).
+      !transitionReport.backsDeclined &&
       lastPass !== undefined &&
       isMainKind(lastPass.kind) &&
       !(launch !== null && launch.kind !== null && launch.sessionId === session?.id)
     ) {
-      setMergeHoldMs(transitionReport.backsDeclined ? MERGE_PAUSE_DECLINED_MS : MERGE_PAUSE_MS);
+      setMergeHoldMs(MERGE_PAUSE_MS);
       setMergeSet(null);
       // Ждать оценок есть смысл, когда они прячут страницы: в режиме наборов ничего не скрыто
       // (R15), статус про пустые там не рисуется — держать экран нечем объяснить (ревью).
@@ -177,7 +180,7 @@ export function App(): ReactNode {
 
   // Посадка пары набора (M4.5, KTD7; handoff M4.5, S6, S10): пара закрыта — обороты набора
   // завершены, приняты или не нужны — и снимок вернул в `editor`: пауза `merge` по набору (после
-  // отказа — короткая, как у основной), текущая на первой показанной странице набора и один тост
+  // отказа паузы нет — B-5), текущая на первой показанной странице набора и один тост
   // «добавлено N» (скрытые названы) — после паузы и после модалки несовпадения, если та нужна.
   // Ключ `EditorScreen` — номер снимка посадки: экран монтируется заново, как после кадра `scan`.
   // Отложенный тост помнит свой набор: «Переснять» снимает посадку — тост уже не про ту ленту.
@@ -187,9 +190,12 @@ export function App(): ReactNode {
   const setLanding = useSetLanding(snapshot, screen);
   if (setLanding !== null && snapshot !== null && session !== null) {
     const { set, key } = setLanding;
-    setMergeHoldMs(set.decision === 'declined' ? MERGE_PAUSE_DECLINED_MS : MERGE_PAUSE_MS);
-    setMergeSet(set.set);
-    setMergeBlankWait(transitionReport?.mode !== 'sets');
+    // «Обороты не нужны» у набора — без паузы, как у основного документа (B-5); посадка и тост
+    // те же.
+    const declined = set.decision === 'declined';
+    setMergeHoldMs(declined ? null : MERGE_PAUSE_MS);
+    setMergeSet(declined ? null : set.set);
+    setMergeBlankWait(!declined && transitionReport?.mode !== 'sets');
     if (key !== null) {
       setSeat({ epoch: snapshot.seq, key });
     }

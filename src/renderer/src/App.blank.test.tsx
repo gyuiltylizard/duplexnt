@@ -95,25 +95,27 @@ describe('ожидание оценок пустых оборотов на merge
         notify({ seq: 2 });
         await Promise.resolve();
       });
-      expect(screen.getByText('Сопоставляем проходы')).toBeDefined();
-      expect(screen.getByText('совпало пар: 3 · ищем пустые обороты…')).toBeDefined();
+      expect(document.querySelector('.merge-screen')).not.toBeNull();
+      expect(document.querySelector('.merge-screen__status')?.textContent).toBe(
+        'совпало пар: 3 · ищем пустые обороты…',
+      );
 
       // Пауза истекла, оценки ещё идут — экран остаётся, сколько бы ни прошло.
       act(() => {
         vi.advanceTimersByTime(1601);
       });
-      expect(screen.getByText('Сопоставляем проходы')).toBeDefined();
+      expect(document.querySelector('.merge-screen')).not.toBeNull();
       act(() => {
         vi.advanceTimersByTime(60_000);
       });
-      expect(screen.getByText('Сопоставляем проходы')).toBeDefined();
+      expect(document.querySelector('.merge-screen')).not.toBeNull();
 
       current = scored;
       await act(async () => {
         notify({ seq: 3 });
         await Promise.resolve();
       });
-      expect(screen.queryByText('Сопоставляем проходы')).toBeNull();
+      expect(document.querySelector('.merge-screen')).toBeNull();
       // Редактор открылся сразу с правильной лентой: один оборот скрыт, тоста поздних нет.
       expect(screen.getByText('стр. 1 из 5')).toBeDefined();
       expect(screen.queryByText(/переключатель «добавить пустые» покажет/u)).toBeNull();
@@ -166,11 +168,13 @@ describe('ожидание оценок пустых оборотов на merge
         notify({ seq: 2 });
         await Promise.resolve();
       });
-      expect(screen.getByText('совпало пар: 3 · пустых оборотов: 2')).toBeDefined();
+      expect(document.querySelector('.merge-screen__status')?.textContent).toBe(
+        'совпало пар: 3 · пустых оборотов: 2',
+      );
       act(() => {
         vi.advanceTimersByTime(1601);
       });
-      expect(screen.queryByText('Сопоставляем проходы')).toBeNull();
+      expect(document.querySelector('.merge-screen')).toBeNull();
       expect(screen.getByText('стр. 1 из 4')).toBeDefined();
     } finally {
       vi.useRealTimers();

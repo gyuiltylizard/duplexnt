@@ -85,6 +85,8 @@ function assemblyFor(
   };
 }
 
+const title = (): string | null => screen.getByRole('heading', { level: 1 }).textContent;
+
 function renderMerge(assemblyReport: AssemblyReport, blank?: BlankSummary) {
   return render(<MergeScreen assembly={assemblyFor(assemblyReport, blank)} />);
 }
@@ -96,64 +98,49 @@ describe('экран merge', () => {
     renderMerge(report({ fronts: 7, backs: 7 }));
 
     expect(screen.getByRole('status').textContent).toBe('совпало пар: 7');
-    expect(screen.getByText('Порядок восстановлен: лист N ← лицо N + оборот N')).toBeDefined();
+    expect(title()).toBe('Сопоставляем лица и обороты');
   });
 
-  it('при несовпадении статус сообщает о нём первым, формула про наборы, ряда «документ» нет (R21)', () => {
-    const view = renderMerge(sets(12, 11));
-
-    expect(screen.getByRole('status').textContent).toBe(
-      'не сошлось: лицевых 12, оборотов 11 — документ соберёте в редакторе',
-    );
-    expect(
-      screen.getByText('Проходы не сошлись — лица и обороты лежат отдельными наборами'),
-    ).toBeDefined();
-    expect(view.container.querySelector('.merge-screen__row--document')).toBeNull();
-    // Ряды проходов на месте.
-    expect(view.container.querySelectorAll('.merge-screen__cell--front').length).toBe(12);
-    expect(view.container.querySelectorAll('.merge-screen__cell--back').length).toBe(11);
-  });
-
-  it('при совпадении ряд «документ» повторяет фактический порядок сборки', () => {
+  it('B-5: сошлось — иллюстрация «пары», строка не янтарная, тега набора нет', () => {
     const view = renderMerge(report({ fronts: 3, backs: 3 }));
 
-    const docCells = view.container.querySelectorAll('.merge-screen__cells--document > *');
-    expect(docCells.length).toBe(6);
-    expect(docCells[0]?.className).not.toContain('doc-cell--back');
-    expect(docCells[1]?.className).toContain('doc-cell--back');
+    expect(view.container.querySelector('.sort')?.className).toBe('sort');
+    expect(view.container.querySelector('.sort')?.getAttribute('aria-hidden')).toBe('true');
+    // Шесть листов — всегда: число несёт строка, не картинка.
+    expect(view.container.querySelectorAll('.sort__sheet')).toHaveLength(6);
+    expect(screen.getByRole('status').className).not.toContain('--warning');
+    expect(view.container.querySelector('.merge-screen__tag')).toBeNull();
   });
 
-  it('лишние обороты названы и не потеряны', () => {
-    renderMerge(sets(12, 13));
+  it('при несовпадении — янтарная строка с точкой; иллюстрация та же, что при совпадении (R21, B-5)', () => {
+    const view = renderMerge(sets(12, 11));
+
+    const status = screen.getByRole('status');
+    expect(status.textContent).toBe(
+      'не сошлось: лицевых 12, оборотов 11 — документ соберёте в редакторе',
+    );
+    expect(status.className).toContain('merge-screen__status--warning');
+    expect(status.querySelector('.dot--warning')).not.toBeNull();
+    expect(view.container.querySelector('.sort')?.className).toBe('sort');
+  });
+
+  it('лишние обороты названы и не потеряны; иллюстрация та же', () => {
+    const view = renderMerge(sets(12, 13));
 
     expect(screen.getByRole('status').textContent).toBe(
       'лишних оборотов: 1 — документ соберёте в редакторе',
     );
+    expect(view.container.querySelector('.sort')?.className).toBe('sort');
   });
 
-  it('принятый коротким проход — свой статус', () => {
-    renderMerge(sets(12, 7, { backsState: 'accepted' }));
+  it('принятый коротким проход — свой статус, янтарный', () => {
+    const view = renderMerge(sets(12, 7, { backsState: 'accepted' }));
 
     expect(screen.getByRole('status').textContent).toBe(
       'проход оборотов принят коротким: лицевых 12, оборотов 7',
     );
-  });
-
-  it('длинный набор: ряд «документ» упирается в потолок ячеек', () => {
-    const view = renderMerge(report({ fronts: 40, backs: 40 }));
-
-    const docCells = view.container.querySelectorAll('.merge-screen__cells--document > *');
-    expect(docCells.length).toBe(24);
-  });
-
-  it('«Обороты не нужны»: ряд оборотов не рендерится, статус frontsOnly, формулы нет', () => {
-    const view = renderMerge(report({ backs: 0, backsState: null, backsDeclined: true }));
-
-    expect(screen.getByRole('status').textContent).toBe('обороты не нужны · страниц: 12');
-    expect(screen.queryByText(/обороты \d/)).toBeNull();
-    expect(screen.queryByText(/Порядок восстановлен/)).toBeNull();
-    expect(view.container.querySelector('.merge-screen__cell--back')).toBeNull();
-    expect(view.container.querySelector('.merge-screen__doc-cell--back')).toBeNull();
+    expect(screen.getByRole('status').className).toContain('--warning');
+    expect(view.container.querySelector('.sort')?.className).toBe('sort');
   });
 
   it.each([
@@ -181,6 +168,21 @@ describe('экран merge', () => {
     renderMerge(report({ fronts: 7, backs: 7 }), blank);
 
     expect(screen.getByRole('status').textContent).toBe(expected);
+  });
+
+  it('B-5: хвост про пустые обороты — отдельным узлом, основное не перерисовывается', () => {
+    const view = renderMerge(report({ fronts: 7, backs: 7 }), {
+      mode: 'hide',
+      found: 0,
+      hidden: 0,
+      pending: 2,
+    });
+
+    expect(view.container.querySelector('.merge-screen__main')?.textContent).toBe('совпало пар: 7');
+    expect(view.container.querySelector('.merge-screen__tail')?.textContent).toBe(
+      ' · ищем пустые обороты…',
+    );
+    expect(screen.getByRole('status').getAttribute('aria-live')).toBe('polite');
   });
 
   it('M4: «Оставлять», «Обороты не нужны» и режим наборов — без пустых в статусе', () => {
@@ -250,33 +252,32 @@ describe('экран merge для набора (M4.5)', () => {
     return { ...base, order: [...base.order.slice(0, 4), ...block, ...base.order.slice(4)] };
   }
 
-  it('совпало: ряды «лица набора» и «обороты набора», ряд «документ» — чередование блока набора, статус по набору', () => {
+  it('совпало: тег «НАБОР Д1», заголовок набора, иллюстрация «пары», статус по набору', () => {
     const view = render(<MergeScreen assembly={withSet(setReport({}))} set={1} />);
 
-    expect(screen.getByText('лица набора 1→3')).toBeDefined();
-    expect(screen.getByText('обороты набора 3→1')).toBeDefined();
-    expect(screen.queryByText('лица 1→12')).toBeNull();
-    expect(view.container.querySelectorAll('.merge-screen__cell--front').length).toBe(3);
-    const docCells = view.container.querySelectorAll('.merge-screen__cells--document > *');
-    expect(docCells.length).toBe(6);
-    expect(docCells[1]?.className).toContain('doc-cell--back');
+    expect(view.container.querySelector('.merge-screen__tag')?.textContent).toBe('НАБОР Д1');
+    expect(title()).toBe('Сопоставляем лица и обороты набора');
+    expect(view.container.querySelector('.sort')?.className).toBe('sort');
     expect(screen.getByRole('status').textContent).toBe('набор Д1: совпало пар 3');
-    expect(screen.getByText('Порядок восстановлен: лист N ← лицо N + оборот N')).toBeDefined();
   });
 
-  it('не сошлось: формула набора, ряда «документ» нет, статус называет числа', () => {
+  it('не сошлось: янтарная строка с числами, иллюстрация та же', () => {
     const view = render(
       <MergeScreen assembly={withSet(setReport({ backs: 2, mismatch: true }))} set={1} />,
     );
 
     expect(screen.getByRole('status').textContent).toBe('набор Д1: не сошлось — лиц 3, оборотов 2');
-    expect(
-      screen.getByText(
-        'Обороты набора не сошлись — лица и обороты лежат рядом, набор поправите в редакторе',
-      ),
-    ).toBeDefined();
-    expect(view.container.querySelector('.merge-screen__row--document')).toBeNull();
-    expect(view.container.querySelectorAll('.merge-screen__cell--back').length).toBe(2);
+    expect(screen.getByRole('status').className).toContain('--warning');
+    expect(view.container.querySelector('.sort')?.className).toBe('sort');
+  });
+
+  it('лишние обороты набора — янтарная строка, иллюстрация та же', () => {
+    const view = render(
+      <MergeScreen assembly={withSet(setReport({ backs: 4, mismatch: true }))} set={1} />,
+    );
+
+    expect(view.container.querySelector('.sort')?.className).toBe('sort');
+    expect(screen.getByRole('status').className).toContain('--warning');
   });
 
   it('обороты приняты коротким — свой статус', () => {
@@ -294,20 +295,6 @@ describe('экран merge для набора (M4.5)', () => {
     );
   });
 
-  it('«Обороты не нужны» для набора: без ряда оборотов и формулы, статус со страницами', () => {
-    const view = render(
-      <MergeScreen
-        assembly={withSet(setReport({ backs: 0, backsState: null, decision: 'declined' }))}
-        set={1}
-      />,
-    );
-
-    expect(screen.getByRole('status').textContent).toBe('набор Д1: обороты не нужны · страниц: 3');
-    expect(screen.queryByText(/обороты набора/)).toBeNull();
-    expect(screen.queryByText(/Порядок восстановлен/)).toBeNull();
-    expect(view.container.querySelector('.merge-screen__cell--back')).toBeNull();
-  });
-
   it('хвост про пустые обороты — по сводке сессии, как у основной пачки', () => {
     render(
       <MergeScreen
@@ -322,9 +309,10 @@ describe('экран merge для набора (M4.5)', () => {
   });
 
   it('без набора — экран основной пачки, как раньше', () => {
-    render(<MergeScreen assembly={withSet(setReport({}))} set={null} />);
+    const view = render(<MergeScreen assembly={withSet(setReport({}))} set={null} />);
 
-    expect(screen.getByText('лица 1→12')).toBeDefined();
+    expect(view.container.querySelector('.merge-screen__tag')).toBeNull();
+    expect(title()).toBe('Сопоставляем лица и обороты');
     expect(screen.getByRole('status').textContent).toBe('совпало пар: 12');
   });
 });
