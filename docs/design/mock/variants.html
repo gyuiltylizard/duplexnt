@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Duplexn't — B-4 движение: варианты</title>
+    <link rel="stylesheet" href="../reference/fonts/fonts.css" />
+    <link rel="stylesheet" href="../reference/app.css" />
+    <link rel="stylesheet" href="../reference/wrapper.css" />
+    <link rel="stylesheet" href="variants.css" />
+  </head>
+  <body class="ref-page mv-page">
+    <header class="mv-head">
+      <div>
+        <div class="kicker">B-4 · ДВИЖЕНИЕ · СТАДИЯ ВАРИАНТОВ</div>
+        <h1 class="mv-head__title">Смена экранов и поворот страницы — по три варианта</h1>
+        <p class="mv-head__lead">Без контекста редактора: только затронутый элемент. Выберите по одному варианту в каждой группе (например, «1b + 2a») — выбранное соберу в моке всех сцен. Остальные пункты брифа (лента, модалка, подсказка) пойдут сразу в контексте.</p>
+      </div>
+      <div class="mv-head__toggles"><label class="toggle-row mv-reduce">
+        <span class="toggle"><input class="toggle__input" id="mv-reduce" type="checkbox" autocomplete="off" /><span class="toggle__track" aria-hidden="true"></span></span>
+        <span class="toggle-row__label">prefers-reduced-motion</span>
+      </label>
+      <label class="toggle-row mv-reduce">
+        <span class="toggle"><input class="toggle__input" id="mv-slow" type="checkbox" autocomplete="off" /><span class="toggle__track" aria-hidden="true"></span></span>
+        <span class="toggle-row__label">замедлить ×4 (для сравнения)</span>
+      </label></div>
+    </header>
+
+    <section class="mv-group" id="g1">
+      <div class="mv-group__head">
+        <h2 class="mv-group__title"><span class="mv-group__num">1</span> Смена экранов</h2>
+        <p class="mv-group__note">Все три окна идут синхронно. Путь: setup → scan (страницы раз в 300 мс) → пауза 520 мс → flip → scan оборотов → merge 1600 мс → editor. Переход накладывается на начало нового экрана и не удлиняет паузы; кнопки нового экрана работают сразу. В каждом окне можно и нажимать самому.</p>
+        <div class="mv-controls">
+          <button type="button" class="btn btn--primary btn--small" id="mv-run">▶ Пройти весь путь</button>
+          <button type="button" class="btn btn--secondary" id="mv-stop">Остановить (на scan)</button>
+          <button type="button" class="btn btn--secondary" id="mv-reset">В начало</button>
+          <span class="mv-controls__state" id="mv-state">setup</span>
+        </div>
+      </div>
+      <div class="mv-row">
+        <article class="mv-opt" id="1a">
+          <div class="mv-opt__head"><span class="mv-badge">1a</span><span class="mv-opt__name">Растворение</span></div>
+          <div class="mv-win"><div class="ref-frame mv-frame" data-variant="a"><div class="mv-stack"></div></div></div>
+          <p class="mv-opt__text">Новый экран проявляется поверх старого, 180 мс, <code>ease</code>. Направления нет — одинаково вперёд и назад. Самый тихий; «процесс идёт дальше» не говорит, только «сменилось».</p>
+        </article>
+        <article class="mv-opt" id="1b">
+          <div class="mv-opt__head"><span class="mv-badge">1b</span><span class="mv-opt__name">Сдвиг по направлению процесса</span></div>
+          <div class="mv-win"><div class="ref-frame mv-frame" data-variant="b"><div class="mv-stack"></div></div></div>
+          <p class="mv-opt__text">Новый въезжает справа на 24 px с проявлением (220 мс), старый уходит влево и гаснет (160 мс), кривая <code>cubic-bezier(.2,0,0,1)</code>. «Остановить» и возврат к настройке — зеркально, справа налево: шаг назад.</p>
+        </article>
+        <article class="mv-opt" id="1c">
+          <div class="mv-opt__head"><span class="mv-badge">1c</span><span class="mv-opt__name">Неподвижное окно, сменяется содержимое</span></div>
+          <div class="mv-win"><div class="ref-frame mv-frame" data-variant="c"><div class="mv-stack"></div></div></div>
+          <p class="mv-opt__text">Старое гаснет за 90 мс; блоки нового (кикер, заголовок, сцена, действия) поднимаются на 6 px и проявляются каскадом по 30 мс, 180 мс каждый. Читается как «следующий шаг на том же листе».</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="mv-group" id="g2">
+      <div class="mv-group__head">
+        <h2 class="mv-group__title"><span class="mv-group__num">2</span> Поворот миниатюры и превью</h2>
+        <p class="mv-group__note">Общая схема для всех трёх: на экране хранится <b>накопленный</b> угол (…, 270, 360, 450…), в данных — по модулю 360. Поэтому 270° → 0° идёт вперёд на 90°, а не назад на 270°. Нажатие не ждёт конца анимации: новый шаг продолжает поворот с текущего положения. Миниатюра и превью крутятся одним углом и одной длительностью.</p>
+        <div class="mv-controls">
+          <button type="button" class="btn btn--secondary" id="mv-burst">↻ × 4 подряд (через 270° → 0°)</button>
+          <button type="button" class="btn btn--secondary" id="mv-burst-ccw">↺ × 3 подряд</button>
+          <button type="button" class="btn btn--secondary" id="mv-rot-reset">Сбросить углы</button>
+        </div>
+      </div>
+      <div class="mv-row">
+        <article class="mv-opt mv-rot" id="2a" data-variant="a">
+          <div class="mv-opt__head"><span class="mv-badge">2a</span><span class="mv-opt__name">Лист поворачивается целиком</span></div>
+          <div class="mv-rot__box"></div>
+          <p class="mv-opt__text">Превью поворачивается как лист в руке: рамка, тень и изображение вместе, с одновременным масштабом до альбомного размера. 240 мс, <code>cubic-bezier(.2,0,0,1)</code>. Самый «физический».</p>
+        </article>
+        <article class="mv-opt mv-rot" id="2b" data-variant="b">
+          <div class="mv-opt__head"><span class="mv-badge">2b</span><span class="mv-opt__name">Изображение в перестраивающейся рамке</span></div>
+          <div class="mv-rot__box"></div>
+          <p class="mv-opt__text">Рамка листа меняет пропорции портрет ↔ альбом, изображение крутится внутри неё (углы на середине пути обрезаются рамкой). 200 мс — текущий <code>--duration-base</code>. Рамка остаётся «бумагой PDF».</p>
+        </article>
+        <article class="mv-opt mv-rot" id="2c" data-variant="c">
+          <div class="mv-opt__head"><span class="mv-badge">2c</span><span class="mv-opt__name">Кивок в сторону команды</span></div>
+          <div class="mv-rot__box"></div>
+          <p class="mv-opt__text">Полного вращения нет: новое положение встаёт сразу, а изображение «доходит» до него последние 10° (на 180° — 14°) с проявлением, 160 мс. Направление читается, глаз не следит за оборотом; от длинных серий не укачивает.</p>
+        </article>
+      </div>
+    </section>
+
+    <template id="mv-rot-tpl">
+      <div class="mv-rot__stage">
+        <div class="thumb thumb--selected mv-rot__thumb">
+          <div class="thumb__paper"><img class="thumb__img" alt="" src="../reference/pages/page-04.jpg" /></div>
+          <div class="thumb__foot"><span class="thumb__num">4</span><span class="thumb__tag">об</span></div>
+        </div>
+        <div class="mv-rot__area"><div class="preview__paper mv-rot__paper"><img class="preview__img mv-rot__img" alt="Страница 4" src="../reference/pages/page-04.jpg" /></div></div>
+      </div>
+      <footer class="stage__statusbar mv-rot__bar">
+        <button type="button" class="btn btn--icon stage__tool" data-rot="-90" title="Повернуть на 90° против часовой">↺</button>
+        <button type="button" class="btn btn--icon stage__tool" data-rot="90" title="Повернуть на 90° по часовой">↻</button>
+        <span class="stage__divider" aria-hidden="true"></span>
+        <label class="toggle-row mv-rot__toggle">
+          <span class="toggle"><input class="toggle__input" type="checkbox" data-flip /><span class="toggle__track" aria-hidden="true"></span></span>
+          <span class="toggle-row__label">Повернуть обороты на 180°</span>
+        </label>
+        <span class="mv-rot__readout">0°</span>
+      </footer>
+    </template>
+
+    <script src="variants.js"></script>
+  </body>
+</html>
