@@ -1,8 +1,36 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react';
+import {
+  animate,
+  distanceOf,
+  durationOf,
+  easingOf,
+  fadeOut,
+  leaveWithGhost,
+  prefersReducedMotion,
+} from '../state/motion';
 
-// Модалка по рецепту дизайн-системы и UI_SPEC раздел 7: затемнение, окно по центру, без анимации.
-// Esc и клик вне окна остаются без действия — закрывает только кнопка. Фокус заперт внутри;
-// при размонтировании возвращается на элемент, который был в фокусе перед открытием.
+// Модалка по рецепту дизайн-системы и UI_SPEC раздел 7: затемнение, окно по центру. Esc и клик
+// вне окна остаются без действия — закрывает только кнопка. Фокус заперт внутри; при
+// размонтировании возвращается на элемент, который был в фокусе перед открытием.
+//
+// Движение (B-4, handoff «4. Модалки и тост»): затемнение проявляется, окно поднимается; уходя,
+// модалка оставляет гаснущую копию — ввод снят сразу. Модалка, открытая тем же коммитом, в
+// котором закрылась прежняя (`newscan` → `save`), — замена: затемнение не моргает, поднимается
+// только окно. Смена содержимого меняет высоту окна плавно.
+
+/**
+ * Модалка закрылась в этом коммите: её уход может забрать следующая (замена). Узел — чтобы
+ * отличить замену от повторного монтажа StrictMode (dev): там «закрывается» тот же узел.
+ */
+let closingThisCommit: { readonly node: HTMLElement | null; readonly cancel: () => void } | null =
+  null;
 
 const FOCUSABLE =
   'button:not(:disabled), input:not(:disabled), select:not(:disabled), ' +
@@ -40,6 +68,7 @@ export function Modal({
   className,
   children,
 }: ModalProps): ReactNode {
+  const overlayRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLElement>(null);
 
   // Элемент, открывший модалку, запоминается при первом рендере: `autoFocus` React вызывает
@@ -62,6 +91,75 @@ export function Modal({
       fallback?.focus();
     };
   }, [opener]);
+
+  // Открытие и уход (B-4). Замена забирает уход прежней себе: копия прежней не вставляется,
+  // затемнение остаётся, поднимается только новое окно.
+  useLayoutEffect(() => {
+    const overlay = overlayRef.current;
+    const dialog = dialogRef.current;
+    const reduced = prefersReducedMotion();
+    const replacing = closingThisCommit !== null && closingThisCommit.node !== overlay;
+    if (replacing) {
+      closingThisCommit?.cancel();
+    }
+    closingThisCommit = null;
+    if (overlay !== null && !replacing) {
+      animate(overlay, [{ opacity: 0 }, { opacity: 1 }], {
+        duration: durationOf(reduced ? '--duration-exit' : '--duration-fast'),
+        easing: easingOf('--ease-standard'),
+      });
+    }
+    if (dialog !== null) {
+      const rise = `translateY(${String(distanceOf('--distance-rise'))}px)`;
+      animate(
+        dialog,
+        reduced
+          ? [{ opacity: 0 }, { opacity: 1 }]
+          : [
+              { opacity: 0, transform: rise },
+              { opacity: 1, transform: 'none' },
+            ],
+        {
+          duration: durationOf(reduced ? '--duration-exit' : '--duration-screen'),
+          easing: easingOf(reduced ? '--ease-standard' : '--ease-out'),
+        },
+      );
+    }
+    return () => {
+      const closing = { node: overlay, cancel: leaveWithGhost(overlay, fadeOut) };
+      closingThisCommit = closing;
+      queueMicrotask(() => {
+        if (closingThisCommit === closing) {
+          closingThisCommit = null;
+        }
+      });
+    };
+  }, []);
+
+  // Высота при смене содержимого (B-4, KTD-4): после каждого рендера — сверка с прошлой высотой.
+  // Идёт прежнее изменение — новое начинается от текущей, видимой высоты.
+  const lastHeight = useRef<number | null>(null);
+  const heightAnimation = useRef<Animation | null>(null);
+  useLayoutEffect(() => {
+    const dialog = dialogRef.current;
+    if (dialog === null) {
+      return;
+    }
+    const running = heightAnimation.current?.playState === 'running';
+    const visible = dialog.offsetHeight;
+    heightAnimation.current?.cancel();
+    heightAnimation.current = null;
+    const natural = dialog.offsetHeight;
+    const from = running ? visible : lastHeight.current;
+    lastHeight.current = natural;
+    if (from !== null && Math.abs(natural - from) > 1 && !prefersReducedMotion()) {
+      heightAnimation.current = animate(
+        dialog,
+        [{ height: `${String(from)}px` }, { height: `${String(natural)}px` }],
+        { duration: durationOf('--duration-base'), easing: easingOf('--ease-out') },
+      );
+    }
+  });
 
   // Обе кнопки футера могут стать недоступными разом (S21 «Удаляем…»): браузер сбросил бы
   // фокус на body, и Tab гулял бы под затемнением.
@@ -106,7 +204,7 @@ export function Modal({
     .join(' ');
 
   return (
-    <div className="modal-overlay">
+    <div className="modal-overlay" ref={overlayRef}>
       <section
         ref={dialogRef}
         role="dialog"

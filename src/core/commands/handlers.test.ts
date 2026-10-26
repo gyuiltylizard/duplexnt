@@ -23,6 +23,7 @@ import { MAX_EDIT_ITEMS } from './schemas';
 
 const EMPTY_SNAPSHOT: Snapshot = {
   blankMode: 'hide',
+  seenHints: [],
   seq: 0,
   scanner: { kind: 'none' },
   session: null,
@@ -51,6 +52,7 @@ function setup(
     useScanner: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
     setParams: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
     setBlankMode: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
+    markHintSeen: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
     startPass: vi.fn(() =>
       Promise.resolve(ok({ end: 'completed' as const, pages: 3, error: null })),
     ),
@@ -771,5 +773,18 @@ describe('команды: режим пустых оборотов (M4, U3)', ()
       expect(invalid(await handlers.setBlankMode(garbage)), JSON.stringify(garbage)).toBe(true);
     }
     expect(service.setBlankMode).toHaveBeenCalledOnce();
+  });
+});
+
+describe('команды: показанные подсказки (B-4)', () => {
+  it('markHintSeen: строгая схема словаря подсказок, затем служба', async () => {
+    const { handlers, service } = setup();
+
+    expect(await handlers.markHintSeen('docsSplit')).toEqual(ok(undefined));
+    expect(service.markHintSeen).toHaveBeenCalledExactlyOnceWith('docsSplit');
+    for (const garbage of ['docs', 'DocsSplit', '', 0, { hint: 'docsSplit' }, null, undefined]) {
+      expect(invalid(await handlers.markHintSeen(garbage)), JSON.stringify(garbage)).toBe(true);
+    }
+    expect(service.markHintSeen).toHaveBeenCalledOnce();
   });
 });

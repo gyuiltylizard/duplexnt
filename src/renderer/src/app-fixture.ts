@@ -17,6 +17,7 @@ export function makeSnapshot(overrides: Partial<Snapshot>): Snapshot {
     storage: { incompatible: false, unsaved: false },
     notices: [],
     blankMode: 'hide',
+    seenHints: [],
     ...overrides,
   };
   if (snapshot.session !== null && snapshot.assembly === null) {
@@ -63,6 +64,7 @@ export function stubApi(snapshot: Snapshot, overrides: Partial<Record<keyof Api,
     connectScanner: vi.fn(() => Promise.resolve(ok(undefined))),
     setScanParams: vi.fn(() => Promise.resolve(ok(undefined))),
     setBlankMode: vi.fn(() => Promise.resolve(ok(undefined))),
+    markHintSeen: vi.fn(() => Promise.resolve(ok(undefined))),
     recheckScanner: vi.fn(() => Promise.resolve(ok(undefined))),
     startPass: vi.fn(() => new Promise(() => undefined)),
     stopPass: vi.fn(() => Promise.resolve(ok(undefined))),

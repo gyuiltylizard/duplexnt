@@ -14,6 +14,9 @@ body,
 
 body {
   margin: 0;
+  /* Окно приложения целиком не прокручивается — прокрутка только внутри панелей. Временный
+     выход за край (движение, B-4) не должен давать полосу прокрутки и сдвигать раскладку. */
+  overflow: hidden;
   background: var(--color-bg-app);
   color: var(--color-text-primary);
   font-family: var(--font-family-sans);

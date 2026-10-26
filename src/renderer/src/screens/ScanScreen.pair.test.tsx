@@ -57,6 +57,7 @@ function makeSnapshot(setPasses: readonly PassSnapshot[], pass: PassProgress): S
     storage: { incompatible: false, unsaved: false },
     notices: [],
     blankMode: 'hide',
+    seenHints: [],
   };
 }
 

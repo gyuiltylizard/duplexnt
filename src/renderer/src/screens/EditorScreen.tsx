@@ -46,6 +46,8 @@ import {
 } from '../state/edits';
 import { toneOf } from '../state/page-text';
 import { errorTextInline } from '../state/error-text';
+import { isTextField, shortcutLetter } from '../state/shortcut-keys';
+import { markTurn } from '../state/turns';
 import type { EditState } from '../state/history';
 import { originKindOf, originsOf } from '../state/origins';
 import { rolesOf } from '../state/screen';
@@ -128,31 +130,6 @@ const NO_BLANK: BlankSummary = { mode: 'keep', found: 0, hidden: 0, pending: 0 }
 
 /** Сегодняшняя дата для имени по умолчанию — локальная, не UTC (как имя файла в M2). */
 const todayStamp = (): string => new Intl.DateTimeFormat('sv-SE').format(new Date());
-
-/** Типы `<input>`, где Ctrl+Z и Delete — текстовые: ленточные сочетания их не перехватывают. */
-const NON_TEXT_INPUTS: readonly string[] = ['checkbox', 'radio', 'button', 'submit', 'reset'];
-
-function isTextField(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) {
-    return false;
-  }
-  if (target instanceof HTMLInputElement) {
-    return !NON_TEXT_INPUTS.includes(target.type);
-  }
-  return target instanceof HTMLTextAreaElement || target.isContentEditable;
-}
-
-/**
- * Буква сочетания с Ctrl: по `key` для латиницы, иначе по физической клавише — в русской
- * раскладке Ctrl+Z приходит с `key` «я».
- */
-function shortcutLetter(event: globalThis.KeyboardEvent): string {
-  const key = event.key.toLowerCase();
-  if (/^[a-z]$/u.test(key)) {
-    return key;
-  }
-  return event.code.startsWith('Key') ? event.code.slice(3).toLowerCase() : key;
-}
 
 export function EditorScreen({
   snapshot,
@@ -412,6 +389,7 @@ export function EditorScreen({
   // поворот виден (S9).
   const rotate = (direction: RotateDirection): void => {
     if (targets.length > 0) {
+      markTurn(targets, direction === 'cw' ? 90 : -90); // движение — на дельту команды (B-4)
       edits.edit(withEdits(rotated(edits.current.edits, targets, direction)), targets);
     }
   };
@@ -660,6 +638,8 @@ export function EditorScreen({
   const rotateTarget = useRotateTarget(session.passes, currentEntry?.addedSet);
   const setRotate = (event: ChangeEvent<HTMLInputElement>): void => {
     if (rotateTarget !== null && rotateTarget.kind !== 'none') {
+      const pass = session.passes.find((it) => it.number === rotateTarget.pass);
+      markTurn(pass?.pages.map((page) => page.key) ?? [], event.target.checked ? 180 : -180);
       edits.edit(rotatedBacks(edits.current, rotateTarget.pass, event.target.checked), []);
     }
   };
@@ -929,6 +909,7 @@ export function EditorScreen({
             frontsOnly={rolesOf(session.passes).backs === null}
             notBlank={currentEntry !== undefined && notBlank.includes(currentEntry.key)}
             locked={locked}
+            hintSeen={snapshot.seenHints.includes('docsSplit')}
             onPickDocument={pickDocument}
             onNotBlank={markNotBlank}
             onRevert={() => {

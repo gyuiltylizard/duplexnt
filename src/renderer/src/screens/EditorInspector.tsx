@@ -1,4 +1,4 @@
-import { useId, useState, type MouseEvent, type ReactNode } from 'react';
+import { useId, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   isPairKind,
@@ -12,6 +12,7 @@ import {
 import type { TFunction } from 'i18next';
 import { noteOf, toneOf, whatOf } from '../state/page-text';
 import type { ShownDocument } from '../state/shown';
+import { useHintAttention } from './useHintAttention';
 
 // Инспектор редактора (handoff M3, S11–S13; M3.5, S6–S7; M3.6, S8–S9): ДЕТАЛИ текущей страницы,
 // ДОКУМЕНТЫ В НАБОРЕ и ПРОВЕРКА, внизу — плашка правок S14 с «Вернуть». Только показ снимка:
@@ -342,6 +343,7 @@ export function EditorInspector({
   frontsOnly,
   notBlank,
   locked,
+  hintSeen,
   onPickDocument,
   onNotBlank,
   onMouseDown,
@@ -366,6 +368,8 @@ export function EditorInspector({
   readonly notBlank: boolean;
   /** Идёт запись или правка в полёте (KTD-9): «Вернуть» и «Это не пустая страница» недоступны. */
   readonly locked: boolean;
+  /** Подсказка про границы (Ctrl/Shift) уже показывалась с привлечением внимания (B-4). */
+  readonly hintSeen: boolean;
   readonly onPickDocument: (document: number) => void;
   /** «Это не пустая страница» (M4, S9) — пометка текущей одним шагом undo. */
   readonly onNotBlank: () => void;
@@ -382,6 +386,9 @@ export function EditorInspector({
   const checksId = useId();
   const blankId = useId();
   const listed = assembly.order.length === 0 ? [] : documents;
+  // Подсказка про границы — при первом показе на установку мигает (B-4).
+  const noteRef = useRef<HTMLParagraphElement>(null);
+  const attention = useHintAttention(noteRef, 'docsSplit', listed.length === 1 && !hintSeen);
   const { report, sets } = assembly;
   const inSets = report.mode === 'sets';
   const blankNote = entry === undefined ? null : blankNoteText(t, entry, inSets);
@@ -465,7 +472,14 @@ export function EditorInspector({
                   </li>
                 ))}
               </ul>
-              <p className="inspector__note">
+              <p
+                ref={noteRef}
+                className={
+                  attention === 'none'
+                    ? 'inspector__note'
+                    : `inspector__note inspector__note--${attention === 'blink' ? 'attention' : 'attention-static'}`
+                }
+              >
                 {listed.length > 1
                   ? t('inspector.docsNoteMany', { count: listed.length })
                   : t('inspector.docsNoteOne')}

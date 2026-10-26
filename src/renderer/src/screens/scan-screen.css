@@ -125,6 +125,7 @@
 /* — лента последних пяти: затухание к старому краю шагом 0,17 — */
 
 .strip {
+  position: relative; /* B-4: опора для выталкиваемой карточки */
   display: flex;
   gap: var(--space-4);
   align-items: flex-end;
@@ -142,6 +143,15 @@
   background: var(--color-bg-paper);
   border: var(--border-width) solid var(--color-border-default);
   overflow: hidden;
+  /* B-4: шаг затухания меняется проявлением, карточка не мигает при сдвиге очереди. */
+  transition: opacity var(--duration-screen) var(--ease-standard);
+}
+
+/* Выталкиваемая карточка (B-4): копия на своём месте поверх потока, гаснет и уходит влево. */
+.strip__card--leaving {
+  position: absolute;
+  margin: 0;
+  pointer-events: none;
 }
 
 .strip__card:nth-last-child(2) {
@@ -214,5 +224,9 @@
   .feed__sheet--moving,
   .feed__bar {
     animation: none;
+  }
+
+  .strip__card {
+    transition: none;
   }
 }

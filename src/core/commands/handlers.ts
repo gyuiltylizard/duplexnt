@@ -20,6 +20,7 @@ import { handleProbe } from '../probe/handle-probe';
 import type { PassService } from '../scan/pass-service';
 import {
   blankModeSchema,
+  hintIdSchema,
   connectScannerRequestSchema,
   noRequestSchema,
   parseInput,
@@ -227,6 +228,11 @@ export function createCommands(context: CommandContext): Commands {
       setBlankMode: async (rawRequest) => {
         const request = parseInput(blankModeSchema, rawRequest);
         return request.ok ? done(() => service.setBlankMode(request.value)) : request;
+      },
+
+      markHintSeen: async (rawRequest) => {
+        const request = parseInput(hintIdSchema, rawRequest);
+        return request.ok ? done(() => service.markHintSeen(request.value)) : request;
       },
 
       startPass: async (rawRequest) => {

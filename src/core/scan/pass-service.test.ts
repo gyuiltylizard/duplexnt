@@ -79,6 +79,7 @@ describe('служба прохода без сканера', () => {
       storage: { incompatible: false, unsaved: false },
       notices: [],
       blankMode: 'hide',
+      seenHints: [],
     });
   });
 

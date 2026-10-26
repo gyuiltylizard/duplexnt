@@ -16,6 +16,7 @@ import {
   type StartupNotice,
 } from '@shared';
 import { NoticesBar } from './components/NoticesBar';
+import { ScreenFrame } from './components/ScreenFrame';
 import { Toast, type ToastAction } from './components/Toast';
 import { DeviceModal } from './modals/DeviceModal';
 import { MismatchModal } from './modals/MismatchModal';
@@ -441,39 +442,52 @@ export function App(): ReactNode {
   return (
     <div className="app">
       {screen !== 'scan' && !merging && <NoticesBar notices={notices} onDismiss={dismissNotice} />}
+      {/* Каждый экран — в своей рамке с ключом по экрану: смена — растворение (B-4). */}
       {screen === 'setup' && (
-        <SetupScreen
-          snapshot={snapshot}
-          launchFailure={launchFailure?.target === 'setup' ? launchFailure.error : null}
-          onStart={startNext}
-          onOpenDevice={openDevice}
-        />
+        <ScreenFrame key="setup">
+          <SetupScreen
+            snapshot={snapshot}
+            launchFailure={launchFailure?.target === 'setup' ? launchFailure.error : null}
+            onStart={startNext}
+            onOpenDevice={openDevice}
+          />
+        </ScreenFrame>
       )}
       {screen === 'scan' && snapshot.pass !== null && (
-        <ScanScreen snapshot={snapshot} pass={snapshot.pass} onStop={stopPass} />
+        <ScreenFrame key="scan">
+          <ScanScreen snapshot={snapshot} pass={snapshot.pass} onStop={stopPass} />
+        </ScreenFrame>
       )}
       {screen === 'flip' && (
-        <FlipScreen
-          snapshot={snapshot}
-          pass={snapshot.pass}
-          launchFailure={launchFailure?.target === 'flip' ? launchFailure.error : null}
-          onStart={startNext}
-          onOpenDevice={openDevice}
-        />
+        <ScreenFrame key="flip">
+          <FlipScreen
+            snapshot={snapshot}
+            pass={snapshot.pass}
+            launchFailure={launchFailure?.target === 'flip' ? launchFailure.error : null}
+            onStart={startNext}
+            onOpenDevice={openDevice}
+          />
+        </ScreenFrame>
       )}
-      {merging && <MergeScreen assembly={assembly} set={mergeSet} />}
+      {merging && (
+        <ScreenFrame key="merge">
+          <MergeScreen assembly={assembly} set={mergeSet} />
+        </ScreenFrame>
+      )}
       {screen === 'editor' && !merging && session !== null && (
-        <EditorScreen
-          key={seat?.epoch ?? 0}
-          snapshot={snapshot}
-          session={session}
-          initialCurrent={seat?.key ?? null}
-          resumeFailure={launchFailure?.target === 'editor' ? launchFailure.error : null}
-          onResume={startNext}
-          onAdd={startAdded}
-          onOpenDevice={openDevice}
-          onToast={showToast}
-        />
+        <ScreenFrame key="editor">
+          <EditorScreen
+            key={seat?.epoch ?? 0}
+            snapshot={snapshot}
+            session={session}
+            initialCurrent={seat?.key ?? null}
+            resumeFailure={launchFailure?.target === 'editor' ? launchFailure.error : null}
+            onResume={startNext}
+            onAdd={startAdded}
+            onOpenDevice={openDevice}
+            onToast={showToast}
+          />
+        </ScreenFrame>
       )}
       {showMismatch && assembly !== null && (
         <MismatchModal

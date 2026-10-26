@@ -66,6 +66,7 @@ function makeSnapshot(fronts: number): Snapshot {
     storage: { incompatible: false, unsaved: false },
     notices: [],
     blankMode: 'hide',
+    seenHints: [],
   };
 }
 

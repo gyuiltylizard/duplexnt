@@ -677,6 +677,9 @@
   align-items: center;
   justify-content: center;
   padding: var(--space-11);
+  /* B-4: лист во время поворота повёрнут и увеличен — углы выходят за область; без обрезки
+     документ получал полосу прокрутки, и раскладка дёргалась (замечание автора). */
+  overflow: clip;
 }
 
 .preview__paper {
@@ -1217,4 +1220,46 @@
 /* S9: секция «ПУСТОЙ ОБОРОТ» — как прочие секции инспектора; кнопка по ширине контента. */
 .inspector__blank-action {
   align-self: flex-start;
+}
+
+/* — B-4: подсказка «обратить внимание» (handoff «5. Подсказка про Ctrl/Shift») — */
+
+/* Подсветка — фон бумаги на панели инспектора с полями за счёт box-shadow того же цвета:
+   геометрия строки не меняется. Снятие ровной подсветки гаснет за --duration-exit. */
+.inspector__note {
+  transition:
+    background-color var(--duration-exit) var(--ease-standard),
+    box-shadow var(--duration-exit) var(--ease-standard);
+}
+
+.inspector__note--attention {
+  border-radius: var(--radius-s);
+  animation: attention var(--duration-loop) var(--ease-loop) var(--iterations-attention);
+}
+
+.inspector__note--attention-static {
+  border-radius: var(--radius-s);
+  background: var(--color-bg-attention);
+  box-shadow: 0 0 0 var(--space-3) var(--color-bg-attention);
+  color: var(--color-text-primary);
+}
+
+@keyframes attention {
+  0%,
+  100% {
+    background: transparent;
+    box-shadow: 0 0 0 var(--space-3) transparent;
+  }
+
+  50% {
+    background: var(--color-bg-attention);
+    box-shadow: 0 0 0 var(--space-3) var(--color-bg-attention);
+    color: var(--color-text-primary);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .inspector__note--attention {
+    animation: none;
+  }
 }

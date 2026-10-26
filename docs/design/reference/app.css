@@ -190,13 +190,21 @@
   --shadow-hairline: 0 1px 0 rgba(28, 26, 22, 0.08);
   --shadow-ring-selected: 0 0 0 2px rgba(28, 26, 22, 0.45);
   /* — движение, слои, прозрачность — */
+  --duration-exit: 120ms;
   --duration-fast: 150ms;
+  --duration-screen: 180ms;
   --duration-base: 200ms;
+  --duration-turn: 240ms;
   --duration-loop: 1200ms;
   --duration-loop-long: 3800ms;
   --delay-stagger: 200ms;
   --ease-standard: ease;
   --ease-loop: ease-in-out;
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --distance-rise: 6px;
+  --distance-enter: 12px;
+  --iterations-attention: 3;
+  --color-bg-attention: var(--color-bg-paper);
   --z-raised: 3;
   --z-tooltip: 6;
   --opacity-soft: 0.85;
@@ -222,6 +230,9 @@ body,
 
 body {
   margin: 0;
+  /* Окно приложения целиком не прокручивается — прокрутка только внутри панелей. Временный
+     выход за край (движение, B-4) не должен давать полосу прокрутки и сдвигать раскладку. */
+  overflow: hidden;
   background: var(--color-bg-app);
   color: var(--color-text-primary);
   font-family: var(--font-family-sans);
@@ -248,6 +259,31 @@ samp {
   display: flex;
   flex-direction: column;
   height: 100%;
+  /* B-4: опора для копии уходящего экрана; свой слой — копия ложится под экран, а не под фон. */
+  position: relative;
+  isolation: isolate;
+}
+
+/* Рамка экрана (B-4) — только для движения, раскладку не меняет. */
+.app__screen {
+  display: contents;
+}
+
+/* Растворение (B-4): новый экран проявляется поверх прежнего и закрывает его — для этого у
+   экрана непрозрачный фон (тот же, что у окна, — видимо ничего не меняется). С прозрачным
+   прежний просвечивал сквозь пустые места нового и исчезал рывком в конце перехода. */
+.app__screen > *,
+.app__leaving {
+  background-color: var(--color-bg-app);
+}
+
+/* Копия уходящего экрана: на месте прежнего (координаты ставит ScreenFrame), под новым, ввод
+   не принимает, снимается по концу растворения. */
+.app__leaving {
+  position: absolute;
+  z-index: -1;
+  margin: 0;
+  pointer-events: none;
 }
 
 /* — кнопки — */
@@ -1413,6 +1449,7 @@ samp {
 /* — лента последних пяти: затухание к старому краю шагом 0,17 — */
 
 .strip {
+  position: relative; /* B-4: опора для выталкиваемой карточки */
   display: flex;
   gap: var(--space-4);
   align-items: flex-end;
@@ -1430,6 +1467,15 @@ samp {
   background: var(--color-bg-paper);
   border: var(--border-width) solid var(--color-border-default);
   overflow: hidden;
+  /* B-4: шаг затухания меняется проявлением, карточка не мигает при сдвиге очереди. */
+  transition: opacity var(--duration-screen) var(--ease-standard);
+}
+
+/* Выталкиваемая карточка (B-4): копия на своём месте поверх потока, гаснет и уходит влево. */
+.strip__card--leaving {
+  position: absolute;
+  margin: 0;
+  pointer-events: none;
 }
 
 .strip__card:nth-last-child(2) {
@@ -1502,6 +1548,10 @@ samp {
   .feed__sheet--moving,
   .feed__bar {
     animation: none;
+  }
+
+  .strip__card {
+    transition: none;
   }
 }
 
@@ -3137,6 +3187,9 @@ samp {
   align-items: center;
   justify-content: center;
   padding: var(--space-11);
+  /* B-4: лист во время поворота повёрнут и увеличен — углы выходят за область; без обрезки
+     документ получал полосу прокрутки, и раскладка дёргалась (замечание автора). */
+  overflow: clip;
 }
 
 .preview__paper {
@@ -3679,6 +3732,48 @@ samp {
   align-self: flex-start;
 }
 
+/* — B-4: подсказка «обратить внимание» (handoff «5. Подсказка про Ctrl/Shift») — */
+
+/* Подсветка — фон бумаги на панели инспектора с полями за счёт box-shadow того же цвета:
+   геометрия строки не меняется. Снятие ровной подсветки гаснет за --duration-exit. */
+.inspector__note {
+  transition:
+    background-color var(--duration-exit) var(--ease-standard),
+    box-shadow var(--duration-exit) var(--ease-standard);
+}
+
+.inspector__note--attention {
+  border-radius: var(--radius-s);
+  animation: attention var(--duration-loop) var(--ease-loop) var(--iterations-attention);
+}
+
+.inspector__note--attention-static {
+  border-radius: var(--radius-s);
+  background: var(--color-bg-attention);
+  box-shadow: 0 0 0 var(--space-3) var(--color-bg-attention);
+  color: var(--color-text-primary);
+}
+
+@keyframes attention {
+  0%,
+  100% {
+    background: transparent;
+    box-shadow: 0 0 0 var(--space-3) transparent;
+  }
+
+  50% {
+    background: var(--color-bg-attention);
+    box-shadow: 0 0 0 var(--space-3) var(--color-bg-attention);
+    color: var(--color-text-primary);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .inspector__note--attention {
+    animation: none;
+  }
+}
+
 /* ── modals/device-modal.css ── */
 
 /* Модалка `device` (U21): список найденных, адрес вручную, «Дополнительно».
@@ -4042,4 +4137,22 @@ samp {
 }
 .save-result__row--failed .save-result__note {
   color: var(--color-danger);
+}
+
+/* B-4: секция ИТОГ проявляется, пока окно дорастает до новой высоты. */
+.save-modal__result {
+  animation: save-result-in var(--duration-fast) var(--ease-standard) 50ms both;
+}
+
+@keyframes save-result-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .save-modal__result {
+    animation-duration: var(--duration-exit);
+    animation-delay: 0ms;
+  }
 }

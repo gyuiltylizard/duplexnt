@@ -1,4 +1,11 @@
-import { memo, type DragEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
+import {
+  memo,
+  useRef,
+  type DragEvent,
+  type KeyboardEvent,
+  type MouseEvent,
+  type ReactNode,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   isPairKind,
@@ -13,6 +20,7 @@ import type { TFunction } from 'i18next';
 import { useImageLoad } from '../components/useImageLoad';
 import type { DropSide } from '../state/edits';
 import { whatOf } from '../state/page-text';
+import { useTurnMotion } from './useTurnMotion';
 
 /** Как выбрали миниатюру: клик, Shift — диапазон, Ctrl — по одной (handoff M3, S4). */
 export type PickMode = 'single' | 'range' | 'toggle';
@@ -150,6 +158,9 @@ export const EditorThumb = memo(function EditorThumb({
 }): ReactNode {
   const { t } = useTranslation();
   const image = useImageLoad();
+  // Поворот — анимация на дельту команды (B-4); конечный угол — классами.
+  const imgRef = useRef<HTMLImageElement>(null);
+  useTurnMotion(imgRef, pageKey, angle, 'thumb');
 
   const click = (event: MouseEvent<HTMLElement>): void => {
     onPick(pageKey, modeOf(event));
@@ -188,6 +199,7 @@ export const EditorThumb = memo(function EditorThumb({
     paper = (
       <>
         <img
+          ref={imgRef}
           className="thumb__img"
           alt=""
           draggable={false}

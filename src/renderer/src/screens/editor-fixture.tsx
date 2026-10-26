@@ -76,6 +76,7 @@ export function makeSnapshot(
     storage: { incompatible: false, unsaved: false },
     notices: [],
     blankMode: 'hide',
+    seenHints: [],
     ...overrides,
     session,
     assembly: overrides.assembly === undefined ? assemblyOf(session, blank) : overrides.assembly,
@@ -136,6 +137,7 @@ export function stubApi(overrides: Partial<Record<keyof Api, unknown>> = {}) {
     assemble: vi.fn(() => Promise.resolve(ok(undefined))),
     // Как ядро: результат команды несёт снимок, следующий за показанным (M3, ревью сессий 3–4).
     setEdits: vi.fn(() => Promise.resolve(ok({ seq: shownSeq + 1 }))),
+    markHintSeen: vi.fn(() => Promise.resolve(ok(undefined))),
     getSaveFolder: vi.fn(() => Promise.resolve(ok('C:\\Документы'))),
     chooseSaveFolder: vi.fn(() => Promise.resolve(ok({ canceled: true, folder: 'C:\\Документы' }))),
     // Пакет записан целиком под запрошенными именами.

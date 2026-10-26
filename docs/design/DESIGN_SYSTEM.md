@@ -228,20 +228,28 @@ flip / merge / editor, модалки device / add / save / mismatch / newscan).
 
 ### Движение
 
-| Токен                  | Значение      | Где используется                                                                    |
-| ---------------------- | ------------- | ----------------------------------------------------------------------------------- |
-| `--duration-fast`      | `150ms`       | Появление split-бара (opacity), переключатель (background, left)                    |
-| `--duration-base`      | `200ms`       | Поворот листа превью (transform)                                                    |
-| `--duration-loop`      | `1200ms`      | Циклы `feed` (подача листа), `pulse` (полоса прогресса, ячейки оборотов, скелетоны) |
-| `--duration-loop-long` | `3800ms`      | Цикл `turn180` — разворот пачки                                                     |
-| `--delay-stagger`      | `200ms`       | Задержка между скелетонами списка устройств (×1, ×2)                                |
-| `--ease-standard`      | `ease`        | Все микропереходы                                                                   |
-| `--ease-loop`          | `ease-in-out` | Все циклические анимации                                                            |
-| `--z-raised`           | `3`           | Split-бар над миниатюрой                                                            |
-| `--z-tooltip`          | `6`           | Тултип над статус-баром                                                             |
-| `--opacity-soft`       | `.85`         | Не используется с B-5 (были ячейки диаграммы сборки M2)                             |
-| `--opacity-disabled`   | `.55`         | Устройство без автоподачи                                                           |
-| `--opacity-dragging`   | `.45`         | Перетаскиваемая миниатюра                                                           |
+| Токен                    | Значение                     | Где используется                                                                                                |
+| ------------------------ | ---------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `--duration-fast`        | `150ms`                      | Появление split-бара (opacity), переключатель (background, left)                                                |
+| `--duration-exit`        | `120ms`                      | Уход: закрытие модалки, гашение тоста, выталкивание карточки ленты `scan`; проявление под reduced-motion (B-4)  |
+| `--duration-base`        | `200ms`                      | Высота модалки при смене содержимого (B-4; поворот превью — теперь `--duration-turn`)                           |
+| `--duration-screen`      | `180ms`                      | Приход: смена экрана, появление модалки и тоста, въезд и сдвиг карточек ленты `scan` (B-4)                      |
+| `--duration-turn`        | `240ms`                      | Поворот миниатюры и превью на 90° / 180° (B-4)                                                                  |
+| `--duration-loop`        | `1200ms`                     | Циклы `feed` (подача листа), `pulse` (полоса прогресса, ячейки оборотов, скелетоны)                             |
+| `--duration-loop-long`   | `3800ms`                     | Цикл `turn180` — разворот пачки                                                                                 |
+| `--delay-stagger`        | `200ms`                      | Задержка между скелетонами списка устройств (×1, ×2)                                                            |
+| `--ease-standard`        | `ease`                       | Все микропереходы                                                                                               |
+| `--ease-loop`            | `ease-in-out`                | Все циклические анимации                                                                                        |
+| `--ease-out`             | `cubic-bezier(0.2, 0, 0, 1)` | Всё, что приходит и встаёт на место: подъём модалки и тоста, въезд и сдвиг ленты, поворот, высота модалки (B-4) |
+| `--distance-rise`        | `6px`                        | Подъём появляющейся модалки и тоста (B-4)                                                                       |
+| `--distance-enter`       | `12px`                       | Въезд новой карточки в ленту `scan`, уход выталкиваемой (B-4)                                                   |
+| `--iterations-attention` | `3`                          | Сколько раз мигает подсказка «обратить внимание» (B-4)                                                          |
+| `--color-bg-attention`   | `var(--color-bg-paper)`      | Подсветка подсказки на панели инспектора (B-4)                                                                  |
+| `--z-raised`             | `3`                          | Split-бар над миниатюрой                                                                                        |
+| `--z-tooltip`            | `6`                          | Тултип над статус-баром                                                                                         |
+| `--opacity-soft`         | `.85`                        | Не используется с B-5 (были ячейки диаграммы сборки M2)                                                         |
+| `--opacity-disabled`     | `.55`                        | Устройство без автоподачи                                                                                       |
+| `--opacity-dragging`     | `.45`                        | Перетаскиваемая миниатюра                                                                                       |
 
 ## Рецепты компонентов
 
@@ -340,7 +348,9 @@ flip / merge / editor, модалки device / add / save / mismatch / newscan).
 - Тело: padding `--space-10 --space-12` (короткие — `--space-9 --space-12`), `gap --space-9`/`--space-8`/`--space-7`; секции с кикером `--font-weight-medium --font-size-xs --font-family-mono --tracking-caps --color-text-hint`, `gap --space-4`/`--space-4`.
 - Футер: фон `--color-bg-panel`, верхняя граница `--color-border-subtle`, padding `--space-8 --space-12` (короткие — `--space-7 --space-12`), слева статусная строка `--font-size-s/--leading-relaxed` (`--color-text-subtle`, при ошибке `--color-danger`), справа ghost «Отмена» + компактная первичная кнопка.
 - Карточка-вариант (mismatch, newscan): `gap --space-6`, padding `--space-6`, `--radius-l`, фон `--color-bg-surface`, граница `--color-border-subtle`; мини-лист 30×42 px `--color-bg-paper` с границей `--color-border-strong` (рекомендуемый — `--color-accent`); заголовок `--font-weight-medium --font-size-base`, описание `--font-size-s --color-text-muted`; стрелка `→` `--font-size-l --color-text-faint`. Hover: `border-color:--color-accent`.
-- Анимации открытия нет.
+- Движение (B-4): затемнение `opacity` за `--duration-fast`, окно — подъём `--distance-rise`
+  за `--duration-screen` `--ease-out`; закрытие — `--duration-exit`; высота при смене
+  содержимого — `--duration-base` `--ease-out`.
 
 ### Элемент списка устройств
 
@@ -565,13 +575,21 @@ flip / merge / editor, модалки device / add / save / mismatch / newscan).
   --shadow-hairline: 0 1px 0 rgba(28, 26, 22, 0.08);
   --shadow-ring-selected: 0 0 0 2px rgba(28, 26, 22, 0.45);
   /* — движение, слои, прозрачность — */
+  --duration-exit: 120ms;
   --duration-fast: 150ms;
+  --duration-screen: 180ms;
   --duration-base: 200ms;
+  --duration-turn: 240ms;
   --duration-loop: 1200ms;
   --duration-loop-long: 3800ms;
   --delay-stagger: 200ms;
   --ease-standard: ease;
   --ease-loop: ease-in-out;
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --distance-rise: 6px;
+  --distance-enter: 12px;
+  --iterations-attention: 3;
+  --color-bg-attention: var(--color-bg-paper);
   --z-raised: 3;
   --z-tooltip: 6;
   --opacity-soft: 0.85;

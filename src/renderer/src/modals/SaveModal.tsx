@@ -88,6 +88,13 @@ function blankFact(t: TFunction, blank: BlankSummary): string {
 /** Отказ повтора, после которого пакета у ядра больше нет: выбор снова доступен (S16). */
 const BATCH_GONE: readonly unknown[] = ['batchStale', 'noFailedFiles'];
 
+/** ИТОГ появился (B-4): если тело модалки его не вмещает — прокрутить к нему. */
+function revealResult(section: HTMLDivElement | null): void {
+  if (section !== null && typeof section.scrollIntoView === 'function') {
+    section.scrollIntoView({ block: 'nearest' });
+  }
+}
+
 export function SaveModal({
   documents,
   defaultNames,
@@ -493,7 +500,8 @@ export function SaveModal({
         </dl>
 
         {results !== null && (
-          <div className="modal__section">
+          // B-4: ИТОГ проявляется после роста высоты окна; не помещается — тело прокручивается к нему.
+          <div className="modal__section save-modal__result" ref={revealResult}>
             <h3 className="kicker" id="save-result-kicker">
               {t('save.result')}
             </h3>
