@@ -49,9 +49,19 @@ export function ScreenFrame({ children }: { readonly children: ReactNode }): Rea
     return () => {
       const leaving = frame?.firstElementChild;
       const app = frame?.parentElement ?? null;
+      // Место копии — ровно там, где стоял экран (над ним могла быть плашка уведомлений):
+      // замеряется сейчас, пока экран в DOM.
+      const box = leaving?.getBoundingClientRect();
+      const origin = app?.getBoundingClientRect();
       // Копия живёт, пока проявляется новый: «держится» на месте без изменений.
       const hold = (ghost: HTMLElement): Animation | null => {
         ghost.classList.add('app__leaving');
+        if (box !== undefined && origin !== undefined) {
+          ghost.style.top = `${String(box.top - origin.top)}px`;
+          ghost.style.left = `${String(box.left - origin.left)}px`;
+          ghost.style.width = `${String(box.width)}px`;
+          ghost.style.height = `${String(box.height)}px`;
+        }
         return animate(ghost, [{}, {}], { duration: screenDuration() });
       };
       const transition: Transition = {
