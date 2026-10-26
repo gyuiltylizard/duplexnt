@@ -348,7 +348,9 @@ flip / merge / editor, модалки device / add / save / mismatch / newscan).
 - Тело: padding `--space-10 --space-12` (короткие — `--space-9 --space-12`), `gap --space-9`/`--space-8`/`--space-7`; секции с кикером `--font-weight-medium --font-size-xs --font-family-mono --tracking-caps --color-text-hint`, `gap --space-4`/`--space-4`.
 - Футер: фон `--color-bg-panel`, верхняя граница `--color-border-subtle`, padding `--space-8 --space-12` (короткие — `--space-7 --space-12`), слева статусная строка `--font-size-s/--leading-relaxed` (`--color-text-subtle`, при ошибке `--color-danger`), справа ghost «Отмена» + компактная первичная кнопка.
 - Карточка-вариант (mismatch, newscan): `gap --space-6`, padding `--space-6`, `--radius-l`, фон `--color-bg-surface`, граница `--color-border-subtle`; мини-лист 30×42 px `--color-bg-paper` с границей `--color-border-strong` (рекомендуемый — `--color-accent`); заголовок `--font-weight-medium --font-size-base`, описание `--font-size-s --color-text-muted`; стрелка `→` `--font-size-l --color-text-faint`. Hover: `border-color:--color-accent`.
-- Анимации открытия нет.
+- Движение (B-4): затемнение `opacity` за `--duration-fast`, окно — подъём `--distance-rise`
+  за `--duration-screen` `--ease-out`; закрытие — `--duration-exit`; высота при смене
+  содержимого — `--duration-base` `--ease-out`.
 
 ### Элемент списка устройств
 
