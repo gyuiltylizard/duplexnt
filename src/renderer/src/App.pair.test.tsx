@@ -154,7 +154,7 @@ describe('M4.5: посадка пары набора (KTD7; handoff S6, S10)', (
     await pushLanding(push, withSet(2, { count: 3 }), 1601, () => {
       expect(mergeStatus()).toBe('набор Д1: совпало пар 3');
       expect(document.querySelector('.merge-screen__tag')?.textContent).toBe('НАБОР Д1');
-      expect(document.querySelector('.sort--ok')).not.toBeNull();
+      expect(document.querySelector('.sort')).not.toBeNull();
       expect(toasts()).toEqual([]);
     });
     expect(document.querySelector('.merge-screen')).toBeNull();
@@ -170,7 +170,7 @@ describe('M4.5: посадка пары набора (KTD7; handoff S6, S10)', (
     expect(document.querySelector('.merge-screen')).toBeNull();
   });
 
-  it('лица набора завершены → flip набора без паузы и тоста; «Обороты не нужны» → короткая пауза и тост', async () => {
+  it('лица набора завершены → flip набора без паузы и тоста; «Обороты не нужны» → без паузы, сразу посадка и тост (B-5)', async () => {
     const fronts = {
       ...withSet(1, null),
       pass: {
@@ -194,10 +194,8 @@ describe('M4.5: посадка пары набора (KTD7; handoff S6, S10)', (
 
     fireEvent.click(screen.getByRole('button', { name: 'Обороты не нужны' }));
     expect(window.api.declineBacks).toHaveBeenCalledTimes(1);
-    await pushLanding(push, withSet(3, null, 'declined'), 1201, () => {
-      expect(mergeStatus()).toBe('набор Д1: обороты не нужны · страниц: 3');
-      expect(screen.queryByText(/обороты набора/)).toBeNull();
-    });
+    // Решение автора на приёмке B-5: после «Обороты не нужны» сопоставлять нечего — паузы нет.
+    await push(withSet(3, null, 'declined'));
     expect(document.querySelector('.merge-screen')).toBeNull();
     expect(toasts()).toEqual(['Добавлено 3 стр.']);
     expect(currentKey()).toBe('p03-s01-0001');
@@ -283,9 +281,8 @@ describe('M4.5: посадка пары набора (KTD7; handoff S6, S10)', (
 
     await pushLanding(push, withSet(2, { count: 2 }), 1601, () => {
       expect(mergeStatus()).toBe('набор Д1: не сошлось — лиц 3, оборотов 2');
-      // B-5: несовпадение набора — янтарная строка, пары в иллюстрации не собираются.
+      // B-5: несовпадение набора — янтарная строка; иллюстрация одна на все исходы.
       expect(document.querySelector('.merge-screen__status--warning')).not.toBeNull();
-      expect(document.querySelector('.sort--short')).not.toBeNull();
     });
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByText('В наборе Д1 лиц 3, оборотов 2')).toBeDefined();

@@ -9,17 +9,16 @@ import './merge-sort.css';
 
 // Экран `merge` (план M2, U9; UI_SPEC раздел 5; редизайн B-5 — handoff
 // `2026-10-b5-merge.md`): процессная пауза без органов управления, уходит сам по таймеру App
-// (KTD-5). Иллюстрация «сортировки» — картинка процесса, а не счёт: лица раскладываются, на
-// каждое ложится его оборот, пары собираются в стопку; при несовпадении пары не собираются, на
-// месте недостающего — пунктир. Строка состояния — фактический результат сборки и первой
-// сообщает о несовпадении (handoff B-5, «Decisions»). С M4 (S12) у строки хвост про пустые
+// (KTD-5). Иллюстрация «сортировки» одна на все исходы — индикатор «идёт сборка», а не
+// рассказ об исходе: лица раскладываются, на каждое ложится его оборот, пары собираются в
+// стопку (решение автора на приёмке B-5: пауза короче цикла, и картинка несовпадения не
+// доигрывалась — о несовпадении сообщает модалка). Строка состояния — фактический результат
+// сборки. После «Обороты не нужны» экрана нет (App). С M4 (S12) у строки хвост про пустые
 // обороты, а App держит экран, пока оценки не пришли (решение автора: без потолка). С M4.5
 // (S6) та же пауза после пары набора «ДN»: тег и заголовок набора, статус по набору.
 
 /** Пауза `merge` (KTD-5, UI_SPEC раздел 9). */
 export const MERGE_PAUSE_MS = 1600;
-/** Пауза после «Обороты не нужны». */
-export const MERGE_PAUSE_DECLINED_MS = 1200;
 
 export interface MergeScreenProps {
   readonly assembly: SessionAssembly;
@@ -27,49 +26,30 @@ export interface MergeScreenProps {
   readonly set?: number | null;
 }
 
-/** Режим иллюстрации (handoff B-5): исход сборки картинкой. */
-export type SortMode = 'ok' | 'short' | 'extra' | 'fronts';
-
 /** Что сопоставляем: основная пачка или набор. */
 interface Pack {
   readonly set: AddedSetReport | null;
   readonly backsState: AssemblyReport['backsState'];
-  readonly mode: SortMode;
-}
-
-/** Исход набора картинкой: решение и состояние оборотов набора (S6 M4.5). */
-function setModeOf(set: AddedSetReport): SortMode {
-  if (set.decision === 'declined') {
-    return 'fronts';
-  }
-  if (set.mismatch || set.backsState === 'accepted') {
-    return set.backs > set.fronts ? 'extra' : 'short';
-  }
-  return 'ok';
-}
-
-/** Исход пачки картинкой — той же классификацией, что статус и `mismatch` (KTD-8 M2). */
-function reportModeOf(report: AssemblyReport): SortMode {
-  switch (assemblyOutcome(report)) {
-    case 'frontsOnly':
-      return 'fronts';
-    case 'accepted':
-      return report.backs > report.fronts ? 'extra' : 'short';
-    case 'fewer':
-      return 'short';
-    case 'extra':
-      return 'extra';
-    case 'ok':
-      return 'ok';
-  }
+  /** Лица и обороты не сошлись (или приняты неравными) — строка янтарная. */
+  readonly mismatch: boolean;
 }
 
 function packOf(assembly: SessionAssembly, setNumber: number | null): Pack {
   const { report } = assembly;
   const set = setNumber === null ? null : (report.sets.find((it) => it.set === setNumber) ?? null);
-  return set === null
-    ? { set: null, backsState: report.backsState, mode: reportModeOf(report) }
-    : { set, backsState: set.backsState, mode: setModeOf(set) };
+  if (set === null) {
+    const outcome = assemblyOutcome(report);
+    return {
+      set: null,
+      backsState: report.backsState,
+      mismatch: outcome === 'fewer' || outcome === 'extra' || outcome === 'accepted',
+    };
+  }
+  return {
+    set,
+    backsState: set.backsState,
+    mismatch: set.mismatch || set.backsState === 'accepted',
+  };
 }
 
 /**
@@ -118,13 +98,6 @@ function setOutcomeText(t: TFunction, set: AddedSetReport): string {
   return t('merge.status.setOk', { set: set.set, count: fronts });
 }
 
-function titleOf(t: TFunction, pack: Pack): string {
-  if (pack.mode === 'fronts') {
-    return t('merge.titleFronts');
-  }
-  return pack.set === null ? t('merge.title') : t('merge.titleSet');
-}
-
 /** Лист иллюстрации: три строки «текста», как у листов `feed` и `turn`. */
 function SortSheet({ className }: { readonly className: string }): ReactNode {
   return (
@@ -137,19 +110,18 @@ function SortSheet({ className }: { readonly className: string }): ReactNode {
 }
 
 /**
- * Иллюстрация «сортировки»: всегда шесть листов и «призрак» — лишние для режима скрывает CSS
- * режима. Число листов документа она не показывает: его несёт строка состояния.
+ * Иллюстрация «сортировки» — одна на все исходы (индикатор сборки): шесть листов, число листов
+ * документа она не показывает — его несёт строка состояния.
  */
-function Sort({ mode }: { readonly mode: SortMode }): ReactNode {
+function Sort(): ReactNode {
   return (
-    <div className={`sort sort--${mode}`} aria-hidden="true">
+    <div className="sort" aria-hidden="true">
       <SortSheet className="sort__sheet--front sort__sheet--f1" />
       <SortSheet className="sort__sheet--front sort__sheet--f2" />
       <SortSheet className="sort__sheet--front sort__sheet--f3" />
       <SortSheet className="sort__sheet--back sort__sheet--b1" />
       <SortSheet className="sort__sheet--back sort__sheet--b2" />
       <SortSheet className="sort__sheet--back sort__sheet--b3" />
-      <SortSheet className="sort__sheet--ghost" />
     </div>
   );
 }
@@ -158,8 +130,8 @@ export function MergeScreen({ assembly, set = null }: MergeScreenProps): ReactNo
   const { t } = useTranslation();
   const screenRef = useRef<HTMLElement>(null);
   const pack = packOf(assembly, set);
-  const title = titleOf(t, pack);
-  const warning = pack.mode === 'short' || pack.mode === 'extra';
+  const title = pack.set === null ? t('merge.title') : t('merge.titleSet');
+  const warning = pack.mismatch;
   const status = pack.set === null ? outcomeText(t, assembly.report) : setOutcomeText(t, pack.set);
   const blank = blankStatus(t, assembly, pack);
 
@@ -175,7 +147,7 @@ export function MergeScreen({ assembly, set = null }: MergeScreenProps): ReactNo
         <h1 className="merge-screen__title">{title}</h1>
       </div>
 
-      <Sort mode={pack.mode} />
+      <Sort />
 
       <p
         className={

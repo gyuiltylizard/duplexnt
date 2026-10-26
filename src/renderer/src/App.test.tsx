@@ -654,7 +654,7 @@ describe('каркас приложения', () => {
     }
   });
 
-  it('KTD-5: «Обороты не нужны» — пауза merge 1,2 с, затем editor только с лицевыми', async () => {
+  it('B-5: «Обороты не нужны» — без паузы merge, сразу editor только с лицевыми', async () => {
     const flip = makeSnapshot({
       session: {
         blankMode: 'keep',
@@ -704,25 +704,14 @@ describe('каркас приложения', () => {
     render(<App />);
     await screen.findByRole('button', { name: 'Обороты не нужны' });
 
-    vi.useFakeTimers();
-    try {
-      current = declined;
-      await act(async () => {
-        notify({ seq: 2 });
-        // Снимок приходит микротаском — дождаться его, не трогая фейковые таймеры.
-        await Promise.resolve();
-      });
-      expect(document.querySelector('.merge-screen')).not.toBeNull();
-      expect(screen.getByText('обороты не нужны · страниц: 3')).toBeDefined();
-
-      act(() => {
-        vi.advanceTimersByTime(1201);
-      });
-      expect(document.querySelector('.merge-screen')).toBeNull();
-      expect(screen.getByText('стр. 1 из 3')).toBeDefined();
-    } finally {
-      vi.useRealTimers();
-    }
+    current = declined;
+    await act(async () => {
+      notify({ seq: 2 });
+      await Promise.resolve();
+    });
+    // Решение автора на приёмке B-5: сопоставлять нечего — экрана `merge` нет вовсе.
+    expect(document.querySelector('.merge-screen')).toBeNull();
+    expect(await screen.findByText('стр. 1 из 3')).toBeDefined();
   });
 
   it('KTD-5: пауза merge не теряется, когда кадр scan пропущен (снимки пришли пачкой)', async () => {
