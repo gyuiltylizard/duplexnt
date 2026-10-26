@@ -1,8 +1,9 @@
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { pageImageUrl, type AssembledPage, type BlankFlag } from '@shared';
 import { multiline } from '../components/multiline';
 import { useImageLoad } from '../components/useImageLoad';
+import { useTurnMotion } from './useTurnMotion';
 
 /**
  * Превью: сама страница под углом из ядра (S8 M3: 90°/270° — альбомная бумага), кромка и метка
@@ -30,6 +31,9 @@ export function EditorPreview({
 }): ReactNode {
   const { t } = useTranslation();
   const image = useImageLoad();
+  // Поворот — лист целиком на дельту команды (B-4); конечный угол — классами.
+  const paperRef = useRef<HTMLDivElement>(null);
+  useTurnMotion(paperRef, entry.key, entry.angle, 'preview');
 
   // Потерянная страница и не открывшийся файл показываются одинаково устроенным листом:
   // угловая метка и текст; различаются пунктиром и ключом текста.
@@ -47,7 +51,7 @@ export function EditorPreview({
   if (image.state === 'loading') {
     classes.push('preview__paper--loading');
   }
-  // Угол — только отображение (KTD-4): файлы не меняются, без анимации (handoff M3, движение).
+  // Угол — только отображение (KTD-4): файлы не меняются; движение — useTurnMotion (B-4).
   if (entry.angle !== 0) {
     classes.push(`preview__paper--angle-${String(entry.angle)}`);
   }
@@ -58,7 +62,11 @@ export function EditorPreview({
     classes.push('preview__paper--doc-start');
   }
   return (
-    <div className={classes.join(' ')} aria-busy={image.state === 'loading' ? true : undefined}>
+    <div
+      ref={paperRef}
+      className={classes.join(' ')}
+      aria-busy={image.state === 'loading' ? true : undefined}
+    >
       {docStart !== null && (
         <span className="preview__doc-start">{t('preview.docStart', { number: docStart })}</span>
       )}

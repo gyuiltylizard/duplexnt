@@ -9,6 +9,8 @@ export interface StubAnimation {
   readonly animation: Animation;
   /** Анимация дошла до конца: `finish` для слушателей. */
   readonly finish: () => void;
+  /** Прогресс с учётом кривой (0…1) — для `effect.getComputedTiming().progress`. */
+  readonly setProgress: (progress: number) => void;
 }
 
 /**
@@ -24,6 +26,7 @@ export function stubAnimate() {
   ) {
     const target = new EventTarget();
     let state: AnimationPlayState = 'running';
+    let progress = 0;
     const finish = (): void => {
       if (state === 'running') {
         state = 'finished';
@@ -42,8 +45,18 @@ export function stubAnimate() {
         },
       },
       playState: { get: () => state },
+      effect: { value: { getComputedTiming: () => ({ progress }) } },
     }) as unknown as Animation;
-    animations.push({ element: this, keyframes, options, animation, finish });
+    animations.push({
+      element: this,
+      keyframes,
+      options,
+      animation,
+      finish,
+      setProgress: (value) => {
+        progress = value;
+      },
+    });
     return animation;
   });
   Object.defineProperty(Element.prototype, 'animate', {
