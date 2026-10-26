@@ -5,6 +5,7 @@ import {
   ok,
   type AssembledPage,
   type BlankMode,
+  type HintId,
   type DomainError,
   sessionConflict,
   type PassKind,
@@ -100,6 +101,8 @@ export interface PassService {
   setParams(params: ScanParams): Promise<Result<void>>;
   /** Режим пустых оборотов (M4, R1): настройка приложения; принимается и без сканера. */
   setBlankMode(mode: BlankMode): Promise<Result<void>>;
+  /** Подсказка показана с привлечением внимания (B-4): в настройки, в снимок. */
+  markHintSeen(hint: HintId): Promise<Result<void>>;
   /**
    * Новый проход или досканирование прерванного. Возвращается, когда задание закрыто. Отказ —
    * проход не начался или не оставил ни страницы, ни сессии.
@@ -457,6 +460,7 @@ export function createPassService(
       storage: { incompatible: store.incompatible, unsaved: store.unsaved() },
       notices,
       blankMode: settings.get().blankMode,
+      seenHints: settings.get().seenHints,
     };
   }
 
@@ -722,6 +726,12 @@ export function createPassService(
     async setBlankMode(mode) {
       // Не параметр устройства: сканер не нужен, по capabilities не сверяется (KTD1).
       const saved = await settings.setBlankMode(mode);
+      notify();
+      return saved;
+    },
+
+    async markHintSeen(hint) {
+      const saved = await settings.markHintSeen(hint);
       notify();
       return saved;
     },

@@ -3,6 +3,8 @@
 
 export const APP_NAME = "Duplexn't";
 
+export { HINTS, type HintId } from './hints';
+
 export {
   BRIDGE_CHANNELS,
   BRIDGE_EVENT_CHANNELS,

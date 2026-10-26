@@ -6,6 +6,7 @@
 // В снимке нет абсолютных путей и адресов заданий (KTD-39): страница адресуется ключом.
 
 import type { BlankFlag, BlankMode, BlankSummary } from './blank';
+import type { HintId } from './hints';
 import type { SessionEdits } from './edits';
 import type { DomainError } from './errors';
 import type { ScanOptions, ScanParams } from './scan-params';
@@ -499,4 +500,6 @@ export interface Snapshot {
    * текущей сессии — в `session.blankMode`: он заморожен и может отличаться.
    */
   readonly blankMode: BlankMode;
+  /** Подсказки, уже показанные с привлечением внимания (B-4): больше не мигают. */
+  readonly seenHints: readonly HintId[];
 }

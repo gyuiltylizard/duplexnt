@@ -909,6 +909,7 @@ export function EditorScreen({
             frontsOnly={rolesOf(session.passes).backs === null}
             notBlank={currentEntry !== undefined && notBlank.includes(currentEntry.key)}
             locked={locked}
+            hintSeen={snapshot.seenHints.includes('docsSplit')}
             onPickDocument={pickDocument}
             onNotBlank={markNotBlank}
             onRevert={() => {

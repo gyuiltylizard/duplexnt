@@ -93,6 +93,7 @@ describe('настройки', () => {
       params: null,
       saveFolder: null,
       blankMode: 'hide',
+      seenHints: [],
     });
     expect(store.notice).toBeNull();
     expect(await readdir(root)).toEqual([]);
@@ -108,6 +109,7 @@ describe('настройки', () => {
       params: PARAMS,
       saveFolder: null,
       blankMode: 'hide',
+      seenHints: [],
     });
     expect(scanner).toMatchObject({
       scheme: 'https',
@@ -116,7 +118,7 @@ describe('настройки', () => {
       basePath: '/eSCL',
       fingerprint: FINGERPRINT,
     });
-    expect(JSON.parse(await readFile(file, 'utf8'))).toMatchObject({ version: 3 });
+    expect(JSON.parse(await readFile(file, 'utf8'))).toMatchObject({ version: 4 });
   });
 
   it('папка сохранения переживает повторное открытие хранилища (M3)', async () => {
@@ -131,6 +133,7 @@ describe('настройки', () => {
       params: PARAMS,
       saveFolder: 'E:\\Архив',
       blankMode: 'hide',
+      seenHints: [],
     });
   });
 
@@ -148,16 +151,18 @@ describe('настройки', () => {
       params: PARAMS,
       saveFolder: null,
       blankMode: 'hide',
+      seenHints: [],
     });
     expect(await readFile(file, 'utf8')).toBe(v1);
 
     await store.rememberSaveFolder('E:\\Архив');
     expect(JSON.parse(await readFile(file, 'utf8'))).toEqual({
-      version: 3,
+      version: 4,
       scanner: null,
       params: PARAMS,
       saveFolder: 'E:\\Архив',
       blankMode: 'hide',
+      seenHints: [],
     });
   });
 
@@ -177,7 +182,7 @@ describe('настройки', () => {
   it('файл настроек с маркером новее понятного не переписывается; приложение работает с дефолтами в памяти', async () => {
     const root = await makeTempDataRoot();
     const file = layoutOf(root).settingsFile;
-    const newer = JSON.stringify({ version: 4, profiles: [{ name: 'будущее' }] });
+    const newer = JSON.stringify({ version: 5, profiles: [{ name: 'будущее' }] });
     await writeFile(file, newer);
 
     const store = await openSettingsStore(root);
@@ -187,6 +192,7 @@ describe('настройки', () => {
       params: null,
       saveFolder: null,
       blankMode: 'hide',
+      seenHints: [],
     });
 
     expect(await store.setParams(PARAMS)).toEqual(ok(undefined));
@@ -202,11 +208,12 @@ describe('настройки', () => {
     const root = await makeTempDataRoot();
     const file = layoutOf(root).settingsFile;
     const content = JSON.stringify({
-      version: 3,
+      version: 4,
       scanner: null,
       params: null,
       saveFolder: null,
       blankMode: 'hide',
+      seenHints: [],
       theme: 'dark',
     });
     await writeFile(file, content);
@@ -230,6 +237,7 @@ describe('настройки', () => {
       params: null,
       saveFolder: null,
       blankMode: 'hide',
+      seenHints: [],
     });
     const names = await readdir(root);
     expect(names).toHaveLength(1);
@@ -279,7 +287,7 @@ describe('запомненный сканер при запуске', () => {
 
     expect(
       await checkRememberedScanner(
-        { scanner: null, params: null, saveFolder: null, blankMode: 'hide' },
+        { scanner: null, params: null, saveFolder: null, blankMode: 'hide', seenHints: [] },
         { createTransport },
       ),
     ).toEqual({ state: 'none' });
@@ -509,16 +517,18 @@ describe('настройки: режим пустых оборотов (M4, R1)'
       params: PARAMS,
       saveFolder: null,
       blankMode: 'hide',
+      seenHints: [],
     });
     expect(await readFile(file, 'utf8')).toBe(v2);
 
     expect(await store.setBlankMode('mark')).toEqual(ok(undefined));
     expect(JSON.parse(await readFile(file, 'utf8'))).toEqual({
-      version: 3,
+      version: 4,
       scanner: null,
       params: PARAMS,
       saveFolder: null,
       blankMode: 'mark',
+      seenHints: [],
     });
   });
 
@@ -534,5 +544,46 @@ describe('настройки: режим пустых оборотов (M4, R1)'
     );
     expect(store.get().blankMode).toBe('keep');
     expect((await openSettingsStore(root)).get().blankMode).toBe('keep');
+  });
+
+  it('B-4: файл версии 3 читается с пустым списком подсказок и переписывается только при записи', async () => {
+    const root = await makeTempDataRoot();
+    const file = layoutOf(root).settingsFile;
+    const v3 = JSON.stringify({
+      version: 3,
+      scanner: null,
+      params: PARAMS,
+      saveFolder: null,
+      blankMode: 'mark',
+    });
+    await writeFile(file, v3);
+
+    const store = await openSettingsStore(root);
+
+    expect(store.notice).toBeNull();
+    expect(store.get().seenHints).toEqual([]);
+    expect(store.get().blankMode).toBe('mark');
+    expect(await readFile(file, 'utf8')).toBe(v3);
+
+    expect(await store.markHintSeen('docsSplit')).toEqual(ok(undefined));
+    expect(JSON.parse(await readFile(file, 'utf8'))).toMatchObject({
+      version: 4,
+      blankMode: 'mark',
+      seenHints: ['docsSplit'],
+    });
+  });
+
+  it('B-4: показанная подсказка помнится между запусками; повтор — без изменений, неизвестная — отказ', async () => {
+    const root = await makeTempDataRoot();
+    const store = await openSettingsStore(root);
+
+    expect(await store.markHintSeen('docsSplit')).toEqual(ok(undefined));
+    expect(await store.markHintSeen('docsSplit')).toEqual(ok(undefined));
+    expect((await openSettingsStore(root)).get().seenHints).toEqual(['docsSplit']);
+
+    expect(await store.markHintSeen('nope' as never)).toEqual(
+      fail('storageFailed', { reason: 'schema' }),
+    );
+    expect(store.get().seenHints).toEqual(['docsSplit']);
   });
 });

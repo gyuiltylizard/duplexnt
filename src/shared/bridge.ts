@@ -13,6 +13,7 @@
 //   `Uint8Array` и `ArrayBuffer` можно; `Buffer`, `Blob` и потоки нельзя.
 
 import type { BlankMode } from './blank';
+import type { HintId } from './hints';
 import type { DiscoveryState } from './discovery';
 import type { SessionEdits } from './edits';
 import type { DomainError, Result } from './errors';
@@ -179,6 +180,8 @@ export interface BridgeCommands {
    * первого прохода. Не параметр устройства — принимается и без сканера.
    */
   readonly setBlankMode: { readonly request: BlankMode; readonly value: undefined };
+  /** Подсказка показана с привлечением внимания (B-4): помнится в настройках, больше не мигает. */
+  readonly markHintSeen: { readonly request: HintId; readonly value: undefined };
   /**
    * Новый проход, досканирование или добавленный набор (M3.5); возвращается, когда задание
    * закрыто. Добавление без сессии — `noSession`, при прерванном последнем проходе —
@@ -246,6 +249,7 @@ export const BRIDGE_CHANNELS = {
   recheckScanner: 'duplexnt:recheck-scanner',
   setScanParams: 'duplexnt:set-scan-params',
   setBlankMode: 'duplexnt:set-blank-mode',
+  markHintSeen: 'duplexnt:mark-hint-seen',
   startPass: 'duplexnt:start-pass',
   stopPass: 'duplexnt:stop-pass',
   acceptPass: 'duplexnt:accept-pass',

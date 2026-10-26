@@ -2,10 +2,12 @@ import { z } from 'zod';
 import {
   BLANK_MODES,
   DEFAULT_BLANK_MODE,
+  HINTS,
   fail,
   ok,
   type BlankMode,
   type DomainError,
+  type HintId,
   type Result,
   type ScanParams,
   type StartupNotice,
@@ -37,8 +39,11 @@ import {
 //
 // Версия 3 (M4, R1): режим пустых оборотов помнится между запусками; файлы версий 1 и 2
 // читаются с режимом по умолчанию и переписываются только при следующей записи.
+//
+// Версия 4 (B-4): какие подсказки уже показаны с привлечением внимания (`seenHints`); файлы
+// версий 1–3 читаются с пустым списком и переписываются только при следующей записи.
 
-export const SETTINGS_VERSION = 3;
+export const SETTINGS_VERSION = 4;
 
 const settingsV1Schema = z.strictObject({
   version: z.literal(1),
@@ -54,10 +59,19 @@ const settingsV2Schema = settingsV1Schema.extend({
   saveFolder: z.string().min(1).nullable(),
 });
 
-const settingsSchema = settingsV2Schema.extend({
-  version: z.literal(SETTINGS_VERSION),
+const settingsV3Schema = settingsV2Schema.extend({
+  version: z.literal(3),
   /** Режим пустых оборотов, выбранный последним (M4, R1); решение приложения, не устройства. */
   blankMode: z.enum(BLANK_MODES),
+});
+
+const settingsSchema = settingsV3Schema.extend({
+  version: z.literal(SETTINGS_VERSION),
+  /** Подсказки, уже показанные с привлечением внимания (B-4) — без повторов. */
+  seenHints: z
+    .array(z.enum(HINTS))
+    .max(HINTS.length)
+    .refine((hints) => new Set(hints).size === hints.length),
 });
 
 export interface Settings {
@@ -65,31 +79,43 @@ export interface Settings {
   readonly params: ScanParams | null;
   readonly saveFolder: string | null;
   readonly blankMode: BlankMode;
+  readonly seenHints: readonly HintId[];
 }
 
-/** Разбор файла настроек: версия 1 поднимается до 2 без папки, версия 2 — до 3 с режимом по умолчанию. */
+/**
+ * Разбор файла настроек: версия 1 поднимается без папки, версия 2 — с режимом пустых по
+ * умолчанию, версии 1–3 — с пустым списком показанных подсказок.
+ */
 function parseSettings(bytes: Uint8Array): VersionedRead<Settings> {
   const marker = readVersionMarker(bytes);
   if (marker === 1) {
     const v1 = parseVersioned(bytes, settingsV1Schema, 1);
     return v1.kind === 'ok'
-      ? { kind: 'ok', value: { ...v1.value, saveFolder: null, blankMode: DEFAULT_BLANK_MODE } }
+      ? {
+          kind: 'ok',
+          value: { ...v1.value, saveFolder: null, blankMode: DEFAULT_BLANK_MODE, seenHints: [] },
+        }
       : v1;
   }
   if (marker === 2) {
     const v2 = parseVersioned(bytes, settingsV2Schema, 2);
     return v2.kind === 'ok'
-      ? { kind: 'ok', value: { ...v2.value, blankMode: DEFAULT_BLANK_MODE } }
+      ? { kind: 'ok', value: { ...v2.value, blankMode: DEFAULT_BLANK_MODE, seenHints: [] } }
       : v2;
+  }
+  if (marker === 3) {
+    const v3 = parseVersioned(bytes, settingsV3Schema, 3);
+    return v3.kind === 'ok' ? { kind: 'ok', value: { ...v3.value, seenHints: [] } } : v3;
   }
   return parseVersioned(bytes, settingsSchema, SETTINGS_VERSION);
 }
 
-const settingsOf = ({ scanner, params, saveFolder, blankMode }: Settings): Settings => ({
+const settingsOf = ({ scanner, params, saveFolder, blankMode, seenHints }: Settings): Settings => ({
   scanner,
   params,
   saveFolder,
   blankMode,
+  seenHints,
 });
 
 export interface SettingsStore {
@@ -106,6 +132,8 @@ export interface SettingsStore {
   setBlankMode(mode: BlankMode): Promise<Result<void>>;
   /** Папка, выбранная в модалке `save` (M3): предлагается при следующем запуске. */
   rememberSaveFolder(folder: string): Promise<Result<void>>;
+  /** Подсказка показана с привлечением внимания (B-4): больше не мигает. Повтор — без изменений. */
+  markHintSeen(hint: HintId): Promise<Result<void>>;
 }
 
 export async function openSettingsStore(
@@ -121,6 +149,7 @@ export async function openSettingsStore(
     params: null,
     saveFolder: null,
     blankMode: DEFAULT_BLANK_MODE,
+    seenHints: [],
   };
   let notice: SettingsStore['notice'] = null;
   const readSettings = async (): Promise<VersionedRead<Settings>> => {
@@ -180,6 +209,10 @@ export async function openSettingsStore(
     setParams: (params) => update({ params }),
     setBlankMode: (blankMode) => update({ blankMode }),
     rememberSaveFolder: (saveFolder) => update({ saveFolder }),
+    markHintSeen: (hint) =>
+      settings.seenHints.includes(hint)
+        ? Promise.resolve(ok(undefined))
+        : update({ seenHints: [...settings.seenHints, hint] }),
   };
 }
 

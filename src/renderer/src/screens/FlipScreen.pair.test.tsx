@@ -74,6 +74,7 @@ function makeSnapshot(setFronts: number): Snapshot {
     storage: { incompatible: false, unsaved: false },
     notices: [],
     blankMode: 'hide',
+    seenHints: [],
   };
 }
 
