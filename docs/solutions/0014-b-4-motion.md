@@ -203,4 +203,8 @@ merge `feat/b-4` → `main` по явному ОК автора.
 
 ## Закрытие вехи
 
-<Заполняется на merge.>
+Приёмка автора 2026-10-26. Merge `feat/b-4` → `main` по явному ОК автора — `40543d4`; `main`
+после merge зелёный (typecheck, lint, format:check, `test:all` целиком), `design:snapshot` — без
+diff. Ветка удалена. Push — по разрешению автора.
+
+Пункт B-4 закрыт.
