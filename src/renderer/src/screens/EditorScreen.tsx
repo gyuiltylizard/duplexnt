@@ -175,9 +175,11 @@ export function EditorScreen({
     () => (reveal ? shownDocumentsOf(documents, order, fileShown) : shownDocuments),
     [documents, order, fileShown, reveal, shownDocuments],
   );
-  /** Ключи с хвостами скрытых (R12) — пока скрытые не показаны; иначе буквально. */
+  /** Ключи с хвостами скрытых (R12) — пока скрытые не показаны; иначе буквально. Хвост — до
+   * границы документа. */
+  const documentStarts = useMemo(() => new Set(documents.map((doc) => doc.start)), [documents]);
   const withTails = (keys: readonly string[]): readonly string[] =>
-    reveal ? keys : withHiddenTails(keys, order);
+    reveal ? keys : withHiddenTails(keys, order, documentStarts);
   // Режим сборки и группы — из ядра (M3.6, R10): renderer ничего не считает сам.
   const mode = snapshot.assembly?.report.mode ?? 'pairs';
   const sets = snapshot.assembly?.sets ?? null;

@@ -7,7 +7,9 @@ import type { AssembledDocument, AssembledPage } from '@shared';
 // — по полной: позиции показанной переводятся в позиции полной перед отправкой (R11–R13).
 // Скрытый хвост (R12): скрытые обороты, идущие в полной ленте сразу за показанной страницей, —
 // её хвост; перенос, группировка, удаление и якорь «после текущей» захватывают его, пока скрытые
-// не показаны. При включённом переключателе выделение буквальное.
+// не показаны. При включённом переключателе выделение буквальное. Хвост не переходит границу
+// документа: скрытый оборот, начинающий следующий документ, — уже его страница (иначе бросок
+// «после» последней страницы документа уезжал за границу в следующий).
 
 /** Документ в координатах показанной ленты; `index` — номер в полной (имена, разрезы, тон). */
 export interface ShownDocument {
@@ -27,18 +29,26 @@ export function shownOf(
   return reveal ? order : order.filter((page) => page.blank !== 'hidden');
 }
 
+const NO_STARTS: ReadonlySet<number> = new Set();
+
 /**
  * Ключи с их скрытыми хвостами в порядке полной ленты: за каждой страницей из `keys` идут
- * скрытые обороты, стоящие сразу за ней, до первой нескрытой. Ключи не из ленты отбрасываются.
+ * скрытые обороты, стоящие сразу за ней, до первой нескрытой или до начала следующего документа
+ * (`starts` — позиции полной ленты, с которых начинаются документы). Ключи не из ленты
+ * отбрасываются.
  */
 export function withHiddenTails(
   keys: readonly string[],
   order: readonly AssembledPage[],
+  starts: ReadonlySet<number> = NO_STARTS,
 ): readonly string[] {
   const wanted = new Set(keys);
   const result: string[] = [];
   let tail = false;
-  for (const page of order) {
+  for (const [index, page] of order.entries()) {
+    if (starts.has(index)) {
+      tail = false;
+    }
     if (wanted.has(page.key)) {
       result.push(page.key);
       tail = true;
