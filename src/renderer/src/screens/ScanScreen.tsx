@@ -14,7 +14,7 @@ import { useFocusWhen } from '../components/useFocusWhen';
 import { useImageLoad } from '../components/useImageLoad';
 import { paramsLine } from '../state/params-line';
 import { setOfPass } from '../state/screen';
-import { useLeavingCard, useStripMotion } from './useStripMotion';
+import { useLeavingCard, useLeavingWait, useStripMotion } from './useStripMotion';
 import './scan-screen.css';
 
 // Экран `scan` (план M1, U23; UI_SPEC раздел 3; handoff U19, S12–S15, S19): тег прохода,
@@ -25,7 +25,8 @@ import './scan-screen.css';
 // тег без номера прохода на цвете набора, счётчик без «из M», мета досканирования без номера.
 // Проходы двустороннего набора (M4.5, R5, R7; handoff M4.5, S3–S4): тег с ролью «ЛИЦА» /
 // «ОБОРОТЫ» на цвете набора, у оборотов счётчик «из N» (`pass.expected` — лица набора), мета
-// досканирования называет набор «ДN».
+// досканирования называет набор «ДN». Пока в ленте нет страниц прохода, на её месте пульсируют
+// три точки (B-9, handoff `2026-10-scan-wait.md`): с первой страницей гаснут копией.
 
 /** Сколько последних страниц показывает лента. */
 export const STRIP_SIZE = 5;
@@ -129,6 +130,20 @@ function StripCard({
   );
 }
 
+/** Три точки ожидания первой страницы (B-9): уходят копией, гаснущей за `--duration-fast`. */
+function ScanWait(): ReactNode {
+  const { t } = useTranslation();
+  const ref = useRef<HTMLDivElement>(null);
+  useLeavingWait(ref);
+  return (
+    <div ref={ref} className="scan-wait" role="status" aria-label={t('scan.strip.waiting')}>
+      <span className="scan-wait__dot" />
+      <span className="scan-wait__dot" />
+      <span className="scan-wait__dot" />
+    </div>
+  );
+}
+
 export function ScanScreen({ snapshot, pass, onStop }: ScanScreenProps): ReactNode {
   const { t } = useTranslation();
   const screenRef = useRef<HTMLElement>(null);
@@ -212,16 +227,19 @@ export function ScanScreen({ snapshot, pass, onStop }: ScanScreenProps): ReactNo
       </div>
 
       {/* Лента занимает место с самого начала: первая миниатюра не расталкивает экран
-          (смоук приёмки M1). Пустая — скрыта от скринридера. */}
-      <ul
-        ref={stripRef}
-        className="strip"
-        aria-label={strip.length > 0 ? t('scan.strip.label') : undefined}
-        aria-hidden={strip.length === 0 ? true : undefined}
-      >
-        {sessionId !== undefined &&
-          strip.map((page) => <StripCard key={page.key} sessionId={sessionId} page={page} />)}
-      </ul>
+          (смоук приёмки M1). Пустая — скрыта от скринридера, на её месте точки ожидания (B-9). */}
+      <div className="scan-screen__slot">
+        <ul
+          ref={stripRef}
+          className="strip"
+          aria-label={strip.length > 0 ? t('scan.strip.label') : undefined}
+          aria-hidden={strip.length === 0 ? true : undefined}
+        >
+          {sessionId !== undefined &&
+            strip.map((page) => <StripCard key={page.key} sessionId={sessionId} page={page} />)}
+        </ul>
+        {strip.length === 0 && <ScanWait />}
+      </div>
 
       <button
         type="button"

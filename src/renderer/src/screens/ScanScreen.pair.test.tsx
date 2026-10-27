@@ -85,6 +85,16 @@ afterEach(() => {
 });
 
 describe('ScanScreen проходов набора (M4.5)', () => {
+  it('B-9: обороты набора до первого оборота — точки ожидания снова видны, хотя лица набора есть', () => {
+    const backs = makePass({ number: 4, kind: 'addedBacks', pair: 3, state: 'running', pages: [] });
+    const pass = progress({});
+    render(
+      <ScanScreen snapshot={makeSnapshot([FRONTS, backs], pass)} pass={pass} onStop={vi.fn()} />,
+    );
+
+    expect(screen.getByRole('status', { name: 'Ждём первую страницу' })).toBeDefined();
+  });
+
   it('S4: обороты набора — тег «ДОБАВЛЯЕМ · ОБОРОТЫ» на цвете набора, счётчик «из N»', () => {
     const backs = makePass({
       number: 4,
@@ -100,7 +110,7 @@ describe('ScanScreen проходов набора (M4.5)', () => {
 
     const tag = screen.getByText('ДОБАВЛЯЕМ · ОБОРОТЫ');
     expect(tag.className).toBe('scan-screen__tag scan-screen__tag--added');
-    expect(screen.getByRole('status').textContent).toBe('Отсканировано 2 из 3');
+    expect(screen.getAllByRole('status')[0]?.textContent).toBe('Отсканировано 2 из 3');
     expect(screen.getByText('300 dpi · оттенки серого · A4')).toBeDefined();
   });
 

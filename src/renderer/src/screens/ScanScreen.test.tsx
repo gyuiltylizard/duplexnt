@@ -220,7 +220,27 @@ describe('экран scan', () => {
     };
     render(<ScanScreen snapshot={makeSnapshot({ pass })} pass={pass} onStop={vi.fn()} />);
 
-    expect(screen.getByRole('status').textContent).toBe('Начинаем проход…');
+    // Второй `status` — точки ожидания (B-9), у счётчика своего имени нет.
+    expect(screen.getAllByRole('status')[0]?.textContent).toBe('Начинаем проход…');
+  });
+
+  it('B-9: до первой страницы на месте ленты три точки ожидания; с первой страницей их нет', () => {
+    const empty = running(0, 0);
+    const view = render(
+      <ScanScreen snapshot={empty.snapshot} pass={empty.pass} onStop={vi.fn()} />,
+    );
+
+    const wait = screen.getByRole('status', { name: 'Ждём первую страницу' });
+    expect(wait.querySelectorAll('.scan-wait__dot').length).toBe(3);
+    // Лента и точки — в одном слоте: высота экрана не меняется.
+    const slot = view.container.querySelector('.scan-screen__slot');
+    expect(wait.parentElement).toBe(slot);
+    expect(slot?.querySelector(':scope > .strip')).not.toBeNull();
+
+    const first = running(1, 1);
+    view.rerender(<ScanScreen snapshot={first.snapshot} pass={first.pass} onStop={vi.fn()} />);
+    expect(screen.queryByRole('status', { name: 'Ждём первую страницу' })).toBeNull();
+    expect(screen.getByAltText('Страница 1')).toBeDefined();
   });
 
   it('лента занимает место и до первой страницы: пустой контейнер на экране', () => {
@@ -362,6 +382,8 @@ describe('экран scan', () => {
 
     expect(screen.getByAltText('Страница 17')).toBeDefined();
     expect(screen.getByAltText('Страница 13')).toBeDefined();
+    // B-9: лента не пуста с первого кадра — ждать нечего.
+    expect(screen.queryByRole('status', { name: 'Ждём первую страницу' })).toBeNull();
   });
 
   it('«Остановить» отправляет команду один раз и блокируется до ответа', () => {
