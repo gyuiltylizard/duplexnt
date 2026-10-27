@@ -16,9 +16,11 @@ import {
   prefersReducedMotion,
 } from '../state/motion';
 
-// Модалка по рецепту дизайн-системы и UI_SPEC раздел 7: затемнение, окно по центру. Esc и клик
-// вне окна остаются без действия — закрывает только кнопка. Фокус заперт внутри; при
-// размонтировании возвращается на элемент, который был в фокусе перед открытием.
+// Модалка по рецепту дизайн-системы и UI_SPEC раздел 7: затемнение, окно по центру. Esc — то же,
+// что кнопка отмены или закрытия модалки (B-11): модалка передаёт её обработчик в `onEscape`,
+// без него (решение без отмены, кнопка недоступна) Esc без действия. Клик вне окна без действия.
+// Фокус заперт внутри; при размонтировании возвращается на элемент, который был в фокусе перед
+// открытием.
 //
 // Движение (B-4, handoff «4. Модалки и тост»): затемнение проявляется, окно поднимается; уходя,
 // модалка оставляет гаснущую копию — ввод снят сразу. Модалка, открытая тем же коммитом, в
@@ -57,6 +59,11 @@ export interface ModalProps {
    */
   readonly busy?: boolean;
   readonly className?: string;
+  /**
+   * Esc (B-11) — тот же обработчик, что у кнопки отмены или закрытия; `undefined` — Esc без
+   * действия: модалка-решение без отмены или кнопка сейчас недоступна.
+   */
+  readonly onEscape?: (() => void) | undefined;
   readonly children: ReactNode;
 }
 
@@ -66,6 +73,7 @@ export function Modal({
   small,
   busy,
   className,
+  onEscape,
   children,
 }: ModalProps): ReactNode {
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -172,7 +180,16 @@ export function Modal({
     }
   }, [busy]);
 
-  const trapFocus = (event: KeyboardEvent<HTMLElement>): void => {
+  const onKeyDown = (event: KeyboardEvent<HTMLElement>): void => {
+    if (event.key === 'Escape') {
+      // Обработанный Esc экрану под модалкой не достаётся: лента редактора сжала бы выделение.
+      if (onEscape !== undefined) {
+        event.preventDefault();
+        event.stopPropagation();
+        onEscape();
+      }
+      return;
+    }
     if (event.key !== 'Tab') {
       return;
     }
@@ -214,7 +231,7 @@ export function Modal({
         aria-busy={busy === true ? true : undefined}
         tabIndex={-1}
         className={classes}
-        onKeyDown={trapFocus}
+        onKeyDown={onKeyDown}
       >
         {children}
       </section>
