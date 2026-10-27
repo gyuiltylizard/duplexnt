@@ -266,6 +266,89 @@ describe('editor M3: перетаскивание (S6)', () => {
   });
 });
 
+describe('B-10: автопрокрутка ленты при переносе', () => {
+  /** Лента 600 px высотой, содержимого 3000 px, прокручена на 1000; кадры — вручную. */
+  function rig() {
+    let top = 1000;
+    let frames: FrameRequestCallback[] = [];
+    let now = 1000;
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    vi.stubGlobal('cancelAnimationFrame', () => {
+      frames = [];
+    });
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+    const scroll = document.querySelector<HTMLElement>('.rail__scroll');
+    if (scroll === null) {
+      throw new Error('нет ленты');
+    }
+    scroll.getBoundingClientRect = () =>
+      ({
+        left: 0,
+        right: 288,
+        top: 100,
+        bottom: 700,
+        x: 0,
+        y: 100,
+        width: 288,
+        height: 600,
+      }) as DOMRect;
+    Object.defineProperty(scroll, 'scrollHeight', { configurable: true, value: 3000 });
+    Object.defineProperty(scroll, 'clientHeight', { configurable: true, value: 600 });
+    Object.defineProperty(scroll, 'scrollTop', {
+      configurable: true,
+      get: () => top,
+      set: (value: number) => {
+        top = value;
+      },
+    });
+    return {
+      scrollTop: () => top,
+      /** `dragover` у верхнего края ленты и пять кадров по 16 мс. */
+      nudgeTop: () => {
+        const event = createEvent.dragOver(scroll, { dataTransfer: dataTransfer() });
+        Object.defineProperty(event, 'clientX', { value: 100 });
+        Object.defineProperty(event, 'clientY', { value: 105 });
+        fireEvent(scroll, event);
+        for (let index = 0; index < 5; index += 1) {
+          const pending = frames;
+          frames = [];
+          now += 16;
+          for (const callback of pending) callback(now);
+        }
+      },
+    };
+  }
+
+  it('перенос страницы: у верхнего края лента едет вверх; после броска — стоит', () => {
+    stubApi();
+    renderEditor(twoPass());
+    const scroll = rig();
+    const transfer = dataTransfer();
+
+    fireEvent.dragStart(option(5), { dataTransfer: transfer });
+    scroll.nudgeTop();
+    const moved = scroll.scrollTop();
+    expect(moved).toBeLessThan(1000);
+
+    fireEvent.drop(option(0), { dataTransfer: transfer });
+    fireEvent.dragEnd(option(5), { dataTransfer: transfer });
+    scroll.nudgeTop();
+    expect(scroll.scrollTop()).toBe(moved);
+  });
+
+  it('чужое перетаскивание (файл, текст) ленту не двигает', () => {
+    stubApi();
+    renderEditor(twoPass());
+    const scroll = rig();
+
+    scroll.nudgeTop();
+    expect(scroll.scrollTop()).toBe(1000);
+  });
+});
+
 describe('editor M3: границы документов (S1, S2, S5, S7)', () => {
   it('split-бар: у всех, кроме первой; клик ставит границу без выбора страницы, фокус — в имя нового', async () => {
     const api = stubApi();

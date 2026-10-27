@@ -28,6 +28,7 @@ import {
   type SplitKind,
   type ThumbDrag,
 } from './EditorThumb';
+import { useDragAutoScroll } from './useDragAutoScroll';
 
 // Лента редактора (план M3, U7–U8; handoff M3, S2–S7; M3.6, S1–S3): группы по документам с
 // разделителем «✕» и полем имени, миниатюры с split-баром и перетаскиванием. В режиме
@@ -260,6 +261,9 @@ export function EditorRail({
   const [dragged, setDragged] = useState<readonly string[] | null>(null);
   const [drop, setDrop] = useState<Drop | null>(null);
   const draggedKeys = useMemo(() => new Set(dragged), [dragged]);
+  // У края ленты она едет сама, пока страницы удерживаются (B-10).
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useDragAutoScroll(scrollRef, dragged !== null);
 
   const finishDrag = (): void => {
     setDragged(null);
@@ -557,6 +561,7 @@ export function EditorRail({
   return (
     <aside className="rail" aria-label={t('editor.railLabel')} ref={railRef} onKeyDown={onKeyDown}>
       <div
+        ref={scrollRef}
         className="rail__scroll"
         onDragOver={scrollDragOver}
         onDragLeave={scrollDragLeave}
