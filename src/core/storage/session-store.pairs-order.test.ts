@@ -82,6 +82,26 @@ describe('перерасстановка оборотов завершённог
     expect(keysOf(store.snapshot())).toEqual([F2, B2, F1, B1]);
   });
 
+  it('разрезы остаются перед той же страницей вне прохода: перед набором — на месте, перед подблоком оборотов — за листом', async () => {
+    const context = await swappedPack();
+    const { store, accept } = context;
+    await setFronts(context);
+    // Разрез перед набором (позиция 4) — документы «Пачка» и «Набор».
+    ok(
+      await store.setEdits(
+        { ...EMPTY_EDITS, order: [...SWAPPED, S1F1, S1F2], cuts: [4], names: ['Пачка', 'Набор'] },
+        {},
+      ),
+    );
+
+    ok(await store.beginPass(ORIGIN, null));
+    await accept(7, 8);
+    ok(await store.endSegment('completed'));
+    const session = store.snapshot();
+    expect(keysOf(session)).toEqual([...SWAPPED, S1F1, S1B1, S1F2, S1B2]);
+    expect(session?.edits).toMatchObject({ cuts: [4], names: ['Пачка', 'Набор'] });
+  });
+
   it('проход лиц набора: завершение порядок не трогает', async () => {
     const context = await swappedPack();
     const { store, journalOnDisk } = context;

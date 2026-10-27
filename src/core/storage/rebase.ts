@@ -1,6 +1,45 @@
-import { EMPTY_EDITS, isBacksKind, sameEdits } from '@shared';
+import { EMPTY_EDITS, isBacksKind, sameEdits, type SessionEdits } from '@shared';
 import { baseAssembly, baseKeysOf, editsContextOf } from '../scan/assembly';
-import { rebaseEdits } from '../scan/edits';
+import {
+  normalizeEdits,
+  rebaseEdits,
+  rebaseOrder,
+  remapCuts,
+  visibleKeysOf,
+  type EditsContext,
+} from '../scan/edits';
+
+const NO_KEYS: ReadonlySet<string> = new Set();
+
+/**
+ * Явный порядок после завершения прохода оборотов (KTD-6 B-13): ключи `finished` изымаются из
+ * `order` и расставляются `rebaseOrder` против итоговой базы `after`, как будто пришли все сразу
+ * — оборот за своей парой. Разрезы и граница остаются перед той же страницей-последователем, не
+ * входящей в проход: разрез перед подблоком оборотов не ложится внутрь чередования, а уходит
+ * за лист; остальные ключи порядка не трогаются.
+ */
+function replaced(
+  after: readonly string[],
+  edits: SessionEdits,
+  finished: ReadonlySet<string>,
+  context: EditsContext,
+): SessionEdits {
+  const kept = (key: string): boolean => !finished.has(key);
+  const shownBefore = visibleKeysOf(after, edits);
+  const order = rebaseOrder(after.filter(kept), after, edits.order.filter(kept));
+  const next = { ...edits, order };
+  const shownAfter = visibleKeysOf(after, next);
+  // Позиция разреза — среди страниц вне прохода: сколько их стояло до него.
+  const keptBefore = shownBefore.filter(kept);
+  const translate = (cuts: readonly number[]): number[] =>
+    remapCuts(
+      keptBefore,
+      shownAfter,
+      cuts.map((cut) => shownBefore.slice(0, cut).filter(kept).length),
+    );
+  const divider = edits.divider === null ? null : (translate([edits.divider])[0] ?? null);
+  return normalizeEdits(after, { ...next, cuts: translate(edits.cuts), divider }, context);
+}
 import { NOTHING_LOST, pagesOf, passSnapshotsOf, passStateOf, type Journal } from './journal';
 
 /**
@@ -51,28 +90,19 @@ export function withRebasedEdits(previous: Journal | null, next: Journal): Journ
   }
   // Ключи «до» и «после» — по раскладке, в которой лента окажется после идущего прохода
   // (`settled`): новый ключ встаёт в явный порядок за соседом по будущей группе. Контекст
-  // нормализации — по настоящему режиму (идёт проход — переходный). Ключи завершившегося прохода
-  // оборотов изымаются из «до» и из порядка: для перебазирования они новые (KTD-6 B-13).
-  const finished = previous === null ? null : finishedBacksKeys(previous, cleaned);
-  const settledBefore =
+  // нормализации — по настоящему режиму (идёт проход — переходный).
+  const before =
     previous === null
       ? null
       : baseKeysOf(baseAssembly(passSnapshotsOf(previous, NOTHING_LOST), previous.assembled, true));
-  const before =
-    settledBefore === null || finished === null || finished.size === 0
-      ? settledBefore
-      : settledBefore.filter((key) => !finished.has(key));
-  const stripped =
-    finished === null || finished.size === 0
-      ? cleaned.edits
-      : { ...cleaned.edits, order: cleaned.edits.order.filter((key) => !finished.has(key)) };
   const passes = passSnapshotsOf(cleaned, NOTHING_LOST);
   const base = baseAssembly(passes, cleaned.assembled);
-  const edits = rebaseEdits(
-    before,
-    baseKeysOf(baseAssembly(passes, cleaned.assembled, true)),
-    stripped,
-    editsContextOf(base, passes, stripped),
-  );
-  return { ...cleaned, edits };
+  const after = baseKeysOf(baseAssembly(passes, cleaned.assembled, true));
+  const context = editsContextOf(base, passes, cleaned.edits);
+  const rebased = rebaseEdits(before, after, cleaned.edits, context);
+  const finished = previous === null ? NO_KEYS : finishedBacksKeys(previous, cleaned);
+  if (finished.size === 0 || rebased.order.length === 0) {
+    return { ...cleaned, edits: rebased };
+  }
+  return { ...cleaned, edits: replaced(after, rebased, finished, context) };
 }
