@@ -13,6 +13,7 @@ import {
   type HistoryMove,
 } from '../state/history';
 import { NO_SELECTION, pruned, selectionOf, single, type Selection } from '../state/selection';
+import { NO_GLUE, type GluedBacks } from '../state/shown';
 
 // Проводка правок редактора (план M3, U7; KTD-3, KTD-3a; журнал M3, сессия 3): undo-стек и
 // выделение поверх снимка. Настоящее — правки последнего снимка; жест строится от него, уходит
@@ -68,6 +69,7 @@ export function useEditorEdits({
   session,
   visible,
   order,
+  glued = NO_GLUE,
   initialCurrent,
   locked,
   onFailed,
@@ -79,6 +81,8 @@ export function useEditorEdits({
   readonly visible: readonly string[];
   /** Полная видимая лента: текущая, ставшая скрытой, переезжает по ней на ближайшую показанную. */
   readonly order: readonly string[];
+  /** Склеенные обороты (B-13): скрытая текущая-оборот переезжает на своё лицо. */
+  readonly glued?: GluedBacks;
   /** Текущая при монтировании; `null` — первая в ленте (M3.5, S9: первая добавленная). */
   readonly initialCurrent: string | null;
   /** Правки недоступны (идёт запись, KTD-9): жесты игнорируются. */
@@ -114,8 +118,8 @@ export function useEditorEdits({
   }
 
   const selection = useMemo(
-    () => pruned(storedSelection, visible, order),
-    [storedSelection, visible, order],
+    () => pruned(storedSelection, visible, order, glued),
+    [storedSelection, visible, order, glued],
   );
 
   const send = (target: EditState, next: EditHistory, options: EditOptions = {}): void => {
