@@ -2,7 +2,7 @@
 title: 'feat: экран scan — индикатор ожидания до первой страницы (B-9)'
 type: feat
 date: 2026-10-27
-status: в работе # в работе → done; заморожен — готов, не начат
+status: done # в работе → done; заморожен — готов, не начат
 origin: docs/design/handoffs/2026-10-scan-wait.md
 ---
 
