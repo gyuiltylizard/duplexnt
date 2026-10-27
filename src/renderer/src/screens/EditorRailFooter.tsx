@@ -3,21 +3,24 @@ import { useTranslation } from 'react-i18next';
 import type { BlankSummary } from '@shared';
 import type { RailRotate } from '../state/useRotateTarget';
 
-// Подвал ленты (handoff M4, S4–S6; R18): постоянное место трёх строк под миниатюрами — панель
-// выделения (при выделении больше одной страницы), переключатель «добавить пустые» со
-// счётчиком и тумблер 180°. Строки появляются и исчезают, лента над подвалом не сдвигается.
-// Переключатель и тумблер — свойства прохода оборотов; панель — выделения. Ни одной строки —
-// подвала нет. Только показ и клики: что показывать и что делать, решает экран. С M4.5 (R16;
-// handoff M4.5, S9) тумблер крутит обороты пачки текущей страницы: подпись цели — в месте
-// счётчика, недоступность с причиной там же.
+// Подвал ленты (handoff M4, S4–S6; R18): постоянное место под миниатюрами — панель выделения
+// (при выделении больше одной страницы) и строка переключателей «Пустые» и «Обороты на 180°».
+// Строки появляются и исчезают, лента над подвалом не сдвигается. Переключатели — свойства
+// прохода оборотов; панель — выделения. Ни одной строки — подвала нет. Только показ и клики: что
+// показывать и что делать, решает экран. С M4.5 (R16; handoff M4.5, S9) тумблер крутит обороты
+// пачки текущей страницы. С B-8 оба переключателя в одну строку, видимых подписей у них нет:
+// счётчик пустых и цель тумблера (или причина недоступности) — в `title` строки и в скрытом
+// описании чекбокса (`aria-describedby`).
 
-/** Панель выделения (S6): текст, «Выделить в документ» вне режима наборов, «Снять». */
+/**
+ * Панель выделения (S6): число выделенных и «Выделить в документ» вне режима наборов. Подсказки
+ * про Shift и Ctrl и «Снять» нет (B-8): выделение уже сделано, сжимают его Esc и щелчок.
+ */
 export interface RailSelection {
   /** Выделенных показанных страниц — больше одной. */
   readonly count: number;
   /** «Выделить в документ» — вне режима наборов (M3.6, KTD8); `null` — кнопки нет. */
   readonly group: { readonly disabled: boolean; readonly onClick: () => void } | null;
-  readonly onClear: () => void;
 }
 
 export interface EditorRailFooterProps {
@@ -49,7 +52,7 @@ export function EditorRailFooter({
   if (selection === null && rotate === null) {
     return null;
   }
-  // S5: без найденных переключатель недоступен с подписью «не найдено» или «оцениваются…».
+  // S5: без найденных переключатель недоступен, описание — «не найдено» или «оцениваются…».
   const found = blank.found > 0;
   const idle = blank.pending > 0 ? 'scoring' : 'none';
   return (
@@ -59,8 +62,8 @@ export function EditorRailFooter({
           <p className="rail__selection-text">
             {t('editor.selection.text', { count: selection.count })}
           </p>
-          <div className="rail__selection-actions">
-            {selection.group !== null && (
+          {selection.group !== null && (
+            <div className="rail__selection-actions">
               <button
                 type="button"
                 className="rail__selection-group"
@@ -69,70 +72,74 @@ export function EditorRailFooter({
               >
                 {t('editor.selection.group')}
               </button>
-            )}
-            <button type="button" className="rail__selection-clear" onClick={selection.onClear}>
-              {t('editor.selection.clear')}
-            </button>
-          </div>
+            </div>
+          )}
         </div>
       )}
-      {rotate !== null && blank.mode === 'hide' && !inSets && (
-        <label
-          className={found ? 'toggle-row' : 'toggle-row toggle-row--disabled'}
-          title={
-            found
-              ? t(reveal ? 'editor.blank.toggleTitle.on' : 'editor.blank.toggleTitle.off')
-              : t(`editor.blank.toggleTitle.${idle}`)
-          }
-        >
-          <span className="toggle">
-            <input
-              ref={toggleRef}
-              className="toggle__input"
-              type="checkbox"
-              checked={reveal}
-              disabled={!found}
-              aria-label={t('editor.blank.toggleLabel')}
-              onChange={(event) => {
-                onReveal(event.target.checked);
-              }}
-            />
-            <span className="toggle__track" aria-hidden="true" />
-          </span>
-          <span className="toggle-row__label">{t('editor.blank.toggle')}</span>
-          <span className="toggle-row__count">
-            {found
-              ? t(reveal ? 'editor.blank.shown' : 'editor.blank.hidden', { count: blank.hidden })
-              : t(`editor.blank.${idle}`)}
-          </span>
-        </label>
-      )}
       {rotate !== null && (
-        <label
-          className={rotate.unavailable ? 'toggle-row toggle-row--disabled' : 'toggle-row'}
-          title={
-            rotate.unavailable
-              ? t('editor.rotateTarget.noneTitle', { reason: rotate.target })
-              : t('editor.rotateBacksTitle')
-          }
-        >
-          <span className="toggle">
-            <input
-              className="toggle__input"
-              type="checkbox"
-              checked={rotate.checked}
-              disabled={rotate.disabled}
-              aria-label={t('editor.rotateBacks')}
-              aria-describedby="rotate-target"
-              onChange={rotate.onChange}
-            />
-            <span className="toggle__track" aria-hidden="true" />
-          </span>
-          <span className="toggle-row__label">{t('editor.rotateBacks')}</span>
-          <span className="toggle-row__count" id="rotate-target">
-            {rotate.target}
-          </span>
-        </label>
+        <div className="rail__toggles">
+          {blank.mode === 'hide' && !inSets && (
+            <label
+              className={found ? 'toggle-row' : 'toggle-row toggle-row--disabled'}
+              title={
+                found
+                  ? t(reveal ? 'editor.blank.toggleTitle.on' : 'editor.blank.toggleTitle.off', {
+                      count: blank.hidden,
+                    })
+                  : t(`editor.blank.toggleTitle.${idle}`)
+              }
+            >
+              <span className="toggle">
+                <input
+                  ref={toggleRef}
+                  className="toggle__input"
+                  type="checkbox"
+                  checked={reveal}
+                  disabled={!found}
+                  aria-label={t('editor.blank.toggleLabel')}
+                  aria-describedby="blank-count"
+                  onChange={(event) => {
+                    onReveal(event.target.checked);
+                  }}
+                />
+                <span className="toggle__track" aria-hidden="true" />
+              </span>
+              <span className="toggle-row__label">{t('editor.blank.toggle')}</span>
+              <span className="visually-hidden" id="blank-count">
+                {found
+                  ? t(reveal ? 'editor.blank.shown' : 'editor.blank.hidden', {
+                      count: blank.hidden,
+                    })
+                  : t(`editor.blank.${idle}`)}
+              </span>
+            </label>
+          )}
+          <label
+            className={rotate.unavailable ? 'toggle-row toggle-row--disabled' : 'toggle-row'}
+            title={
+              rotate.unavailable
+                ? t('editor.rotateTarget.noneTitle', { reason: rotate.target })
+                : t('editor.rotateBacksTitle', { target: rotate.target })
+            }
+          >
+            <span className="toggle">
+              <input
+                className="toggle__input"
+                type="checkbox"
+                checked={rotate.checked}
+                disabled={rotate.disabled}
+                aria-label={t('editor.rotateBacks')}
+                aria-describedby="rotate-target"
+                onChange={rotate.onChange}
+              />
+              <span className="toggle__track" aria-hidden="true" />
+            </span>
+            <span className="toggle-row__label">{t('editor.rotateBacks')}</span>
+            <span className="visually-hidden" id="rotate-target">
+              {rotate.target}
+            </span>
+          </label>
+        </div>
       )}
     </footer>
   );

@@ -191,15 +191,6 @@
   cursor: pointer;
 }
 
-.rail__selection-clear {
-  padding: var(--space-4) var(--space-3);
-  border: 0;
-  background: none;
-  color: var(--color-text-on-inverse-muted);
-  font: var(--font-weight-medium) var(--font-size-s) / var(--leading-snug) var(--font-family-sans);
-  cursor: pointer;
-}
-
 /* — S2 M3: группа документа — */
 
 .doc-group {
@@ -401,6 +392,15 @@
   padding: var(--space-5) var(--space-6);
   background: var(--color-bg-panel);
   border-top: var(--border-width) solid var(--color-border-subtle);
+}
+
+/* B-8: «Пустые» и «Обороты на 180°» — одной строкой; при нехватке ширины (крупный шрифт ОС)
+   второй переносится ниже, подписи не обрезаются. */
+.rail__toggles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-5) var(--space-10);
 }
 
 .thumbs {
@@ -1187,13 +1187,6 @@
 }
 
 /* S5: переключатель пустых — строка тумблера со счётчиком справа. */
-.toggle-row__count {
-  margin-left: auto;
-  white-space: nowrap;
-  font: var(--font-weight-regular) var(--font-size-xs) / var(--leading-none) var(--font-family-mono);
-  color: var(--color-text-subtle);
-}
-
 .toggle-row--disabled {
   cursor: default;
   opacity: var(--opacity-disabled);

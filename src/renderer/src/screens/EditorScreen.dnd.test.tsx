@@ -387,6 +387,27 @@ describe('editor M3: границы документов (S1, S2, S5, S7)', () =
     expect(within(toolbar).getByText('документ 2 из 2 · стр. 1 из 3')).toBeDefined();
   });
 
+  it('S1, B-8: при выделении нескольких кнопки тулбара нет — «с этой страницы» неоднозначно', () => {
+    stubApi();
+    renderEditor(twoPass());
+    const splitHere = () =>
+      within(screen.getByRole('banner')).queryByRole('button', {
+        name: '+ Новый документ с этой страницы',
+      });
+
+    fireEvent.click(option(2));
+    expect(splitHere()).not.toBeNull();
+    fireEvent.click(option(3), { shiftKey: true });
+    expect(splitHere()).toBeNull();
+    // Ctrl+клик снял вторую — снова одна страница, кнопка вернулась.
+    fireEvent.click(option(2), { ctrlKey: true });
+    expect(splitHere()).not.toBeNull();
+    fireEvent.click(option(4), { shiftKey: true });
+    expect(splitHere()).toBeNull();
+    fireEvent.keyDown(option(4), { key: 'Escape' });
+    expect(splitHere()).not.toBeNull();
+  });
+
   it('S2: «✕» в разделителе снимает границу вместе с именем документа', () => {
     const api = stubApi();
     renderEditor(

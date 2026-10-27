@@ -67,7 +67,7 @@ describe('экран editor', () => {
     const api = stubApi();
     renderEditor(twoPass());
 
-    const toggle = screen.getByRole('checkbox', { name: 'Повернуть обороты на 180°' });
+    const toggle = screen.getByRole('checkbox', { name: 'Обороты на 180°' });
     fireEvent.click(toggle);
     expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({
       edits: EMPTY_EDITS,
@@ -87,7 +87,7 @@ describe('экран editor', () => {
     expect((options[1] as Element).className).toContain('thumb--angle-180');
     expect((options[0] as Element).className).not.toContain('thumb--angle-');
 
-    const toggle = screen.getByRole('checkbox', { name: 'Повернуть обороты на 180°' });
+    const toggle = screen.getByRole('checkbox', { name: 'Обороты на 180°' });
     expect((toggle as HTMLInputElement).checked).toBe(true);
     fireEvent.click(toggle);
     expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({ edits: EMPTY_EDITS, rotate180: {} });

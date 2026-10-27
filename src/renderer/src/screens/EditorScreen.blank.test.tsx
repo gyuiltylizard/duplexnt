@@ -34,7 +34,7 @@ import {
 } from './editor-fixture';
 
 // Экран `editor`, M4 (план U6; handoff M4, S1–S13): показанная лента без скрытых пустых
-// оборотов, переключатель «добавить пустые», скрытые хвосты при переносе и удалении, метка
+// оборотов, переключатель «Пустые», скрытые хвосты при переносе и удалении, метка
 // «ПУСТО», пометка «Это не пустая страница», пункт ПРОВЕРКИ, поздние оценки, все скрыты.
 // Флаги считает зеркало сборки по вердиктам (guard-тест сверяет его с ядром).
 
@@ -169,7 +169,7 @@ describe('пустые обороты в редакторе (M4)', () => {
     fireEvent.keyDown(current(), { key: 'Home' });
     fireEvent.keyDown(current(), { key: 'ArrowRight', shiftKey: true });
     expect(selectedKeys()).toEqual([F1, F2]);
-    expect(screen.getByText('Выделено 2 стр. · Shift — диапазон, Ctrl — по одной')).toBeDefined();
+    expect(screen.getByText('Выделено 2 стр.')).toBeDefined();
   });
 
   it('R12: удаление лица уносит скрытый хвост одним шагом; тост — по показанным; Ctrl+Z возвращает обоих', async () => {
@@ -393,7 +393,7 @@ describe('пустые обороты в редакторе (M4)', () => {
     expect(document.activeElement).toBe(option(1));
     expect(onToast).toHaveBeenCalledTimes(1);
     expect(onToast).toHaveBeenCalledWith(
-      'Скрыт 1 пустой оборот — переключатель «добавить пустые» покажет его',
+      'Скрыт 1 пустой оборот — переключатель «Пустые» покажет его',
     );
     // Тот же снимок ещё раз — тоста нет.
     rerender({ ...late, seq: late.seq + 1 });

@@ -118,7 +118,7 @@ describe('ожидание оценок пустых оборотов на merge
       expect(document.querySelector('.merge-screen')).toBeNull();
       // Редактор открылся сразу с правильной лентой: один оборот скрыт, тоста поздних нет.
       expect(screen.getByText('стр. 1 из 5')).toBeDefined();
-      expect(screen.queryByText(/переключатель «добавить пустые» покажет/u)).toBeNull();
+      expect(screen.queryByText(/переключатель «Пустые» покажет/u)).toBeNull();
     } finally {
       vi.useRealTimers();
     }

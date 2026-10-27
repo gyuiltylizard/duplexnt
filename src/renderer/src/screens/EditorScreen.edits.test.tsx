@@ -149,7 +149,7 @@ describe('editor M3: документы', () => {
 });
 
 describe('editor M3: выделение', () => {
-  it('клик, Shift+клик и Ctrl+клик; панель выделения и «Снять»', () => {
+  it('клик, Shift+клик и Ctrl+клик; панель выделения и Esc', () => {
     stubApi();
     renderEditor(twoPass());
 
@@ -161,7 +161,7 @@ describe('editor M3: выделение', () => {
     expect(screen.getByText('5 из 6')).toBeDefined();
     expect(document.querySelectorAll('[role="option"][tabindex="0"]').length).toBe(1);
     expect(option(4).getAttribute('tabindex')).toBe('0');
-    expect(screen.getByText('Выделено 4 стр. · Shift — диапазон, Ctrl — по одной')).toBeDefined();
+    expect(screen.getByText('Выделено 4 стр.')).toBeDefined();
     expect(screen.getByRole('button', { name: 'Удалить 4 стр.' })).toBeDefined();
     expect(
       screen.getByRole('button', { name: 'Повернуть 4 стр. на 90° по часовой' }),
@@ -170,7 +170,7 @@ describe('editor M3: выделение', () => {
     fireEvent.click(option(2), { ctrlKey: true });
     expect(selectedKeys()).toEqual([B3, B2, F3]);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Снять' }));
+    fireEvent.keyDown(option(4), { key: 'Escape' });
     expect(selectedKeys()).toEqual([F3]);
     expect(screen.queryByRole('region', { name: 'Выделение' })).toBeNull();
     expect(option(4).className).not.toContain('thumb--in-selection');
@@ -594,7 +594,7 @@ describe('editor M3: правки', () => {
     const snapshot = twoPass();
     const { rerender } = renderEditor(snapshot);
 
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Повернуть обороты на 180°' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Обороты на 180°' }));
     expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({
       edits: EMPTY_EDITS,
       rotate180: { 2: true },
@@ -647,7 +647,7 @@ describe('editor M3: пустой редактор и инспектор', () =>
     // Инспектор: ДЕТАЛИ скрыты, документов нет; тумблер остаётся.
     expect(screen.queryByText('ДЕТАЛИ')).toBeNull();
     expect(screen.getByText('документов нет')).toBeDefined();
-    expect(screen.getByRole('checkbox', { name: 'Повернуть обороты на 180°' })).toBeDefined();
+    expect(screen.getByRole('checkbox', { name: 'Обороты на 180°' })).toBeDefined();
   });
 
   it('S11: ДЕТАЛИ свёрнуты по умолчанию; факты и пояснение о паре текущей страницы', () => {

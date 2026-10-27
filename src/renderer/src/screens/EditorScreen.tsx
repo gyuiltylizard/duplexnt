@@ -90,7 +90,7 @@ import './editor-screen.css';
 // через границу — правка порядка с явной границей (`dividerAfterMove`, `movedAcross`, KTD8);
 // сборка — команда `assemble` напрямую, не шаг undo (KTD5): запись сборки входит в подпись ленты.
 // Пустые обороты (M4; handoff M4, S1–S13): экран живёт по показанной ленте — без скрытых, пока
-// переключатель «добавить пустые» выключен (состояние экрана, не правка); правки считаются по
+// переключатель «Пустые» выключен (состояние экрана, не правка); правки считаются по
 // полной ленте, скрытые хвосты едут за лицом (KTD4, R11–R13); «Это не пустая страница» —
 // правка `notBlank` (KTD5); поздние оценки прячут страницу с тостом (KTD6).
 
@@ -151,7 +151,7 @@ export function EditorScreen({
   const positions = useMemo(() => new Map(visible.map((key, index) => [key, index])), [visible]);
   const blank = snapshot.assembly?.blank ?? NO_BLANK;
   // Показанная лента (M4, KTD4; handoff M4, S1–S3): без скрытых пустых оборотов, пока
-  // переключатель «добавить пустые» выключен. Переключатель — состояние экрана: не правка, не
+  // переключатель «Пустые» выключен. Переключатель — состояние экрана: не правка, не
   // шаг undo, сбрасывается с перемонтированием (R13). Текущая, выделение, клавиатура, нумерация,
   // счётчики и якоря — по показанной; правки — по полной (`visible`), позиции переводятся.
   const [reveal, setReveal] = useState(false);
@@ -264,7 +264,7 @@ export function EditorScreen({
   const focusKey = useRef<string | null>(initialCurrent);
   const focusAfterEdit = useRef(false);
   const focusName = useRef<number | null>(null);
-  // S7 M4: все показанные страницы скрыты — фокус на переключателе «добавить пустые», один раз
+  // S7 M4: все показанные страницы скрыты — фокус на переключателе «Пустые», один раз
   // на вход в это состояние.
   const blankToggleRef = useRef<HTMLInputElement>(null);
   const allHiddenFocused = useRef(false);
@@ -335,8 +335,16 @@ export function EditorScreen({
   }, []);
 
   const railKeyDown = (event: KeyboardEvent<HTMLElement>): void => {
-    // Esc — выделение сжимается до текущей, откуда бы в ленте ни нажали.
+    // Esc — выделение сжимается до текущей, откуда бы в ленте ни нажали. Из подвала панель
+    // выделения исчезнет вместе с фокусом — он переходит на текущую страницу (B-8, KTD-7).
     if (event.key === 'Escape') {
+      if (
+        selection.keys.length > 1 &&
+        event.target instanceof Element &&
+        event.target.closest('.rail__footer') !== null
+      ) {
+        focusKey.current = selection.current;
+      }
       setSelection(collapsed(selection));
       return;
     }
@@ -586,8 +594,10 @@ export function EditorScreen({
 
   // Тулбар (S1): «+ Новый документ с этой страницы» — если текущая не первая и границы перед
   // ней ещё нет; в режиме наборов документов нет (R17). Начало документа — по показанной ленте.
+  // При выделении нескольких кнопки нет (B-8): «с этой страницы» стало бы неоднозначным.
   const atDocStart = currentShownDoc?.start === currentIndex;
-  const canSplitHere = sets === null && currentIndex > 0 && !atDocStart;
+  const canSplitHere =
+    sets === null && currentIndex > 0 && !atDocStart && selection.keys.length <= 1;
 
   // Ctrl+Z, Ctrl+Y / Ctrl+Shift+Z, Delete — на всём экране, кроме текстовых полей и модалок
   // (handoff M3, Undo/Redo). Подписка — одна на монтирование: StrictMode её переживает.
@@ -814,8 +824,8 @@ export function EditorScreen({
           onMove={move}
           onMoveAcross={moveAcross}
           footer={
-            // S4–S6 M4: панель выделения (больше одной показанной), переключатель «добавить
-            // пустые» и тумблер 180° — у прохода оборотов.
+            // S4–S6 M4: панель выделения (больше одной показанной); строка переключателей
+            // «Пустые» и «Обороты на 180°» — у прохода оборотов (B-8).
             <EditorRailFooter
               selection={
                 selection.keys.length > 1
@@ -823,11 +833,6 @@ export function EditorScreen({
                       count: selection.keys.length,
                       // «Выделить в документ» — только вне режима наборов (M3.6, KTD8).
                       group: sets === null ? { disabled: locked, onClick: group } : null,
-                      onClear: () => {
-                        // Панель исчезнет вместе с кнопкой — фокус переходит на текущую страницу.
-                        setSelection(collapsed(selection));
-                        focusKey.current = selection.current;
-                      },
                     }
                   : null
               }

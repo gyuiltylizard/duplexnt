@@ -80,13 +80,9 @@ describe('подвал ленты (S4–S6, R18)', () => {
     expect(children).toEqual(['rail__scroll', 'rail__footer']);
     expect([...(footer()?.children ?? [])].map((child) => child.className)).toEqual([
       'rail__selection',
-      'toggle-row',
+      'rail__toggles',
     ]);
-    expect(
-      within(region ?? document.body).getByText(
-        'Выделено 3 стр. · Shift — диапазон, Ctrl — по одной',
-      ),
-    ).toBeDefined();
+    expect(within(region ?? document.body).getByText('Выделено 3 стр.')).toBeDefined();
   });
 
   it('без прохода оборотов подвала нет, пока нет выделения; с выделением — только панель', () => {
@@ -101,30 +97,61 @@ describe('подвал ленты (S4–S6, R18)', () => {
     ]);
     expect(screen.queryByRole('checkbox')).toBeNull();
 
-    fireEvent.click(button('Снять'));
+    // B-8: «Снять» нет — Esc с кнопки панели сжимает выделение, фокус уходит на текущую, а не
+    // пропадает вместе с панелью.
+    expect(screen.queryByRole('button', { name: 'Снять' })).toBeNull();
+    button('Выделить в документ').focus();
+    fireEvent.keyDown(button('Выделить в документ'), { key: 'Escape' });
     expect(footer()).toBeNull();
     expect(selectedKeys()).toEqual([F2]);
     expect(document.activeElement).toBe(option(1));
   });
 
-  it('режим «Скрывать»: панель → переключатель → тумблер; при `found = 0` переключатель недоступен с подписью', () => {
+  it('режим «Скрывать», B-8: «Пустые» и «Обороты на 180°» одной строкой, без видимых подписей', () => {
     stubApi();
     renderEditor(hideSnapshot());
+    const blankToggle = (): HTMLInputElement =>
+      screen.getByRole<HTMLInputElement>('checkbox', {
+        name: 'Показать скрытые пустые обороты в ленте — в файл они не попадут',
+      });
+    const rotateToggle = (): HTMLInputElement =>
+      screen.getByRole<HTMLInputElement>('checkbox', { name: 'Обороты на 180°' });
 
     expect([...(footer()?.children ?? [])].map((child) => child.className)).toEqual([
-      'toggle-row',
-      'toggle-row',
+      'rail__toggles',
     ]);
+    const row = footer()?.querySelector('.rail__toggles');
+    expect([...(row?.children ?? [])].map((child) => child.textContent)).toEqual([
+      'Пустыескрыто: 2',
+      'Обороты на 180°обороты основного документа',
+    ]);
+    // Счётчик и цель — скрытые описания чекбоксов, сведения — и в `title` строки.
+    expect(blankToggle().getAttribute('aria-describedby')).toBe('blank-count');
+    expect(document.getElementById('blank-count')?.className).toBe('visually-hidden');
+    expect(document.getElementById('blank-count')?.textContent).toBe('скрыто: 2');
+    expect(blankToggle().closest('.toggle-row')?.getAttribute('title')).toBe(
+      'Скрыто 2 пустых оборота — в файл не попадут. Включите, чтобы увидеть их в ленте.',
+    );
+    expect(document.getElementById('rotate-target')?.className).toBe('visually-hidden');
+    expect(rotateToggle().closest('.toggle-row')?.getAttribute('title')).toMatch(
+      /^Действует на обороты основного документа\. Если обороты вверх ногами/u,
+    );
+
+    fireEvent.click(blankToggle());
+    expect(document.getElementById('blank-count')?.textContent).toBe('показано: 2');
+    expect(blankToggle().closest('.toggle-row')?.getAttribute('title')).toMatch(
+      /^Показано 2 пустых оборота — в файл не попадут\./u,
+    );
+
     fireEvent.click(option(0));
     fireEvent.click(option(1), { shiftKey: true });
     expect([...(footer()?.children ?? [])].map((child) => child.className)).toEqual([
       'rail__selection',
-      'toggle-row',
-      'toggle-row',
+      'rail__toggles',
     ]);
-    expect(screen.getByText('скрыто: 2')).toBeDefined();
+  });
 
-    cleanup();
+  it('`found = 0` и оценки идут: «Пустые» недоступен, описание и `title` — почему', () => {
     stubApi();
     renderEditor(
       hideSnapshot(
@@ -140,7 +167,26 @@ describe('подвал ленты (S4–S6, R18)', () => {
     });
     expect(toggle.disabled).toBe(true);
     expect(toggle.closest('.toggle-row')?.className).toContain('toggle-row--disabled');
-    expect(screen.getByText('не найдено')).toBeDefined();
+    expect(document.getElementById('blank-count')?.textContent).toBe('не найдено');
+    expect(toggle.closest('.toggle-row')?.getAttribute('title')).toBe('Пустых оборотов не найдено');
+
+    cleanup();
+    stubApi();
+    renderEditor(hideSnapshot(new Map()));
+    expect(document.getElementById('blank-count')?.textContent).toBe('оцениваются…');
+    expect(
+      document.getElementById('blank-count')?.closest('.toggle-row')?.getAttribute('title'),
+    ).toBe('Пустые обороты ещё оцениваются');
+  });
+
+  it('режим наборов: в строке только тумблер 180°', () => {
+    stubApi();
+    renderEditor(twoPass(2));
+
+    expect(footer()?.querySelector('.rail__toggles')?.querySelectorAll('.toggle-row').length).toBe(
+      1,
+    );
+    expect(screen.queryByRole('checkbox', { name: /пустые/u })).toBeNull();
   });
 });
 
@@ -240,13 +286,14 @@ describe('«Выделить в документ» (S6, KTD7, R19)', () => {
     });
   });
 
-  it('режим наборов: кнопки нет, «Снять» есть', () => {
+  it('режим наборов: панель — только текст, без кнопок и пустой обёртки кнопок', () => {
     stubApi();
     renderEditor(twoPass(2));
 
     fireEvent.click(option(0));
     fireEvent.click(option(1), { shiftKey: true });
-    expect(screen.queryByRole('button', { name: 'Выделить в документ' })).toBeNull();
-    expect(button('Снять')).toBeDefined();
+    const region = screen.getByRole('region', { name: 'Выделение' });
+    expect(within(region).queryAllByRole('button')).toEqual([]);
+    expect([...region.children].map((child) => child.className)).toEqual(['rail__selection-text']);
   });
 });
