@@ -9,7 +9,6 @@ import {
   sheetOf,
   shownDocumentsOf,
   shownOf,
-  withHiddenTails,
 } from './shown';
 
 // Показанная лента (план M4, U6; handoff M4, S1, S3, Behaviour): фильтр скрытых, скрытые
@@ -44,37 +43,6 @@ describe('показанная лента', () => {
   it('без переключателя скрытые выпадают, помеченные остаются; с переключателем — полная', () => {
     expect(shownOf(ORDER, false).map((entry) => entry.key)).toEqual(['1l', '2l', '3l', '3o', '4l']);
     expect(shownOf(ORDER, true)).toBe(ORDER);
-  });
-
-  it.each([
-    ['хвост из одного скрытого', ['1l'], ['1l', '1o']],
-    ['хвост из нескольких скрытых подряд', ['2l'], ['2l', '2o', '2x']],
-    ['помеченная — не хвост', ['3l'], ['3l']],
-    ['хвост у последней страницы', ['4l'], ['4l', '4o']],
-    ['скрытая сама по себе — без хвоста соседей', ['1o'], ['1o']],
-    [
-      'несколько ключей — в порядке полной ленты с хвостами',
-      ['4l', '1l'],
-      ['1l', '1o', '4l', '4o'],
-    ],
-    ['чужой ключ отбрасывается', ['zz'], []],
-  ])('хвосты: %s', (_name, keys, expected) => {
-    expect(withHiddenTails(keys, ORDER)).toEqual(expected);
-  });
-
-  it('хвост не тянется через показанную страницу', () => {
-    // 3o помечена и показана: скрытый 4o — хвост 4l, не 3l.
-    expect(withHiddenTails(['3l', '3o'], ORDER)).toEqual(['3l', '3o']);
-  });
-
-  it('хвост не тянется через границу документа: скрытый за разрезом — уже следующий документ', () => {
-    // Разрез перед 2x (позиция 4): 2o — хвост 2l, а 2x начинает второй документ.
-    expect(withHiddenTails(['2l'], ORDER, new Set([4]))).toEqual(['2l', '2o']);
-    // Разрез сразу за 1l (позиция 1): у 1l хвоста нет.
-    expect(withHiddenTails(['1l'], ORDER, new Set([1]))).toEqual(['1l']);
-    // Ключ на самой границе берётся, и его хвост — тоже.
-    expect(withHiddenTails(['3l'], ORDER, new Set([5]))).toEqual(['3l']);
-    expect(withHiddenTails(['4l'], ORDER, new Set([5]))).toEqual(['4l', '4o']);
   });
 
   const SHOWN = shownOf(ORDER, false).map((entry) => entry.key);

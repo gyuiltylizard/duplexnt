@@ -233,23 +233,136 @@ describe('пустые обороты в редакторе (M4)', () => {
     ).toEqual([F1, F3]);
   });
 
-  it('R12: при включённом переключателе перенос буквальный — хвост не едет', () => {
+  it('B-13: при включённом переключателе пустой оборот едет за лицом; выделение после — лицо', () => {
     const api = stubApi();
-    renderEditor(blankSnapshot());
+    const snapshot = blankSnapshot();
+    const { rerender } = renderEditor(snapshot);
     fireEvent.click(revealToggle());
 
-    // Полная лента: F1, B3, F2, B2, F3, B1; F3 — пятая.
+    // Полная лента: F1, B3, F2, B2, F3, B1; F3 — пятая. Бросок «после F1» — за его оборотом B3.
     dragAndDrop(option(4), option(0), 'after');
-    expect(lastSent(api).edits.order).toEqual([F1, F3, B3, F2, B2, B1]);
+    expect(lastSent(api).edits.order).toEqual([F1, B3, F3, B1, F2, B2]);
+    rerender(applied(snapshot, lastSent(api), VERDICTS));
+    expect(selectedKeys()).toEqual([F3]);
   });
 
-  it('R12: при включённом переключателе удаление буквальное — лицо без хвоста', () => {
+  it('B-13: при включённом переключателе удаление лица уносит и оборот; оборот один удаляется сам', () => {
     const api = stubApi();
     renderEditor(blankSnapshot());
     fireEvent.click(revealToggle());
 
     fireEvent.keyDown(current(), { key: 'Delete' });
-    expect(lastSent(api).edits.deleted).toEqual([F1]);
+    expect(lastSent(api).edits.deleted).toEqual([F1, B3]);
+
+    cleanup();
+    const alone = stubApi();
+    renderEditor(blankSnapshot());
+    fireEvent.click(revealToggle());
+    fireEvent.click(option(1)); // B3 — склеенный оборот
+    fireEvent.keyDown(current(), { key: 'Delete' });
+    expect(lastSent(alone).edits.deleted).toEqual([B3]);
+  });
+
+  it('B-13, «Помечать»: лист едет и удаляется целиком, тост считает страницы пользователя', async () => {
+    const api = stubApi();
+    const snapshot = blankSnapshot('mark');
+    const { onToast, rerender } = renderEditor(snapshot);
+
+    // Все страницы показаны с метками: F1, B3, F2, B2, F3, B1.
+    dragAndDrop(option(4), option(0), 'after');
+    expect(lastSent(api).edits.order).toEqual([F1, B3, F3, B1, F2, B2]);
+    await settle();
+    rerender(applied(snapshot, lastSent(api), VERDICTS));
+
+    fireEvent.click(option(0));
+    fireEvent.keyDown(current(), { key: 'Delete' });
+    expect(lastSent(api).edits.deleted).toEqual([F1, B3]);
+    await settle();
+    expect(onToast).toHaveBeenCalledWith('Страница удалена — Ctrl+Z вернёт');
+  });
+
+  it('B-13: выделение с лицом без оборота добирает оборот, оборот без лица остаётся', async () => {
+    const api = stubApi();
+    const snapshot = blankSnapshot();
+    const { rerender } = renderEditor(snapshot);
+    fireEvent.click(revealToggle());
+
+    // Выделены F1 и B1 (оборот F3): едут F1 и B3, B1 остаётся; бросок «после F2» — за F2
+    // (B2 не пустой и не склеен).
+    fireEvent.click(option(0));
+    fireEvent.click(option(5), { ctrlKey: true });
+    dragAndDrop(option(0), option(2), 'after');
+    expect(lastSent(api).edits.order).toEqual([F2, F1, B3, B2, F3, B1]);
+    await settle();
+    rerender(applied(snapshot, lastSent(api), VERDICTS));
+    // Выделение после переноса — страницы пользователя из перенесённых: F1.
+    expect(selectedKeys()).toEqual([F1]);
+  });
+
+  it('B-13: бросок на склеенный оборот — слева перед его лицом, справа после листа; лицо на свой оборот — ничего', () => {
+    const before = stubApi();
+    renderEditor(blankSnapshot());
+    fireEvent.click(revealToggle());
+    dragAndDrop(option(4), option(1), 'before'); // F3 → перед B3 = перед F1
+    expect(lastSent(before).edits.order).toEqual([F3, B1, F1, B3, F2, B2]);
+
+    cleanup();
+    const after = stubApi();
+    renderEditor(blankSnapshot());
+    fireEvent.click(revealToggle());
+    dragAndDrop(option(4), option(1), 'after'); // F3 → после B3 = после листа F1
+    expect(lastSent(after).edits.order).toEqual([F1, B3, F3, B1, F2, B2]);
+
+    cleanup();
+    const own = stubApi();
+    renderEditor(blankSnapshot());
+    fireEvent.click(revealToggle());
+    dragAndDrop(option(0), option(1), 'before'); // F1 → на свой оборот
+    expect(own.setEdits).not.toHaveBeenCalled();
+  });
+
+  it('B-13: «+ Новый документ с этой страницы» на склеенном обороте недоступен', () => {
+    stubApi();
+    renderEditor(blankSnapshot());
+    fireEvent.click(revealToggle());
+
+    fireEvent.click(option(2)); // F2
+    expect(screen.getByRole('button', { name: '+ Новый документ с этой страницы' })).toBeDefined();
+    fireEvent.click(option(1)); // B3
+    expect(screen.queryByRole('button', { name: '+ Новый документ с этой страницы' })).toBeNull();
+  });
+
+  it('B-13: «Это не пустая страница» снимает склейку — лицо едет одно', async () => {
+    const api = stubApi();
+    const snapshot = blankSnapshot();
+    const { rerender } = renderEditor(snapshot);
+    fireEvent.click(revealToggle());
+
+    fireEvent.click(option(1)); // B3
+    fireEvent.click(screen.getByRole('button', { name: 'Это не пустая страница' }));
+    await settle();
+    rerender(applied(snapshot, lastSent(api), VERDICTS));
+
+    dragAndDrop(option(0), option(2), 'after'); // F1 → после F2; B3 остаётся
+    expect(lastSent(api).edits.order).toEqual([B3, F2, F1, B2, F3, B1]);
+  });
+
+  it('B-13: якорь «После текущей» при включённом переключателе — после листа и с лица, и с оборота', () => {
+    stubApi();
+    const onAdd = vi.fn();
+    renderEditor({ ...blankSnapshot(), scanner: READY }, { onAdd });
+    fireEvent.click(revealToggle());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Добавить' }));
+    fireEvent.click(screen.getByRole('radio', { name: /После текущей страницы/u }));
+    fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
+    expect(onAdd).toHaveBeenLastCalledWith('addedFronts', B3);
+
+    fireEvent.click(option(1)); // B3
+    fireEvent.click(screen.getByRole('button', { name: 'Добавить' }));
+    fireEvent.click(screen.getByRole('radio', { name: /После текущей страницы/u }));
+    fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
+    expect(onAdd).toHaveBeenLastCalledWith('addedFronts', B3);
   });
 
   it('R12: разрез ложится перед показанной страницей — хвост предыдущей остаётся слева', () => {
@@ -262,7 +375,7 @@ describe('пустые обороты в редакторе (M4)', () => {
     expect(lastSent(api).edits.cuts).toEqual([2]);
   });
 
-  it('R11: текущая, ставшая скрытой, переезжает на ближайшую показанную справа', () => {
+  it('R11/B-13: текущая, ставшая скрытой, переезжает на своё лицо', () => {
     stubApi();
     renderEditor(blankSnapshot());
     fireEvent.click(revealToggle());
@@ -270,8 +383,8 @@ describe('пустые обороты в редакторе (M4)', () => {
     expect(screen.getByText('2 из 6')).toBeDefined();
 
     fireEvent.click(revealToggle());
-    expect(selectedKeys()).toEqual([F2]);
-    expect(screen.getByText('2 из 4')).toBeDefined();
+    expect(selectedKeys()).toEqual([F1]);
+    expect(screen.getByText('1 из 4')).toBeDefined();
   });
 
   it('S8/S9/S10: превью, секция «ПУСТОЙ ОБОРОТ» и факт «Содержимое» у пустой страницы', () => {
@@ -339,7 +452,8 @@ describe('пустые обороты в редакторе (M4)', () => {
     onToast.mockClear();
     rerender(applied(marked, lastSent(api), VERDICTS));
     expect(keysShown()).toEqual([F1, F2, B2, F3]);
-    expect(selectedKeys()).toEqual([F2]);
+    // Снова склеенный оборот — текущая уходит на его лицо (B-13).
+    expect(selectedKeys()).toEqual([F1]);
     // Скрытие правкой, не вердиктом — тоста поздних оценок нет.
     expect(onToast).not.toHaveBeenCalled();
   });
@@ -417,9 +531,10 @@ describe('пустые обороты в редакторе (M4)', () => {
     });
     rerender(late);
     expect(keysShown()).toEqual([F1, F2, B2, F3]);
-    expect(selectedKeys()).toEqual([F2]);
+    // Скрытый оборот склеен с F1 — текущая уходит на лицо (B-13).
+    expect(selectedKeys()).toEqual([F1]);
     // Фокус переехал вместе с текущей, а не упал на body (ревью).
-    expect(document.activeElement).toBe(option(1));
+    expect(document.activeElement).toBe(option(0));
     expect(onToast).toHaveBeenCalledTimes(1);
     expect(onToast).toHaveBeenCalledWith(
       'Скрыт 1 пустой оборот — переключатель «Пустые» покажет его',
