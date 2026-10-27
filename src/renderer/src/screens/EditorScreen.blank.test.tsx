@@ -18,7 +18,9 @@ import {
   B2,
   B3,
   ctrlZ,
+  dataTransfer,
   dragAndDrop,
+  dragOver,
   edits,
   F1,
   F2,
@@ -319,6 +321,77 @@ describe('пустые обороты в редакторе (M4)', () => {
     fireEvent.click(revealToggle());
     dragAndDrop(option(0), option(1), 'before'); // F1 → на свой оборот
     expect(own.setEdits).not.toHaveBeenCalled();
+  });
+
+  it('B-13, лента: склеенный оборот не тянется сам — draggable false, подпись, бросок не идёт', () => {
+    const api = stubApi();
+    renderEditor(blankSnapshot());
+    fireEvent.click(revealToggle());
+
+    expect(option(1).getAttribute('draggable')).toBe('false');
+    expect(option(1).getAttribute('title')).toBe('Оборот идёт вместе со своей страницей');
+    expect(option(0).getAttribute('draggable')).toBe('true');
+    expect(option(0).getAttribute('title')).toBeNull();
+
+    const transfer = dataTransfer();
+    fireEvent.dragStart(option(1), { dataTransfer: transfer });
+    expect(document.querySelector('.thumb--dragging')).toBeNull();
+    dragOver(option(4), 'after', transfer);
+    expect(document.querySelector('.thumb__drop')).toBeNull();
+    fireEvent.drop(option(4), { dataTransfer: transfer });
+    expect(api.setEdits).not.toHaveBeenCalled();
+  });
+
+  it('B-13, лента: оборот в выделении вместе с лицом тянется — едут оба', () => {
+    const api = stubApi();
+    renderEditor(blankSnapshot());
+    fireEvent.click(revealToggle());
+
+    fireEvent.click(option(0)); // F1
+    fireEvent.click(option(1), { ctrlKey: true }); // B3
+    expect(option(1).getAttribute('draggable')).toBe('true');
+    expect(option(1).getAttribute('title')).toBeNull();
+    dragAndDrop(option(1), option(4), 'after'); // за B3 → после листа F3 (за B1)
+    expect(lastSent(api).edits.order).toEqual([F2, B2, F3, B1, F1, B3]);
+  });
+
+  it('B-13, лента: при переносе лица подсвечен и его оборот; маркер на обороте — у листа', () => {
+    stubApi();
+    renderEditor(blankSnapshot());
+    fireEvent.click(revealToggle());
+
+    const transfer = dataTransfer();
+    fireEvent.dragStart(option(4), { dataTransfer: transfer }); // F3
+    expect(option(4).className).toContain('thumb--dragging');
+    expect(option(5).className).toContain('thumb--dragging'); // B1 — оборот F3
+
+    dragOver(option(1), 'before', transfer); // левая половина B3 → перед F1
+    expect(option(0).querySelector('.thumb__drop--before')).not.toBeNull();
+    expect(option(1).querySelector('.thumb__drop')).toBeNull();
+    dragOver(option(1), 'after', transfer); // правая половина B3 → после листа F1 = после B3
+    expect(option(1).querySelector('.thumb__drop--after')).not.toBeNull();
+    expect(option(0).querySelector('.thumb__drop')).toBeNull();
+    // Над своим оборотом маркера нет.
+    dragOver(option(5), 'before', transfer);
+    expect(document.querySelector('.thumb__drop')).toBeNull();
+    fireEvent.dragEnd(option(4), { dataTransfer: transfer });
+  });
+
+  it('B-13, лента: у склеенного оборота нет split-бара; после «Это не пустая страница» — есть', async () => {
+    const api = stubApi();
+    const snapshot = blankSnapshot();
+    const { rerender } = renderEditor(snapshot);
+    fireEvent.click(revealToggle());
+
+    expect(option(1).querySelector('.thumb__split')).toBeNull(); // B3
+    expect(option(2).querySelector('.thumb__split')).not.toBeNull(); // F2
+
+    fireEvent.click(option(1));
+    fireEvent.click(screen.getByRole('button', { name: 'Это не пустая страница' }));
+    await settle();
+    rerender(applied(snapshot, lastSent(api), VERDICTS));
+    expect(option(1).querySelector('.thumb__split')).not.toBeNull();
+    expect(option(1).getAttribute('draggable')).toBe('true');
   });
 
   it('B-13: «+ Новый документ с этой страницы» на склеенном обороте недоступен', () => {

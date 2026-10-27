@@ -866,6 +866,7 @@ export function EditorScreen({
           onRename={rename}
           onMove={move}
           onMoveAcross={moveAcross}
+          glued={glued}
           footer={
             // S4–S6 M4: панель выделения (больше одной показанной); строка переключателей
             // «Пустые» и «Обороты на 180°» — у прохода оборотов (B-8).

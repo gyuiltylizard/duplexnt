@@ -19,7 +19,7 @@ import {
 import type { DropSide, SetSide } from '../state/edits';
 import { originKindOf } from '../state/origins';
 import { single, type Selection } from '../state/selection';
-import type { ShownDocument } from '../state/shown';
+import { movingOf, NO_GLUE, sheetDrop, type GluedBacks, type ShownDocument } from '../state/shown';
 import { toneOf } from '../state/page-text';
 import {
   EditorThumb,
@@ -185,6 +185,11 @@ export interface EditorRailProps {
   readonly onMove: (keys: readonly string[], target: string, side: DropSide) => void;
   /** Бросок на разделитель наборов или в пустую группу: в конец лиц / в начало оборотов (KTD8). */
   readonly onMoveAcross: (keys: readonly string[], side: SetSide) => void;
+  /**
+   * Склеенные обороты «оборот → лицо» (B-13, KTD-4): оборот не тянется сам, едет и подсвечивается
+   * с лицом, цель броска на нём перепривязывается к листу, split-бара у него нет.
+   */
+  readonly glued?: GluedBacks;
   /** Подвал ленты: панель выделения, переключатель пустых, тумблер 180° (handoff M4, S4). */
   readonly footer: ReactNode;
 }
@@ -209,10 +214,12 @@ export function EditorRail({
   onRename,
   onMove,
   onMoveAcross,
+  glued = NO_GLUE,
   footer,
 }: EditorRailProps): ReactNode {
   const { t } = useTranslation();
   const total = order.length;
+  const orderKeys = useMemo(() => order.map((entry) => entry.key), [order]);
   /** Фокус на карточку текущей страницы — точку входа клавиатуры (роуминг `tabindex`). */
   const focusCurrent = (): void => {
     if (selection.current !== null) {
@@ -260,7 +267,12 @@ export function EditorRail({
   // Перетаскивание (S6): что тянут и где маркер вставки.
   const [dragged, setDragged] = useState<readonly string[] | null>(null);
   const [drop, setDrop] = useState<Drop | null>(null);
-  const draggedKeys = useMemo(() => new Set(dragged), [dragged]);
+  // Подсвечиваются и не принимают маркер все перетаскиваемые страницы — с оборотами лиц (B-13);
+  // в `onMove` уходят ключи пользователя, экран сам добирает обороты.
+  const draggedKeys = useMemo(
+    () => new Set(dragged === null ? [] : movingOf(dragged, glued, orderKeys)),
+    [dragged, glued, orderKeys],
+  );
   // У края ленты она едет сама, пока страницы удерживаются (B-10).
   const scrollRef = useRef<HTMLDivElement>(null);
   useDragAutoScroll(scrollRef, dragged !== null);
@@ -290,8 +302,14 @@ export function EditorRail({
       },
       start: (key, event) => {
         // Тянут выделенную из нескольких — едет всё выделение в порядке ленты; иначе одна
-        // страница, и выделение переходит на неё.
+        // страница, и выделение переходит на неё. Склеенный оборот сам не тянется (B-13, R6) —
+        // только в выделении вместе со своим лицом; с лицами едут их обороты.
         const group = multi && selectedKeys.has(key);
+        const face = glued.get(key);
+        if (face !== undefined && !(group && selectedKeys.has(face))) {
+          event.preventDefault();
+          return;
+        }
         const keys = group ? selection.keys : [key];
         if (!group) {
           onSelect(single(key));
@@ -316,9 +334,17 @@ export function EditorRail({
         event.preventDefault();
         event.dataTransfer.dropEffect = 'move';
         const rect = event.currentTarget.getBoundingClientRect();
-        const side: DropSide = event.clientX < rect.left + rect.width / 2 ? 'before' : 'after';
-        if (drop?.kind !== 'thumb' || drop.key !== key || drop.side !== side) {
-          setDrop({ kind: 'thumb', key, side });
+        const half: DropSide = event.clientX < rect.left + rect.width / 2 ? 'before' : 'after';
+        // Цель на склеенном обороте — его лист (R6): маркер рисуется там, куда лягут страницы.
+        const target = sheetDrop(key, half, [...draggedKeys], glued, orderKeys);
+        if (target === null) {
+          if (drop !== null) {
+            setDrop(null);
+          }
+          return;
+        }
+        if (drop?.kind !== 'thumb' || drop.key !== target.key || drop.side !== target.side) {
+          setDrop({ kind: 'thumb', key: target.key, side: target.side });
         }
       },
     };
@@ -386,6 +412,12 @@ export function EditorRail({
     finishDrag();
   };
 
+  /** Склеенный оборот тянется только в выделении вместе со своим лицом (B-13, R6). */
+  const draggableOf = (key: string): boolean => {
+    const face = glued.get(key);
+    return face === undefined || (multi && selectedKeys.has(key) && selectedKeys.has(face));
+  };
+
   const splitKind = (position: number): SplitKind =>
     position === 0 || !documentsEditable || !editable || multi || modifierHeld
       ? null
@@ -411,10 +443,11 @@ export function EditorRail({
       current={entry.key === selection.current}
       selected={selectedKeys.has(entry.key)}
       multi={multi && selectedKeys.has(entry.key)}
-      draggable={editable}
+      glued={glued.has(entry.key)}
+      draggable={editable && draggableOf(entry.key)}
       dragging={draggedKeys.has(entry.key)}
       drop={drop?.kind === 'thumb' && drop.key === entry.key ? drop.side : null}
-      split={splitKind(position)}
+      split={glued.has(entry.key) ? null : splitKind(position)}
       onPick={onPick}
       onSplit={split}
       drag={drag}
