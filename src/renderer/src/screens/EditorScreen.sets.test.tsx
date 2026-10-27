@@ -119,7 +119,7 @@ describe('лента в режиме наборов (S1–S3, R17)', () => {
     fireEvent.click(option(0));
     fireEvent.click(option(1), { shiftKey: true });
     expect(screen.queryByRole('button', { name: 'Выделить в документ' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Снять' })).toBeDefined();
+    expect(screen.getByRole('region', { name: 'Выделение' }).textContent).toBe('Выделено 2 стр.');
   });
 
   it('S9: подпись миниатюры по группе и месту; тег «об» — по происхождению', () => {

@@ -11,13 +11,15 @@ import type { RailRotate } from '../state/useRotateTarget';
 // handoff M4.5, S9) тумблер крутит обороты пачки текущей страницы: подпись цели — в месте
 // счётчика, недоступность с причиной там же.
 
-/** Панель выделения (S6): текст, «Выделить в документ» вне режима наборов, «Снять». */
+/**
+ * Панель выделения (S6): число выделенных и «Выделить в документ» вне режима наборов. Подсказки
+ * про Shift и Ctrl и «Снять» нет (B-8): выделение уже сделано, сжимают его Esc и щелчок.
+ */
 export interface RailSelection {
   /** Выделенных показанных страниц — больше одной. */
   readonly count: number;
   /** «Выделить в документ» — вне режима наборов (M3.6, KTD8); `null` — кнопки нет. */
   readonly group: { readonly disabled: boolean; readonly onClick: () => void } | null;
-  readonly onClear: () => void;
 }
 
 export interface EditorRailFooterProps {
@@ -59,8 +61,8 @@ export function EditorRailFooter({
           <p className="rail__selection-text">
             {t('editor.selection.text', { count: selection.count })}
           </p>
-          <div className="rail__selection-actions">
-            {selection.group !== null && (
+          {selection.group !== null && (
+            <div className="rail__selection-actions">
               <button
                 type="button"
                 className="rail__selection-group"
@@ -69,11 +71,8 @@ export function EditorRailFooter({
               >
                 {t('editor.selection.group')}
               </button>
-            )}
-            <button type="button" className="rail__selection-clear" onClick={selection.onClear}>
-              {t('editor.selection.clear')}
-            </button>
-          </div>
+            </div>
+          )}
         </div>
       )}
       {rotate !== null && blank.mode === 'hide' && !inSets && (

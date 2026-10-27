@@ -169,7 +169,7 @@ describe('пустые обороты в редакторе (M4)', () => {
     fireEvent.keyDown(current(), { key: 'Home' });
     fireEvent.keyDown(current(), { key: 'ArrowRight', shiftKey: true });
     expect(selectedKeys()).toEqual([F1, F2]);
-    expect(screen.getByText('Выделено 2 стр. · Shift — диапазон, Ctrl — по одной')).toBeDefined();
+    expect(screen.getByText('Выделено 2 стр.')).toBeDefined();
   });
 
   it('R12: удаление лица уносит скрытый хвост одним шагом; тост — по показанным; Ctrl+Z возвращает обоих', async () => {

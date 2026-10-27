@@ -65,7 +65,7 @@ describe('выделение', () => {
     expect(toggled(single('c'), 'c', TAPE)).toEqual(single('c'));
   });
 
-  it('«Снять» — выделение сжимается до текущей', () => {
+  it('Esc — выделение сжимается до текущей', () => {
     expect(collapsed({ current: 'c', anchor: 'a', keys: ['a', 'b', 'c'] })).toEqual(single('c'));
     expect(collapsed(NO_SELECTION)).toEqual(NO_SELECTION);
   });

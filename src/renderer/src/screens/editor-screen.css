@@ -191,15 +191,6 @@
   cursor: pointer;
 }
 
-.rail__selection-clear {
-  padding: var(--space-4) var(--space-3);
-  border: 0;
-  background: none;
-  color: var(--color-text-on-inverse-muted);
-  font: var(--font-weight-medium) var(--font-size-s) / var(--leading-snug) var(--font-family-sans);
-  cursor: pointer;
-}
-
 /* — S2 M3: группа документа — */
 
 .doc-group {

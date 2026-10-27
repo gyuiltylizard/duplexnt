@@ -335,8 +335,16 @@ export function EditorScreen({
   }, []);
 
   const railKeyDown = (event: KeyboardEvent<HTMLElement>): void => {
-    // Esc — выделение сжимается до текущей, откуда бы в ленте ни нажали.
+    // Esc — выделение сжимается до текущей, откуда бы в ленте ни нажали. Из подвала панель
+    // выделения исчезнет вместе с фокусом — он переходит на текущую страницу (B-8, KTD-7).
     if (event.key === 'Escape') {
+      if (
+        selection.keys.length > 1 &&
+        event.target instanceof Element &&
+        event.target.closest('.rail__footer') !== null
+      ) {
+        focusKey.current = selection.current;
+      }
       setSelection(collapsed(selection));
       return;
     }
@@ -825,11 +833,6 @@ export function EditorScreen({
                       count: selection.keys.length,
                       // «Выделить в документ» — только вне режима наборов (M3.6, KTD8).
                       group: sets === null ? { disabled: locked, onClick: group } : null,
-                      onClear: () => {
-                        // Панель исчезнет вместе с кнопкой — фокус переходит на текущую страницу.
-                        setSelection(collapsed(selection));
-                        focusKey.current = selection.current;
-                      },
                     }
                   : null
               }

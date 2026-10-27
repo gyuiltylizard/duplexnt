@@ -69,7 +69,7 @@ export function toggled(selection: Selection, key: string, visible: readonly str
   return { current: nearest, anchor: nearest, keys };
 }
 
-/** «Снять» и Esc: выделение сжимается до текущей. */
+/** Esc: выделение сжимается до текущей. */
 export const collapsed = (selection: Selection): Selection =>
   selection.current === null ? NO_SELECTION : single(selection.current);
 

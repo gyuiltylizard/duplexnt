@@ -82,11 +82,7 @@ describe('подвал ленты (S4–S6, R18)', () => {
       'rail__selection',
       'toggle-row',
     ]);
-    expect(
-      within(region ?? document.body).getByText(
-        'Выделено 3 стр. · Shift — диапазон, Ctrl — по одной',
-      ),
-    ).toBeDefined();
+    expect(within(region ?? document.body).getByText('Выделено 3 стр.')).toBeDefined();
   });
 
   it('без прохода оборотов подвала нет, пока нет выделения; с выделением — только панель', () => {
@@ -101,7 +97,11 @@ describe('подвал ленты (S4–S6, R18)', () => {
     ]);
     expect(screen.queryByRole('checkbox')).toBeNull();
 
-    fireEvent.click(button('Снять'));
+    // B-8: «Снять» нет — Esc с кнопки панели сжимает выделение, фокус уходит на текущую, а не
+    // пропадает вместе с панелью.
+    expect(screen.queryByRole('button', { name: 'Снять' })).toBeNull();
+    button('Выделить в документ').focus();
+    fireEvent.keyDown(button('Выделить в документ'), { key: 'Escape' });
     expect(footer()).toBeNull();
     expect(selectedKeys()).toEqual([F2]);
     expect(document.activeElement).toBe(option(1));
@@ -240,13 +240,14 @@ describe('«Выделить в документ» (S6, KTD7, R19)', () => {
     });
   });
 
-  it('режим наборов: кнопки нет, «Снять» есть', () => {
+  it('режим наборов: панель — только текст, без кнопок и пустой обёртки кнопок', () => {
     stubApi();
     renderEditor(twoPass(2));
 
     fireEvent.click(option(0));
     fireEvent.click(option(1), { shiftKey: true });
-    expect(screen.queryByRole('button', { name: 'Выделить в документ' })).toBeNull();
-    expect(button('Снять')).toBeDefined();
+    const region = screen.getByRole('region', { name: 'Выделение' });
+    expect(within(region).queryAllByRole('button')).toEqual([]);
+    expect([...region.children].map((child) => child.className)).toEqual(['rail__selection-text']);
   });
 });
