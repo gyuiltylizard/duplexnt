@@ -4,6 +4,7 @@ import {
   type BlankMode,
   type BlankVerdicts,
   type ScannerState,
+  type SessionEdits,
   type SessionSnapshot,
   type Snapshot,
 } from '@shared';
@@ -18,6 +19,7 @@ import {
   B3,
   ctrlZ,
   dragAndDrop,
+  edits,
   F1,
   F2,
   F3,
@@ -202,6 +204,33 @@ describe('пустые обороты в редакторе (M4)', () => {
 
     dragAndDrop(option(3), option(0), 'after');
     expect(lastSent(api).edits.order).toEqual([F1, B3, F3, B1, F2, B2]);
+  });
+
+  it('R12: бросок «после» последней страницы документа остаётся в нём — скрытый за разрезом не хвост', () => {
+    // Разрез перед B3: скрытый оборот листа 1 начинает документ 2 (так выходит, если границу
+    // ставили при показанных пустых). Полная лента: F1 | B3, F2, B2, F3, B1.
+    const passes = [
+      makePass({ pages: pages(3) }),
+      makePass({ number: 2, kind: 'backs', pages: pages(3, 1, 'p02-s01') }),
+    ];
+    const withCut = (change: Partial<SessionEdits>): Snapshot => {
+      const base = makeSnapshot(passes, {}, { blankMode: 'hide', edits: edits(change) }, VERDICTS);
+      return { ...base, assembly: assemblyWithEditsOf(sessionOf(base), VERDICTS) };
+    };
+    const api = stubApi();
+    const { rerender } = renderEditor(withCut({ cuts: [1], names: ['', ''] }));
+
+    // Показанная: F1 | F2, B2, F3. F3 с хвостом B1 — после F1, последней страницы документа 1.
+    dragAndDrop(option(3), option(0), 'after');
+    const sent = lastSent(api).edits;
+    expect(sent.order).toEqual([F1, F3, B1, B3, F2, B2]);
+
+    rerender(withCut(sent));
+    expect(
+      within(screen.getByRole('listbox', { name: 'Страницы документа 1' }))
+        .getAllByRole('option')
+        .map((element) => element.getAttribute('data-key')),
+    ).toEqual([F1, F3]);
   });
 
   it('R12: при включённом переключателе перенос буквальный — хвост не едет', () => {

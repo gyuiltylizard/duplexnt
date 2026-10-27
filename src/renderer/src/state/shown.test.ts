@@ -57,6 +57,16 @@ describe('показанная лента', () => {
     expect(withHiddenTails(['3l', '3o'], ORDER)).toEqual(['3l', '3o']);
   });
 
+  it('хвост не тянется через границу документа: скрытый за разрезом — уже следующий документ', () => {
+    // Разрез перед 2x (позиция 4): 2o — хвост 2l, а 2x начинает второй документ.
+    expect(withHiddenTails(['2l'], ORDER, new Set([4]))).toEqual(['2l', '2o']);
+    // Разрез сразу за 1l (позиция 1): у 1l хвоста нет.
+    expect(withHiddenTails(['1l'], ORDER, new Set([1]))).toEqual(['1l']);
+    // Ключ на самой границе берётся, и его хвост — тоже.
+    expect(withHiddenTails(['3l'], ORDER, new Set([5]))).toEqual(['3l']);
+    expect(withHiddenTails(['4l'], ORDER, new Set([5]))).toEqual(['4l', '4o']);
+  });
+
   const SHOWN = shownOf(ORDER, false).map((entry) => entry.key);
 
   it.each([
