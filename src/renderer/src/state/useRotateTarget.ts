@@ -55,7 +55,7 @@ export const useRotateTarget = (
   addedSet: number | null | undefined,
 ): RotateTarget | null => useMemo(() => rotateTargetOf(passes, addedSet), [passes, addedSet]);
 
-/** Подпись цели (или причина недоступности) — в `toggle-row__count` (решение handoff). */
+/** Цель (или причина недоступности) — скрытое описание чекбокса и `title` строки (B-8). */
 export function rotateTargetText(t: TFunction, target: RotateTarget): string {
   switch (target.kind) {
     case 'main':

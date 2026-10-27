@@ -90,7 +90,7 @@ import './editor-screen.css';
 // через границу — правка порядка с явной границей (`dividerAfterMove`, `movedAcross`, KTD8);
 // сборка — команда `assemble` напрямую, не шаг undo (KTD5): запись сборки входит в подпись ленты.
 // Пустые обороты (M4; handoff M4, S1–S13): экран живёт по показанной ленте — без скрытых, пока
-// переключатель «добавить пустые» выключен (состояние экрана, не правка); правки считаются по
+// переключатель «Пустые» выключен (состояние экрана, не правка); правки считаются по
 // полной ленте, скрытые хвосты едут за лицом (KTD4, R11–R13); «Это не пустая страница» —
 // правка `notBlank` (KTD5); поздние оценки прячут страницу с тостом (KTD6).
 
@@ -151,7 +151,7 @@ export function EditorScreen({
   const positions = useMemo(() => new Map(visible.map((key, index) => [key, index])), [visible]);
   const blank = snapshot.assembly?.blank ?? NO_BLANK;
   // Показанная лента (M4, KTD4; handoff M4, S1–S3): без скрытых пустых оборотов, пока
-  // переключатель «добавить пустые» выключен. Переключатель — состояние экрана: не правка, не
+  // переключатель «Пустые» выключен. Переключатель — состояние экрана: не правка, не
   // шаг undo, сбрасывается с перемонтированием (R13). Текущая, выделение, клавиатура, нумерация,
   // счётчики и якоря — по показанной; правки — по полной (`visible`), позиции переводятся.
   const [reveal, setReveal] = useState(false);
@@ -264,7 +264,7 @@ export function EditorScreen({
   const focusKey = useRef<string | null>(initialCurrent);
   const focusAfterEdit = useRef(false);
   const focusName = useRef<number | null>(null);
-  // S7 M4: все показанные страницы скрыты — фокус на переключателе «добавить пустые», один раз
+  // S7 M4: все показанные страницы скрыты — фокус на переключателе «Пустые», один раз
   // на вход в это состояние.
   const blankToggleRef = useRef<HTMLInputElement>(null);
   const allHiddenFocused = useRef(false);
@@ -824,8 +824,8 @@ export function EditorScreen({
           onMove={move}
           onMoveAcross={moveAcross}
           footer={
-            // S4–S6 M4: панель выделения (больше одной показанной), переключатель «добавить
-            // пустые» и тумблер 180° — у прохода оборотов.
+            // S4–S6 M4: панель выделения (больше одной показанной); строка переключателей
+            // «Пустые» и «Обороты на 180°» — у прохода оборотов (B-8).
             <EditorRailFooter
               selection={
                 selection.keys.length > 1

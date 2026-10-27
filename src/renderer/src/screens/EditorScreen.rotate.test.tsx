@@ -40,7 +40,7 @@ function withSets() {
 }
 
 const toggle = (): HTMLInputElement =>
-  screen.getByRole<HTMLInputElement>('checkbox', { name: 'Повернуть обороты на 180°' });
+  screen.getByRole<HTMLInputElement>('checkbox', { name: 'Обороты на 180°' });
 const targetText = (): string | null =>
   document.getElementById('rotate-target')?.textContent ?? null;
 const row = (): HTMLElement => {
@@ -97,7 +97,7 @@ describe('тумблер 180° по пачке текущей (S9)', () => {
     expect(lastSent(api)).toEqual({ edits: EMPTY_EDITS, rotate180: { 4: true } });
   });
 
-  it('AE15: текущая на одностороннем «Д2» — недоступен с причиной в подписи и title', () => {
+  it('AE15: текущая на одностороннем «Д2» — недоступен с причиной в описании и title', () => {
     stubApi();
     renderEditor(withSets());
 
@@ -126,7 +126,7 @@ describe('тумблер 180° по пачке текущей (S9)', () => {
         { backsDeclined: true },
       ),
     );
-    expect(screen.queryByRole('checkbox', { name: 'Повернуть обороты на 180°' })).toBeNull();
+    expect(screen.queryByRole('checkbox', { name: 'Обороты на 180°' })).toBeNull();
 
     rerender(
       makeSnapshot(

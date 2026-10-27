@@ -394,6 +394,15 @@
   border-top: var(--border-width) solid var(--color-border-subtle);
 }
 
+/* B-8: «Пустые» и «Обороты на 180°» — одной строкой; при нехватке ширины (крупный шрифт ОС)
+   второй переносится ниже, подписи не обрезаются. */
+.rail__toggles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-5) var(--space-10);
+}
+
 .thumbs {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(var(--size-thumb), 1fr));
@@ -1178,13 +1187,6 @@
 }
 
 /* S5: переключатель пустых — строка тумблера со счётчиком справа. */
-.toggle-row__count {
-  margin-left: auto;
-  white-space: nowrap;
-  font: var(--font-weight-regular) var(--font-size-xs) / var(--leading-none) var(--font-family-mono);
-  color: var(--color-text-subtle);
-}
-
 .toggle-row--disabled {
   cursor: default;
   opacity: var(--opacity-disabled);

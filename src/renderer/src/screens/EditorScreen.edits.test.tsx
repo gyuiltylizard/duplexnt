@@ -594,7 +594,7 @@ describe('editor M3: правки', () => {
     const snapshot = twoPass();
     const { rerender } = renderEditor(snapshot);
 
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Повернуть обороты на 180°' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Обороты на 180°' }));
     expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({
       edits: EMPTY_EDITS,
       rotate180: { 2: true },
@@ -647,7 +647,7 @@ describe('editor M3: пустой редактор и инспектор', () =>
     // Инспектор: ДЕТАЛИ скрыты, документов нет; тумблер остаётся.
     expect(screen.queryByText('ДЕТАЛИ')).toBeNull();
     expect(screen.getByText('документов нет')).toBeDefined();
-    expect(screen.getByRole('checkbox', { name: 'Повернуть обороты на 180°' })).toBeDefined();
+    expect(screen.getByRole('checkbox', { name: 'Обороты на 180°' })).toBeDefined();
   });
 
   it('S11: ДЕТАЛИ свёрнуты по умолчанию; факты и пояснение о паре текущей страницы', () => {
