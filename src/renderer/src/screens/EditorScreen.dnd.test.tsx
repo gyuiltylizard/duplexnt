@@ -630,6 +630,21 @@ describe('editor M3: плашка правок и полный откат (S14)'
     expect(api.setEdits).not.toHaveBeenCalled();
   });
 
+  it('B-11: «Вернуть» → Esc — как «Отмена»: ничего не шлёт, выделение в ленте не трогает', () => {
+    const api = stubApi();
+    renderEditor(applied(twoPass(), editedState));
+    fireEvent.click(option(1));
+    fireEvent.click(option(3), { shiftKey: true });
+
+    fireEvent.click(button('Вернуть'));
+    const dialog = screen.getByRole('dialog', { name: 'Вернуть всё как после сканирования?' });
+    fireEvent.keyDown(within(dialog).getByRole('button', { name: 'Отмена' }), { key: 'Escape' });
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(api.setEdits).not.toHaveBeenCalled();
+    expect(selectedKeys().length).toBe(3);
+  });
+
   it('AE4: «Вернуть всё» — пустые правки и выключенный тумблер одним шагом; Ctrl+Z возвращает всё', async () => {
     const api = stubApi();
     const edited = applied(twoPass(), editedState);

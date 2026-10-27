@@ -131,6 +131,19 @@ describe('модалка newscan: состояние набора', () => {
 });
 
 describe('модалка newscan: действия', () => {
+  it('B-11: Esc — как «Остаться в документе»; пока удаляем — без действия', () => {
+    stubApi({ closeSession: vi.fn(() => new Promise(() => undefined)) });
+    const { onClose } = renderModal();
+
+    fireEvent.keyDown(fresh(), { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(fresh());
+    expect(screen.getByText('Удаляем…')).toBeDefined();
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it('«Закрыть текущий…» шлёт закрытие сессии и блокирует карточки до ответа', () => {
     const api = stubApi({ closeSession: vi.fn(() => new Promise(() => undefined)) });
     const { onClose } = renderModal();

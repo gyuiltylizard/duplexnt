@@ -15,7 +15,13 @@ export function RevertModal({ onCancel, onConfirm }: RevertModalProps): ReactNod
   const { t } = useTranslation();
 
   return (
-    <Modal labelledBy="revert-title" describedBy="revert-text" small className="revert-modal">
+    <Modal
+      labelledBy="revert-title"
+      describedBy="revert-text"
+      small
+      className="revert-modal"
+      onEscape={onCancel}
+    >
       <header className="modal__header">
         <h2 id="revert-title" className="modal__title">
           {t('revert.title')}

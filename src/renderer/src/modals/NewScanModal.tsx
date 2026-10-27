@@ -123,6 +123,7 @@ export function NewScanModal({
       small
       busy={closing}
       className="newscan-modal"
+      onEscape={closing ? undefined : onClose}
     >
       <header className="modal__header">
         <div className="modal__kicker">

@@ -41,7 +41,13 @@ export function MismatchModal({ report, onClose }: MismatchModalProps): ReactNod
   }
 
   return (
-    <Modal labelledBy="mismatch-title" describedBy="mismatch-text" small className="mismatch-modal">
+    <Modal
+      labelledBy="mismatch-title"
+      describedBy="mismatch-text"
+      small
+      className="mismatch-modal"
+      onEscape={onClose}
+    >
       <header className="modal__header">
         <div className="modal__kicker">
           <span className="dot dot--warning" aria-hidden="true" />

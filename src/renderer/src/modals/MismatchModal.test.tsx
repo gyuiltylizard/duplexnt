@@ -29,6 +29,14 @@ const text = (): string => document.getElementById('mismatch-text')?.textContent
 afterEach(cleanup);
 
 describe('модалка mismatch (M3.6, S6: три исхода про режим наборов)', () => {
+  it('B-11: Esc — как «Понятно»', () => {
+    const onClose = vi.fn();
+    render(<MismatchModal report={report(12, 11)} onClose={onClose} />);
+
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Понятно' }), { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it('оборотов меньше: числа проходов, режим объяснён, три шага, лист не назван; одно действие «Понятно»', () => {
     const onClose = vi.fn();
     render(<MismatchModal report={report(12, 11)} onClose={onClose} />);
