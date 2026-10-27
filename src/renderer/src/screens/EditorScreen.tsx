@@ -586,8 +586,10 @@ export function EditorScreen({
 
   // Тулбар (S1): «+ Новый документ с этой страницы» — если текущая не первая и границы перед
   // ней ещё нет; в режиме наборов документов нет (R17). Начало документа — по показанной ленте.
+  // При выделении нескольких кнопки нет (B-8): «с этой страницы» стало бы неоднозначным.
   const atDocStart = currentShownDoc?.start === currentIndex;
-  const canSplitHere = sets === null && currentIndex > 0 && !atDocStart;
+  const canSplitHere =
+    sets === null && currentIndex > 0 && !atDocStart && selection.keys.length <= 1;
 
   // Ctrl+Z, Ctrl+Y / Ctrl+Shift+Z, Delete — на всём экране, кроме текстовых полей и модалок
   // (handoff M3, Undo/Redo). Подписка — одна на монтирование: StrictMode её переживает.
