@@ -3,6 +3,7 @@ import { defineConfig } from 'electron-vite';
 import type { Plugin } from 'vite';
 import { buildCsp } from './tooling/csp';
 import { aliases } from './tooling/aliases';
+import { devCssUrls } from './tooling/dev-css-urls';
 
 // Терминал редактора на машине автора наследует ELECTRON_RUN_AS_NODE=1: с ней Electron
 // стартует как обычный Node и окна нет. Конфиг грузится в процессе electron-vite до запуска
@@ -49,7 +50,7 @@ export default defineConfig({
   },
   renderer: {
     resolve: { alias: aliases },
-    plugins: [react(), cspMeta()],
+    plugins: [react(), cspMeta(), devCssUrls()],
     build: {
       // Vite превращает ассеты меньше 4 КБ в data:-URI, а `font-src 'self'` их блокирует —
       // как раз на редких подмножествах шрифтов, где это всплыло бы не сразу.

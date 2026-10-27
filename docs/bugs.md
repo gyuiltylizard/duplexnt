@@ -41,6 +41,11 @@ _(пусто)_
 
 `- [сер.] <заголовок> — <чем закрыт> → [solution NNNN](…) / коммит (YYYY-MM-DD)`
 
+- [high] В `npm run dev` не грузились вшитые шрифты: вместо Golos Text и IBM Plex Mono — системные
+  Segoe UI и Courier New (тот самый «шрифт с засечками»). Апостроф в пути проекта `Duplexn't`
+  ломал `url(/@fs/…)` без кавычек, которые Vite пишет в CSS под dev-сервером; сборка не задета →
+  плагин `tooling/dev-css-urls.ts` → [solution 0019](solutions/0019-dev-fonts-apostrophe.md)
+  (2026-10-27)
 - [low] Значок на панели задач меньше соседних (плитка 21 px против 22–23 на 100 %) — значок окна
   отдельным `build/window-icon.ico` целиком из `icon-small.svg` →
   [solution 0012](solutions/0012-b-7-app-icon.md), «Доработка после закрытия» (2026-10-26)
