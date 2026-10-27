@@ -8,7 +8,7 @@ import {
   stubAnimate,
   unstubAnimate,
 } from '../state/motion-fixture';
-import { useLeavingCard, useStripMotion } from './useStripMotion';
+import { useLeavingCard, useLeavingWait, useStripMotion } from './useStripMotion';
 
 // Лента последних страниц на `scan` — движение (B-4, handoff «2. Лента»).
 
@@ -110,5 +110,65 @@ describe('лента scan — движение (B-4)', () => {
     expect(animations[0]?.keyframes).toEqual([{ opacity: 0 }, {}]);
     expect(animations[0]?.options.duration).toBe(120);
     expect(view.container.querySelector('.strip__card--leaving')).toBeNull();
+  });
+});
+
+function Wait() {
+  const ref = useRef<HTMLDivElement>(null);
+  useLeavingWait(ref);
+  return <div ref={ref} className="scan-wait" role="status" />;
+}
+
+function Slot({ waiting }: { readonly waiting: boolean }) {
+  return <div className="scan-screen__slot">{waiting && <Wait />}</div>;
+}
+
+describe('точки ожидания scan — уход (B-9)', () => {
+  beforeEach(setMotionTokens);
+  afterEach(() => {
+    cleanup();
+    unstubAnimate();
+    clearMotionTokens();
+    vi.unstubAllGlobals();
+  });
+
+  it('первая страница: точки уходят копией, гаснущей за 150 мс `ease`; копия скрыта от ввода', async () => {
+    const { animations } = stubAnimate();
+    const view = render(<Slot waiting />);
+
+    view.rerender(<Slot waiting={false} />);
+    await act(flushMicrotasks);
+
+    const ghost = view.container.querySelector('.scan-wait');
+    expect(ghost?.getAttribute('aria-hidden')).toBe('true');
+    expect(ghost?.hasAttribute('inert')).toBe(true);
+    expect(animations[0]?.element).toBe(ghost);
+    expect(animations[0]?.keyframes).toEqual([{ opacity: 1 }, { opacity: 0 }]);
+    expect(animations[0]?.options.duration).toBe(150);
+    expect(animations[0]?.options.easing).toBe('ease');
+  });
+
+  it('reduced-motion: затухание остаётся — проявление вместо вспышки', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({ matches: true })),
+    );
+    const { animations } = stubAnimate();
+    const view = render(<Slot waiting />);
+
+    view.rerender(<Slot waiting={false} />);
+    await act(flushMicrotasks);
+
+    expect(animations).toHaveLength(1);
+    expect(animations[0]?.options.duration).toBe(150);
+  });
+
+  it('без Web Animations API — копии нет, точки снимаются сразу', async () => {
+    const view = render(<Slot waiting />);
+
+    view.rerender(<Slot waiting={false} />);
+    await act(flushMicrotasks);
+
+    expect(view.container.querySelector('.scan-wait')).toBeNull();
   });
 });

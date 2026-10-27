@@ -1447,6 +1447,43 @@ samp {
 
 /* — лента последних пяти: затухание к старому краю шагом 0,17 — */
 
+/* B-9: лента и точки ожидания делят место ленты — высота экрана не меняется. Слот — во всю
+   ширину экрана: пустая лента ширины не даёт, и точки в слоте нулевой ширины сжимались в ноль. */
+.scan-screen__slot {
+  position: relative;
+  align-self: stretch;
+  height: 74px;
+  display: flex;
+  justify-content: center;
+}
+
+.scan-wait {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+/* Геометрия точки — литерал, как у иллюстраций экрана; цикл — `pulse` из app.css. */
+.scan-wait__dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-round);
+  background: var(--color-text-faint);
+  animation: pulse var(--duration-loop) var(--ease-loop) infinite;
+}
+
+.scan-wait__dot:nth-child(2) {
+  animation-delay: var(--delay-stagger);
+}
+
+.scan-wait__dot:nth-child(3) {
+  animation-delay: calc(var(--delay-stagger) * 2);
+}
+
 .strip {
   position: relative; /* B-4: опора для выталкиваемой карточки */
   display: flex;
@@ -1551,6 +1588,12 @@ samp {
 
   .strip__card {
     transition: none;
+  }
+
+  /* B-9: три ровные точки без цикла. */
+  .scan-wait__dot {
+    animation: none;
+    opacity: var(--opacity-disabled);
   }
 }
 

@@ -115,3 +115,22 @@ export function useLeavingCard(cardRef: RefObject<HTMLElement | null>) {
     };
   }, [cardRef]);
 }
+
+/**
+ * Уход индикатора ожидания первой страницы (B-9, handoff `2026-10-scan-wait.md`): копия гаснет
+ * за `--duration-fast`, карточка тем временем появляется как обычно — ждать не нужно. Затухание
+ * остаётся и под reduced-motion: проявление вместо вспышки (правило 4 B-4).
+ */
+export function useLeavingWait(waitRef: RefObject<HTMLElement | null>) {
+  useLayoutEffect(() => {
+    const wait = waitRef.current;
+    return () => {
+      leaveWithGhost(wait, (ghost) =>
+        animate(ghost, [{ opacity: 1 }, { opacity: 0 }], {
+          duration: durationOf('--duration-fast'),
+          easing: easingOf('--ease-standard'),
+        }),
+      );
+    };
+  }, [waitRef]);
+}
