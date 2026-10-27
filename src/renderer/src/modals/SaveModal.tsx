@@ -316,9 +316,14 @@ export function SaveModal({
 
   // Футер: выбор — «Отмена» + «Сохранить…»; частичный сбой — «Закрыть» + «Повторить
   // неудавшиеся»; всё записано, но имена изменены — одна «Готово».
+  // Esc (B-11) — та же кнопка: «Готово», «Закрыть» или «Отмена»; во время записи — без действия.
   let actions: ReactNode;
+  let escape: (() => void) | undefined;
   if (outcome !== null && outcome.report.failed.length === 0) {
     const { report } = outcome;
+    escape = () => {
+      onSaved(report);
+    };
     actions = (
       <button
         ref={primaryRef}
@@ -333,6 +338,7 @@ export function SaveModal({
     );
   } else {
     const retry = outcome?.requested ?? null;
+    escape = writing ? undefined : onClose;
     let label: string;
     if (retry !== null) {
       label = t('save.retry');
@@ -367,7 +373,7 @@ export function SaveModal({
   }
 
   return (
-    <Modal labelledBy="save-title" busy={writing} className="save-modal">
+    <Modal labelledBy="save-title" busy={writing} className="save-modal" onEscape={escape}>
       <header className="modal__header">
         <h2 id="save-title" className="modal__title">
           {fileCount === 1 ? t('save.titleOne') : t('save.titleMany', { count: fileCount })}

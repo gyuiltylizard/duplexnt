@@ -168,6 +168,14 @@ describe('модалка add: запуск и отмена', () => {
     expect(onStart).not.toHaveBeenCalled();
   });
 
+  it('B-11: Esc — как «Отмена»: закрывает без запуска', () => {
+    const { onStart, onClose } = renderModal();
+
+    fireEvent.keyDown(oneSided(), { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onStart).not.toHaveBeenCalled();
+  });
+
   it('фокус заперт: Tab с «Начать скан» — на выбранную карточку, Shift+Tab с неё — на «Начать скан»', () => {
     renderModal();
     // Выбрана вторая карточка: первая в DOM — с tabIndex −1, в кольцо она не входит.

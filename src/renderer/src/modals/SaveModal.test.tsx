@@ -277,7 +277,7 @@ describe('модалка save: запись', () => {
           }),
       ),
     });
-    const { onWriting, onSaved } = renderModal();
+    const { onWriting, onSaved, onClose } = renderModal();
 
     fireEvent.click(button('Сохранить 3 файла'));
     await settle();
@@ -287,6 +287,9 @@ describe('модалка save: запись', () => {
     expect(button('Сохраняем…').hasAttribute('disabled')).toBe(true);
     expect(button('Отмена').hasAttribute('disabled')).toBe(true);
     expect(onWriting).toHaveBeenLastCalledWith(true);
+    // B-11: во время записи Esc без действия — как недоступная «Отмена».
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
 
     answer(ok({ folder: FOLDER, written: [{ index: 0, fileName: 'x.pdf' }], failed: [] }));
     await settle();
@@ -452,6 +455,38 @@ describe('модалка save: ИТОГ', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(onSaved).not.toHaveBeenCalled();
     expect(api.saveDocuments).toHaveBeenCalledTimes(1);
+  });
+
+  it('B-11: Esc — «Отмена» при выборе, «Закрыть» после сбоя, «Готово» после записи', async () => {
+    stubApi({ saveDocuments: vi.fn(() => Promise.resolve(partial)) });
+    const first = renderModal({ documents: FIVE, defaultNames: FIVE_DEFAULTS, total: 10 });
+    fireEvent.keyDown(button('Сохранить 5 файлов'), { key: 'Escape' });
+    expect(first.onClose).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(button('Сохранить 5 файлов'));
+    await settle();
+    fireEvent.keyDown(button('Закрыть'), { key: 'Escape' });
+    expect(first.onClose).toHaveBeenCalledTimes(2);
+    expect(first.onSaved).not.toHaveBeenCalled();
+    cleanup();
+
+    stubApi({
+      saveDocuments: vi.fn(() =>
+        Promise.resolve(
+          ok({ folder: FOLDER, written: [{ index: 0, fileName: 'Акт_.pdf' }], failed: [] }),
+        ),
+      ),
+    });
+    const second = renderModal({
+      documents: [doc(0, 3, 'Акт?')],
+      defaultNames: ['Скан'],
+      total: 3,
+    });
+    fireEvent.click(button('Сохранить файл'));
+    await settle();
+    fireEvent.keyDown(button('Готово'), { key: 'Escape' });
+    expect(second.onSaved).toHaveBeenCalledTimes(1);
+    expect(second.onClose).not.toHaveBeenCalled();
   });
 
   it('санитизированное имя помечено «имя изменено»', async () => {

@@ -292,7 +292,13 @@ export function DeviceModal({ initialAddress, onClose, onConnected }: DeviceModa
   }
 
   return (
-    <Modal labelledBy="device-title" busy={connecting !== null} className="device-modal">
+    <Modal
+      labelledBy="device-title"
+      busy={connecting !== null}
+      className="device-modal"
+      // «Отмена» доступна и во время подключения — отменяет его (S10); Esc — она же (B-11).
+      onEscape={onClose}
+    >
       <header className="modal__header">
         <h2 id="device-title" className="modal__title">
           {t('device.title')}

@@ -181,7 +181,7 @@ export function AddModal({
   };
 
   return (
-    <Modal labelledBy="add-title" describedBy="add-text" className="add-modal">
+    <Modal labelledBy="add-title" describedBy="add-text" className="add-modal" onEscape={onClose}>
       <header className="modal__header">
         <h2 id="add-title" className="modal__title">
           {t('add.title')}

@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Modal } from './Modal';
 
 afterEach(cleanup);
@@ -178,5 +178,49 @@ describe('Modal', () => {
     view.rerender(<Host busy />);
 
     expect(document.activeElement?.getAttribute('role')).toBe('dialog');
+  });
+
+  it('B-11: Esc вызывает `onEscape` и дальше модалки не уходит', () => {
+    const onEscape = vi.fn();
+    const outer = vi.fn();
+    render(
+      <div onKeyDown={outer}>
+        <Modal labelledBy="m-title" onEscape={onEscape}>
+          <h2 id="m-title">Заголовок</h2>
+          <input aria-label="поле" />
+        </Modal>
+      </div>,
+    );
+
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'поле' }), { key: 'Escape' });
+
+    expect(onEscape).toHaveBeenCalledOnce();
+    expect(outer).not.toHaveBeenCalled();
+  });
+
+  it('B-11: без `onEscape` Esc без действия; Enter и буквы обработчик не вызывают', () => {
+    const outer = vi.fn();
+    render(
+      <div onKeyDown={outer}>
+        <TwoButtons />
+      </div>,
+    );
+    fireEvent.keyDown(screen.getByRole('button', { name: 'первая' }), { key: 'Escape' });
+    expect(screen.getByRole('dialog')).toBeDefined();
+    // Не обработан — всплывает как обычно.
+    expect(outer).toHaveBeenCalledOnce();
+
+    cleanup();
+    const onEscape = vi.fn();
+    render(
+      <Modal labelledBy="m-title" onEscape={onEscape}>
+        <h2 id="m-title">Заголовок</h2>
+        <button type="button">кнопка</button>
+      </Modal>,
+    );
+    const button = screen.getByRole('button', { name: 'кнопка' });
+    fireEvent.keyDown(button, { key: 'Enter' });
+    fireEvent.keyDown(button, { key: 'q' });
+    expect(onEscape).not.toHaveBeenCalled();
   });
 });

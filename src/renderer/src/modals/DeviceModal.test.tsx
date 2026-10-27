@@ -200,6 +200,25 @@ describe('DeviceModal', () => {
     expect(document.activeElement?.textContent).toBe('Отмена');
   });
 
+  it('B-11: Esc — как «Отмена»: и с полем адреса в фокусе, и во время подключения', async () => {
+    stubApi();
+    const onClose = vi.fn();
+    const view = render(<DeviceModal onClose={onClose} onConnected={vi.fn()} />);
+    await flush();
+
+    fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    view.unmount();
+    const onCloseBusy = vi.fn();
+    render(<DeviceModal onClose={onCloseBusy} onConnected={vi.fn()} />);
+    await flush();
+    fireEvent.click(screen.getByText('ScanPro 200'));
+    fireEvent.click(screen.getByRole('button', { name: 'Подключить' }));
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Отмена' }), { key: 'Escape' });
+    expect(onCloseBusy).toHaveBeenCalledTimes(1);
+  });
+
   it('закрытие останавливает поиск и отменяет идущее подключение', async () => {
     const { stopDiscovery, cancelConnect } = stubApi();
     const view = render(<DeviceModal onClose={vi.fn()} onConnected={vi.fn()} />);
