@@ -74,6 +74,7 @@ describe('правки и сохранение через эмулятор (M3, 
     names: NAMES,
     divider: null,
     notBlank: [],
+    keepOriginal: [],
   };
 
   it('AE1, AE7: правки переживают перезапуск; пакет — занятое имя, сбой записи, повтор', async () => {
@@ -177,6 +178,7 @@ describe('правки и сохранение через эмулятор (M3, 
       names: ['', 'Хвост'],
       divider: null,
       notBlank: [],
+      keepOriginal: [],
     };
     unwrap(await service.setEdits(manual, {}));
 

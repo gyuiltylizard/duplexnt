@@ -8,6 +8,7 @@ import {
   sessionConflict,
   type AddedPassIntent,
   type BlankMode,
+  type StraightenMode,
   type Result,
   type SessionEdits,
   type SessionSnapshot,
@@ -186,12 +187,13 @@ export interface SessionStore {
    * пишутся сразу (журнал v4): по намерению (`AddedPassIntent`) или по очереди (`nextKindOf`).
    * Намерение проверяется той же проверкой, что в `planPass`. Режим пустых оборотов (M4, R2)
    * замораживается в журнале, когда проход открывает сессию — новую или заново после пустой;
-   * дальше аргумент не читается.
+   * дальше аргумент не читается. Режим выравнивания (M6, R15) — так же.
    */
   beginPass(
     origin: PassOrigin,
     intent: AddedPassIntent | null,
     blankMode?: BlankMode,
+    straighten?: StraightenMode,
   ): Promise<Result<SegmentStart>>;
   /** С чем можно досканировать последний проход; отказ — досканировать нельзя. */
   resumeTarget(): Result<PassOrigin>;
@@ -464,6 +466,7 @@ export function createSessionStore(
         edits: journal.edits,
         assembled: journal.assembled,
         blankMode: journal.blankMode,
+        straighten: journal.straighten,
       };
     },
 
@@ -473,7 +476,7 @@ export function createSessionStore(
 
     planPass: (request) => planPass(state(), request),
 
-    beginPass: (origin, intent, blankMode = 'keep') =>
+    beginPass: (origin, intent, blankMode = 'keep', straighten = 'off') =>
       mutating(async () => {
         if (runningSegmentOf(journal) !== null) {
           return conflict('passRunning');
@@ -494,7 +497,7 @@ export function createSessionStore(
         // оборотов, отметка о сохранении, правки) с ней и уходят.
         const base =
           journal === null || (isVacant(journal) && journal.deletions.length === 0)
-            ? { ...newJournal(newSessionId()), blankMode }
+            ? { ...newJournal(newSessionId()), blankMode, straighten }
             : isVacant(journal)
               ? {
                   ...journal,
@@ -504,6 +507,7 @@ export function createSessionStore(
                   edits: EMPTY_EDITS,
                   assembled: null,
                   blankMode,
+                  straighten,
                 }
               : journal;
         const number = base.nextPass;

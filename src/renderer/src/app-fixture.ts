@@ -17,6 +17,7 @@ export function makeSnapshot(overrides: Partial<Snapshot>): Snapshot {
     storage: { incompatible: false, unsaved: false },
     notices: [],
     blankMode: 'hide',
+    straightenMode: 'auto',
     seenHints: [],
     ...overrides,
   };

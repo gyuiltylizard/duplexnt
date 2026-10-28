@@ -38,6 +38,7 @@ describe('M3.5: посадка добавленного набора (KTD-7; han
       seq,
       session: {
         blankMode: 'keep',
+        straighten: 'off',
         id: 'session.x',
         backsDeclined: false,
         saved: false,

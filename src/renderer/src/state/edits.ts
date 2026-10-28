@@ -214,6 +214,18 @@ export function markedNotBlank(edits: SessionEdits, key: string): SessionEdits {
   return { ...edits, notBlank: [...edits.notBlank, key] };
 }
 
+/**
+ * «Вернуть оригинал» (M6, R14): ключ входит в `keepOriginal` — в ленте и в файле снова исходник,
+ * выправленная копия остаётся в производном. Обычная правка: шаг undo, «Вернуть» снимает. Уже
+ * откаченная — без изменений (шага нет).
+ */
+export function keptOriginal(edits: SessionEdits, key: string): SessionEdits {
+  if (edits.keepOriginal.includes(key)) {
+    return edits;
+  }
+  return { ...edits, keepOriginal: [...edits.keepOriginal, key] };
+}
+
 /** Имя документа `docIndex` (с нуля); пустая строка — имя по умолчанию. */
 export function renamed(edits: SessionEdits, docIndex: number, name: string): SessionEdits {
   if (docIndex < 0 || docIndex >= edits.names.length || edits.names[docIndex] === name) {

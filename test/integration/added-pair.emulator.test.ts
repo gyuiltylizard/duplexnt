@@ -133,7 +133,7 @@ async function savedFixtures(service: PassService, root: string): Promise<(numbe
 }
 
 describe('двусторонний добавленный набор — полный путь через эмулятор (M4.5, U8)', () => {
-  it('F1 / AE1: основная пара → лица набора «после стр. 4» → ожидание → обороты «из 3» → чередование по якорю → журнал v7 → PDF', async () => {
+  it('F1 / AE1: основная пара → лица набора «после стр. 4» → ожидание → обороты «из 3» → чередование по якорю → журнал v8 → PDF', async () => {
     const { service, root, snapshots } = await connect(SCENARIOS['added-pair']);
     await setFrontsScanned(service);
 
@@ -199,7 +199,7 @@ describe('двусторонний добавленный набор — пол�
     ).toBe(true);
 
     journal = await journalOnDisk(root);
-    expect(journal.version).toBe(7);
+    expect(journal.version).toBe(8);
     expect(rolesOf(journal.passes)).toEqual([
       [1, 'fronts', null],
       [2, 'backs', null],
@@ -616,7 +616,7 @@ describe('двусторонний добавленный набор — пол�
     expect(calls).toHaveLength(6);
   });
 
-  it('AE10: журнал v6 с односторонним набором открывается после перезапуска — набор односторонний по якорю, файл переписан v7', async () => {
+  it('AE10: журнал v6 с односторонним набором открывается после перезапуска — набор односторонний по якорю, файл переписан v8', async () => {
     const { service, root, restart } = await connect({ trays: [[1, 2, 3], [6, 5, 4], [7]] });
     await scanned(service, 3, 3);
     expect(unwrap(await service.startPass({ kind: 'added', after: F2 }))).toMatchObject({
@@ -629,15 +629,16 @@ describe('двусторонний добавленный набор — пол�
     const current = JSON.parse(await readFile(file, 'utf8')) as {
       version: number;
       passes: Record<string, unknown>[];
+      edits: Record<string, unknown>;
     };
+    const without = (value: Record<string, unknown>, ...fields: string[]) =>
+      Object.fromEntries(Object.entries(value).filter(([field]) => !fields.includes(field)));
+    // Форма v6: без режима выравнивания и отката (M6, журнал v8).
     const v6 = {
-      ...current,
+      ...without(current, 'straighten'),
       version: 6,
-      passes: current.passes.map((pass) =>
-        Object.fromEntries(
-          Object.entries(pass).filter(([field]) => field !== 'pair' && field !== 'backsDecision'),
-        ),
-      ),
+      edits: without(current.edits, 'keepOriginal'),
+      passes: current.passes.map((pass) => without(pass, 'pair', 'backsDecision')),
     };
     await writeFile(file, JSON.stringify(v6));
 
@@ -669,7 +670,7 @@ describe('двусторонний добавленный набор — пол�
       version: number;
       passes: { kind: string; pair: unknown; backsDecision: unknown }[];
     };
-    expect(raw.version).toBe(7);
+    expect(raw.version).toBe(8);
     expect(raw.passes.map((pass) => [pass.kind, pass.pair, pass.backsDecision])).toEqual([
       ['fronts', null, null],
       ['backs', null, null],

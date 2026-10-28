@@ -4,6 +4,7 @@ import {
   deleted,
   dividerAfterMove,
   grouped,
+  keptOriginal,
   markedNotBlank,
   moved,
   movedAcross,
@@ -461,5 +462,19 @@ describe('«Выделить в документ» — извлечение в �
     expect(grouped(edits({}), SIX, [])).toBeNull();
     expect(grouped(edits({}), SIX, SIX)).toBeNull();
     expect(grouped(edits({ cuts: [2], names: ['А', 'Б'] }), SIX, [...SIX].reverse())).toBeNull();
+  });
+});
+
+// M6 (R14): «Вернуть оригинал» — ключ в `keepOriginal`, как пометка «не пустая».
+describe('откат выравнивания (M6)', () => {
+  it('добавляет ключ в keepOriginal, остальное не трогает', () => {
+    const base = { ...EMPTY_EDITS, deleted: ['x'] };
+    expect(keptOriginal(base, 'b')).toEqual({ ...base, keepOriginal: ['b'] });
+    expect(keptOriginal({ ...base, keepOriginal: ['a'] }, 'b').keepOriginal).toEqual(['a', 'b']);
+  });
+
+  it('уже откаченная — без изменений (шага нет)', () => {
+    const base = { ...EMPTY_EDITS, keepOriginal: ['b'] };
+    expect(keptOriginal(base, 'b')).toBe(base);
   });
 });

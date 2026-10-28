@@ -46,6 +46,7 @@ const pages = (count: number, prefix: string) =>
 function makeSnapshot(setFronts: number): Snapshot {
   const session = {
     blankMode: 'keep' as const,
+    straighten: 'off' as const,
     id: 'session.x',
     backsDeclined: false,
     saved: false,
@@ -74,6 +75,7 @@ function makeSnapshot(setFronts: number): Snapshot {
     storage: { incompatible: false, unsaved: false },
     notices: [],
     blankMode: 'hide',
+    straightenMode: 'auto',
     seenHints: [],
   };
 }

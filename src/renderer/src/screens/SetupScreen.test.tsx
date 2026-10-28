@@ -24,6 +24,7 @@ const READY: ScannerState = { kind: 'ready', scanner: INFO, options: OPTIONS, pa
 function makeSnapshot(scanner: ScannerState): Snapshot {
   return {
     blankMode: 'hide',
+    straightenMode: 'auto',
     seenHints: [],
     seq: 1,
     scanner,

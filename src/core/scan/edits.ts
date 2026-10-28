@@ -98,6 +98,8 @@ export function normalizeEdits(
   // Пометки «не пустая» (M4): уникальные живые ключи, как `deleted`; удалённая страница пометку
   // сохраняет — Ctrl+Z удаления вернёт её непустой.
   const notBlank = unique(edits.notBlank, isAlive);
+  // Откат выравнивания (M6): то же правило — удалённая страница откат сохраняет.
+  const keepOriginal = unique(edits.keepOriginal, isAlive);
   const length = visibleKeysOf(autoKeys, { ...edits, order, deleted }).length;
   const base = { order, rotations, deleted };
   // Порядок ключей — как у `EMPTY_EDITS`: сверка сравнивает журнал по сериализации.
@@ -112,6 +114,7 @@ export function normalizeEdits(
         names: [''],
         divider: normalizeDivider(edits.divider, order.length === 0 ? context.auto : null, length),
         notBlank,
+        keepOriginal,
       };
     case 'transit':
       return {
@@ -119,6 +122,7 @@ export function normalizeEdits(
         ...normalizeCuts(edits.cuts, edits.names, length),
         divider: normalizeDivider(edits.divider, null, length),
         notBlank,
+        keepOriginal,
       };
     default:
       return {
@@ -126,6 +130,7 @@ export function normalizeEdits(
         ...normalizeCuts(edits.cuts, edits.names, length),
         divider: null,
         notBlank,
+        keepOriginal,
       };
   }
 }
@@ -236,6 +241,7 @@ export function hasEdits(edits: SessionEdits, rotateBacks: boolean): boolean {
     edits.cuts.length > 0 ||
     edits.names.some((name) => name !== '') ||
     edits.divider !== null ||
-    edits.notBlank.length > 0
+    edits.notBlank.length > 0 ||
+    edits.keepOriginal.length > 0
   );
 }

@@ -50,6 +50,7 @@ describe('хранилище сессии: проход', () => {
       id: SESSION,
       backsDeclined: false,
       blankMode: 'keep',
+      straighten: 'off',
       saved: false,
       passes: [
         {

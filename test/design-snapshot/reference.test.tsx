@@ -82,6 +82,7 @@ function sessionOf(passes: PassSnapshot[], over: Partial<SessionSnapshot> = {}):
     edits: EMPTY_EDITS,
     assembled: null,
     blankMode: 'keep',
+    straighten: 'off',
     passes,
     ...over,
   };
@@ -373,6 +374,7 @@ function editorSnapshot(): Snapshot {
   const session = sessionOf([passOf(1, 'fronts', SHEETS), passOf(2, 'backs', SHEETS)], {
     edits: ASSEMBLED_EDITS,
     blankMode: 'mark',
+    straighten: 'off',
   });
   return makeSnapshot({
     scanner: READY,

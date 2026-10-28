@@ -460,6 +460,7 @@ export function createPassService(
       storage: { incompatible: store.incompatible, unsaved: store.unsaved() },
       notices,
       blankMode: settings.get().blankMode,
+      straightenMode: settings.get().straightenMode,
       seenHints: settings.get().seenHints,
     };
   }
@@ -558,7 +559,12 @@ export function createPassService(
       }
       const begun = current.resumed
         ? await store.resumePass()
-        : await store.beginPass(origin, current.request, settings.get().blankMode);
+        : await store.beginPass(
+            origin,
+            current.request,
+            settings.get().blankMode,
+            settings.get().straightenMode,
+          );
       if (!begun.ok) {
         return begun;
       }

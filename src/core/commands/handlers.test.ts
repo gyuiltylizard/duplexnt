@@ -23,6 +23,7 @@ import { MAX_EDIT_ITEMS } from './schemas';
 
 const EMPTY_SNAPSHOT: Snapshot = {
   blankMode: 'hide',
+  straightenMode: 'auto',
   seenHints: [],
   seq: 0,
   scanner: { kind: 'none' },
@@ -334,6 +335,7 @@ describe('снимок и проход', () => {
       names: ['', 'Договор'],
       divider: null,
       notBlank: [],
+      keepOriginal: [],
     };
 
     expect(await handlers.setEdits({ edits, rotate180: { 2: true } })).toEqual(ok({ seq: 7 }));

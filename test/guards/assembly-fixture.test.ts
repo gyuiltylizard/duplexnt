@@ -43,6 +43,7 @@ const sessionOf = (
   edits: EMPTY_EDITS,
   assembled: null,
   blankMode: 'keep',
+  straighten: 'off',
   passes,
   ...extra,
 });

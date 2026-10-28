@@ -175,6 +175,7 @@ describe('хранилище сессии: правки редактора (M3, 
     names: ['', 'Договор'],
     divider: null,
     notBlank: [],
+    keepOriginal: [],
   };
 
   async function twoPasses() {
@@ -375,6 +376,7 @@ describe('хранилище сессии: правки редактора (M3, 
           names: ['Пусто', 'Начало', 'Конец'],
           divider: null,
           notBlank: [],
+          keepOriginal: [],
         },
         {},
       ),
@@ -388,6 +390,7 @@ describe('хранилище сессии: правки редактора (M3, 
       names: ['Начало', 'Конец'],
       divider: null,
       notBlank: [],
+      keepOriginal: [],
     };
     expect(store.snapshot()?.edits).toEqual(expected);
     expect((await journalOnDisk()).edits).toEqual(expected);
@@ -635,6 +638,7 @@ describe('хранилище сессии: роль прохода и добав
       names: ['', 'Акт'],
       divider: null,
       notBlank: [],
+      keepOriginal: [],
     };
     ok(await store.setEdits(edits, {}));
     const keysBefore = visibleKeys(store);
@@ -818,5 +822,57 @@ describe('хранилище сессии: режим пустых оборот�
     ok(await store.markSaved());
     ok(await store.setEdits({ ...EMPTY_EDITS, notBlank: ['p02-s01-0002'] }, {}));
     expect(store.snapshot()?.saved).toBe(true);
+  });
+});
+
+describe('хранилище сессии: режим выравнивания (M6, U4; ADR 0004, амендмент 2026-10-28)', () => {
+  it('замораживается при первом проходе, второй проход его не меняет, переживает запись', async () => {
+    const { store, accept, journalOnDisk } = await setup();
+    ok(await store.beginPass(ORIGIN, null, 'keep', 'auto'));
+    await accept(1, 2);
+    ok(await store.endSegment('completed'));
+    ok(await store.beginPass(ORIGIN, null, 'keep', 'off'));
+    await accept(3, 4);
+    ok(await store.endSegment('completed'));
+
+    expect(store.snapshot()?.straighten).toBe('auto');
+    expect((await journalOnDisk()).straighten).toBe('auto');
+    expect(store.snapshot()?.edits.keepOriginal).toEqual([]);
+  });
+
+  it('без аргумента — «не выравнивать»; вакантный журнал и новая сессия замораживают заново', async () => {
+    const { store, accept, journalOnDisk } = await setup();
+    ok(await store.beginPass(ORIGIN, null));
+    await accept(1, 1);
+    ok(await store.endSegment('completed'));
+    expect(store.snapshot()?.straighten).toBe('off');
+    ok(await store.closeSession());
+
+    // Проход без страниц сессию не открывает: следующий проход замораживает режим заново.
+    ok(await store.beginPass(ORIGIN, null, 'keep', 'off'));
+    ok(await store.endSegment('completed'));
+    expect(store.snapshot()).toBeNull();
+    ok(await store.beginPass(ORIGIN, null, 'keep', 'auto'));
+    await accept(1, 1);
+    ok(await store.endSegment('completed'));
+    expect(store.snapshot()?.straighten).toBe('auto');
+    expect((await journalOnDisk()).straighten).toBe('auto');
+  });
+
+  it('откат выравнивания пишется правкой и читается дословно; новая сессия его не наследует', async () => {
+    const { store, accept } = await setup();
+    ok(await store.beginPass(ORIGIN, null, 'keep', 'auto'));
+    await accept(1, 2);
+    ok(await store.endSegment('completed'));
+
+    const kept = { ...EMPTY_EDITS, keepOriginal: ['p01-s01-0002'] };
+    ok(await store.setEdits(kept, {}));
+    expect(store.snapshot()?.edits.keepOriginal).toEqual(['p01-s01-0002']);
+    ok(await store.closeSession());
+
+    ok(await store.beginPass(ORIGIN, null, 'keep', 'auto'));
+    await accept(1, 1);
+    ok(await store.endSegment('completed'));
+    expect(store.snapshot()?.edits.keepOriginal).toEqual([]);
   });
 });

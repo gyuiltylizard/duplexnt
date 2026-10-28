@@ -10,6 +10,7 @@ import { parseCapabilities } from '../escl/capabilities';
 import type { ConnectedScanner, ConnectorOptions } from '../escl/connect';
 import { scanOptionsOf } from '../escl/scan-settings';
 import { layoutOf } from '../storage/layout';
+import { openSettingsStore } from '../storage/settings-store';
 import { realStorageFs, StorageError } from '../storage/storage-fs';
 import { interruptionError, openPassService } from './pass-service';
 
@@ -79,6 +80,7 @@ describe('служба прохода без сканера', () => {
       storage: { incompatible: false, unsaved: false },
       notices: [],
       blankMode: 'hide',
+      straightenMode: 'auto',
       seenHints: [],
     });
   });
@@ -582,6 +584,7 @@ describe('служба прохода: правки редактора (M3, U3)'
     names: ['', 'Договор'],
     divider: null,
     notBlank: [],
+    keepOriginal: [],
   };
 
   it('правка видна в снимке и сборке, снимает «сохранено» и переживает перезапуск службы (AE1)', async () => {
@@ -852,6 +855,7 @@ describe('служба прохода: пакетное сохранение (M3
         names: ['', ''],
         divider: null,
         notBlank: [],
+        keepOriginal: [],
       },
       {},
     );
@@ -1058,6 +1062,20 @@ describe('служба прохода: пакетное сохранение (M3
       fail('sessionConflict', { reason: 'noSession' }),
     );
     expect(service.sessionId()).toBeNull();
+  });
+});
+
+describe('служба прохода: режим выравнивания (M6, U4)', () => {
+  it('в снимке — из настроек: без файла «выравнивать», записанный режим помнится между открытиями', async () => {
+    const root = await makeTempDataRoot();
+    expect((await openPassService(root)).snapshot().straightenMode).toBe('auto');
+
+    expect(await (await openSettingsStore(root)).setStraightenMode('off')).toEqual({
+      ok: true,
+      value: undefined,
+    });
+
+    expect((await openPassService(root)).snapshot().straightenMode).toBe('off');
   });
 });
 

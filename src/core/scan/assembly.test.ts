@@ -187,6 +187,7 @@ describe('сборка: правки поверх автопорядка (M3, U2
         names: ['Счёт', 'Акт'],
         divider: null,
         notBlank: [],
+        keepOriginal: [],
       },
     });
     const assembly = assembleSession(session);
@@ -237,6 +238,7 @@ describe('сборка: правки поверх автопорядка (M3, U2
         names: [''],
         divider: null,
         notBlank: [],
+        keepOriginal: [],
       },
     });
     const assembly = assembleSession(session);

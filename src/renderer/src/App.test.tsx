@@ -35,6 +35,7 @@ describe('каркас приложения', () => {
         },
         session: {
           blankMode: 'keep',
+          straighten: 'off',
           id: 'session.x',
           backsDeclined: false,
           saved: false,
@@ -69,6 +70,7 @@ describe('каркас приложения', () => {
       makeSnapshot({
         session: {
           blankMode: 'keep',
+          straighten: 'off',
           id: 'session.x',
           backsDeclined: false,
           saved: false,
@@ -120,6 +122,7 @@ describe('каркас приложения', () => {
       makeSnapshot({
         session: {
           blankMode: 'keep',
+          straighten: 'off',
           id: 'session.x',
           backsDeclined: false,
           saved: false,
@@ -153,6 +156,7 @@ describe('каркас приложения', () => {
       makeSnapshot({
         session: {
           blankMode: 'keep',
+          straighten: 'off',
           id: 'session.x',
           backsDeclined: true,
           saved: false,
@@ -279,6 +283,7 @@ describe('каркас приложения', () => {
         },
         session: {
           blankMode: 'keep',
+          straighten: 'off',
           id: 'session.x',
           backsDeclined: false,
           saved: false,
@@ -323,6 +328,7 @@ describe('каркас приложения', () => {
         },
         session: {
           blankMode: 'keep',
+          straighten: 'off',
           id: 'session.x',
           backsDeclined: false,
           saved: false,
@@ -365,6 +371,7 @@ describe('каркас приложения', () => {
         notices: ['pagesLost'],
         session: {
           blankMode: 'keep',
+          straighten: 'off',
           id: 'session.x',
           backsDeclined: false,
           saved: false,
@@ -402,6 +409,7 @@ describe('каркас приложения', () => {
       canAccept: true,
       session: {
         blankMode: 'keep',
+        straighten: 'off',
         id: 'session.x',
         backsDeclined: false,
         saved: false,
@@ -496,6 +504,7 @@ describe('каркас приложения', () => {
         canAccept: true,
         session: {
           blankMode: 'keep',
+          straighten: 'off',
           id: 'session.x',
           backsDeclined: false,
           saved: false,
@@ -542,6 +551,7 @@ describe('каркас приложения', () => {
       },
       session: {
         blankMode: 'keep',
+        straighten: 'off',
         id: 'session.x',
         backsDeclined: false,
         saved: false,
@@ -579,6 +589,7 @@ describe('каркас приложения', () => {
       seq: 2,
       session: {
         blankMode: 'keep',
+        straighten: 'off',
         id: 'session.x',
         backsDeclined: false,
         saved: false,
@@ -658,6 +669,7 @@ describe('каркас приложения', () => {
     const flip = makeSnapshot({
       session: {
         blankMode: 'keep',
+        straighten: 'off',
         id: 'session.x',
         backsDeclined: false,
         saved: false,
@@ -683,6 +695,7 @@ describe('каркас приложения', () => {
       seq: 2,
       session: {
         blankMode: 'keep',
+        straighten: 'off',
         id: 'session.x',
         backsDeclined: true,
         saved: false,
@@ -718,6 +731,7 @@ describe('каркас приложения', () => {
     const flip = makeSnapshot({
       session: {
         blankMode: 'keep',
+        straighten: 'off',
         id: 'session.x',
         backsDeclined: false,
         saved: false,
@@ -743,6 +757,7 @@ describe('каркас приложения', () => {
       seq: 2,
       session: {
         blankMode: 'keep',
+        straighten: 'off',
         id: 'session.x',
         backsDeclined: false,
         saved: false,
@@ -803,6 +818,7 @@ describe('каркас приложения', () => {
       makeSnapshot({
         session: {
           blankMode: 'keep',
+          straighten: 'off',
           id: 'session.x',
           backsDeclined: false,
           saved: false,
@@ -855,6 +871,7 @@ describe('каркас приложения', () => {
         canAccept: true,
         session: {
           blankMode: 'keep',
+          straighten: 'off',
           id: 'session.x',
           backsDeclined: false,
           saved: false,

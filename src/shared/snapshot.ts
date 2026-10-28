@@ -6,6 +6,7 @@
 // В снимке нет абсолютных путей и адресов заданий (KTD-39): страница адресуется ключом.
 
 import type { BlankFlag, BlankMode, BlankSummary } from './blank';
+import type { StraightenMode } from './straighten';
 import type { HintId } from './hints';
 import type { SessionEdits } from './edits';
 import type { DomainError } from './errors';
@@ -229,6 +230,11 @@ export interface SessionSnapshot {
    * первого прохода, в редакторе не меняется; сессии журнала v5 — «оставлять».
    */
   readonly blankMode: BlankMode;
+  /**
+   * Режим выравнивания перекоса сессии (M6; ADR 0004, амендмент 2026-10-28): заморожен при
+   * старте первого прохода, в редакторе не меняется; сессии журнала v7 — «не выравнивать».
+   */
+  readonly straighten: StraightenMode;
 }
 
 /** Угол страницы при показе и в PDF по часовой стрелке (M3, KTD-4). */
@@ -500,6 +506,11 @@ export interface Snapshot {
    * текущей сессии — в `session.blankMode`: он заморожен и может отличаться.
    */
   readonly blankMode: BlankMode;
+  /**
+   * Режим выравнивания перекоса из настроек (M6, R13) — для ряда в `setup`. Режим текущей
+   * сессии — в `session.straighten`: он заморожен и может отличаться.
+   */
+  readonly straightenMode: StraightenMode;
   /** Подсказки, уже показанные с привлечением внимания (B-4): больше не мигают. */
   readonly seenHints: readonly HintId[];
 }

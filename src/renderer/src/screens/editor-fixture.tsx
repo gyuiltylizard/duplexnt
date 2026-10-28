@@ -64,6 +64,7 @@ export function makeSnapshot(
     edits: EMPTY_EDITS,
     assembled: null,
     blankMode: 'keep',
+    straighten: 'off',
     passes,
     ...sessionOverrides,
   };
@@ -76,6 +77,7 @@ export function makeSnapshot(
     storage: { incompatible: false, unsaved: false },
     notices: [],
     blankMode: 'hide',
+    straightenMode: 'auto',
     seenHints: [],
     ...overrides,
     session,

@@ -61,6 +61,7 @@ const journalOf = (passes: readonly JournalPass[], extra: Partial<Journal> = {})
   edits: EMPTY_EDITS,
   assembled: null,
   blankMode: 'keep',
+  straighten: 'off',
   ...extra,
 });
 

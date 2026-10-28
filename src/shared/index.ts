@@ -147,3 +147,4 @@ export {
   type ErrorDetails,
   type Result,
 } from './errors';
+export { DEFAULT_STRAIGHTEN_MODE, STRAIGHTEN_MODES, type StraightenMode } from './straighten';

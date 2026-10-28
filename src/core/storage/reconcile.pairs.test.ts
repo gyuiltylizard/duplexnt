@@ -5,7 +5,7 @@ import { EMPTY_EDITS } from '@shared';
 import { dirSnapshot } from '../../../test/support/dir-snapshot';
 import { journalOnDisk, rolesOf } from '../../../test/support/session-store';
 import { makeTempDataRoot } from '../../../test/support/temp-data-root';
-import { pendingPairOf, type JournalPass } from './journal';
+import { JOURNAL_VERSION, pendingPairOf, type JournalPass } from './journal';
 import { layoutOf } from './layout';
 import { openSessionStore } from './reconcile';
 
@@ -34,7 +34,7 @@ const passAt = (
 });
 
 const journalOf = (passes: readonly JournalPass[], extra: object = {}) => ({
-  version: 7,
+  version: JOURNAL_VERSION,
   sessionId: SESSION,
   nextPass: Math.max(0, ...passes.map((pass) => pass.number)) + 1,
   passes,
@@ -44,6 +44,7 @@ const journalOf = (passes: readonly JournalPass[], extra: object = {}) => ({
   edits: EMPTY_EDITS,
   assembled: null as readonly string[] | null,
   blankMode: 'keep' as const,
+  straighten: 'off' as const,
   ...extra,
 });
 
@@ -88,8 +89,9 @@ describe('сверка при запуске: пары добавленных н
   it('журнал версии 6 переписывается текущей версией: добавленный набор остаётся односторонним, ссылки пары и решения нет; повтор ничего не меняет', async () => {
     const passes = [...MAIN, passAt(3, 1, { kind: 'added', after: 'p01-s01-0001' })];
     const v6 = {
-      ...journalOf(passes),
+      ...omit(journalOf(passes), 'straighten'),
       version: 6,
+      edits: omit(EMPTY_EDITS, 'keepOriginal'),
       passes: passes.map((pass) => omit(pass, 'pair', 'backsDecision')),
     };
     const { root, layout } = await seed(v6, filesOf(passes));
@@ -101,7 +103,7 @@ describe('сверка при запуске: пары добавленных н
       version: number;
       passes: { kind: string; pair: unknown; backsDecision: unknown }[];
     };
-    expect(raw.version).toBe(7);
+    expect(raw.version).toBe(JOURNAL_VERSION);
     expect(raw.passes.map((pass) => [pass.kind, pass.pair, pass.backsDecision])).toEqual([
       ['fronts', null, null],
       ['backs', null, null],
