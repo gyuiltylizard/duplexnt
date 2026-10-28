@@ -57,6 +57,26 @@ export {
 export type { DiscoveredScanner, DiscoveryState } from './discovery';
 
 export {
+  FAN_LINE_MM,
+  isSkewProfile,
+  SKEW_OUTCOMES,
+  skewFanMm,
+  skewLateralRows,
+  skewMaxAbsDeg,
+  skewProfileOf,
+  skewTanRows,
+  skewThetaAt,
+  STRAIGHTEN_GEOMETRY_VERSION,
+  type SkewBand,
+  type SkewBandReason,
+  type SkewContrast,
+  type SkewMeasure,
+  type SkewOutcome,
+  type SkewPrior,
+  type SkewProfile,
+} from './skew';
+
+export {
   EDIT_ANGLES,
   EMPTY_EDITS,
   MAX_DOCUMENT_NAME_LENGTH,

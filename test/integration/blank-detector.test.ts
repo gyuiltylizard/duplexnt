@@ -14,8 +14,10 @@ const PIXEL_LIMIT = 5100 * 8400;
 // Чистый лист с дырками дырокола — тоже пустой: такой оборот пользователь хочет скрыть.
 // `pencil-number-gray-200` — оборот с одним бледным карандашным номером с приёмки M4: при
 // пороге 5e-4 он скрывался; порог снижен до середины между ним и дыроколом (версия 2).
+// Сканы детектора перекоса (M6, U1: косые листы `fan-*`, сетка с кривой закладкой, фото) —
+// страницы с содержимым: детектор пустых их не скрывает.
 const BLANK_PREFIXES = ['blank-', 'bleed-', 'punched-'];
-const CONTENT_PREFIXES = ['pencil-', 'text-', 'signature-'];
+const CONTENT_PREFIXES = ['pencil-', 'text-', 'signature-', 'fan-', 'tilt-', 'photo-'];
 
 const classOf = (name: string): 'blank' | 'content' | null =>
   BLANK_PREFIXES.some((prefix) => name.startsWith(prefix))
