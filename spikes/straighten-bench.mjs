@@ -1051,6 +1051,21 @@ async function gridAnalysis(bytes, { dpi, log }) {
     log(
       `  k (доля бокового дрейфа, МНК по точкам с |θ| > 0,1°) = ${den > 0 ? (num / den).toFixed(2) : '—'}`,
     );
+    // Модель «наклон вертикали = θ строк + φ»: φ — постоянное смещение направления подачи
+    // относительно строк (устройство / прошивка); оценка — среднее (tilt − θ) по полосам.
+    let phiSum = 0;
+    let phiN = 0;
+    let phi2 = 0;
+    for (const b of buckets.values()) {
+      const d = b.tilt / b.n - b.theta / b.n;
+      phiSum += d;
+      phi2 += d * d;
+      phiN += 1;
+    }
+    const phi = phiSum / phiN;
+    log(
+      `  φ (наклон вертикалей минус угол строк, среднее по полосам) = ${phi.toFixed(3)}° ± ${Math.sqrt(phi2 / phiN - phi * phi).toFixed(3)}`,
+    );
   }
   return {
     horizontals,
