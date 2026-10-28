@@ -9,6 +9,7 @@ import {
   syntheticGray,
   WORKING_HEIGHT,
   WORKING_WIDTH,
+  type SyntheticContent,
   type ThetaOf,
 } from '../../../test/support/synthetic-page';
 import { measureSkew } from '../detect/skew';
@@ -49,7 +50,7 @@ function rawOf(gray: ReturnType<typeof syntheticGray>): RawImage {
   return { ...gray, channels: 1 };
 }
 
-async function straightened(theta: ThetaOf, content: 'text' | 'grid' = 'text') {
+async function straightened(theta: ThetaOf, content: SyntheticContent = 'text') {
   const distorted = syntheticGray({ theta, lateral: true, content });
   const out = await straightenRaw(rawOf(distorted), denseProfile(theta), {
     yieldBetween: immediate,

@@ -2,10 +2,7 @@ import {
   decodeWorkingGray,
   INK_DELTA,
   marginHistogramOf,
-  MARGIN_RATIO,
-  PAPER_WHITE_PERCENTILE,
   paperWhiteOf,
-  WORKING_LONG_SIDE,
   type GrayImage,
 } from './gray';
 
@@ -21,9 +18,7 @@ import {
 // `BLANK_DETECTOR_VERSION`: кэш оценок с другой версией пересчитывается (KTD3).
 //
 // Рабочий размер, обрезка полей, белое бумаги и дельта чернил — общие с детектором перекоса
-// подачи (M6) и живут в `gray.ts`; здесь они реэкспортируются для прежних импортов.
-
-export { INK_DELTA, MARGIN_RATIO, PAPER_WHITE_PERCENTILE, WORKING_LONG_SIDE, type GrayImage };
+// подачи (M6) и живут в `gray.ts`.
 
 /**
  * Версия алгоритма и констант; хранится в кэше оценок.

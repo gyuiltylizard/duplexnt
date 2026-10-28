@@ -1,13 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-  BLANK_DETECTOR_VERSION,
-  BLANK_THRESHOLD,
-  INK_DELTA,
-  inkRatioOf,
-  isBlank,
-  MARGIN_RATIO,
-  type GrayImage,
-} from './blank';
+import { BLANK_DETECTOR_VERSION, BLANK_THRESHOLD, inkRatioOf, isBlank } from './blank';
+import { INK_DELTA, MARGIN_RATIO, type GrayImage } from './gray';
 
 // Чистая часть детектора (план M4, U2): доля чернильных пикселей по готовым серым пикселям и
 // вердикт по порогу. Декодирование и уменьшение через `sharp` — `test/integration`.

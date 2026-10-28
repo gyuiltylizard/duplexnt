@@ -7,6 +7,7 @@ import {
   quadraticTheta,
   stepTheta,
   syntheticGray,
+  type SyntheticContent,
   type ThetaOf,
 } from '../../../test/support/synthetic-page';
 import {
@@ -29,7 +30,7 @@ import { marginHistogramOf, paperWhiteOf } from './gray';
 /** Сразу, без макрозадачи: тестам точка уступки не нужна, но считается. */
 const immediate = () => Promise.resolve();
 
-async function measure(theta: ThetaOf, content?: 'text' | 'blank' | 'band' | 'photo') {
+async function measure(theta: ThetaOf, content?: SyntheticContent) {
   const yields: number[] = [];
   const gray = syntheticGray({ theta, ...(content === undefined ? {} : { content }) });
   const result = await measureSkew(gray, {
