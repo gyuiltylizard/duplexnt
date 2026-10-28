@@ -18,7 +18,10 @@
 //       синтетическая страница с известным профилем: декод / измерение / warp / энкод,
 //       паузы цикла событий, пик и плато RSS, отношение размера выхода к входу
 //
-// Единицы: профиль θ(u) = a + b·(u − 0.5) + c·(u − 0.5)², u — доля высоты, углы — градусы.
+// Единицы: u — доля высоты, углы — градусы. Профиль — одно из семейств: узлы по полосам
+// (`knots`, по умолчанию; монотонный сплайн), сглаженная ступень (`step`), квадратика
+// θ(u) = a + b·(u − 0.5) + c·(u − 0.5)² (`quad`). На ET-3850 профиль — ступень: верх и низ
+// листа под разными углами, переход ~60 мм около середины (остановка подачи).
 // Соглашение знака: коррекция out(x, y) = in(x, y − (x − xc)·tanθ(y)); синтетика искажается
 // обратным образом, так что бенч проверяет согласованность знака детектора и ресэмплера между
 // собой. Знак относительно сканера проверяется на сетке.
@@ -37,7 +40,7 @@ const WORKING_LONG_SIDE = 1400;
 const INK_DELTA = 40;
 const PAPER_WHITE_PERCENTILE = 0.9;
 const EDGE_MASK = 0.03;
-const BAND_MM = 50;
+let BAND_MM = 30; // --band-mm; на сетках ET-3850 30 мм (с окном Ханна) даёт ≤ 0,5 мм остатка
 const BAND_OVERLAP = 0.5;
 const COARSE_RANGE = 2.0;
 const COARSE_STEP = 0.2;
@@ -47,7 +50,7 @@ const MIN_INK_FRACTION = 0.002;
 /** Выше — не документ (фото, заливка): строкового профиля нет, а уверенность обманчива. */
 const MAX_INK_FRACTION = 0.3;
 /** Половины полосы по ширине должны дать один угол: две колонки и графика расходятся. */
-const HALVES_TOLERANCE_DEG = 0.15;
+let HALVES_TOLERANCE_DEG = 0.25; // --halves-tol; узкие полосы шумнее
 /** Остаток подгонки полос к профилю выше — полосы зацепились не за строки. */
 const FIT_RESIDUAL_MAX_DEG = 0.1;
 /** Дыра в покрытии валидными полосами больше — квадратике не на что опереться, берём прямую. */
@@ -56,6 +59,8 @@ const CONFIDENCE_MIN = 3;
 const MIN_BANDS = 3;
 const MIN_COVERAGE = 0.4;
 const LEVEL_DEG = 0.1;
+/** Доля бокового дрейфа от интеграла tanθ: 1 — чистый поворот, 0 — чистый срез (меряется сеткой). */
+const LATERAL_K = 1; // сетки ET-3850: k = 0,92–1,02 — лист поворачивается целиком
 const IMPROVE_K = 1.3;
 const A4_HEIGHT_MM = 297;
 const A4_WIDTH_MM = 210;
@@ -64,7 +69,85 @@ const DEG = Math.PI / 180;
 
 // --- Профиль ---------------------------------------------------------------------------------
 
-const thetaAt = (profile, u) => profile.a + profile.b * (u - 0.5) + profile.c * (u - 0.5) ** 2;
+/** Наклоны монотонного кубического сплайна (Fritsch–Carlson) по узлам. */
+function pchipSlopes(us, ys) {
+  const n = us.length;
+  const d = new Array(n).fill(0);
+  if (n < 2) return d;
+  const h = [];
+  const delta = [];
+  for (let i = 0; i < n - 1; i += 1) {
+    h.push(us[i + 1] - us[i]);
+    delta.push((ys[i + 1] - ys[i]) / (us[i + 1] - us[i]));
+  }
+  if (n === 2) return [delta[0], delta[0]];
+  for (let i = 1; i < n - 1; i += 1) {
+    if (delta[i - 1] * delta[i] <= 0) {
+      d[i] = 0;
+    } else {
+      const w1 = 2 * h[i] + h[i - 1];
+      const w2 = h[i] + 2 * h[i - 1];
+      d[i] = (w1 + w2) / (w1 / delta[i - 1] + w2 / delta[i]);
+    }
+  }
+  const endSlope = (h0, h1, d0, d1) => {
+    let slope = ((2 * h0 + h1) * d0 - h0 * d1) / (h0 + h1);
+    if (Math.sign(slope) !== Math.sign(d0)) slope = 0;
+    else if (Math.sign(d0) !== Math.sign(d1) && Math.abs(slope) > 3 * Math.abs(d0)) slope = 3 * d0;
+    return slope;
+  };
+  d[0] = endSlope(h[0], h[1], delta[0], delta[1]);
+  d[n - 1] = endSlope(h[n - 2], h[n - 3], delta[n - 2], delta[n - 3]);
+  return d;
+}
+
+/** θ(u) по узлам: монотонный кубический сплайн внутри, константа за крайними узлами. */
+function thetaKnots(profile, u) {
+  const { us, thetas } = profile;
+  if (u <= us[0]) return thetas[0];
+  if (u >= us[us.length - 1]) return thetas[thetas.length - 1];
+  if (profile.slopes === undefined) profile.slopes = pchipSlopes(us, thetas);
+  let i = 0;
+  while (us[i + 1] < u) i += 1;
+  const h = us[i + 1] - us[i];
+  const t = (u - us[i]) / h;
+  const t2 = t * t;
+  const t3 = t2 * t;
+  const h00 = 2 * t3 - 3 * t2 + 1;
+  const h10 = t3 - 2 * t2 + t;
+  const h01 = -2 * t3 + 3 * t2;
+  const h11 = t3 - t2;
+  return (
+    h00 * thetas[i] +
+    h10 * h * profile.slopes[i] +
+    h01 * thetas[i + 1] +
+    h11 * h * profile.slopes[i + 1]
+  );
+}
+
+/**
+ * θ(u) по профилю одного из семейств: `knots` (узлы по полосам), `step` (сглаженная ступень
+ * t1 → t2 с центром u0 и шириной w; логистика, 76 % перехода внутри ±w/2), иначе квадратика.
+ */
+const thetaAt = (profile, u) => {
+  if (profile.kind === 'knots') return thetaKnots(profile, u);
+  if (profile.kind === 'step') {
+    const z = (u - profile.u0) / profile.w;
+    const sigma = 1 / (1 + Math.exp(-4 * z));
+    return profile.t1 + (profile.t2 - profile.t1) * sigma;
+  }
+  return profile.a + profile.b * (u - 0.5) + profile.c * (u - 0.5) ** 2;
+};
+
+function describeProfile(profile) {
+  if (profile.kind === 'knots') {
+    return `узлы ${profile.us.map((u, i) => `${u.toFixed(2)}:${profile.thetas[i].toFixed(2)}`).join(' ')}`;
+  }
+  if (profile.kind === 'step') {
+    return `ступень верх ${profile.t1.toFixed(3)}° низ ${profile.t2.toFixed(3)}° u0=${profile.u0.toFixed(2)} w=${profile.w.toFixed(2)}`;
+  }
+  return `квадратика a=${profile.a.toFixed(3)} b=${profile.b.toFixed(3)} c=${profile.c.toFixed(3)}`;
+}
 
 /** tanθ по строкам картинки высоты `height` (Float64Array). */
 function tanRows(profile, height) {
@@ -76,7 +159,7 @@ function tanRows(profile, height) {
 }
 
 /** Боковой дрейф строк — интеграл tanθ от середины высоты, в пикселях (Float64Array). */
-function lateralRows(tan, height) {
+function lateralRows(tan, height, k = LATERAL_K) {
   const out = new Float64Array(height);
   const yc = Math.floor(height / 2);
   let acc = 0;
@@ -89,6 +172,7 @@ function lateralRows(tan, height) {
     acc -= tan[y];
     out[y] = acc;
   }
+  for (let y = 0; y < height; y += 1) out[y] *= k;
   return out;
 }
 
@@ -144,7 +228,7 @@ function profileScore(bins) {
 }
 
 /** Строковый профиль чернил при наклоне на угол (градусы): субпиксельное распределение. */
-function projectAt(xs, ys, count, stride, angleDeg, bins, offset) {
+function projectAt(xs, ys, ws, count, stride, angleDeg, bins, offset) {
   bins.fill(0);
   const t = Math.tan(angleDeg * DEG);
   const last = bins.length - 1;
@@ -153,22 +237,25 @@ function projectAt(xs, ys, count, stride, angleDeg, bins, offset) {
     const base = Math.floor(row);
     if (base < 0 || base >= last) continue;
     const f = row - base;
-    bins[base] += 1 - f;
-    bins[base + 1] += f;
+    const w = ws[i];
+    bins[base] += w * (1 - f);
+    bins[base + 1] += w * f;
   }
   return profileScore(bins);
 }
 
 /** Угол по списку пикселей: грубый перебор, уточнение, парабола; {angle, confidence}. */
-function angleOf(xs, ys, count, bins, offset, filter = null, around = null) {
+function angleOf(xs, ys, ws, count, bins, offset, filter = null, around = null) {
   // Половины: пиксели с xs по одну сторону от нуля — через фильтр (копия списка).
   let sx = xs.subarray(0, count);
   let sy = ys.subarray(0, count);
+  let sw = ws.subarray(0, count);
   if (filter !== null) {
     const keep = [];
     for (let i = 0; i < count; i += 1) if (filter(xs[i])) keep.push(i);
     sx = Float32Array.from(keep, (i) => xs[i]);
     sy = Float32Array.from(keep, (i) => ys[i]);
+    sw = Float32Array.from(keep, (i) => ws[i]);
   }
   const total = sx.length;
   if (total < 50) return { angle: null, confidence: 0 };
@@ -179,21 +266,31 @@ function angleOf(xs, ys, count, bins, offset, filter = null, around = null) {
   // Половины ищутся в окрестности угла всей полосы: грубый перебор не утраивается.
   const from = around === null ? -COARSE_RANGE : around - 3 * COARSE_STEP;
   const to = around === null ? COARSE_RANGE : around + 3 * COARSE_STEP;
+  const coarse = [];
   for (let angle = from; angle <= to + 1e-9; angle += COARSE_STEP) {
-    const score = projectAt(sx, sy, total, stride, angle, bins, offset);
+    const score = projectAt(sx, sy, sw, total, stride, angle, bins, offset);
+    coarse.push(score);
     if (score > best) {
       best = score;
       bestAngle = angle;
     }
     if (score < worst) worst = score;
   }
+  // Резкость пика: лучший счёт против соседей на ±0,4° (строки дают острый пик, штриховка и
+  // пятна — плоский). Независима от размаха перебора, в отличие от max/min.
+  const bestIndex = coarse.indexOf(best);
+  const neighbours = [bestIndex - 2, bestIndex + 2].filter((i) => i >= 0 && i < coarse.length);
+  const sharpness =
+    neighbours.length === 0
+      ? 1
+      : best / (neighbours.reduce((sum, i) => sum + coarse[i], 0) / neighbours.length);
   const fine = [];
   for (
     let angle = bestAngle - FINE_RANGE;
     angle <= bestAngle + FINE_RANGE + 1e-9;
     angle += FINE_STEP
   ) {
-    fine.push({ angle, score: projectAt(sx, sy, total, 1, angle, bins, offset) });
+    fine.push({ angle, score: projectAt(sx, sy, sw, total, 1, angle, bins, offset) });
   }
   let k = 0;
   for (let i = 1; i < fine.length; i += 1) if (fine[i].score > fine[k].score) k = i;
@@ -206,7 +303,7 @@ function angleOf(xs, ys, count, bins, offset, filter = null, around = null) {
     if (denom < 0) angle += (FINE_STEP * (s0 - s2)) / (2 * denom);
   }
   const bestCoarseScale = stride === 1 ? fine[k].score : fine[k].score / (stride * stride);
-  return { angle, confidence: worst > 0 ? bestCoarseScale / worst : Infinity };
+  return { angle, confidence: worst > 0 ? bestCoarseScale / worst : Infinity, sharpness };
 }
 
 /**
@@ -225,6 +322,7 @@ async function bandAngles(gray, { pxPerMm, log = () => {}, yieldBetween = true, 
   const x1 = width - x0;
   const xs = new Float32Array(width * bandPx);
   const ys = new Float32Array(width * bandPx);
+  const ws = new Float32Array(width * bandPx);
   const maxShift = Math.ceil((width / 2) * Math.tan(COARSE_RANGE * DEG)) + 2;
   const bins = new Float64Array(bandPx + 2 * maxShift + 2);
   const bands = [];
@@ -233,8 +331,12 @@ async function bandAngles(gray, { pxPerMm, log = () => {}, yieldBetween = true, 
     const yc = top + bandPx / 2;
     let count = 0;
     let sumY = 0;
+    let sumW = 0;
     for (let y = top; y < top + bandPx; y += 1) {
       const row = y * width;
+      // Окно Ханна по высоте полосы: обрез полосы по горизонтали сам по себе — горизонтальный
+      // край в чернилах, и счёт тянется к 0° (штриховка под 12° давала ровно 0,000°).
+      const hann = 0.5 - 0.5 * Math.cos((2 * Math.PI * (y - top + 0.5)) / bandPx);
       for (let x = x0; x < x1; x += 1) {
         if (data[row + x] < inkBelow) {
           xs[count] = x - xc;
@@ -243,14 +345,16 @@ async function bandAngles(gray, { pxPerMm, log = () => {}, yieldBetween = true, 
           // (мёртвая зона ±0,1° на синтетике). Постоянная доля на пиксель — одинаковое
           // размытие при любом угле.
           ys[count] = y - yc + ((count * 0x9e3779b1) >>> 0) / 2 ** 32;
-          sumY += y - yc;
+          ws[count] = hann;
+          sumY += hann * (y - yc);
+          sumW += hann;
           count += 1;
         }
       }
     }
     // Положение полосы — по центроиду чернил, а не по геометрии: полоса с текстом только в
     // нижней половине меряет угол там, где текст.
-    const u = (count > 0 ? yc + sumY / count : yc) / height;
+    const u = (sumW > 0 ? yc + sumY / sumW : yc) / height;
     const inkFraction = count / (bandPx * (x1 - x0));
     if (inkFraction < MIN_INK_FRACTION) {
       bands.push({ u, inkFraction, angle: null, confidence: 0, valid: false, reason: 'no-ink' });
@@ -268,9 +372,9 @@ async function bandAngles(gray, { pxPerMm, log = () => {}, yieldBetween = true, 
       continue;
     }
     const offset = bandPx / 2 + maxShift;
-    const whole = angleOf(xs, ys, count, bins, offset);
-    const left = angleOf(xs, ys, count, bins, offset, (x) => x < 0, whole.angle);
-    const right = angleOf(xs, ys, count, bins, offset, (x) => x >= 0, whole.angle);
+    const whole = angleOf(xs, ys, ws, count, bins, offset);
+    const left = angleOf(xs, ys, ws, count, bins, offset, (x) => x < 0, whole.angle);
+    const right = angleOf(xs, ys, ws, count, bins, offset, (x) => x >= 0, whole.angle);
     const halvesGap =
       left.angle === null || right.angle === null ? Infinity : Math.abs(left.angle - right.angle);
     const reason =
@@ -290,6 +394,7 @@ async function bandAngles(gray, { pxPerMm, log = () => {}, yieldBetween = true, 
       inkFraction,
       angle,
       confidence: whole.confidence,
+      sharpness: whole.sharpness,
       halvesGap,
       valid: reason === null,
       reason,
@@ -297,7 +402,7 @@ async function bandAngles(gray, { pxPerMm, log = () => {}, yieldBetween = true, 
     });
     const halves = `${left.angle === null ? '-' : left.angle.toFixed(3)}/${right.angle === null ? '-' : right.angle.toFixed(3)}`;
     log(
-      `  полоса u=${u.toFixed(3)} чернил ${(inkFraction * 100).toFixed(2)}% угол ${angle.toFixed(3)}° (целиком ${whole.angle.toFixed(3)}) уверенность ${whole.confidence.toFixed(1)} половины ${halves}${reason ? ` X ${reason}` : ''}`,
+      `  полоса u=${u.toFixed(3)} чернил ${(inkFraction * 100).toFixed(2)}% угол ${angle.toFixed(3)}° (целиком ${whole.angle.toFixed(3)}) уверенность ${whole.confidence.toFixed(1)} резкость ${whole.sharpness.toFixed(2)} половины ${halves}${reason ? ` X ${reason}` : ''}`,
     );
     onBand?.(performance.now() - chunkStarted);
     if (yieldBetween) await yieldNow();
@@ -377,8 +482,56 @@ function fitQuadratic(points, { linear = false } = {}) {
   return { profile, residuals, maxResidual: Math.max(...residuals.map(Math.abs)), linear };
 }
 
+/** Сглаженная ступень по точкам {u, theta, w}: перебор u0 и w, линейная подгонка t1, t2. */
+function fitStep(points) {
+  let best = null;
+  const widths = [0.05, 0.08, 0.12, 0.16, 0.2, 0.25, 0.32];
+  for (let u0 = 0.15; u0 <= 0.85 + 1e-9; u0 += 0.01) {
+    for (const w of widths) {
+      let s11 = 0;
+      let s12 = 0;
+      let s22 = 0;
+      let r1 = 0;
+      let r2 = 0;
+      for (const p of points) {
+        const sigma = 1 / (1 + Math.exp((-4 * (p.u - u0)) / w));
+        const a = 1 - sigma;
+        const wt = p.w ?? 1;
+        s11 += wt * a * a;
+        s12 += wt * a * sigma;
+        s22 += wt * sigma * sigma;
+        r1 += wt * a * p.theta;
+        r2 += wt * sigma * p.theta;
+      }
+      const det = s11 * s22 - s12 * s12;
+      if (Math.abs(det) < 1e-12) continue;
+      const t1 = (r1 * s22 - r2 * s12) / det;
+      const t2 = (r2 * s11 - r1 * s12) / det;
+      const profile = { kind: 'step', t1, t2, u0, w };
+      let cost = 0;
+      for (const p of points) cost += (p.w ?? 1) * (p.theta - thetaAt(profile, p.u)) ** 2;
+      if (best === null || cost < best.cost) best = { cost, profile };
+    }
+  }
+  const residuals = points.map((p) => p.theta - thetaAt(best.profile, p.u));
+  return { profile: best.profile, residuals, maxResidual: Math.max(...residuals.map(Math.abs)) };
+}
+
+/** Узлы по полосам: θ в центроиде каждой валидной полосы, между ними монотонный сплайн. */
+function knotsOf(points) {
+  const sorted = points.slice().sort((p, q) => p.u - q.u);
+  return {
+    profile: { kind: 'knots', us: sorted.map((p) => p.u), thetas: sorted.map((p) => p.theta) },
+    residuals: sorted.map(() => 0),
+    maxResidual: 0,
+  };
+}
+
 /** Измерение по серой рабочей картинке: полосы → профиль → гейт → исход (KTD-2, KTD-5). */
-async function measureGray(gray, { log = () => {}, yieldBetween = true, onBand } = {}) {
+async function measureGray(
+  gray,
+  { log = () => {}, yieldBetween = true, onBand, family = 'knots' } = {},
+) {
   const pxPerMm = Math.max(gray.width, gray.height) / A4_HEIGHT_MM;
   const started = performance.now();
   const { bands, white, bandFraction } = await bandAngles(gray, {
@@ -409,16 +562,22 @@ async function measureGray(gray, { log = () => {}, yieldBetween = true, onBand }
   let supportGap = 0;
   for (let i = 1; i < us.length; i += 1) supportGap = Math.max(supportGap, us[i] - us[i - 1]);
   const linear = supportGap > MAX_SUPPORT_GAP;
-  const fit = fitQuadratic(
-    valid.map((b) => ({ u: b.u, theta: b.angle, w: Math.min(b.confidence, 20) })),
-    { linear },
-  );
-  if (fit.maxResidual > FIT_RESIDUAL_MAX_DEG) {
+  const points = valid.map((b) => ({ u: b.u, theta: b.angle, w: Math.min(b.confidence, 20) }));
+  const quad = fitQuadratic(points, { linear });
+  const step = linear ? quad : fitStep(points);
+  const knots = linear ? quad : knotsOf(points);
+  // Гейт формы: полосы должны ложиться хотя бы на одно гладкое семейство — дуга или ступень;
+  // прыгающие углы (две колонки, графика) не ложатся ни на одно.
+  const shapeResidual = Math.min(quad.maxResidual, step.maxResidual);
+  const fit = family === 'quad' ? quad : family === 'step' ? step : knots;
+  const shape = { quad, step, shapeResidual };
+  if (shapeResidual > FIT_RESIDUAL_MAX_DEG) {
     return {
       ...base,
       outcome: 'unmeasurable',
-      reason: `остаток подгонки ${fit.maxResidual.toFixed(3)}°`,
+      reason: `остаток формы ${shapeResidual.toFixed(3)}° (дуга ${quad.maxResidual.toFixed(3)}, ступень ${step.maxResidual.toFixed(3)})`,
       fit,
+      ...shape,
       coverage,
       linear,
       supportGap,
@@ -435,6 +594,7 @@ async function measureGray(gray, { log = () => {}, yieldBetween = true, onBand }
     linear,
     supportGap,
     fit,
+    ...shape,
     contrast,
     measureMs: performance.now() - started,
   };
@@ -598,13 +758,13 @@ async function straightenRaw(
   raw,
   info,
   profile,
-  { lateral = false, bandMpx = 1, yieldBetween = true, onBand } = {},
+  { lateral = false, k = LATERAL_K, bandMpx = 1, yieldBetween = true, onBand } = {},
 ) {
   const { width, height, channels } = info;
   const tan = tanRows(profile, height);
   const white = estimateWhite(raw, width, height, channels);
   if (lateral)
-    await shiftRowsLateral(raw, width, height, channels, lateralRows(tan, height), white, {
+    await shiftRowsLateral(raw, width, height, channels, lateralRows(tan, height, k), white, {
       yieldBetween,
     });
   return warpVertical(raw, width, height, channels, tan, white, { bandMpx, yieldBetween, onBand });
@@ -781,6 +941,7 @@ async function gridAnalysis(bytes, { dpi, log }) {
         driftMm: (bottom.across - top.across) / pxPerMm,
         spanMm: (bottom.along - top.along) / pxPerMm,
         points: points.length,
+        samples: points,
       };
     })
     .sort((p, q) => p.xMm - q.xMm);
@@ -836,6 +997,59 @@ async function gridAnalysis(bytes, { dpi, log }) {
     );
     log(
       `  → ${Math.abs(meanV) < 0.05 ? 'вертикали стоят: искажение — срез (вертикальный сдвиг столбцов достаточен)' : Math.abs(meanV - meanH) < 0.05 ? 'вертикали наклонены как горизонтали: поворот — нужна горизонтальная составляющая' : 'смешанный случай — смотреть профиль дрейфа'}`,
+    );
+  }
+  if (horizontals.length >= 3 && verticals.length) {
+    const stepFit = fitStep(horizontals.map((h) => ({ u: h.u, theta: h.theta })));
+    log(
+      `\nСтупень по горизонталям: ${describeProfile(stepFit.profile)}; максимальный остаток ${stepFit.maxResidual.toFixed(3)}°`,
+    );
+    // Локальный наклон вертикалей (dx/dy между соседними полосами) против угла строк на той
+    // же высоте: отношение — доля бокового дрейфа k (1 — поворот, 0 — срез).
+    const sortedH = horizontals.slice().sort((p, q) => p.u - q.u);
+    const thetaH = (u) => {
+      if (u <= sortedH[0].u) return sortedH[0].theta;
+      for (let i = 1; i < sortedH.length; i += 1) {
+        if (u <= sortedH[i].u) {
+          const t = (u - sortedH[i - 1].u) / (sortedH[i].u - sortedH[i - 1].u);
+          return sortedH[i - 1].theta * (1 - t) + sortedH[i].theta * t;
+        }
+      }
+      return sortedH[sortedH.length - 1].theta;
+    };
+    const buckets = new Map();
+    let num = 0;
+    let den = 0;
+    for (const v of verticals) {
+      for (let i = 1; i < v.samples.length; i += 1) {
+        const a = v.samples[i - 1];
+        const b = v.samples[i];
+        const uMid = (a.along + b.along) / 2 / height;
+        const tilt = Math.atan((b.across - a.across) / (b.along - a.along)) / DEG;
+        const th = thetaH(uMid);
+        const key = Math.round(uMid * 100) / 100;
+        const bucket = buckets.get(key) ?? { n: 0, tilt: 0, theta: 0 };
+        bucket.n += 1;
+        bucket.tilt += tilt;
+        bucket.theta += th;
+        buckets.set(key, bucket);
+        if (Math.abs(th) > 0.1) {
+          num += tilt * th;
+          den += th * th;
+        }
+      }
+    }
+    log('\nВертикали локально (между соседними полосами) против угла строк на той же высоте:');
+    log('   u     θ строк,°  наклон верт.,°  отношение');
+    for (const [key, b] of [...buckets.entries()].sort((p, q) => p[0] - q[0])) {
+      const th = b.theta / b.n;
+      const tl = b.tilt / b.n;
+      log(
+        `  ${key.toFixed(2)}   ${th.toFixed(3).padStart(7)}      ${tl.toFixed(3).padStart(7)}      ${Math.abs(th) > 0.1 ? (tl / th).toFixed(2) : '   —'}`,
+      );
+    }
+    log(
+      `  k (доля бокового дрейфа, МНК по точкам с |θ| > 0,1°) = ${den > 0 ? (num / den).toFixed(2) : '—'}`,
     );
   }
   return {
@@ -898,25 +1112,31 @@ async function syntheticScan({ dpi, channels, profile }) {
 
 // --- Измерение и коррекция одного JPEG -----------------------------------------------------
 
-async function measureJpeg(bytes, { log, onBand } = {}) {
+async function measureJpeg(bytes, { log, onBand, family } = {}) {
   const started = performance.now();
   const gray = await decodeGray(bytes, WORKING_LONG_SIDE);
   const decodeMs = performance.now() - started;
-  const result = await measureGray(gray, { log, onBand });
+  const result = await measureGray(gray, { log, onBand, family });
   return { ...result, decodeMs, working: { width: gray.width, height: gray.height } };
 }
 
 async function straightenJpeg(
   bytes,
   profile,
-  { dpi, lateral, bandMpx = 1, yieldBetween = true, onBand, quality = 92 },
+  { dpi, lateral, bandMpx = 1, yieldBetween = true, onBand, quality = 92, k = LATERAL_K },
 ) {
   const t0 = performance.now();
   const { data, info } = await sharp(bytes, { limitInputPixels: 80_000_000 })
     .raw()
     .toBuffer({ resolveWithObject: true });
   const t1 = performance.now();
-  const out = await straightenRaw(data, info, profile, { lateral, bandMpx, yieldBetween, onBand });
+  const out = await straightenRaw(data, info, profile, {
+    lateral,
+    k,
+    bandMpx,
+    yieldBetween,
+    onBand,
+  });
   const t2 = performance.now();
   const jpeg = await sharp(out, {
     raw: { width: info.width, height: info.height, channels: info.channels },
@@ -931,12 +1151,13 @@ async function straightenJpeg(
 // --- Воркер: та же коррекция в worker_threads ------------------------------------------------
 
 if (!isMainThread) {
-  parentPort.on('message', async ({ bytes, profile, lateral, bandMpx, dpi }) => {
+  parentPort.on('message', async ({ bytes, profile, lateral, k, bandMpx, dpi }) => {
     // Буферы sharp непередаваемы (пул / внешняя память): в поток уходят байты JPEG копией, а
     // декод, warp и энкод живут здесь — главный поток сырых пикселей не держит.
     const result = await straightenJpeg(Buffer.from(bytes), profile, {
       dpi,
       lateral,
+      k,
       bandMpx,
       yieldBetween: false,
     });
@@ -947,13 +1168,13 @@ if (!isMainThread) {
   });
 }
 
-function straightenInWorker(worker, bytes, profile, { lateral, bandMpx, dpi }) {
+function straightenInWorker(worker, bytes, profile, { lateral, k, bandMpx, dpi }) {
   return new Promise((done, fail) => {
     worker.once('message', (message) => done({ ...message, jpeg: Buffer.from(message.jpeg) }));
     worker.once('error', fail);
     const copy = new Uint8Array(bytes.length);
     copy.set(bytes);
-    worker.postMessage({ bytes: copy, profile, lateral, bandMpx, dpi }, [copy.buffer]);
+    worker.postMessage({ bytes: copy, profile, lateral, k, bandMpx, dpi }, [copy.buffer]);
   });
 }
 
@@ -1009,6 +1230,10 @@ const { values: options, positionals } = parseArgs({
     lateral: { type: 'boolean', default: false },
     out: { type: 'string' },
     profile: { type: 'string' },
+    family: { type: 'string', default: 'knots' },
+    'band-mm': { type: 'string' },
+    'halves-tol': { type: 'string' },
+    k: { type: 'string' },
     quiet: { type: 'boolean', default: false },
   },
 });
@@ -1016,6 +1241,9 @@ const [command, input] = positionals;
 const log = (text) => console.log(text);
 const bandLog = options.quiet ? () => {} : log;
 const dpi = Number(options.dpi);
+const lateralK = options.k === undefined ? LATERAL_K : Number(options.k);
+if (options['band-mm'] !== undefined) BAND_MM = Number(options['band-mm']);
+if (options['halves-tol'] !== undefined) HALVES_TOLERANCE_DEG = Number(options['halves-tol']);
 const mb = (bytes) => (bytes / (1024 * 1024)).toFixed(0);
 
 async function commandGrid() {
@@ -1023,18 +1251,22 @@ async function commandGrid() {
 }
 
 async function commandMeasure() {
-  const result = await measureJpeg(readFileSync(input), { log: bandLog });
+  const result = await measureJpeg(readFileSync(input), { log: bandLog, family: options.family });
   log(
     `\nРабочая картинка ${result.working.width}×${result.working.height}; декод ${result.decodeMs.toFixed(0)} мс, полосы ${result.bandsMs.toFixed(0)} мс`,
   );
   log(
     `Полос ${result.bands.length}, валидных ${result.valid}; исход: ${result.outcome}${result.reason ? ` (${result.reason})` : ''}`,
   );
+  if (result.quad) {
+    log(
+      `Форма: дуга остаток ${result.quad.maxResidual.toFixed(3)}° (${describeProfile(result.quad.profile)}); ступень остаток ${result.step.maxResidual.toFixed(3)}° (${describeProfile(result.step.profile)})`,
+    );
+  }
   if (result.fit && result.contrast) {
-    const { a, b, c } = result.fit.profile;
     const kind = result.linear ? ` (прямая: дыра покрытия ${result.supportGap.toFixed(2)})` : '';
     log(
-      `Профиль${kind}: a=${a.toFixed(3)} b=${b.toFixed(3)} c=${c.toFixed(3)}; остаток полос ${result.fit.maxResidual.toFixed(3)}°; покрытие ${(result.coverage * 100).toFixed(0)}%`,
+      `Профиль${kind}: ${describeProfile(result.fit.profile)}; покрытие ${(result.coverage * 100).toFixed(0)}%`,
     );
     log(
       `Контраст строк: до ${result.contrast.before.toExponential(3)} после ${result.contrast.after.toExponential(3)} — ×${result.contrast.ratio.toFixed(2)} (порог ${IMPROVE_K})`,
@@ -1058,6 +1290,7 @@ async function commandStraighten() {
   const result = await straightenJpeg(bytes, profile, {
     dpi,
     lateral: options.lateral,
+    k: lateralK,
     bandMpx: Number(options['band-mpx']),
   });
   writeFileSync(resolve(options.out), result.jpeg);
@@ -1158,6 +1391,7 @@ async function commandBench() {
       const m = await measureJpeg(scan.bytes, {
         log: () => {},
         onBand: (ms) => measureChunks.push(ms),
+        family: options.family,
       });
       const measureStall = await probe.snapshot();
       const measuredProfile = m.fit?.profile ?? profile;
@@ -1169,6 +1403,7 @@ async function commandBench() {
       if (worker) {
         const r = await straightenInWorker(worker, scan.bytes, measuredProfile, {
           lateral: options.lateral,
+          k: lateralK,
           bandMpx,
           dpi,
         });
@@ -1184,6 +1419,7 @@ async function commandBench() {
         const tWarp = performance.now();
         const warp = await straightenRaw(data, info, measuredProfile, {
           lateral: options.lateral,
+          k: lateralK,
           bandMpx,
           onBand: (ms) => bandTimes.push(ms),
         });
@@ -1205,11 +1441,12 @@ async function commandBench() {
         .toBuffer();
       const thumbMs = performance.now() - tThumb;
       const encodeStall = await probe.snapshot();
-      const check = await measureJpeg(jpeg, { log: () => {} });
+      const check = await measureJpeg(jpeg, { log: () => {}, family: options.family });
       rows.push({
         page,
         outcome: m.outcome,
         measured: m.fit?.profile ?? null,
+        family: options.family,
         measureMs: m.decodeMs + m.bandsMs,
         measureStall,
         decodeMs,
@@ -1230,14 +1467,10 @@ async function commandBench() {
           `размер ×${r.sizeRatio.toFixed(2)} | RSS сверх базы ${r.rssAfterMb} МБ | исход ${m.outcome} → после ${check.outcome}`,
       );
       if (page === 1 && m.fit) {
-        const { a, b, c } = m.fit.profile;
         log(
-          `    измерено a=${a.toFixed(3)} b=${b.toFixed(3)} c=${c.toFixed(3)} (задано ${profile.a}/${profile.b}/${profile.c}); контраст ×${m.contrast.ratio.toFixed(2)}`,
+          `    измерено: ${describeProfile(m.fit.profile)}; контраст ×${m.contrast.ratio.toFixed(2)}`,
         );
-        if (check.fit) {
-          const p = check.fit.profile;
-          log(`    после коррекции a=${p.a.toFixed(3)} b=${p.b.toFixed(3)} c=${p.c.toFixed(3)}`);
-        }
+        if (check.fit) log(`    после коррекции: ${describeProfile(check.fit.profile)}`);
       }
     }
   } finally {
