@@ -102,6 +102,72 @@ describe('перерасстановка оборотов завершённог
     expect(session?.edits).toMatchObject({ cuts: [4], names: ['Пачка', 'Набор'] });
   });
 
+  it('разрез перед подблоком оборотов в конце ленты не схлопывается: идёт к первому обороту на новом месте', async () => {
+    const context = await swappedPack();
+    const { store, accept } = context;
+    await setFronts(context);
+    ok(await store.beginPass(ORIGIN, null));
+    await accept(7, 7);
+    ok(await store.endSegment('interrupted'));
+    // В прерванном состоянии: разрез перед единственным оборотом набора (позиция 6), имя у документа.
+    ok(
+      await store.setEdits(
+        {
+          ...EMPTY_EDITS,
+          order: [...SWAPPED, S1F1, S1F2, S1B2],
+          cuts: [6],
+          names: ['Пачка', 'Обороты'],
+        },
+        {},
+      ),
+    );
+    ok(await store.resumePass());
+    await accept(8, 8);
+    ok(await store.endSegment('completed'));
+    const session = store.snapshot();
+    // Последователя вне прохода нет — разрез остаётся перед тем же оборотом на его новом месте
+    // (докачанный оборот лёг перед ним ещё при приходе), документ с именем не схлопнулся.
+    expect(keysOf(session)).toEqual([...SWAPPED, S1F1, 'p04-s02-0001', S1F2, S1B2]);
+    expect(session?.edits).toMatchObject({ cuts: [7], names: ['Пачка', 'Обороты'] });
+  });
+
+  it('граница наборов при явном порядке: обороты после completed не выпадают за границу', async () => {
+    const { store, accept } = await setup();
+    ok(await store.beginPass(ORIGIN, null));
+    await accept(1, 3);
+    ok(await store.endSegment('completed'));
+    ok(await store.beginPass(ORIGIN, null));
+    await accept(4, 4);
+    ok(await store.endSegment('interrupted'));
+    // Режим наборов (3 лица, 1 оборот): лица переставлены, явная граница после лиц.
+    const fronts = ['p01-s01-0002', 'p01-s01-0001', 'p01-s01-0003'];
+    ok(
+      await store.setEdits({ ...EMPTY_EDITS, order: [...fronts, 'p02-s01-0001'], divider: 3 }, {}),
+    );
+    ok(await store.resumePass());
+    await accept(5, 5);
+    ok(await store.endSegment('interrupted'));
+    const session = store.snapshot();
+    assert(session !== null);
+    expect(assembleSession(session).sets).toMatchObject({ fronts: 3, backs: 2 });
+  });
+
+  it('«Остановить» на досканировании без новых страниц ручную расстановку оборотов не трогает', async () => {
+    const context = await swappedPack();
+    const { store, accept } = context;
+    await setFronts(context);
+    ok(await store.beginPass(ORIGIN, null));
+    await accept(7, 7);
+    ok(await store.endSegment('interrupted'));
+    const arranged = [S1B2, ...SWAPPED, S1F1, S1F2];
+    ok(await store.setEdits({ ...EMPTY_EDITS, order: arranged }, {}));
+
+    ok(await store.resumePass());
+    ok(await store.discardSegment());
+    expect(store.snapshot()?.edits.order).toEqual(arranged);
+    expect(keysOf(store.snapshot())).toEqual(arranged);
+  });
+
   it('проход лиц набора: завершение порядок не трогает', async () => {
     const context = await swappedPack();
     const { store, journalOnDisk } = context;

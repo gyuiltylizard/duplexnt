@@ -394,6 +394,21 @@ describe('пустые обороты в редакторе (M4)', () => {
     expect(option(1).getAttribute('draggable')).toBe('true');
   });
 
+  it('B-13: выделены одни склеенные обороты — «Выделить в документ» недоступна, перенос не идёт', () => {
+    const api = stubApi();
+    renderEditor(blankSnapshot());
+    fireEvent.click(revealToggle());
+
+    fireEvent.click(option(1)); // B3
+    fireEvent.click(option(5), { ctrlKey: true }); // B1
+    const groupButton = screen.getByRole<HTMLButtonElement>('button', {
+      name: 'Выделить в документ',
+    });
+    expect(groupButton.disabled).toBe(true);
+    fireEvent.click(groupButton);
+    expect(api.setEdits).not.toHaveBeenCalled();
+  });
+
   it('B-13: «+ Новый документ с этой страницы» на склеенном обороте недоступен', () => {
     stubApi();
     renderEditor(blankSnapshot());

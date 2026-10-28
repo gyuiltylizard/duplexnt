@@ -41,9 +41,11 @@ export type GluedBacks = ReadonlyMap<string, string>;
 
 export const NO_GLUE: GluedBacks = new Map();
 
+// Оборот с известным листом клеится только к лицу того же листа и набора; лицо без листа (лист
+// одностороннего набора, подблок несовпавшего) для него чужое. Оборот без листа (лишний,
+// подблок) — по соседству.
 const pairMatches = (face: AssembledPage, back: AssembledPage, mode: AssemblyMode): boolean =>
   mode !== 'pairs' ||
-  face.sheet === null ||
   back.sheet === null ||
   (face.addedSet === back.addedSet && face.sheet === back.sheet);
 

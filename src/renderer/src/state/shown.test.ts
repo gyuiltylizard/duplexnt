@@ -143,6 +143,11 @@ describe('склеенные обороты', () => {
     expect(gluedBacksOf(order, NONE, 'pairs').size).toBe(0);
   });
 
+  it('оборот с известным листом не клеится к лицу без листа (лист одностороннего набора)', () => {
+    const order = [paired('1l', 1), paired('d1', null, null, 1), paired('1o', 1, 'hidden')];
+    expect(gluedBacksOf(order, NONE, 'pairs').size).toBe(0);
+  });
+
   it('граница документа между лицом и оборотом обрывает склейку', () => {
     expect(gluedBacksOf(PAIRS, new Set([1]), 'pairs').has('1o')).toBe(false);
     expect(gluedBacksOf(PAIRS, new Set([1]), 'pairs').get('2o')).toBe('2l');

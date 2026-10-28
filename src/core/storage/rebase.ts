@@ -29,15 +29,31 @@ function replaced(
   const order = rebaseOrder(after.filter(kept), after, edits.order.filter(kept));
   const next = { ...edits, order };
   const shownAfter = visibleKeysOf(after, next);
-  // Позиция разреза — среди страниц вне прохода: сколько их стояло до него.
+  // Позиция разреза — среди страниц вне прохода: сколько их стояло до него. Если за разрезом
+  // стояли только страницы прохода (разрез перед подблоком оборотов в конце), последователя вне
+  // прохода нет — разрез идёт к первому из них на новом месте, а не за конец ленты: иначе
+  // документ с именем схлопнулся бы молча, а граница наборов оставила бы группу оборотов пустой.
   const keptBefore = shownBefore.filter(kept);
   const translate = (cuts: readonly number[]): number[] =>
-    remapCuts(
-      keptBefore,
-      shownAfter,
-      cuts.map((cut) => shownBefore.slice(0, cut).filter(kept).length),
-    );
-  const divider = edits.divider === null ? null : (translate([edits.divider])[0] ?? null);
+    cuts.map((cut) => {
+      const ahead = shownBefore.slice(0, cut).filter(kept).length;
+      if (ahead < keptBefore.length) {
+        return remapCuts(keptBefore, shownAfter, [ahead])[0] ?? shownAfter.length;
+      }
+      const moved = shownBefore
+        .slice(cut)
+        .filter((key) => !kept(key))
+        .map((key) => shownAfter.indexOf(key))
+        .filter((at) => at >= 0);
+      return moved.length === 0 ? shownAfter.length : Math.min(...moved);
+    });
+  // Граница наборов — не дальше первого оборота прохода на новом месте: обороты принадлежат
+  // группе оборотов, а пока проход шёл, граница могла уехать за оборот, вставший перед ней.
+  const firstFinished = Math.min(...shownAfter.flatMap((key, index) => (kept(key) ? [] : [index])));
+  const divider =
+    edits.divider === null
+      ? null
+      : Math.min(translate([edits.divider])[0] ?? shownAfter.length, firstFinished);
   return normalizeEdits(after, { ...next, cuts: translate(edits.cuts), divider }, context);
 }
 import { NOTHING_LOST, pagesOf, passSnapshotsOf, passStateOf, type Journal } from './journal';
@@ -59,6 +75,15 @@ function finishedBacksKeys(previous: Journal, next: Journal): ReadonlySet<string
     }
     const now = next.passes.find((it) => it.number === pass.number);
     if (now === undefined || passStateOf(now) === 'running') {
+      continue;
+    }
+    // Сегмент отброшен («Остановить» на досканировании) или докачка прервалась до первой
+    // страницы: новых страниц нет, расстановка прежних оборотов остаётся какой была. Сверка после
+    // сбоя сегменты не убирает и страницы не теряет — её переход считается.
+    const segment = now.segments.at(-1);
+    const dropped = now.segments.length < pass.segments.length;
+    const empty = segment?.pageCount === 0 && passStateOf(now) !== 'completed';
+    if (dropped || empty) {
       continue;
     }
     for (const page of pagesOf(now)) {
