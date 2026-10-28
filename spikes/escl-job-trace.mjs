@@ -14,7 +14,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } fr
 import http from 'node:http';
 import https from 'node:https';
 import { join, resolve } from 'node:path';
-import { setTimeout as sleep } from 'node:timers/promises';
+import { setImmediate as yieldNow, setTimeout as sleep } from 'node:timers/promises';
 import { parseArgs } from 'node:util';
 
 const { values: options, positionals } = parseArgs({
@@ -40,6 +40,9 @@ const { values: options, positionals } = parseArgs({
     'page-timeout': { type: 'string', default: '180' },
     'probe-interval': { type: 'string', default: '5' },
     'probe-limit': { type: 'string', default: '180' },
+    // Нагрузка на цикл событий (M6, U1, A/B «зависит ли остановка подачи от хоста»): CPU-кусками
+    // по столько миллисекунд с уступкой между ними — как измерение и ресэмплер в main.
+    load: { type: 'string', default: '0' },
     // Соединение.
     keepalive: { type: 'boolean', default: false },
     scheme: { type: 'string', default: 'https' },
@@ -668,7 +671,43 @@ async function scenarioAbandon() {
   }
 }
 
-const scenarios = { job: () => runJob(''), wake: scenarioWake, abandon: scenarioAbandon };
+// --- Нагрузка на цикл событий (M6, U1) -------------------------------------------------------
+
+const loadStats = { chunks: 0, busyMs: 0, maxGapMs: 0 };
+let loadRunning = false;
+async function loadLoop(chunkMs) {
+  loadRunning = true;
+  let lastEnd = performance.now();
+  while (loadRunning) {
+    const started = performance.now();
+    loadStats.maxGapMs = Math.max(loadStats.maxGapMs, started - lastEnd);
+    let x = 0;
+    while (performance.now() - started < chunkMs) x += Math.sqrt(x + 1);
+    loadStats.chunks += 1;
+    loadStats.busyMs += performance.now() - started;
+    lastEnd = performance.now();
+    await yieldNow();
+  }
+}
+
+async function jobUnderLoad() {
+  const chunkMs = number('load');
+  if (chunkMs <= 0) return runJob('');
+  note(`Нагрузка на цикл событий: куски по ${chunkMs} мс с уступкой между ними`);
+  const loop = loadLoop(chunkMs);
+  try {
+    return await runJob('');
+  } finally {
+    loadRunning = false;
+    await loop;
+    trace.load = { chunkMs, ...loadStats };
+    note(
+      `Нагрузка: кусков ${loadStats.chunks}, занято ${Math.round(loadStats.busyMs)} мс, самый долгий просвет между кусками ${Math.round(loadStats.maxGapMs)} мс`,
+    );
+  }
+}
+
+const scenarios = { job: jobUnderLoad, wake: scenarioWake, abandon: scenarioAbandon };
 if (!scenarios[scenario]) {
   console.error(`Неизвестный сценарий «${scenario}». Есть: ${Object.keys(scenarios).join(', ')}`);
   process.exit(2);
