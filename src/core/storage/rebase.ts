@@ -1,7 +1,97 @@
-import { EMPTY_EDITS, sameEdits } from '@shared';
+import { EMPTY_EDITS, isBacksKind, sameEdits, type SessionEdits } from '@shared';
 import { baseAssembly, baseKeysOf, editsContextOf } from '../scan/assembly';
-import { rebaseEdits } from '../scan/edits';
-import { NOTHING_LOST, pagesOf, passSnapshotsOf, type Journal } from './journal';
+import {
+  normalizeEdits,
+  rebaseEdits,
+  rebaseOrder,
+  remapCuts,
+  visibleKeysOf,
+  type EditsContext,
+} from '../scan/edits';
+
+const NO_KEYS: ReadonlySet<string> = new Set();
+
+/**
+ * Явный порядок после завершения прохода оборотов (KTD-6 B-13): ключи `finished` изымаются из
+ * `order` и расставляются `rebaseOrder` против итоговой базы `after`, как будто пришли все сразу
+ * — оборот за своей парой. Разрезы и граница остаются перед той же страницей-последователем, не
+ * входящей в проход: разрез перед подблоком оборотов не ложится внутрь чередования, а уходит
+ * за лист; остальные ключи порядка не трогаются.
+ */
+function replaced(
+  after: readonly string[],
+  edits: SessionEdits,
+  finished: ReadonlySet<string>,
+  context: EditsContext,
+): SessionEdits {
+  const kept = (key: string): boolean => !finished.has(key);
+  const shownBefore = visibleKeysOf(after, edits);
+  const order = rebaseOrder(after.filter(kept), after, edits.order.filter(kept));
+  const next = { ...edits, order };
+  const shownAfter = visibleKeysOf(after, next);
+  // Позиция разреза — среди страниц вне прохода: сколько их стояло до него. Если за разрезом
+  // стояли только страницы прохода (разрез перед подблоком оборотов в конце), последователя вне
+  // прохода нет — разрез идёт к первому из них на новом месте, а не за конец ленты: иначе
+  // документ с именем схлопнулся бы молча, а граница наборов оставила бы группу оборотов пустой.
+  const keptBefore = shownBefore.filter(kept);
+  const translate = (cuts: readonly number[]): number[] =>
+    cuts.map((cut) => {
+      const ahead = shownBefore.slice(0, cut).filter(kept).length;
+      if (ahead < keptBefore.length) {
+        return remapCuts(keptBefore, shownAfter, [ahead])[0] ?? shownAfter.length;
+      }
+      const moved = shownBefore
+        .slice(cut)
+        .filter((key) => !kept(key))
+        .map((key) => shownAfter.indexOf(key))
+        .filter((at) => at >= 0);
+      return moved.length === 0 ? shownAfter.length : Math.min(...moved);
+    });
+  // Граница наборов — не дальше первого оборота прохода на новом месте: обороты принадлежат
+  // группе оборотов, а пока проход шёл, граница могла уехать за оборот, вставший перед ней.
+  const firstFinished = Math.min(...shownAfter.flatMap((key, index) => (kept(key) ? [] : [index])));
+  const divider =
+    edits.divider === null
+      ? null
+      : Math.min(translate([edits.divider])[0] ?? shownAfter.length, firstFinished);
+  return normalizeEdits(after, { ...next, cuts: translate(edits.cuts), divider }, context);
+}
+import { NOTHING_LOST, pagesOf, passSnapshotsOf, passStateOf, type Journal } from './journal';
+
+/**
+ * Ключи проходов оборотов, вышедших из `running` между журналами (B-13, KTD-6; ADR 0004,
+ * амендмент 2026-10-28): основной пачки и наборов. Пока проход шёл, его страницы вставали в явный
+ * порядок за соседом по `settled`-проекции — подблоком; по завершении они расставляются заново
+ * против итоговой сборки, как будто пришли все сразу, — чередованием. Проход, исчезнувший из
+ * `next` («Остановить» на единственном сегменте), ключей не имеет. Проходы лиц не трогаются: их
+ * блок одинаков в обеих проекциях. Сверка после сбоя передаёт журнал с диска (`running`) и
+ * усыновлённый (`interrupted`) — перестановка один раз, следующий запуск перехода не видит.
+ */
+function finishedBacksKeys(previous: Journal, next: Journal): ReadonlySet<string> {
+  const keys = new Set<string>();
+  for (const pass of previous.passes) {
+    if (!isBacksKind(pass.kind) || passStateOf(pass) !== 'running') {
+      continue;
+    }
+    const now = next.passes.find((it) => it.number === pass.number);
+    if (now === undefined || passStateOf(now) === 'running') {
+      continue;
+    }
+    // Сегмент отброшен («Остановить» на досканировании) или докачка прервалась до первой
+    // страницы: новых страниц нет, расстановка прежних оборотов остаётся какой была. Сверка после
+    // сбоя сегменты не убирает и страницы не теряет — её переход считается.
+    const segment = now.segments.at(-1);
+    const dropped = now.segments.length < pass.segments.length;
+    const empty = segment?.pageCount === 0 && passStateOf(now) !== 'completed';
+    if (dropped || empty) {
+      continue;
+    }
+    for (const page of pagesOf(now)) {
+      keys.add(page.key);
+    }
+  }
+  return keys;
+}
 
 /**
  * Журнал с правками в каноническом виде против своих страниц (M3, KTD-3a, KTD-10; M3.6, R8).
@@ -32,11 +122,12 @@ export function withRebasedEdits(previous: Journal | null, next: Journal): Journ
       : baseKeysOf(baseAssembly(passSnapshotsOf(previous, NOTHING_LOST), previous.assembled, true));
   const passes = passSnapshotsOf(cleaned, NOTHING_LOST);
   const base = baseAssembly(passes, cleaned.assembled);
-  const edits = rebaseEdits(
-    before,
-    baseKeysOf(baseAssembly(passes, cleaned.assembled, true)),
-    cleaned.edits,
-    editsContextOf(base, passes, cleaned.edits),
-  );
-  return { ...cleaned, edits };
+  const after = baseKeysOf(baseAssembly(passes, cleaned.assembled, true));
+  const context = editsContextOf(base, passes, cleaned.edits);
+  const rebased = rebaseEdits(before, after, cleaned.edits, context);
+  const finished = previous === null ? NO_KEYS : finishedBacksKeys(previous, cleaned);
+  if (finished.size === 0 || rebased.order.length === 0) {
+    return { ...cleaned, edits: rebased };
+  }
+  return { ...cleaned, edits: replaced(after, rebased, finished, context) };
 }

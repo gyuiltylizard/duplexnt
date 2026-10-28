@@ -1,4 +1,4 @@
-import { relocate } from './shown';
+import { NO_GLUE, relocate, type GluedBacks } from './shown';
 
 // Выделение в ленте редактора (план M3, U6; UI_SPEC §6.5; handoff M3, Behaviour): текущая
 // страница (её показывает превью), якорь диапазона и набор выделенных. Текущая выделена всегда;
@@ -81,19 +81,21 @@ export const targetsOf = (selection: Selection): readonly string[] =>
  * Выделение после нового снимка: исчезнувшие ключи выпадают, порядок — по новой ленте. Пропала
  * текущая — текущей становится первая уцелевшая выделенная, иначе первая страница ленты.
  * Текущая осталась в полной ленте `order`, но ушла из показанной `visible` (скрыта как пустой
- * оборот, M4 R11) — ближайшая показанная справа, в конце — слева.
+ * оборот, M4 R11) — на своё лицо по карте склейки `glued` (B-13), иначе ближайшая показанная
+ * справа, в конце — слева.
  */
 export function pruned(
   selection: Selection,
   visible: readonly string[],
   order: readonly string[] = visible,
+  glued: GluedBacks = NO_GLUE,
 ): Selection {
   const keys = inTapeOrder(visible, selection.keys);
   let current: string | null;
   if (selection.current !== null && visible.includes(selection.current)) {
     current = selection.current;
   } else if (selection.current !== null && order.includes(selection.current)) {
-    current = relocate(selection.current, visible, order) ?? keys[0] ?? visible[0] ?? null;
+    current = relocate(selection.current, visible, order, glued) ?? keys[0] ?? visible[0] ?? null;
   } else {
     current = keys[0] ?? visible[0] ?? null;
   }

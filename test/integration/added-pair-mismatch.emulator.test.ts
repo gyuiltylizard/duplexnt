@@ -341,7 +341,7 @@ describe('несовпадение оборотов добавленного н�
     ]);
   });
 
-  it('«Переснять» при ручном порядке: мёртвые ключи ушли из `order`, расстановка остальных цела; новые обороты — подблоком за лицами набора (R12)', async () => {
+  it('«Переснять» при ручном порядке: мёртвые ключи ушли из `order`, расстановка остальных цела; новые обороты по завершении — чередованием (B-13)', async () => {
     const { service } = await mismatched();
 
     // Набор «Д1» перенесён в конец ленты целиком: лица, затем обороты.
@@ -357,12 +357,21 @@ describe('несовпадение оборотов добавленного н�
     });
     expect(keysOf(snapshot)).toEqual([...MAIN_HEAD, ...MAIN_TAIL, ...SET_FRONTS]);
 
-    // Чередование действует только в автопорядке: при ручном каждый новый оборот встаёт за
-    // соседом по проходу — подблок оборотов в порядке документа за лицами набора.
+    // Пока проход шёл, каждый новый оборот вставал за соседом по проходу — подблоком; по
+    // завершении ядро расставило обороты за своими лицами (B-13, план 2026-10-27-005, KTD-6).
     expect(unwrap(await service.startPass(null))).toMatchObject({ end: 'completed', pages: 3 });
     snapshot = service.snapshot();
     expect(snapshot.assembly?.report.sets[0]).toMatchObject({ backs: 3, mismatch: false });
-    const expected = [...MAIN_HEAD, ...MAIN_TAIL, ...SET_FRONTS, key(5, 3), key(5, 2), key(5, 1)];
+    const expected = [
+      ...MAIN_HEAD,
+      ...MAIN_TAIL,
+      key(3, 1),
+      key(5, 3),
+      key(3, 2),
+      key(5, 2),
+      key(3, 3),
+      key(5, 1),
+    ];
     expect(snapshot.session?.edits.order).toEqual(expected);
     expect(keysOf(snapshot)).toEqual(expected);
   });

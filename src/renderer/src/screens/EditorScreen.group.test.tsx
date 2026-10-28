@@ -251,7 +251,7 @@ describe('«Выделить в документ» (S6, KTD7, R19)', () => {
     expect(selectedKeys()).toEqual([B3, B2]);
   });
 
-  it('AE10: скрытые хвосты едут с выделенными, пока переключатель выключен; включён — буквально', async () => {
+  it('AE10 плана M4 / B-13: склеенные обороты едут с выделенными лицами и при скрытых, и при показанных', async () => {
     const api = stubApi();
     const snapshot = hideSnapshot();
     const { onToast } = renderEditor(snapshot);
@@ -276,12 +276,12 @@ describe('«Выделить в документ» (S6, KTD7, R19)', () => {
         name: 'Показать скрытые пустые обороты в ленте — в файл они не попадут',
       }),
     );
-    // Полная лента: F1, B3, F2, B2, F3, B1 — выделены F1 и F3 без хвостов.
+    // Полная лента: F1, B3, F2, B2, F3, B1 — выделены F1 и F3, обороты B3 и B1 идут с ними (B-13).
     fireEvent.click(option(0));
     fireEvent.click(option(4), { ctrlKey: true });
     fireEvent.click(button('Выделить в документ'));
     expect(literal.setEdits).toHaveBeenCalledExactlyOnceWith({
-      edits: edits({ order: [F1, F3, B3, F2, B2, B1], cuts: [2], names: ['', ''] }),
+      edits: edits({ order: [F1, B3, F3, B1, F2, B2], cuts: [4], names: ['', ''] }),
       rotate180: {},
     });
   });

@@ -29,20 +29,15 @@ import { RevertModal } from '../modals/RevertModal';
 import { SaveModal } from '../modals/SaveModal';
 import {
   deleted,
-  dividerAfterMove,
   grouped,
   markedNotBlank,
-  moved,
-  movedAcross,
   renamed,
   REVERTED,
   rotated,
   rotatedBacks,
   withCut,
   withoutCut,
-  type DropSide,
   type RotateDirection,
-  type SetSide,
 } from '../state/edits';
 import { toneOf } from '../state/page-text';
 import { errorTextInline } from '../state/error-text';
@@ -52,17 +47,16 @@ import type { EditState } from '../state/history';
 import { originKindOf, originsOf } from '../state/origins';
 import { rolesOf } from '../state/screen';
 import { rotateRowOf, useRotateTarget } from '../state/useRotateTarget';
-import {
-  afterRemoval,
-  collapsed,
-  ranged,
-  selectionOf,
-  single,
-  targetsOf,
-  toggled,
-} from '../state/selection';
+import { afterRemoval, collapsed, ranged, single, targetsOf, toggled } from '../state/selection';
 import { assembleBlockOf, assembleBlockText } from '../state/assemble-block';
-import { shownDocumentsOf, shownOf, withHiddenTails } from '../state/shown';
+import {
+  gluedBacksOf,
+  movingOf,
+  removingOf,
+  sheetOf,
+  shownDocumentsOf,
+  shownOf,
+} from '../state/shown';
 import { EditorInspector } from './EditorInspector';
 import { EditorPassBanner } from './EditorPassBanner';
 import { EditorPreview } from './EditorPreview';
@@ -71,6 +65,7 @@ import { EditorRailFooter } from './EditorRailFooter';
 import { EditorStatusBar } from './EditorStatusBar';
 import { EditorToolbar } from './EditorToolbar';
 import type { PickMode } from './EditorThumb';
+import { railMovesOf, type RailMoves } from './railMoves';
 import { useEditorAssemble } from './useEditorAssemble';
 import { useEditorEdits } from './useEditorEdits';
 import { SAVE_TOAST_MS, useEditorSaving } from './useEditorSaving';
@@ -91,7 +86,7 @@ import './editor-screen.css';
 // сборка — команда `assemble` напрямую, не шаг undo (KTD5): запись сборки входит в подпись ленты.
 // Пустые обороты (M4; handoff M4, S1–S13): экран живёт по показанной ленте — без скрытых, пока
 // переключатель «Пустые» выключен (состояние экрана, не правка); правки считаются по
-// полной ленте, скрытые хвосты едут за лицом (KTD4, R11–R13); «Это не пустая страница» —
+// полной ленте, пустой оборот склеен со своим листом (KTD4, R11–R13; B-13); «Это не пустая страница» —
 // правка `notBlank` (KTD5); поздние оценки прячут страницу с тостом (KTD6).
 
 export interface EditorScreenProps {
@@ -175,14 +170,17 @@ export function EditorScreen({
     () => (reveal ? shownDocumentsOf(documents, order, fileShown) : shownDocuments),
     [documents, order, fileShown, reveal, shownDocuments],
   );
-  /** Ключи с хвостами скрытых (R12) — пока скрытые не показаны; иначе буквально. Хвост — до
-   * границы документа. */
-  const documentStarts = useMemo(() => new Set(documents.map((doc) => doc.start)), [documents]);
-  const withTails = (keys: readonly string[]): readonly string[] =>
-    reveal ? keys : withHiddenTails(keys, order, documentStarts);
   // Режим сборки и группы — из ядра (M3.6, R10): renderer ничего не считает сам.
   const mode = snapshot.assembly?.report.mode ?? 'pairs';
   const sets = snapshot.assembly?.sets ?? null;
+  // Склеенные обороты (B-13, KTD-1): пустой оборот — часть листа при любом состоянии
+  // переключателя; одно правило на перенос, удаление, группировку, якорь и разрез. Склейка
+  // обрывается на границе документа. Скрытый хвост R12 — её частный случай.
+  const documentStarts = useMemo(() => new Set(documents.map((doc) => doc.start)), [documents]);
+  const glued = useMemo(
+    () => gluedBacksOf(order, documentStarts, mode),
+    [order, documentStarts, mode],
+  );
   // Происхождение страницы — роль прохода по ключу: тег «об», факт «Откуда» и слова страницы пары
   // (R11, R23; M4.5).
   const origins = useMemo(() => originsOf(session.passes), [session.passes]);
@@ -205,6 +203,7 @@ export function EditorScreen({
     session,
     visible: shownKeys,
     order: visible,
+    glued,
     initialCurrent,
     locked,
     // Правка не записалась — человек должен знать, что лента осталась прежней. Текст ошибки
@@ -405,16 +404,18 @@ export function EditorScreen({
   };
 
   // Удаление — пометка, без подтверждения: тост подсказывает Ctrl+Z (S9). Текущей после
-  // удаления становится страница, вставшая на место удалённой. Скрытый хвост уходит вместе с
-  // лицом одним шагом (R12); тост и кнопка считают только показанные.
+  // удаления становится страница, вставшая на место удалённой. Склеенный оборот уходит вместе с
+  // лицом одним шагом (B-13, KTD-3), выделенный сам по себе — сам; тост и кнопка считают
+  // страницы пользователя. `afterRemoval` знает всё удалённое: иначе «выживший» на месте лица —
+  // его же оборот, которого в новой ленте нет.
   const remove = (fromRail: boolean): void => {
     if (targets.length === 0) {
       return;
     }
     const before = shownKeys;
-    const removing = withTails(targets);
+    const removing = removingOf(targets, glued, visible);
     const sent = edits.edit(withEdits(deleted(edits.current.edits, visible, removing)), removing, {
-      select: (after) => afterRemoval(before, targets, after),
+      select: (after) => afterRemoval(before, removing, after),
       onSuccess: () => {
         onToast(
           targets.length === 1
@@ -428,60 +429,26 @@ export function EditorScreen({
     }
   };
 
-  /** Перенос ушёл: выделены перенесённые страницы на новом месте, текущая — прежняя. */
-  const sendMove = (next: SessionEdits, keys: readonly string[]): void => {
-    const current = selection.current;
-    const fromRail = focusInRail();
-    const sent = edits.edit(withEdits(next), keys, {
-      select: (after) => {
-        const chosen = selectionOf(keys, after);
-        return chosen !== null && current !== null && chosen.keys.includes(current)
-          ? { ...chosen, current, anchor: current }
-          : chosen;
+  // Перенос страниц: бросок на миниатюру и через разделитель наборов — `railMoves.ts` (S6 M3;
+  // M3.6, KTD8; B-13). Фабрика зовётся в обработчике: ref фокуса читается не при рендере.
+  const railMoves = (): RailMoves =>
+    railMovesOf({
+      edits,
+      visible,
+      positions,
+      glued,
+      sets,
+      withEdits,
+      focusInRail,
+      onMovedFromRail: () => {
+        focusAfterEdit.current = true;
       },
     });
-    // Миниатюра, сменившая группу, перемонтируется — фокус вернётся на текущую после снимка.
-    if (sent && fromRail) {
-      focusAfterEdit.current = true;
-    }
+  const move: RailMoves['move'] = (keys, target, side) => {
+    railMoves().move(keys, target, side);
   };
-
-  // Перенос (S6): группа — с внутренним порядком ленты; бросок на исходное место — шага нет.
-  // В режиме наборов (M3.6, KTD8) перенесённые берут группу страницы-цели: граница считается
-  // здесь и уходит тем же `setEdits`, что порядок, — один шаг undo. Крайняя страница, брошенная
-  // «через границу» рядом с собой, порядок не меняет, а группу — да: шлётся одна граница.
-  // Скрытые хвосты (R12 M4): едут за перенесёнными, а бросок «после» показанной страницы ложится
-  // за её хвостом — лист не разрывается.
-  const move = (keys: readonly string[], target: string, side: DropSide): void => {
-    const targetIndex = positions.get(target);
-    if (targetIndex === undefined || keys.includes(target)) {
-      return;
-    }
-    const moving = withTails(keys);
-    const anchor = side === 'after' ? (withTails([target]).at(-1) ?? target) : target;
-    const base = moved(edits.current.edits, visible, moving, anchor, side);
-    let next: SessionEdits | null = base;
-    if (sets !== null) {
-      const divider = dividerAfterMove(visible, sets.divider, moving, targetIndex);
-      if (base !== null || divider !== sets.divider) {
-        next = { ...(base ?? edits.current.edits), divider };
-      }
-    }
-    if (next !== null) {
-      sendMove(next, moving);
-    }
-  };
-
-  // Бросок на разделитель наборов или в пустую группу (S2–S3 M3.6): только граница, порядок —
-  // если выделение к ней не прилегало.
-  const moveAcross = (keys: readonly string[], side: SetSide): void => {
-    if (sets === null) {
-      return;
-    }
-    const next = movedAcross(edits.current.edits, visible, sets.divider, keys, side);
-    if (next !== null) {
-      sendMove(next, keys);
-    }
+  const moveAcross: RailMoves['moveAcross'] = (keys, side) => {
+    railMoves().moveAcross(keys, side);
   };
 
   /**
@@ -503,11 +470,12 @@ export function EditorScreen({
   };
 
   // Граница перед позицией показанной ленты: split-бар, кнопка тулбара (S7, S1). Разрез ложится
-  // перед показанной страницей в полной ленте — хвост предыдущей остаётся слева (R12 M4). Новый
-  // документ — тот, что начинается с этой позиции.
+  // перед показанной страницей в полной ленте — склеенные обороты предыдущей остаются слева;
+  // перед склеенным оборотом разрез не ставится (B-13, R4). Новый документ — тот, что
+  // начинается с этой позиции.
   const split = (position: number): void => {
     const key = shownKeys[position];
-    const full = key === undefined ? undefined : positions.get(key);
+    const full = key === undefined || glued.has(key) ? undefined : positions.get(key);
     if (full === undefined) {
       return;
     }
@@ -544,10 +512,12 @@ export function EditorScreen({
 
   // «Выделить в документ» (S6 M4, KTD7): подряд — границы до и после куска одним шагом; не
   // подряд — выделенные встают на место первой и получают границы, тоже одним шагом (перенос:
-  // Ctrl+Z выделит их). Подряд — по полной ленте с хвостами скрытых (R12 M4).
+  // Ctrl+Z выделит их). Подряд — по полной ленте со склеенными оборотами (R12 M4, B-13).
+  // Лица берут склеенные обороты, оборот без лица выпадает (B-13, KTD-3): разрез не ляжет между
+  // лицом и его оборотом.
   const group = (): void => {
-    const keys = withTails(selection.keys);
-    const result = grouped(edits.current.edits, visible, keys);
+    const keys = movingOf(selection.keys, glued, visible);
+    const result = keys.length === 0 ? null : grouped(edits.current.edits, visible, keys);
     if (result === null) {
       return;
     }
@@ -596,10 +566,16 @@ export function EditorScreen({
 
   // Тулбар (S1): «+ Новый документ с этой страницы» — если текущая не первая и границы перед
   // ней ещё нет; в режиме наборов документов нет (R17). Начало документа — по показанной ленте.
-  // При выделении нескольких кнопки нет (B-8): «с этой страницы» стало бы неоднозначным.
+  // При выделении нескольких кнопки нет (B-8): «с этой страницы» стало бы неоднозначным. На
+  // склеенном обороте кнопки нет (B-13, R4): разрез разорвал бы лист.
   const atDocStart = currentShownDoc?.start === currentIndex;
   const canSplitHere =
-    sets === null && currentIndex > 0 && !atDocStart && selection.keys.length <= 1;
+    sets === null &&
+    currentIndex > 0 &&
+    !atDocStart &&
+    selection.keys.length <= 1 &&
+    selection.current !== null &&
+    !glued.has(selection.current);
 
   // Ctrl+Z, Ctrl+Y / Ctrl+Shift+Z, Delete — на всём экране, кроме текстовых полей и модалок
   // (handoff M3, Undo/Redo). Подписка — одна на монтирование: StrictMode её переживает.
@@ -735,8 +711,8 @@ export function EditorScreen({
     return 0;
   };
 
-  // Якоря для модалки — только пока она открыта (KTD-8). «После текущей» — за её скрытым хвостом
-  // (R12 M4), номера — по показанной ленте.
+  // Якоря для модалки — только пока она открыта (KTD-8). «После текущей» — после её листа: за
+  // склеенными оборотами и при показанных (B-13, R5), номера — по показанной ленте.
   const anchors =
     modal === 'add'
       ? anchorsOf(t, {
@@ -748,7 +724,10 @@ export function EditorScreen({
           mode,
           sets,
           origin: originKindOf(origins, currentEntry?.key),
-          after: selection.current === null ? undefined : withTails([selection.current]).at(-1),
+          after:
+            selection.current === null
+              ? undefined
+              : sheetOf(selection.current, glued, visible).at(-1),
           numberOf,
         })
       : null;
@@ -825,6 +804,7 @@ export function EditorScreen({
           onRename={rename}
           onMove={move}
           onMoveAcross={moveAcross}
+          glued={glued}
           footer={
             // S4–S6 M4: панель выделения (больше одной показанной); строка переключателей
             // «Пустые» и «Обороты на 180°» — у прохода оборотов (B-8).
@@ -834,7 +814,15 @@ export function EditorScreen({
                   ? {
                       count: selection.keys.length,
                       // «Выделить в документ» — только вне режима наборов (M3.6, KTD8).
-                      group: sets === null ? { disabled: locked, onClick: group } : null,
+                      // Выделены одни склеенные обороты — группировать нечего (B-13, KTD-3).
+                      group:
+                        sets === null
+                          ? {
+                              disabled:
+                                locked || movingOf(selection.keys, glued, visible).length === 0,
+                              onClick: group,
+                            }
+                          : null,
                     }
                   : null
               }

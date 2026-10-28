@@ -150,6 +150,13 @@ describe('выделение по показанной ленте (M4)', () => {
     });
   });
 
+  it('скрытая текущая — склеенный оборот: переезжает на своё лицо (B-13)', () => {
+    const glued = new Map([['1o', '1l']]);
+    expect(pruned({ current: '1o', anchor: '1o', keys: ['1o'] }, SHOWN, ORDER, glued)).toEqual(
+      single('1l'),
+    );
+  });
+
   it('показанных нет — выделения нет', () => {
     expect(pruned({ current: '1o', anchor: '1o', keys: ['1o'] }, [], ORDER)).toEqual(NO_SELECTION);
   });

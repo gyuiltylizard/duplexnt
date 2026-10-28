@@ -113,6 +113,7 @@ export const EditorThumb = memo(function EditorThumb({
   current,
   selected,
   multi,
+  glued,
   draggable,
   dragging,
   drop,
@@ -145,6 +146,8 @@ export const EditorThumb = memo(function EditorThumb({
   readonly selected: boolean;
   /** В выделении из нескольких страниц — тёмная рамка и кольцо. */
   readonly multi: boolean;
+  /** Склеенный пустой оборот (B-13): сам не тянется — обычный курсор и подпись почему. */
+  readonly glued: boolean;
   /** Правки доступны — миниатюру можно тянуть (S6). */
   readonly draggable: boolean;
   /** Её тянут — сама или в составе выделения. */
@@ -233,6 +236,9 @@ export const EditorThumb = memo(function EditorThumb({
   if (dragging) {
     classes.push('thumb--dragging');
   }
+  if (glued) {
+    classes.push('thumb--glued');
+  }
 
   const base = thumbLabelOf(t, { lost, inSets, origin, side, sheet, addedSet, position });
   const turned = angle === 0 ? base : `${base}, ${t('thumb.angle', { angle })}`;
@@ -247,7 +253,13 @@ export const EditorThumb = memo(function EditorThumb({
       aria-selected={selected}
       aria-busy={!lost && image.state === 'loading' ? true : undefined}
       aria-label={label}
-      title={!lost && image.state === 'failed' ? t('thumb.failedTitle') : undefined}
+      title={
+        !lost && image.state === 'failed'
+          ? t('thumb.failedTitle')
+          : glued && !draggable
+            ? t('thumb.gluedTitle')
+            : undefined
+      }
       tabIndex={current ? 0 : -1}
       data-key={pageKey}
       className={classes.join(' ')}
