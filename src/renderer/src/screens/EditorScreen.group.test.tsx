@@ -26,9 +26,10 @@ import {
 } from './editor-fixture';
 
 // Экран `editor`, M4 U7 (handoff M4, S4–S6; KTD7; R18–R19): подвал ленты с панелью выделения
-// вместо панели над лентой и «Выделить в документ» для любого выделения — подряд (как в M3 S5)
-// и не подряд (перенос + границы одним шагом). Случаи панели M3 из `EditorScreen.dnd.test.tsx`
-// переехали сюда. Снимок с результатом команды тест подаёт сам (`applied`).
+// вместо панели над лентой и «Выделить в документ» для любого выделения. С B-14 команда
+// извлекает выделенные в отдельный документ в конце ленты (перенос + граница одним шагом),
+// исходный документ остаётся одним. Случаи панели M3 из `EditorScreen.dnd.test.tsx` переехали
+// сюда. Снимок с результатом команды тест подаёт сам (`applied`).
 
 const button = (name: string): HTMLElement => screen.getByRole('button', { name });
 const rail = (): HTMLElement =>
@@ -190,8 +191,8 @@ describe('подвал ленты (S4–S6, R18)', () => {
   });
 });
 
-describe('«Выделить в документ» (S6, KTD7, R19)', () => {
-  it('подряд: две границы одним шагом, порядок не трогается, тост, фокус в имя нового (M3 S5)', async () => {
+describe('«Выделить в документ» (S6, KTD7, R19; B-14)', () => {
+  it('подряд из середины: кусок уезжает в конец ленты, исходный документ остаётся одним; тост, фокус в имя нового; Ctrl+Z возвращает', async () => {
     const api = stubApi();
     const snapshot = twoPass();
     const { onToast, rerender } = renderEditor(snapshot);
@@ -200,20 +201,36 @@ describe('«Выделить в документ» (S6, KTD7, R19)', () => {
     fireEvent.click(option(2), { shiftKey: true });
     fireEvent.click(button('Выделить в документ'));
     expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({
-      edits: edits({ cuts: [1, 3], names: ['', '', ''] }),
+      edits: edits({ order: [F1, B2, F3, B1, B3, F2], cuts: [4], names: ['', ''] }),
       rotate180: {},
     });
     await settle();
     expect(onToast).toHaveBeenCalledExactlyOnceWith('Отдельный документ из 2 стр. создан');
 
     rerender(applied(snapshot, lastSent(api)));
-    expect(screen.getAllByRole('listbox').length).toBe(3);
+    expect(screen.getAllByRole('option').map((item) => item.getAttribute('data-key'))).toEqual([
+      F1,
+      B2,
+      F3,
+      B1,
+      B3,
+      F2,
+    ]);
+    // Два документа, не три: исходный без извлечённых и новый в конце.
+    expect(screen.getAllByRole('listbox').length).toBe(2);
     expect(document.activeElement).toBe(nameField(2));
-    // Граница — не страницы: выделение не тронуто.
+    // Выделение — перенесённые; порядок стал ручным.
+    expect(selectedKeys()).toEqual([B3, F2]);
+    expect(screen.getByText('Есть ручные правки')).toBeDefined();
+
+    ctrlZ();
+    expect(api.setEdits).toHaveBeenLastCalledWith({ edits: EMPTY_EDITS, rotate180: {} });
+    await settle();
+    rerender(applied(snapshot, lastSent(api)));
     expect(selectedKeys()).toEqual([B3, F2]);
   });
 
-  it('не подряд: выделенные встают на место первой, остальные вправо, границы до и после — одним шагом; Ctrl+Z выделяет перенесённые', async () => {
+  it('не подряд: выделенные уезжают в конец ленточным порядком, остальные смыкаются — одним шагом', async () => {
     const api = stubApi();
     const snapshot = twoPass();
     const { onToast, rerender } = renderEditor(snapshot);
@@ -223,32 +240,40 @@ describe('«Выделить в документ» (S6, KTD7, R19)', () => {
     expect(selectedKeys()).toEqual([B3, B2]);
     fireEvent.click(button('Выделить в документ'));
     expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({
-      edits: edits({ order: [F1, B3, B2, F2, F3, B1], cuts: [1, 3], names: ['', '', ''] }),
+      edits: edits({ order: [F1, F2, F3, B1, B3, B2], cuts: [4], names: ['', ''] }),
       rotate180: {},
     });
     await settle();
     expect(onToast).toHaveBeenCalledExactlyOnceWith('Отдельный документ из 2 стр. создан');
 
     rerender(applied(snapshot, lastSent(api)));
-    expect(screen.getAllByRole('option').map((item) => item.getAttribute('data-key'))).toEqual([
-      F1,
-      B3,
-      B2,
-      F2,
-      F3,
-      B1,
-    ]);
-    expect(screen.getAllByRole('listbox').length).toBe(3);
+    expect(screen.getAllByRole('listbox').length).toBe(2);
     expect(document.activeElement).toBe(nameField(2));
-    // Выделение — перенесённые; порядок стал ручным.
     expect(selectedKeys()).toEqual([B3, B2]);
-    expect(screen.getByText('Есть ручные правки')).toBeDefined();
+  });
 
-    ctrlZ();
-    expect(api.setEdits).toHaveBeenLastCalledWith({ edits: EMPTY_EDITS, rotate180: {} });
+  it('кусок уже в конце ленты: только граница, порядок не становится ручным, выделение не тронуто', async () => {
+    const api = stubApi();
+    const snapshot = twoPass();
+    const { rerender } = renderEditor(snapshot);
+
+    fireEvent.click(option(4));
+    fireEvent.click(option(5), { shiftKey: true });
+    fireEvent.click(button('Выделить в документ'));
+    expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({
+      edits: edits({ cuts: [4], names: ['', ''] }),
+      rotate180: {},
+    });
     await settle();
     rerender(applied(snapshot, lastSent(api)));
-    expect(selectedKeys()).toEqual([B3, B2]);
+    expect(screen.getAllByRole('listbox').length).toBe(2);
+    expect(document.activeElement).toBe(nameField(2));
+    expect(selectedKeys()).toEqual([F3, B1]);
+
+    // Повторно на уже отдельном документе в конце — жеста нет, кнопка недоступна.
+    expect(button('Выделить в документ')).toHaveProperty('disabled', true);
+    fireEvent.click(button('Выделить в документ'));
+    expect(api.setEdits).toHaveBeenCalledTimes(1);
   });
 
   it('AE10 плана M4 / B-13: склеенные обороты едут с выделенными лицами и при скрытых, и при показанных', async () => {
@@ -256,12 +281,13 @@ describe('«Выделить в документ» (S6, KTD7, R19)', () => {
     const snapshot = hideSnapshot();
     const { onToast } = renderEditor(snapshot);
 
-    // Показанная лента: F1, F2, B2, F3. Выделены F1 и F3 — с хвостами B3 и B1.
+    // Показанная лента: F1, F2, B2, F3. Выделены F1 и F3 — с хвостами B3 и B1; исходный документ
+    // остаётся из F2 и B2, извлечённые — за ними.
     fireEvent.click(option(0));
     fireEvent.click(option(3), { ctrlKey: true });
     fireEvent.click(button('Выделить в документ'));
     expect(api.setEdits).toHaveBeenCalledExactlyOnceWith({
-      edits: edits({ order: [F1, B3, F3, B1, F2, B2], cuts: [4], names: ['', ''] }),
+      edits: edits({ order: [F2, B2, F1, B3, F3, B1], cuts: [2], names: ['', ''] }),
       rotate180: {},
     });
     await settle();
@@ -281,7 +307,7 @@ describe('«Выделить в документ» (S6, KTD7, R19)', () => {
     fireEvent.click(option(4), { ctrlKey: true });
     fireEvent.click(button('Выделить в документ'));
     expect(literal.setEdits).toHaveBeenCalledExactlyOnceWith({
-      edits: edits({ order: [F1, B3, F3, B1, F2, B2], cuts: [4], names: ['', ''] }),
+      edits: edits({ order: [F2, B2, F1, B3, F3, B1], cuts: [2], names: ['', ''] }),
       rotate180: {},
     });
   });

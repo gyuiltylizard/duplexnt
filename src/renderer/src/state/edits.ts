@@ -1,4 +1,4 @@
-import { EMPTY_EDITS, sameList, type EditAngle, type SessionEdits } from '@shared';
+import { EMPTY_EDITS, normalizeCuts, sameList, type EditAngle, type SessionEdits } from '@shared';
 import type { EditState } from './history';
 
 // Жесты редактора (план M3, U6; KTD-3a): каждый строит следующее состояние правок от правок
@@ -226,54 +226,15 @@ export function renamed(edits: SessionEdits, docIndex: number, name: string): Se
 }
 
 /**
- * «Выделить в документ»: подряд идущие позиции `from…to` становятся отдельным документом —
- * границы до и после куска одним шагом; в начале и в конце ленты лишних нет (UI_SPEC §6.5).
- * Границы внутри куска снимаются вместе с именами документов, которые они начинали, — иначе
- * вместо одного документа вышло бы несколько. Хвост за куском, чей документ начинался внутри
- * куска, сохраняет его имя. Возвращает правки и номер нового документа (с нуля) — туда уходит
- * фокус имени.
- */
-export function separated(
-  edits: SessionEdits,
-  from: number,
-  to: number,
-  length: number,
-): { readonly edits: SessionEdits; readonly document: number } {
-  const inside = (cut: number): boolean => cut > from && cut <= to;
-  // Документ страницы за куском — до жеста; его имя переезжает на хвост, если граница,
-  // с которой он начинался, снимается.
-  const tail = edits.cuts.filter((cut) => cut <= to + 1).length;
-  const tailStart = edits.cuts[tail - 1];
-  const tailName =
-    to + 1 < length && tailStart !== undefined && inside(tailStart) ? edits.names[tail] : undefined;
-
-  let next: SessionEdits = edits.cuts.some(inside)
-    ? {
-        ...edits,
-        cuts: edits.cuts.filter((cut) => !inside(cut)),
-        // Имя документа с номером `index` начинается с разреза `index - 1`; у первого его нет.
-        names: edits.names.filter((_, index) => {
-          const start = edits.cuts[index - 1];
-          return start === undefined || !inside(start);
-        }),
-      }
-    : edits;
-  for (const position of [from, to + 1]) {
-    next = withCut(next, position, length) ?? next;
-  }
-  const docIndex = next.cuts.filter((cut) => cut <= from).length;
-  if (tailName !== undefined) {
-    next = renamed(next, docIndex + 1, tailName);
-  }
-  return { edits: next, document: docIndex };
-}
-
-/**
- * «Выделить в документ» для любого выделения (M4, KTD7; handoff M4, S6): страницы `keys` подряд —
- * только разрезы, как `separated`; не подряд — явный порядок (выделенные встают на позицию
- * первой из них, остальные сдвигаются вправо, взаимный порядок не меняется) и разрезы по
- * арифметике `moved`, затем границы до и после куска. Ключей в ленте нет — `null` (жеста нет).
- * Группировка не подряд — перенос: порядок становится явным (R7).
+ * «Выделить в документ» (M4, KTD7; B-14): страницы `keys` извлекаются из своих документов и
+ * становятся отдельным документом в конце ленты — исходный документ остаётся одним целым, без
+ * них. Взаимный порядок извлечённых — ленточный; разрезы сдвигаются на изъятые левее, как при
+ * удалении; опустевшие документы схлопываются вместе с именем (`normalizeCuts` — та же сверка,
+ * что в ядре: номер нового документа для фокуса имени нужен до снимка). Новый документ — с
+ * именем по умолчанию; кусок — ровно целый документ — переезжает в конец со своим именем.
+ * Возвращается номер нового документа (с нуля). Это перенос: порядок становится явным (R7),
+ * кроме куска, уже стоявшего в конце. Ключей в ленте нет, выделена вся лента или кусок уже
+ * отдельный документ в конце — `null` (жеста нет; кнопка недоступна).
  */
 export function grouped(
   edits: SessionEdits,
@@ -281,24 +242,42 @@ export function grouped(
   keys: readonly string[],
 ): { readonly edits: SessionEdits; readonly document: number } | null {
   const grouping = new Set(keys);
-  const positions = positionsOf(visible, grouping);
-  const from = positions[0];
-  if (from === undefined) {
+  const removed = positionsOf(visible, grouping);
+  const first = removed[0];
+  if (first === undefined || removed.length === visible.length) {
     return null;
   }
-  const to = from + positions.length - 1;
-  if (positions.at(-1) === to) {
-    return separated(edits, from, to, visible.length);
+  const rest = visible.filter((key) => !grouping.has(key));
+  const settled = {
+    ...edits,
+    ...normalizeCuts(cutsWithout(edits.cuts, removed), edits.names, rest.length),
+  };
+  const next = withCut(settled, rest.length, visible.length);
+  const inPlace = first === rest.length;
+  if (next === null || (inPlace && sameList(next.cuts, edits.cuts))) {
+    return null;
+  }
+  const document = next.cuts.length;
+  const named = renamed(next, document, wholeDocumentName(edits, visible.length, removed));
+  if (inPlace) {
+    return { edits: named, document };
   }
   const group = visible.filter((key) => grouping.has(key));
-  const rest = visible.filter((key) => !grouping.has(key));
-  // Кусок встаёт на позицию первой выделенной: разрез на этой позиции остаётся слева от куска,
-  // разрезы правее (по исходной ленте — и тот, что стоял сразу за первой выделенной) уезжают за
-  // кусок, как у `moved` «перед»; сдвиг на изъятые левее — как у `cutsWithout`.
-  const cuts = edits.cuts.map((cut) => {
-    const shifted = cut - positions.filter((index) => index < cut).length;
-    return cut > from ? shifted + group.length : shifted;
-  });
-  const order = [...rest.slice(0, from), ...group, ...rest.slice(from)];
-  return separated({ ...edits, order, cuts }, from, to, visible.length);
+  return { edits: { ...named, order: [...rest, ...group] }, document };
+}
+
+/** Имя документа, если позиции `removed` — ровно один целый документ ленты; иначе пустое. */
+function wholeDocumentName(
+  edits: SessionEdits,
+  length: number,
+  removed: readonly number[],
+): string {
+  const first = removed[0] ?? 0;
+  const end = first + removed.length;
+  if (removed.at(-1) !== end - 1) {
+    return '';
+  }
+  const bounds = [0, ...edits.cuts, length];
+  const index = bounds.indexOf(first);
+  return index >= 0 && bounds[index + 1] === end ? (edits.names[index] ?? '') : '';
 }

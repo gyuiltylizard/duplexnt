@@ -1,9 +1,8 @@
-import { EMPTY_EDITS, sameEdits, type SessionEdits } from '@shared';
+import { EMPTY_EDITS, normalizeCuts, sameEdits, type SessionEdits } from '@shared';
 import { describe, expect, it } from 'vitest';
 import {
   documentsOf,
   hasEdits,
-  normalizeCuts,
   normalizeEdits,
   pageAngle,
   rebaseEdits,
