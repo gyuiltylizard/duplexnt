@@ -46,6 +46,36 @@ export const EMPTY_EDITS: SessionEdits = {
   notBlank: [],
 };
 
+/**
+ * Разрезы внутри ленты длины `length`: выход за края прижимается, порядок выравнивается, пустой
+ * документ схлопывается вместе со своим именем — и в начале ленты, и в середине, и в конце.
+ * Одна на ядро (нормализация правок, KTD-3a) и редактор («Выделить в документ» считает номер
+ * нового документа для фокуса имени до снимка, B-14) — правило схлопывания не расходится.
+ */
+export function normalizeCuts(
+  cuts: readonly number[],
+  names: readonly string[],
+  length: number,
+): Pick<SessionEdits, 'cuts' | 'names'> {
+  const bounds = [0];
+  for (const cut of cuts) {
+    bounds.push(Math.min(length, Math.max(bounds.at(-1) ?? 0, cut)));
+  }
+  bounds.push(length);
+  const kept: { readonly start: number; readonly name: string }[] = [];
+  for (let index = 0; index + 1 < bounds.length; index += 1) {
+    const start = bounds[index] ?? 0;
+    if ((bounds[index + 1] ?? 0) > start) {
+      kept.push({ start, name: names[index] ?? '' });
+    }
+  }
+  // Пустая лента (всё удалено) — один пустой документ; первое имя не теряется.
+  if (kept.length === 0) {
+    return { cuts: [], names: [names[0] ?? ''] };
+  }
+  return { cuts: kept.slice(1).map((doc) => doc.start), names: kept.map((doc) => doc.name) };
+}
+
 /** Списки равны поэлементно. */
 export const sameList = <T>(left: readonly T[], right: readonly T[]): boolean =>
   left.length === right.length && left.every((value, index) => value === right[index]);

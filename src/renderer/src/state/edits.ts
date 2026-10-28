@@ -1,4 +1,4 @@
-import { EMPTY_EDITS, sameList, type EditAngle, type SessionEdits } from '@shared';
+import { EMPTY_EDITS, normalizeCuts, sameList, type EditAngle, type SessionEdits } from '@shared';
 import type { EditState } from './history';
 
 // Жесты редактора (план M3, U6; KTD-3a): каждый строит следующее состояние правок от правок
@@ -226,32 +226,15 @@ export function renamed(edits: SessionEdits, docIndex: number, name: string): Se
 }
 
 /**
- * Разрезы и имена без пустых документов на ленте длины `length` — та же сверка, что в ядре
- * (`normalizeCuts`), но здесь: номер нового документа для фокуса имени считается до снимка.
- * Разрез перед первой страницей, за последней и совпавшие разрезы снимаются вместе с именем
- * документа, который они начинали и который опустел.
- */
-function withoutEmptyDocuments(edits: SessionEdits, length: number): SessionEdits {
-  const bounds = [0, ...edits.cuts, length];
-  const kept = edits.names.flatMap((name, index) => {
-    const start = bounds[index] ?? 0;
-    return (bounds[index + 1] ?? 0) > start ? [{ start, name }] : [];
-  });
-  return {
-    ...edits,
-    cuts: kept.slice(1).map((doc) => doc.start),
-    names: kept.map((doc) => doc.name),
-  };
-}
-
-/**
  * «Выделить в документ» (M4, KTD7; B-14): страницы `keys` извлекаются из своих документов и
  * становятся отдельным документом в конце ленты — исходный документ остаётся одним целым, без
  * них. Взаимный порядок извлечённых — ленточный; разрезы сдвигаются на изъятые левее, как при
- * удалении; документ, целиком ушедший в кусок, схлопывается вместе с именем. Новый документ —
- * с именем по умолчанию; возвращается его номер (с нуля) — туда уходит фокус имени. Это
- * перенос: порядок становится явным (R7), кроме случая, когда кусок уже стоял в конце. Ключей
- * в ленте нет, выделена вся лента или кусок уже отдельный документ в конце — `null` (жеста нет).
+ * удалении; опустевшие документы схлопываются вместе с именем (`normalizeCuts` — та же сверка,
+ * что в ядре: номер нового документа для фокуса имени нужен до снимка). Новый документ — с
+ * именем по умолчанию; кусок — ровно целый документ — переезжает в конец со своим именем.
+ * Возвращается номер нового документа (с нуля). Это перенос: порядок становится явным (R7),
+ * кроме куска, уже стоявшего в конце. Ключей в ленте нет, выделена вся лента или кусок уже
+ * отдельный документ в конце — `null` (жеста нет; кнопка недоступна).
  */
 export function grouped(
   edits: SessionEdits,
@@ -260,20 +243,41 @@ export function grouped(
 ): { readonly edits: SessionEdits; readonly document: number } | null {
   const grouping = new Set(keys);
   const removed = positionsOf(visible, grouping);
-  if (removed.length === 0 || removed.length === visible.length) {
+  const first = removed[0];
+  if (first === undefined || removed.length === visible.length) {
     return null;
   }
-  const group = visible.filter((key) => grouping.has(key));
   const rest = visible.filter((key) => !grouping.has(key));
-  const order = [...rest, ...group];
-  const settled = withoutEmptyDocuments(
-    { ...edits, cuts: cutsWithout(edits.cuts, removed) },
-    rest.length,
-  );
+  const settled = {
+    ...edits,
+    ...normalizeCuts(cutsWithout(edits.cuts, removed), edits.names, rest.length),
+  };
   const next = withCut(settled, rest.length, visible.length);
-  const inPlace = sameList(order, visible);
+  const inPlace = first === rest.length;
   if (next === null || (inPlace && sameList(next.cuts, edits.cuts))) {
     return null;
   }
-  return { edits: inPlace ? next : { ...next, order }, document: next.cuts.length };
+  const document = next.cuts.length;
+  const named = renamed(next, document, wholeDocumentName(edits, visible.length, removed));
+  if (inPlace) {
+    return { edits: named, document };
+  }
+  const group = visible.filter((key) => grouping.has(key));
+  return { edits: { ...named, order: [...rest, ...group] }, document };
+}
+
+/** Имя документа, если позиции `removed` — ровно один целый документ ленты; иначе пустое. */
+function wholeDocumentName(
+  edits: SessionEdits,
+  length: number,
+  removed: readonly number[],
+): string {
+  const first = removed[0] ?? 0;
+  const end = first + removed.length;
+  if (removed.at(-1) !== end - 1) {
+    return '';
+  }
+  const bounds = [0, ...edits.cuts, length];
+  const index = bounds.indexOf(first);
+  return index >= 0 && bounds[index + 1] === end ? (edits.names[index] ?? '') : '';
 }

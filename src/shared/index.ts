@@ -64,6 +64,7 @@ export {
   sameList,
   type EditAngle,
   type SessionEdits,
+  normalizeCuts,
 } from './edits';
 
 export {

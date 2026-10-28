@@ -270,7 +270,8 @@ describe('«Выделить в документ» (S6, KTD7, R19; B-14)', () =>
     expect(document.activeElement).toBe(nameField(2));
     expect(selectedKeys()).toEqual([F3, B1]);
 
-    // Повторно на уже отдельном документе в конце — жеста нет.
+    // Повторно на уже отдельном документе в конце — жеста нет, кнопка недоступна.
+    expect(button('Выделить в документ')).toHaveProperty('disabled', true);
     fireEvent.click(button('Выделить в документ'));
     expect(api.setEdits).toHaveBeenCalledTimes(1);
   });

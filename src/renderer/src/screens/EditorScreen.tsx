@@ -813,12 +813,18 @@ export function EditorScreen({
                   ? {
                       count: selection.keys.length,
                       // «Выделить в документ» — только вне режима наборов (M3.6, KTD8).
-                      // Выделены одни склеенные обороты — группировать нечего (B-13, KTD-3).
+                      // Выделены одни склеенные обороты — группировать нечего (B-13, KTD-3);
+                      // кусок уже отдельный документ в конце или вся лента — жеста нет (B-14).
                       group:
                         sets === null
                           ? {
                               disabled:
-                                locked || movingOf(selection.keys, glued, visible).length === 0,
+                                locked ||
+                                grouped(
+                                  edits.current.edits,
+                                  visible,
+                                  movingOf(selection.keys, glued, visible),
+                                ) === null,
                               onClick: group,
                             }
                           : null,
