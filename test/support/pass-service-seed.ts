@@ -7,6 +7,7 @@ import { scanOptionsOf } from '../../src/core/escl/scan-settings';
 import { openPassService } from '../../src/core/scan/pass-service';
 import { layoutOf } from '../../src/core/storage/layout';
 import { ET_3850, readFixture } from './fixtures';
+import { SESSION } from './session-store';
 
 // Общие хелперы тестов службы прохода без сканера и эмулятора
 // (`src/core/scan/pass-service*.test.ts`): подключённый сканер из фикстуры capabilities, посев
@@ -20,9 +21,9 @@ import { ET_3850, readFixture } from './fixtures';
 //   оценки пустых, пара добавленного набора, сборка ленты.
 // Обвязка на эмуляторе — `pass-service.ts` рядом.
 
-export const SESSION = 'a1b2c3d4e5f60718';
+export { SESSION };
 /** Байты-заглушка страницы: маркеры JPEG есть, картинки нет. */
-export const pageBytes = Uint8Array.of(0xff, 0xd8, 1, 0xff, 0xd9);
+const pageBytes = Uint8Array.of(0xff, 0xd8, 1, 0xff, 0xd9);
 
 /** Сканер, «подключённый» по фикстуре capabilities ET-3850; сеть не трогается. */
 export function connected(): ConnectedScanner {
@@ -92,38 +93,38 @@ export async function seedSession(
   }
 }
 
-/** Транспорт, отвечающий отказом сети: дошли до него — политика проход пропустила. */
-export function refusingConnector() {
-  const requests: string[] = [];
-  const connector: ConnectorOptions = {
+const refused = () => fail('scannerUnreachable', { reason: 'refused' });
+
+/** Транспорт, отвечающий отказом сети на всё; `onRequest` видит каждый запрос до ответа. */
+function refusingTransport(onRequest: (path: string) => Promise<void> | void): ConnectorOptions {
+  return {
     createTransport: () => ({
-      request: (options) => {
-        requests.push(options.path);
-        return Promise.resolve(fail('scannerUnreachable', { reason: 'refused' }));
+      request: async (options) => {
+        await onRequest(options.path);
+        return refused();
       },
-      stream: () => Promise.resolve(fail('scannerUnreachable', { reason: 'refused' })),
+      stream: () => Promise.resolve(refused()),
       close: () => undefined,
     }),
   };
+}
+
+/** Транспорт, отвечающий отказом сети: дошли до него — политика проход пропустила. */
+export function refusingConnector() {
+  const requests: string[] = [];
+  const connector = refusingTransport((path) => {
+    requests.push(path);
+  });
   return { requests, connector };
 }
 
-/** Транспорт, который держит первый запрос до `release`: снимок идущего прохода виден снаружи. */
+/** Транспорт, который держит каждый запрос до `release`: снимок идущего прохода виден снаружи. */
 export function gatedConnector() {
   let release = (): void => undefined;
   const gate = new Promise<void>((resolve) => {
     release = resolve;
   });
-  const connector: ConnectorOptions = {
-    createTransport: () => ({
-      request: async () => {
-        await gate;
-        return fail('scannerUnreachable', { reason: 'refused' });
-      },
-      stream: () => Promise.resolve(fail('scannerUnreachable', { reason: 'refused' })),
-      close: () => undefined,
-    }),
-  };
+  const connector = refusingTransport(() => gate);
   return { connector, release };
 }
 
