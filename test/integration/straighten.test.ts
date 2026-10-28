@@ -338,6 +338,21 @@ describe('ресэмплер на сканах ET-3850 (M6, U3)', () => {
     expect(chunks).toBe(1);
   });
 
+  it('ошибка колбэка вызывающего без отмены пробрасывается, а не превращается в null', async () => {
+    const profile = skewProfileOf([{ u: 0.5, theta: 0.5 }]);
+    const run = straighten(pageFixture(1), profile, {
+      pixelLimit: PIXEL_LIMIT,
+      dpi: 300,
+      onChunk: () => {
+        throw new Error('bench');
+      },
+    });
+
+    await expect(run).rejects.toThrow('bench');
+    // Оставшийся путь к `null` — сбой libvips при кодировании — не проверяется: без мока
+    // заставить libvips упасть на кодировании нельзя, а `sharp` в проекте не мокается.
+  });
+
   it('битый JPEG, не JPEG и превышение предела пикселей — null', async () => {
     const profile = skewProfileOf([{ u: 0.5, theta: 0.5 }]);
     const options = { pixelLimit: PIXEL_LIMIT, dpi: 300 };

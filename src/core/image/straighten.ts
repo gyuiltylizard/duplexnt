@@ -245,8 +245,8 @@ export async function straightenRaw(
  * Выправленная страница JPEG по профилю (`sharp` — `test:integration`): декод в сырые пиксели
  * с пределом, коррекция, JPEG q92 4:4:4 того же размера и числа каналов (серый остаётся
  * одноканальным явно — иначе `sharp` кодирует серый буфер трёхканальным), плотность — в JFIF.
- * Сбой — не JPEG, превышение предела, ошибка декодирования, нежданное число каналов — `null`:
- * страница остаётся как есть (R24). Отмена — исключение причиной сигнала.
+ * Сбой — не JPEG, превышение предела, ошибка декодирования, нежданное число каналов, сбой
+ * кодирования — `null`: страница остаётся как есть (R24). Отмена — исключение причиной сигнала.
  */
 export async function straighten(
   bytes: Uint8Array,
@@ -285,10 +285,10 @@ export async function straighten(
   } catch {
     return null;
   }
+  const out = await straightenRaw(raw, profile, options);
+  // Отмена на последней полосе: цикл полос её уже не увидит, кодировать незачем.
+  options.signal?.throwIfAborted();
   try {
-    const out = await straightenRaw(raw, profile, options);
-    // Отмена на последней полосе: цикл полос её уже не увидит, кодировать незачем.
-    options.signal?.throwIfAborted();
     const { width, height } = raw;
     const dpi = options.dpi ?? jfifDpi(bytes);
     let pipeline = sharp(out, { raw: { width, height, channels } });
@@ -302,7 +302,9 @@ export async function straighten(
     const output = dpi === null ? { jpeg: bare, dpi: null } : withJfifDensity(bare, dpi);
     return { ...output, info: { width, height, channels }, encoding: STRAIGHTEN_ENCODING };
   } catch (error: unknown) {
-    // Отмена — исключение причиной сигнала; сбой libvips при кодировании — `null`, как и при декоде.
+    // Отмена — исключение причиной сигнала; сбой libvips при кодировании — `null`, как и при декоде;
+    // ошибки самого ресэмплера и колбэков вызывающего (`onChunk`, `yieldBetween`) сюда не попадают —
+    // они пробрасываются.
     if (options.signal?.aborted === true) {
       throw error;
     }
