@@ -15,7 +15,7 @@
     "typecheck": "tsc -b",
     "lint": "eslint .",
     "test": "vitest run --project node --project jsdom",
-    "test:integration": "vitest run --project integration",
+    "test:integration": "vitest run --project integration && vitest run --project worst-case --no-file-parallelism",
     "test:all": "npm run test && npm run test:integration",
     "design:snapshot": "vitest run --project design",
     "format": "prettier --write .",

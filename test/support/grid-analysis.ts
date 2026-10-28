@@ -1,4 +1,3 @@
-import sharp from 'sharp';
 import { FAN_LINE_MM } from '@shared';
 import { marginHistogramOf, paperWhiteOf, type GrayImage } from '../../src/core/detect/gray';
 
@@ -136,8 +135,12 @@ function linearFit(points: readonly Sample[]): { slope: number; intercept: numbe
   return { slope, intercept, bow };
 }
 
-/** Серое полного разрешения — без уменьшения, чтобы мерить десятые доли миллиметра. */
+/**
+ * Серое полного разрешения — без уменьшения, чтобы мерить десятые доли миллиметра (`sharp`
+ * загружается по месту: модуль нужен и юнитам на синтетике без `sharp`).
+ */
 export async function decodeFullGray(bytes: Uint8Array): Promise<GrayImage> {
+  const { default: sharp } = await import('sharp');
   const { data, info } = await sharp(bytes, { limitInputPixels: 80_000_000 })
     .greyscale()
     .raw()
@@ -160,7 +163,11 @@ export function fanOf(horizontals: readonly GridHorizontal[], lineMm = FAN_LINE_
 
 /** Анализ скана сетки (JPEG) на полном разрешении при известном DPI. */
 export async function analyzeGrid(bytes: Uint8Array, dpi: number): Promise<GridAnalysis> {
-  const gray = await decodeFullGray(bytes);
+  return analyzeGrayGrid(await decodeFullGray(bytes), dpi);
+}
+
+/** Анализ серой картинки сетки при известном DPI (чистая функция — и для синтетики). */
+export function analyzeGrayGrid(gray: GrayImage, dpi: number): GridAnalysis {
   const { data, width, height } = gray;
   const pxPerMm = dpi / 25.4;
   const { histogram, total } = marginHistogramOf(gray);

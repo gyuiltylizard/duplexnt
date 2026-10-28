@@ -1,4 +1,5 @@
 import type { GrayImage } from '../../src/core/detect/gray';
+import { withJfifDensity } from '../../src/core/escl/jpeg-markers';
 
 // Синтетическая «страница» для детектора перекоса и ресэмплера (план M6, U2–U3): идеальная
 // страница в миллиметрах (строки текста из штрихов, пробелы, короткие строки) искажается
@@ -26,7 +27,9 @@ export type SyntheticContent =
   /** Строки только в одной узкой полосе посередине — мало полос для профиля. */
   | 'band'
   /** Сплошная тёмная «фотография» без строк — чернил больше допустимого. */
-  | 'photo';
+  | 'photo'
+  /** Сетка 10 мм, как тестовые листы U1: горизонтали и вертикали для анализа сетки. */
+  | 'grid';
 
 export interface SyntheticPageOptions {
   readonly width?: number;
@@ -54,6 +57,10 @@ const TEXT_BOTTOM_MM = 275;
 const TEXT_LEFT_MM = 20;
 const TEXT_RIGHT_MM = 190;
 
+/** Сетка: линии 0,4 мм с шагом 10 мм в этих пределах по обеим осям. */
+const GRID_FROM_MM = 15;
+const GRID_TO_MM = 195;
+
 /** Строка текста короче блока (последняя в абзаце) — концы такой строки мерить нельзя. */
 export const isShortLine = (lineIndex: number): boolean => hash01(lineIndex * 7919) < 0.12;
 
@@ -73,6 +80,11 @@ export function fullLineNear(lineIndex: number): number {
 export function idealPage(xMm: number, yMm: number, content: SyntheticContent): number {
   if (content === 'blank') {
     return 1;
+  }
+  if (content === 'grid') {
+    const near = (mm: number): boolean =>
+      mm >= GRID_FROM_MM && mm <= GRID_TO_MM && Math.abs(mm - Math.round(mm / 10) * 10) <= 0.2;
+    return near(xMm) || near(yMm) ? 0.15 : 1;
   }
   if (content === 'photo') {
     // Плавные тёмные пятна: без строк, чернил больше 30 %.
@@ -193,10 +205,13 @@ export async function syntheticJpeg(
     }
   }
   const { default: sharp } = await import('sharp');
-  return sharp(raw, { raw: { width, height, channels } })
+  const image = sharp(raw, { raw: { width, height, channels } });
+  // Серый — одноканальным явно, плотность — в JFIF руками: `withMetadata({density})` у `sharp`
+  // переводит выход в sRGB тремя каналами с профилем ICC.
+  const jpeg = await (channels === 1 ? image.toColourspace('b-w') : image)
     .jpeg({ quality: 85 })
-    .withMetadata({ density: dpi })
     .toBuffer();
+  return Buffer.from(withJfifDensity(jpeg, dpi).jpeg);
 }
 
 /**
@@ -205,6 +220,13 @@ export async function syntheticJpeg(
  * берётся ближайший к ожидаемому y (соседние строки, вошедшие в окно из-за сдвига, не
  * мешают). Проверяет соглашение о знаке по пикселям, а не по формуле. Короткая строка — `null`.
  */
+/**
+ * Просвет внутри строки, который ещё не разделяет пробеги: светлые штрихи середины строки
+ * (0,85) под порог чернил не попадают, и между тёмными кромками — до 7 px; межстрочный
+ * просвет — 10,8 px.
+ */
+const MERGE_GAP_PX = 8;
+
 export function lineEndsAt(
   gray: GrayImage,
   lineIndex: number,
@@ -219,9 +241,12 @@ export function lineEndsAt(
     const x1 = Math.round((xMm + 1.5) * pxPerMm);
     const y0 = Math.round(nominal - LINE_PITCH_MM * pxPerMm);
     const y1 = Math.round(nominal + LINE_PITCH_MM * pxPerMm);
+    // Пробег чернил — с просветами до `MERGE_GAP_PX`: у строки из светлых штрихов в окне могут
+    // остаться одни тёмные кромки сверху и снизу, и без слияния каждая была бы «своей» строкой.
     const runs: { weight: number; moment: number }[] = [];
     let run: { weight: number; moment: number } | null = null;
-    for (let y = y0; y <= y1 + 1; y += 1) {
+    let gap = 0;
+    for (let y = y0; y <= y1 + MERGE_GAP_PX + 1; y += 1) {
       let ink = 0;
       for (let x = x0; x <= x1 && y <= y1; x += 1) {
         ink += Math.max(0, 200 - (gray.data[y * gray.width + x] ?? 255));
@@ -230,9 +255,13 @@ export function lineEndsAt(
         run ??= { weight: 0, moment: 0 };
         run.weight += ink;
         run.moment += ink * y;
+        gap = 0;
       } else if (run !== null) {
-        runs.push(run);
-        run = null;
+        gap += 1;
+        if (gap > MERGE_GAP_PX) {
+          runs.push(run);
+          run = null;
+        }
       }
     }
     let best: number | null = null;

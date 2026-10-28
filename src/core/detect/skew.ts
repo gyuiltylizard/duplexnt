@@ -109,6 +109,8 @@ export interface MeasureSkewOptions {
    * нечем. В M6 принимается и не читается — поведение без неё полное.
    */
   readonly prior?: SkewPrior | null;
+  /** Отмена между полосами: промис отклоняется причиной сигнала (KTD-12). */
+  readonly signal?: AbortSignal;
 }
 
 /** Детерминированный дробный сдвиг строки пикселя: одинаковое размытие при любом угле. */
@@ -270,6 +272,7 @@ async function bandAngles(
   const bands: SkewBand[] = [];
   const yieldBetween = options.yieldBetween ?? (() => yieldNow());
   for (let top = 0; top + bandPx <= height; top += step) {
+    options.signal?.throwIfAborted();
     const started = performance.now();
     const yc = top + bandPx / 2;
     let count = 0;

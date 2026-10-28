@@ -164,6 +164,25 @@ describe('детектор перекоса: гейты и исход', () => {
     expect(withPrior).toEqual(result);
   });
 
+  it('отмена между полосами: промис отклоняется причиной сигнала, дальше полосы не считаются', async () => {
+    const gray = syntheticGray({ theta: stepTheta(0, -0.8, 0.55, 0.12) });
+    const controller = new AbortController();
+    let chunks = 0;
+    const run = measureSkew(gray, {
+      yieldBetween: immediate,
+      signal: controller.signal,
+      onChunk: () => {
+        chunks += 1;
+        if (chunks === 2) {
+          controller.abort(new Error('стоп'));
+        }
+      },
+    });
+
+    await expect(run).rejects.toThrow('стоп');
+    expect(chunks).toBe(2);
+  });
+
   it('запасной проход полосами 50 мм помечается в результате', async () => {
     // Строки с разной фазой в двух колонках ловушку в чистой синтетике не дают; проверяется
     // только то, что обычный проход идёт 30 мм — запасной проверяют фикстуры (две колонки).
