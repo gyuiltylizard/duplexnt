@@ -3,7 +3,7 @@ title: 'B-13 — пустой оборот приклеен к своему ли
 type: solution
 date: 2026-10-28
 milestone: B-13
-status: в работе # → done на закрытии
+status: done
 plan: ../plans/2026-10-27-005-feat-b-13-blank-back-glue-plan.md
 ---
 
