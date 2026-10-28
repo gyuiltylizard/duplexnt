@@ -184,13 +184,40 @@ describe('детектор перекоса: гейты и исход', () => {
     expect(chunks).toBe(2);
   });
 
-  it('запасной проход полосами 50 мм помечается в результате', async () => {
-    // Строки с разной фазой в двух колонках ловушку в чистой синтетике не дают; проверяется
-    // только то, что обычный проход идёт 30 мм — запасной проверяют фикстуры (две колонки).
+  it('ровный наклон проходит обычным проходом 30 мм', async () => {
     const { result } = await measure(() => 0.5);
 
-    expect([BAND_MM, FALLBACK_BAND_MM]).toContain(result.bandMm);
     expect(result.bandMm).toBe(BAND_MM);
+  });
+
+  it('запасной проход 50 мм: шип 0,6° шириной 12 мм на ступени валит форму при 30 мм, при 50 мм размывается — профиль есть, bandMm = 50', async () => {
+    // Полоса 30 мм видит шип как отдельный угол, и ни ступень, ни парабола его не описывают;
+    // полоса 50 мм усредняет его с соседями ниже остатка формы (ревью сессий 1–2: запасной
+    // проход прежде ни одним тестом не утверждался).
+    const step = stepTheta(0, -0.8, 0.55, 0.12);
+    const spike: ThetaOf = (u) => step(u) + (u > 0.28 && u < 0.32 ? 0.6 : 0);
+    const { result } = await measure(spike);
+
+    expect(result.outcome).toBe('willStraighten');
+    expect(result.bandMm).toBe(FALLBACK_BAND_MM);
+    expect(result.reason).toBeNull();
+    expect(result.shapeResidual).not.toBeNull();
+    expect(
+      knotError(profileOf(result), step, (u) => Math.abs(u - 0.55) > 0.12),
+    ).toBeLessThanOrEqual(0.05);
+  });
+
+  it('обе формы не описывают лестницу из двух ступеней: unmeasurable с bandMm = 50 и причинами обоих проходов', async () => {
+    const staircase: ThetaOf = (u) =>
+      stepTheta(0, -0.5, 0.35, 0.05)(u) + stepTheta(0, -0.5, 0.65, 0.05)(u);
+    const { result } = await measure(staircase);
+
+    expect(result.outcome).toBe('unmeasurable');
+    expect(result.profile).toBeNull();
+    expect(result.bandMm).toBe(FALLBACK_BAND_MM);
+    expect(result.reason).toMatch(
+      /^остаток формы [\d.]+° при 30 мм; остаток формы [\d.]+° при 50 мм$/,
+    );
   });
 });
 

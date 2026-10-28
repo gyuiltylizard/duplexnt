@@ -124,13 +124,17 @@ describe('ресэмплер на сканах ET-3850 (M6, U3)', () => {
           `${name.padEnd(22)} ${String(before.channels)} кан. ${(input.byteLength / 1024).toFixed(0).padStart(5)} → ${(jpeg.byteLength / 1024).toFixed(0).padStart(5)} КБ (×${ratio.toFixed(2)}); до (${measure.bandMm} мм): веер ${measure.fanMm?.toFixed(2)} мм ×${measure.contrast?.ratio.toFixed(2)}; после: ${describeAgain(again)}`,
         );
         checks.push(() => {
-          expect(again, name).not.toBeNull();
-          if (again?.profile) {
-            expect(skewMaxAbsDeg(again.profile), name).toBeLessThanOrEqual(RESIDUAL_MAX_DEG);
-            expect(skewFanMm(again.profile), name).toBeLessThanOrEqual(
-              RESIDUAL_FAN_MM[measure.bandMm] ?? 0,
-            );
+          // Лист, который после коррекции нечем измерить, — не «остаток в допуске», а провал
+          // стража: коррекция, после которой профиль не читается, прошла бы молча (ревью сессий 1–2).
+          const profile = again?.profile ?? null;
+          expect(profile, `${name}: после коррекции ${describeAgain(again)}`).not.toBeNull();
+          if (profile === null) {
+            return;
           }
+          expect(skewMaxAbsDeg(profile), name).toBeLessThanOrEqual(RESIDUAL_MAX_DEG);
+          expect(skewFanMm(profile), name).toBeLessThanOrEqual(
+            RESIDUAL_FAN_MM[measure.bandMm] ?? 0,
+          );
         });
       }
       console.log(
@@ -185,7 +189,10 @@ describe('ресэмплер на сканах ET-3850 (M6, U3)', () => {
           continue;
         }
         const fanBefore = result.measure.fanMm ?? 0;
-        const fanAfter = result.again?.profile ? skewFanMm(result.again.profile) : 0;
+        // Неизмеримый после коррекции лист — провал R24, а не «веер 0»: страж как раз об этом.
+        const profile = result.again?.profile ?? null;
+        expect(profile, `${name}: после коррекции ${describeAgain(result.again)}`).not.toBeNull();
+        const fanAfter = profile === null ? Number.POSITIVE_INFINITY : skewFanMm(profile);
         console.log(`${name}: веер ${fanBefore.toFixed(2)} → ${fanAfter.toFixed(2)} мм`);
         expect(fanAfter, name).toBeLessThanOrEqual(fanBefore);
       }

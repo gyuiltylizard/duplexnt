@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { skewThetaAt, type SkewMeasure, type SkewOutcome } from '@shared';
 import {
+  BAND_MM,
   CONFIDENCE_MIN,
+  FALLBACK_BAND_MM,
   IMPROVE_RATIO,
   LEVEL_DEG,
   measureSkewJpeg,
@@ -55,6 +57,13 @@ const EXPECTED: Readonly<Record<string, readonly SkewOutcome[]>> = {
   'text-line-gray-300': ['unmeasurable'],
 };
 
+/**
+ * Измеренные сканы, которые проходят только запасным проходом 50 мм: обычный проход 30 мм
+ * проваливает гейт формы. Закреплено, чтобы запасной проход нельзя было убрать, оставив таблицу
+ * зелёной; неизмеримые листы не закрепляются — у них 50 означает лишь провал формы при 30.
+ */
+const EXPECTED_FALLBACK: readonly string[] = ['text-gray-300'];
+
 const names = scanFixtureNames();
 const results = new Map<string, SkewMeasure | null>();
 const chunks = new Map<string, number[]>();
@@ -107,6 +116,11 @@ describe('детектор перекоса на сканах ET-3850 (M6, U2)',
       const result = await measured(name);
       expect(result, name).not.toBeNull();
       expect(EXPECTED[name], `${name}: ${describeMeasure(result)}`).toContain(result?.outcome);
+      if (result !== null && result.outcome !== 'unmeasurable') {
+        expect(result.bandMm, name).toBe(
+          EXPECTED_FALLBACK.includes(name) ? FALLBACK_BAND_MM : BAND_MM,
+        );
+      }
     }
   });
 
