@@ -29,20 +29,15 @@ import { RevertModal } from '../modals/RevertModal';
 import { SaveModal } from '../modals/SaveModal';
 import {
   deleted,
-  dividerAfterMove,
   grouped,
   markedNotBlank,
-  moved,
-  movedAcross,
   renamed,
   REVERTED,
   rotated,
   rotatedBacks,
   withCut,
   withoutCut,
-  type DropSide,
   type RotateDirection,
-  type SetSide,
 } from '../state/edits';
 import { toneOf } from '../state/page-text';
 import { errorTextInline } from '../state/error-text';
@@ -52,21 +47,12 @@ import type { EditState } from '../state/history';
 import { originKindOf, originsOf } from '../state/origins';
 import { rolesOf } from '../state/screen';
 import { rotateRowOf, useRotateTarget } from '../state/useRotateTarget';
-import {
-  afterRemoval,
-  collapsed,
-  ranged,
-  selectionOf,
-  single,
-  targetsOf,
-  toggled,
-} from '../state/selection';
+import { afterRemoval, collapsed, ranged, single, targetsOf, toggled } from '../state/selection';
 import { assembleBlockOf, assembleBlockText } from '../state/assemble-block';
 import {
   gluedBacksOf,
   movingOf,
   removingOf,
-  sheetDrop,
   sheetOf,
   shownDocumentsOf,
   shownOf,
@@ -79,6 +65,7 @@ import { EditorRailFooter } from './EditorRailFooter';
 import { EditorStatusBar } from './EditorStatusBar';
 import { EditorToolbar } from './EditorToolbar';
 import type { PickMode } from './EditorThumb';
+import { railMovesOf, type RailMoves } from './railMoves';
 import { useEditorAssemble } from './useEditorAssemble';
 import { useEditorEdits } from './useEditorEdits';
 import { SAVE_TOAST_MS, useEditorSaving } from './useEditorSaving';
@@ -442,75 +429,26 @@ export function EditorScreen({
     }
   };
 
-  /**
-   * Перенос ушёл: выделены перенесённые страницы пользователя на новом месте (склеенные обороты
-   * в выделение не входят, KTD-3), текущая — прежняя; Ctrl+Z выделит всё перенесённое.
-   */
-  const sendMove = (
-    next: SessionEdits,
-    moving: readonly string[],
-    selected: readonly string[] = moving,
-  ): void => {
-    const current = selection.current;
-    const fromRail = focusInRail();
-    const sent = edits.edit(withEdits(next), moving, {
-      select: (after) => {
-        const chosen = selectionOf(selected, after);
-        return chosen !== null && current !== null && chosen.keys.includes(current)
-          ? { ...chosen, current, anchor: current }
-          : chosen;
+  // Перенос страниц: бросок на миниатюру и через разделитель наборов — `railMoves.ts` (S6 M3;
+  // M3.6, KTD8; B-13). Фабрика зовётся в обработчике: ref фокуса читается не при рендере.
+  const railMoves = (): RailMoves =>
+    railMovesOf({
+      edits,
+      visible,
+      positions,
+      glued,
+      sets,
+      withEdits,
+      focusInRail,
+      onMovedFromRail: () => {
+        focusAfterEdit.current = true;
       },
     });
-    // Миниатюра, сменившая группу, перемонтируется — фокус вернётся на текущую после снимка.
-    if (sent && fromRail) {
-      focusAfterEdit.current = true;
-    }
+  const move: RailMoves['move'] = (keys, target, side) => {
+    railMoves().move(keys, target, side);
   };
-
-  // Перенос (S6): группа — с внутренним порядком ленты; бросок на исходное место — шага нет.
-  // В режиме наборов (M3.6, KTD8) перенесённые берут группу страницы-цели: граница считается
-  // здесь и уходит тем же `setEdits`, что порядок, — один шаг undo. Крайняя страница, брошенная
-  // «через границу» рядом с собой, порядок не меняет, а группу — да: шлётся одна граница.
-  // Склеенные обороты (B-13, R2, R6): едут за своими лицами, оборот без лица остаётся; бросок
-  // «после» страницы ложится за её листом, бросок на оборот — перед его лицом или после листа;
-  // бросок лица на свой оборот — ничего. Лист не разрывается.
-  const move = (keys: readonly string[], target: string, side: DropSide): void => {
-    if (!positions.has(target)) {
-      return;
-    }
-    const moving = movingOf(keys, glued, visible);
-    const drop = sheetDrop(target, side, moving, glued, visible);
-    const targetIndex = drop === null ? undefined : positions.get(drop.key);
-    if (drop === null || targetIndex === undefined) {
-      return;
-    }
-    const base = moved(edits.current.edits, visible, moving, drop.key, drop.side);
-    let next: SessionEdits | null = base;
-    if (sets !== null) {
-      const divider = dividerAfterMove(visible, sets.divider, moving, targetIndex);
-      if (base !== null || divider !== sets.divider) {
-        next = { ...(base ?? edits.current.edits), divider };
-      }
-    }
-    if (next !== null) {
-      sendMove(
-        next,
-        moving,
-        keys.filter((key) => moving.includes(key)),
-      );
-    }
-  };
-
-  // Бросок на разделитель наборов или в пустую группу (S2–S3 M3.6): только граница, порядок —
-  // если выделение к ней не прилегало.
-  const moveAcross = (keys: readonly string[], side: SetSide): void => {
-    if (sets === null) {
-      return;
-    }
-    const next = movedAcross(edits.current.edits, visible, sets.divider, keys, side);
-    if (next !== null) {
-      sendMove(next, keys);
-    }
+  const moveAcross: RailMoves['moveAcross'] = (keys, side) => {
+    railMoves().moveAcross(keys, side);
   };
 
   /**
