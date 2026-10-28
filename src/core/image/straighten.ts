@@ -256,6 +256,8 @@ export async function straighten(
   if (!hasJpegMarkers(bytes)) {
     return null;
   }
+  // Уже отменённая задача не декодирует страницу (до секунды и сотни мегабайт на 600 dpi цвет).
+  options.signal?.throwIfAborted();
   const limit = decodePixelLimit(options.pixelLimit);
   let raw: RawImage;
   let channels: 1 | 3;
@@ -283,17 +285,27 @@ export async function straighten(
   } catch {
     return null;
   }
-  const out = await straightenRaw(raw, profile, options);
-  const { width, height } = raw;
-  const dpi = options.dpi ?? jfifDpi(bytes);
-  let pipeline = sharp(out, { raw: { width, height, channels } });
-  if (channels === 1) {
-    pipeline = pipeline.toColourspace('b-w');
+  try {
+    const out = await straightenRaw(raw, profile, options);
+    // Отмена на последней полосе: цикл полос её уже не увидит, кодировать незачем.
+    options.signal?.throwIfAborted();
+    const { width, height } = raw;
+    const dpi = options.dpi ?? jfifDpi(bytes);
+    let pipeline = sharp(out, { raw: { width, height, channels } });
+    if (channels === 1) {
+      pipeline = pipeline.toColourspace('b-w');
+    }
+    const encoded = await pipeline
+      .jpeg({ quality: JPEG_QUALITY, chromaSubsampling: CHROMA_SUBSAMPLING })
+      .toBuffer();
+    const bare = new Uint8Array(encoded.buffer, encoded.byteOffset, encoded.byteLength);
+    const output = dpi === null ? { jpeg: bare, dpi: null } : withJfifDensity(bare, dpi);
+    return { ...output, info: { width, height, channels }, encoding: STRAIGHTEN_ENCODING };
+  } catch (error: unknown) {
+    // Отмена — исключение причиной сигнала; сбой libvips при кодировании — `null`, как и при декоде.
+    if (options.signal?.aborted === true) {
+      throw error;
+    }
+    return null;
   }
-  const encoded = await pipeline
-    .jpeg({ quality: JPEG_QUALITY, chromaSubsampling: CHROMA_SUBSAMPLING })
-    .toBuffer();
-  const bare = new Uint8Array(encoded.buffer, encoded.byteOffset, encoded.byteLength);
-  const output = dpi === null ? { jpeg: bare, dpi: null } : withJfifDensity(bare, dpi);
-  return { ...output, info: { width, height, channels }, encoding: STRAIGHTEN_ENCODING };
 }

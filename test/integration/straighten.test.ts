@@ -294,6 +294,50 @@ describe('ресэмплер на сканах ET-3850 (M6, U3)', () => {
     },
   );
 
+  it('уже отменённый сигнал: отказ причиной сигнала до декода — и для страницы, которую не декодировать', async () => {
+    const profile = skewProfileOf([{ u: 0.5, theta: 0.5 }]);
+    const controller = new AbortController();
+    controller.abort(new Error('стоп'));
+    const chunks: number[] = [];
+    const options = {
+      pixelLimit: PIXEL_LIMIT,
+      dpi: 300,
+      signal: controller.signal,
+      onChunk: (ms: number) => {
+        chunks.push(ms);
+      },
+    };
+
+    await expect(straighten(pageFixture(1), profile, options)).rejects.toThrow('стоп');
+    // Без проверки до декода битая страница дала бы `null`, а не отказ отменой.
+    await expect(
+      straighten(Uint8Array.of(0xff, 0xd8, 1, 2, 0xff, 0xd9), profile, options),
+    ).rejects.toThrow('стоп');
+    expect(chunks).toEqual([]);
+  });
+
+  it('отмена на последней полосе: отказ причиной сигнала, выход не кодируется', async () => {
+    const profile = skewProfileOf([{ u: 0.5, theta: 0.5 }]);
+    const bytes = pageFixture(1);
+    const meta = await sharp(bytes).metadata();
+    const controller = new AbortController();
+    let chunks = 0;
+    const run = straighten(bytes, profile, {
+      pixelLimit: PIXEL_LIMIT,
+      dpi: 300,
+      // Одна полоса на всю страницу: её чанк — последний, цикл полос отмену уже не проверит.
+      bandPixels: meta.width * meta.height,
+      signal: controller.signal,
+      onChunk: () => {
+        chunks += 1;
+        controller.abort(new Error('стоп'));
+      },
+    });
+
+    await expect(run).rejects.toThrow('стоп');
+    expect(chunks).toBe(1);
+  });
+
   it('битый JPEG, не JPEG и превышение предела пикселей — null', async () => {
     const profile = skewProfileOf([{ u: 0.5, theta: 0.5 }]);
     const options = { pixelLimit: PIXEL_LIMIT, dpi: 300 };

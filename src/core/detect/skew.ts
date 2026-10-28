@@ -4,7 +4,6 @@ import {
   skewMaxAbsDeg,
   skewProfileOf,
   skewTanRows,
-  skewThetaAt,
   STRAIGHTEN_GEOMETRY_VERSION,
   type SkewBand,
   type SkewBandReason,
@@ -719,9 +718,6 @@ export async function measureSkew(
         : null,
   };
 }
-
-/** Угол профиля на доле высоты — для тестов и журнала; обёртка над `@shared`. */
-export const skewAt = (profile: SkewProfile, u: number): number => skewThetaAt(profile, u);
 
 /**
  * Измерение страницы JPEG (`sharp` — `test:integration`). Сбой — не JPEG, превышение предела
