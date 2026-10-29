@@ -40,7 +40,8 @@ const EXPECTED: Readonly<Record<string, readonly SkewOutcome[]>> = {
   'fan-grid-3-gray-300': ['willStraighten'],
   'tilt-grid-gray-300': ['willStraighten'],
   'fan-sparse-gray-300': ['willStraighten'],
-  'fan-twocol-gray-300': ['willStraighten', 'notImproved', 'unmeasurable'],
+  'fan-twocol-gray-300': ['willStraighten'],
+  'fan-twocol-gray-200': ['willStraighten'],
   'fan-graphic-gray-300': ['willStraighten', 'notImproved', 'unmeasurable'],
   'photo-gray-300': ['unmeasurable'],
   'photo-color-300': ['unmeasurable'],
@@ -66,11 +67,7 @@ const EXPECTED: Readonly<Record<string, readonly SkewOutcome[]>> = {
  * проваливает гейт формы. Закреплено, чтобы запасной проход нельзя было убрать, оставив таблицу
  * зелёной; неизмеримые листы не закрепляются — у них 50 означает лишь провал формы при 30.
  */
-const EXPECTED_FALLBACK: readonly string[] = [
-  'text-gray-300',
-  'sheet-front-gray-200',
-  'rulers-gray-200',
-];
+const EXPECTED_FALLBACK: readonly string[] = ['text-gray-300', 'rulers-gray-200'];
 
 const names = scanFixtureNames();
 const results = new Map<string, SkewMeasure | null>();
@@ -103,7 +100,8 @@ const describeMeasure = (m: SkewMeasure | null): string => {
           .join(' ');
   const contrast = m.contrast === null ? '' : ` ×${m.contrast.ratio.toFixed(2)}`;
   const fan = m.fanMm === null ? '' : ` веер ${m.fanMm.toFixed(2)} мм`;
-  return `${m.outcome.padEnd(15)} ${m.bandMm} мм${contrast}${fan} ${m.reason ?? ''} | ${profile}`;
+  const basis = m.basis === 'halves' ? ' по половинам' : '';
+  return `${m.outcome.padEnd(15)} ${m.bandMm} мм${basis}${contrast}${fan} ${m.reason ?? ''} | ${profile}`;
 };
 
 describe('детектор перекоса на сканах ET-3850 (M6, U2)', () => {
@@ -152,6 +150,22 @@ describe('детектор перекоса на сканах ET-3850 (M6, U2)',
     expect(Math.min(...validInk)).toBeGreaterThanOrEqual(0.01);
   });
 
+  it('две колонки: форма по целым полосам шумит, профиль — по среднему половин; штриховка так не проходит', async () => {
+    // Замечание автора на приёмке M6: веер — свойство подачи, а не колонки; первая колонка
+    // даёт чистую ступень, целая полоса — шум 0,1–0,2° от наложения фаз. Без запасного
+    // профиля по половинам обе двухколоночные страницы — «не измерить» (остаток 0,13–0,23°).
+    for (const name of ['fan-twocol-gray-300', 'fan-twocol-gray-200']) {
+      const result = await measured(name);
+      expect(result?.outcome, name).toBe('willStraighten');
+      expect(result?.basis, name).toBe('halves');
+      expect(result?.bandMm, name).toBe(BAND_MM);
+    }
+    for (const name of ['fan-text-gray-300', 'fan-grid-1-gray-300', 'fan-table-gray-300']) {
+      expect((await measured(name))?.basis, name).toBe('whole');
+    }
+    expect((await measured('fan-graphic-gray-300'))?.outcome).toBe('unmeasurable');
+  });
+
   it('причина «не измерена»: строки не сходятся у ловушек, не по чему мерить у фото и чистых; у измеренных — нет', async () => {
     for (const name of names) {
       const result = await measured(name);
@@ -161,7 +175,7 @@ describe('детектор перекоса на сканах ET-3850 (M6, U2)',
       const expected =
         result.outcome !== 'unmeasurable'
           ? null
-          : ['fan-twocol-gray-300', 'fan-graphic-gray-300'].includes(name)
+          : name === 'fan-graphic-gray-300'
             ? 'shape'
             : 'content';
       expect(result.cause, `${name}: ${describeMeasure(result)}`).toBe(expected);

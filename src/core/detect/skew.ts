@@ -7,6 +7,7 @@ import {
   STRAIGHTEN_GEOMETRY_VERSION,
   type SkewBand,
   type SkewBandReason,
+  type SkewBasis,
   type SkewCause,
   type SkewContrast,
   type SkewMeasure,
@@ -36,7 +37,7 @@ import {
 // `@shared`.
 
 /** Версия алгоритма и констант детектора; пишется в запись измерения вместе с геометрией. */
-export const SKEW_DETECTOR_VERSION = 3;
+export const SKEW_DETECTOR_VERSION = 4;
 
 /** Номинальная высота листа — для перевода миллиметров полосы в пиксели рабочей картинки. */
 const PAGE_HEIGHT_MM = 297;
@@ -340,6 +341,7 @@ async function bandAngles(
       confidence: 0,
       inkFraction,
       halvesGap: Infinity,
+      halvesAngle: null,
       reason,
     });
     if (inkFraction < MIN_INK_FRACTION) {
@@ -372,6 +374,8 @@ async function bandAngles(
           left.angle === null || right.angle === null
             ? Infinity
             : Math.abs(left.angle - right.angle);
+        const halvesAngle =
+          left.angle === null || right.angle === null ? null : (left.angle + right.angle) / 2;
         // Вето половин — только когда хотя бы одна из них возражает: половина с плоским пиком
         // (плашка, риски линейки, пустая бумага с просвечиванием) мерит шум и уверенную целую
         // полосу не отменяет — иначе блок строк рядом с плашкой и низ листа с линейками
@@ -396,7 +400,15 @@ async function bandAngles(
             : whole.angle;
         const angle =
           Math.abs(whole.angle - halvesMean) <= HALVES_TOLERANCE_DEG ? whole.angle : halvesMean;
-        bands.push({ u, angle, confidence: whole.confidence, inkFraction, halvesGap, reason });
+        bands.push({
+          u,
+          angle,
+          confidence: whole.confidence,
+          inkFraction,
+          halvesGap,
+          halvesAngle,
+          reason,
+        });
       }
     }
     options.onChunk?.(performance.now() - started);
@@ -571,6 +583,8 @@ type PassResult =
       readonly bands: SkewBand[];
       readonly coverage: number;
       readonly shapeResidual: number;
+      /** По каким углам построен профиль: целых полос или среднему половин. */
+      readonly basis: SkewBasis;
     }
   | {
       readonly ok: false;
@@ -613,43 +627,97 @@ async function measurePass(
       shapeResidual: null,
     };
   }
-  let supportGap = 0;
-  for (let i = 1; i < us.length; i += 1) {
-    supportGap = Math.max(supportGap, (us[i] ?? 0) - (us[i - 1] ?? 0));
-  }
-  const linear = supportGap > MAX_SUPPORT_GAP;
   const points: Point[] = valid.map((b) => ({
     u: b.u,
     theta: b.angle ?? 0,
     w: Math.min(b.confidence, MAX_WEIGHT),
   }));
-  const quad = fitQuadratic(points, linear);
-  const shapeResidual = linear ? quad.maxResidual : Math.min(quad.maxResidual, fitStep(points));
   // Все валидные полосы ниже порога движения — страница ровная и без согласия формы: вопрос
   // «верить ли профилю для коррекции» не стоит, коррекции не будет. Почти пустой лист после
   // коррекции (три полосы −0,08 / +0,10 / −0,08°) давал остаток формы 0,105° и «не по чему
   // мерить» вместо «ровная». Профиль — узлами: константа за крайними держит его под порогом.
-  const level = valid.every((b) => Math.abs(b.angle ?? 0) < LEVEL_DEG);
-  if (level) {
-    return { ok: true, profile: knotsOf(points), bands, coverage, shapeResidual };
+  if (valid.every((b) => Math.abs(b.angle ?? 0) < LEVEL_DEG)) {
+    const { shapeResidual } = fitProfile(points);
+    return { ok: true, profile: knotsOf(points), bands, coverage, shapeResidual, basis: 'whole' };
   }
-  if (shapeResidual > SHAPE_RESIDUAL_MAX_DEG) {
+  const whole = fitProfile(points);
+  if (whole.shapeResidual <= SHAPE_RESIDUAL_MAX_DEG) {
     return {
-      ok: false,
-      stage: 'shape',
-      reason: `остаток формы ${shapeResidual.toFixed(3)}° при ${bandMm} мм`,
+      ok: true,
+      profile: whole.profile,
       bands,
       coverage,
-      shapeResidual,
+      shapeResidual: whole.shapeResidual,
+      basis: 'whole',
     };
   }
+  // Форма по целым полосам не сошлась — запасной профиль по среднему половин там, где они
+  // согласны между собой: у двух колонок с разной фазой строк целая полоса шумит на 0,1–0,2°
+  // (строки колонок накладываются в разных фазах), а каждая половина видит одну колонку и
+  // даёт чистую ступень; веер — свойство подачи листа, одинаков по всей ширине, так что
+  // профиль по половинам выправляет обе колонки. Полос и покрытия у половин должно хватать
+  // по тем же гейтам.
+  const agreed = valid.filter((b) => b.halvesAngle !== null && b.halvesGap <= HALVES_TOLERANCE_DEG);
+  const agreedUs = agreed.map((b) => b.u).sort((p, q) => p - q);
+  const agreedCoverage =
+    agreedUs.length === 0
+      ? 0
+      : Math.min(1, (agreedUs[agreedUs.length - 1] ?? 0) - (agreedUs[0] ?? 0) + bandFraction);
+  if (agreed.length >= MIN_BANDS && agreedCoverage >= MIN_COVERAGE) {
+    const halves = fitProfile(
+      agreed.map((b) => ({
+        u: b.u,
+        theta: b.halvesAngle ?? 0,
+        w: Math.min(b.confidence, MAX_WEIGHT),
+      })),
+    );
+    if (halves.shapeResidual <= SHAPE_RESIDUAL_MAX_DEG) {
+      return {
+        ok: true,
+        profile: halves.profile,
+        bands,
+        coverage: agreedCoverage,
+        shapeResidual: halves.shapeResidual,
+        basis: 'halves',
+      };
+    }
+  }
+  return {
+    ok: false,
+    stage: 'shape',
+    reason: `остаток формы ${whole.shapeResidual.toFixed(3)}° при ${bandMm} мм`,
+    bands,
+    coverage,
+    shapeResidual: whole.shapeResidual,
+  };
+}
+
+interface FittedProfile {
+  readonly profile: SkewProfile;
+  /** min(остаток дуги, остаток ступени); при дыре покрытия — остаток прямой. */
+  readonly shapeResidual: number;
+}
+
+/**
+ * Профиль по точкам (u, θ, вес): дыра покрытия > `MAX_SUPPORT_GAP` → прямая по двум узлам
+ * (u = 0 и 1), иначе узлы по точкам; остаток формы — к гейту `SHAPE_RESIDUAL_MAX_DEG`.
+ */
+function fitProfile(points: readonly Point[]): FittedProfile {
+  const us = points.map((p) => p.u).sort((p, q) => p - q);
+  let supportGap = 0;
+  for (let i = 1; i < us.length; i += 1) {
+    supportGap = Math.max(supportGap, (us[i] ?? 0) - (us[i - 1] ?? 0));
+  }
+  const linear = supportGap > MAX_SUPPORT_GAP;
+  const quad = fitQuadratic(points, linear);
+  const shapeResidual = linear ? quad.maxResidual : Math.min(quad.maxResidual, fitStep(points));
   const profile = linear
     ? skewProfileOf([
         { u: 0, theta: (quad.coef[0] ?? 0) - 0.5 * (quad.coef[1] ?? 0) },
         { u: 1, theta: (quad.coef[0] ?? 0) + 0.5 * (quad.coef[1] ?? 0) },
       ])
     : knotsOf(points);
-  return { ok: true, profile, bands, coverage, shapeResidual };
+  return { profile, shapeResidual };
 }
 
 /** Профиль ниже порога движения по всей высоте — страница ровная (R10). */
@@ -734,6 +802,7 @@ export async function measureSkew(
   const base = {
     geometryVersion: STRAIGHTEN_GEOMETRY_VERSION,
     cause: null,
+    basis: null,
     fanMm: null,
     contrast: null,
   };
@@ -760,9 +829,9 @@ export async function measureSkew(
       reason: pass.reason,
     };
   }
-  const { profile, bands, coverage, shapeResidual } = pass;
+  const { profile, bands, coverage, shapeResidual, basis } = pass;
   const fanMm = skewFanMm(profile);
-  const common = { ...base, profile, bands, bandMm, coverage, shapeResidual, fanMm };
+  const common = { ...base, profile, bands, bandMm, coverage, shapeResidual, fanMm, basis };
   if (isLevel(profile)) {
     return { ...common, outcome: 'level', reason: null };
   }

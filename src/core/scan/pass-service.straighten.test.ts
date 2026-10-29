@@ -102,6 +102,7 @@ const measureOf = (outcome: SkewOutcome): SkewMeasure => ({
           { u: 0.8, theta: 0.6 },
         ]),
   cause: outcome === 'unmeasurable' ? 'content' : null,
+  basis: outcome === 'unmeasurable' ? null : 'whole',
   contrast: null,
   fanMm: null,
   bands: [],

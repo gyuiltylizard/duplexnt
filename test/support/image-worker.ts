@@ -78,6 +78,7 @@ export const realMeasurer: SkewMeasurer = (bytes, limit, options) =>
 export const LEVEL_MEASURE: SkewMeasure = {
   outcome: 'level',
   cause: null,
+  basis: 'whole',
   geometryVersion: STRAIGHTEN_GEOMETRY_VERSION,
   profile: { kind: 'knots', us: [0.5], thetas: [0] },
   contrast: null,
