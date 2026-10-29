@@ -5,7 +5,7 @@
 // `blankFlagOf`: одно правило на сборку ядра и зеркало renderer'а. Порогов renderer не знает.
 
 import { pageImageUrl, type PageImageView } from './bridge';
-import type { SkewOutcome } from './skew';
+import type { SkewCause, SkewOutcome } from './skew';
 
 export const STRAIGHTEN_MODES = ['auto', 'off'] as const;
 
@@ -30,6 +30,8 @@ export type StraightenDeferredReason = (typeof STRAIGHTEN_DEFERRED_REASONS)[numb
  */
 export interface StraightenFact {
   readonly outcome: SkewOutcome | null;
+  /** Почему не измерена — только при `outcome: 'unmeasurable'`. */
+  readonly cause: SkewCause | null;
   /** Версия геометрии выправленного файла любой известной версии; `null` — файла нет. */
   readonly version: number | null;
   readonly deferred: StraightenDeferredReason | null;
@@ -58,9 +60,10 @@ export type StraightenStatus = (typeof STRAIGHTEN_STATUSES)[number] | null;
 
 /**
  * Причина «не выровнено» — текст по ней выбирает интерфейс (handoff U7): у `unmeasurable` —
- * «не по чему мерить» / «не помогло», у `deferred` — «мало места» / «сбой».
+ * «не по чему мерить» / «наклон строк не сходится» (`SkewCause`) / «не помогло», у
+ * `deferred` — «мало места» / «сбой».
  */
-export const STRAIGHTEN_REASONS = ['measure', 'nohelp', 'disk', 'fail'] as const;
+export const STRAIGHTEN_REASONS = ['measure', 'shape', 'nohelp', 'disk', 'fail'] as const;
 export type StraightenReason = (typeof STRAIGHTEN_REASONS)[number];
 
 /**
@@ -121,7 +124,11 @@ export function straightenMarkOf(input: StraightenMarkInput): StraightenMark {
   }
   switch (fact.outcome) {
     case 'unmeasurable':
-      return { status: 'unmeasurable', reason: 'measure', version: null };
+      return {
+        status: 'unmeasurable',
+        reason: fact.cause === 'shape' ? 'shape' : 'measure',
+        version: null,
+      };
     case 'notImproved':
       return { status: 'unmeasurable', reason: 'nohelp', version: null };
     case 'level':
@@ -198,7 +205,7 @@ export const NO_STRAIGHTEN: StraightenSummary = {
   deferred: 0,
   pending: 0,
   total: 0,
-  reasons: { measure: 0, nohelp: 0, disk: 0, fail: 0 },
+  reasons: { measure: 0, shape: 0, nohelp: 0, disk: 0, fail: 0 },
 };
 
 export function straightenSummaryOf(

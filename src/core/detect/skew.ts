@@ -7,6 +7,7 @@ import {
   STRAIGHTEN_GEOMETRY_VERSION,
   type SkewBand,
   type SkewBandReason,
+  type SkewCause,
   type SkewContrast,
   type SkewMeasure,
   type SkewPrior,
@@ -35,7 +36,7 @@ import {
 // `@shared`.
 
 /** Версия алгоритма и констант детектора; пишется в запись измерения вместе с геометрией. */
-export const SKEW_DETECTOR_VERSION = 2;
+export const SKEW_DETECTOR_VERSION = 3;
 
 /** Номинальная высота листа — для перевода миллиметров полосы в пиксели рабочей картинки. */
 const PAGE_HEIGHT_MM = 297;
@@ -730,9 +731,17 @@ export async function measureSkew(
 ): Promise<SkewMeasure> {
   const { histogram, total } = marginHistogramOf(gray);
   const white = paperWhiteOf(histogram, total);
-  const base = { geometryVersion: STRAIGHTEN_GEOMETRY_VERSION, fanMm: null, contrast: null };
+  const base = {
+    geometryVersion: STRAIGHTEN_GEOMETRY_VERSION,
+    cause: null,
+    fanMm: null,
+    contrast: null,
+  };
   let bandMm = BAND_MM;
   let pass = await measurePass(gray, white, bandMm, options);
+  // Причина отказа — по первому проходу: провал формы при 30 мм значит, что строки есть, и
+  // запасной проход 50 мм её не меняет, даже если сам упал по числу полос.
+  const cause: SkewCause | null = pass.ok ? null : pass.stage === 'shape' ? 'shape' : 'content';
   if (!pass.ok && pass.stage === 'shape') {
     bandMm = FALLBACK_BAND_MM;
     const retry = await measurePass(gray, white, bandMm, options);
@@ -742,6 +751,7 @@ export async function measureSkew(
     return {
       ...base,
       outcome: 'unmeasurable',
+      cause,
       profile: null,
       bands: pass.bands,
       bandMm,

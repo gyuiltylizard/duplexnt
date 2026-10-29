@@ -102,8 +102,8 @@ const queueOf = (overrides: Partial<StraightenQueueState> = {}): StraightenQueue
 describe('выравнивание: факты для статусов и ход (KTD-9)', () => {
   const session = sessionOf([passOf(1, 3)], { straighten: 'auto' });
   const verdicts: SkewVerdicts = new Map([
-    [keyOf(1, 1), { outcome: 'willStraighten', profile: PROFILE }],
-    [keyOf(1, 2), { outcome: 'level', profile: PROFILE }],
+    [keyOf(1, 1), { outcome: 'willStraighten', cause: null, profile: PROFILE }],
+    [keyOf(1, 2), { outcome: 'level', cause: null, profile: PROFILE }],
   ]);
   const files = new Map([[keyOf(1, 1), fileOf(keyOf(1, 1))]]);
   const straightened = { resolve: (key: string) => files.get(key) ?? null };
@@ -112,9 +112,9 @@ describe('выравнивание: факты для статусов и ход
     const queue = queueOf({ deferred: new Map([[keyOf(1, 3), 'noSpace']]) });
     expect(straightenFactsOf(session, verdicts, straightened, queue)).toEqual(
       new Map([
-        [keyOf(1, 1), { outcome: 'willStraighten', version: 1, deferred: null }],
-        [keyOf(1, 2), { outcome: 'level', version: null, deferred: null }],
-        [keyOf(1, 3), { outcome: null, version: null, deferred: 'noSpace' }],
+        [keyOf(1, 1), { outcome: 'willStraighten', version: 1, deferred: null, cause: null }],
+        [keyOf(1, 2), { outcome: 'level', version: null, deferred: null, cause: null }],
+        [keyOf(1, 3), { outcome: null, version: null, deferred: 'noSpace', cause: null }],
       ]),
     );
     expect(straightenFactsOf(session, new Map(), { resolve: () => null }, queueOf()).size).toBe(0);

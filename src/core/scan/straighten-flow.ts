@@ -82,11 +82,12 @@ export function straightenFactsOf(
   const facts = new Map<string, StraightenFact>();
   for (const pass of session.passes) {
     for (const page of pass.pages) {
-      const outcome = verdicts.get(page.key)?.outcome ?? null;
+      const verdict = verdicts.get(page.key);
+      const outcome = verdict?.outcome ?? null;
       const version = straightened.resolve(page.key)?.version ?? null;
       const deferred = queue.deferred.get(page.key) ?? null;
       if (outcome !== null || version !== null || deferred !== null) {
-        facts.set(page.key, { outcome, version, deferred });
+        facts.set(page.key, { outcome, cause: verdict?.cause ?? null, version, deferred });
       }
     }
   }

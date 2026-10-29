@@ -2,6 +2,7 @@ import { join } from 'node:path';
 import { z } from 'zod';
 import {
   isSkewProfile,
+  SKEW_CAUSES,
   SKEW_OUTCOMES,
   STRAIGHTEN_GEOMETRY_VERSION,
   type SkewMeasure,
@@ -40,6 +41,7 @@ const profileSchema = z.custom<SkewMeasure['profile']>(
 const cacheSchema = z.strictObject({
   v: z.strictObject({ geometry: z.number().int(), detector: z.number().int() }),
   outcome: z.enum(SKEW_OUTCOMES),
+  cause: z.enum(SKEW_CAUSES).nullable(),
   profile: profileSchema,
   contrast: z.strictObject({ before: z.number(), after: z.number(), ratio: z.number() }).nullable(),
   fanMm: z.number().nullable(),
@@ -89,7 +91,7 @@ interface Entry {
   readonly verdict: SkewVerdict;
 }
 
-const UNMEASURABLE: SkewVerdict = { outcome: 'unmeasurable', profile: null };
+const UNMEASURABLE: SkewVerdict = { outcome: 'unmeasurable', cause: 'content', profile: null };
 
 /** Запись кэша из результата измерения; `null` (сбой декода) — `unmeasurable` с причиной. */
 function recordOf(measure: SkewMeasure | null, bytes: number, reason: string | null): CacheRecord {
@@ -98,6 +100,7 @@ function recordOf(measure: SkewMeasure | null, bytes: number, reason: string | n
     ? {
         v,
         outcome: 'unmeasurable',
+        cause: 'content',
         profile: null,
         contrast: null,
         fanMm: null,
@@ -107,6 +110,7 @@ function recordOf(measure: SkewMeasure | null, bytes: number, reason: string | n
     : {
         v,
         outcome: measure.outcome,
+        cause: measure.cause,
         profile: measure.profile,
         contrast: measure.contrast,
         fanMm: measure.fanMm,
@@ -138,6 +142,7 @@ export function createSkewScores(
 
   const verdictOf = (record: CacheRecord): SkewVerdict => ({
     outcome: record.outcome,
+    cause: record.cause,
     profile: record.profile,
   });
 

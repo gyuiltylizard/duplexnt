@@ -54,6 +54,17 @@ export type SkewOutcome = (typeof SKEW_OUTCOMES)[number];
 
 export type SkewBandReason = 'no-ink' | 'too-much-ink' | 'low-confidence' | 'halves-disagree';
 
+/**
+ * Почему страница не измерена (только у `unmeasurable`): `content` — строк мало или они не
+ * покрывают лист (фото, пустой лист, одна строка, сбой декода); `shape` — строки есть, но их
+ * наклон по полосам не ложится на один профиль ни при 30, ни при 50 мм (две колонки с разной
+ * фазой строк, косая штриховка). Интерфейс называет причину по-разному — «не по чему мерить»
+ * против «наклон строк не сходится» (замечание автора на приёмке M6).
+ */
+export const SKEW_CAUSES = ['content', 'shape'] as const;
+
+export type SkewCause = (typeof SKEW_CAUSES)[number];
+
 /** Полоса измерения — для журнала вехи, тестов и подсказки M6.5; в снимок не идёт. */
 export interface SkewBand {
   /** Доля высоты — центроид чернил полосы. */
@@ -84,6 +95,8 @@ export interface SkewContrast {
  */
 export interface SkewMeasure {
   readonly outcome: SkewOutcome;
+  /** Почему не измерена; у остальных исходов — `null`. */
+  readonly cause: SkewCause | null;
   /** `STRAIGHTEN_GEOMETRY_VERSION` на момент измерения. */
   readonly geometryVersion: number;
   readonly profile: SkewProfile | null;
@@ -111,6 +124,7 @@ export interface SkewMeasure {
  */
 export interface SkewVerdict {
   readonly outcome: SkewOutcome;
+  readonly cause: SkewCause | null;
   readonly profile: SkewProfile | null;
 }
 

@@ -55,7 +55,7 @@ export function StraightCheck({
   let hint: string | null = null;
   if (undone > 0) {
     const { reasons } = straighten;
-    const listed = (['measure', 'nohelp', 'disk', 'fail'] as const)
+    const listed = (['measure', 'shape', 'nohelp', 'disk', 'fail'] as const)
       .filter((reason) => reasons[reason] > 0)
       .map((reason) =>
         t('inspector.check.straightReason', {

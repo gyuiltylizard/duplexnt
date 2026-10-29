@@ -77,6 +77,7 @@ export const realMeasurer: SkewMeasurer = (bytes, limit, options) =>
 /** Измерение «ровно» без детектора: страница остаётся оригиналом, очередь коррекции пуста. */
 export const LEVEL_MEASURE: SkewMeasure = {
   outcome: 'level',
+  cause: null,
   geometryVersion: STRAIGHTEN_GEOMETRY_VERSION,
   profile: { kind: 'knots', us: [0.5], thetas: [0] },
   contrast: null,

@@ -33,6 +33,7 @@ const PROFILE = skewProfileOf([
 
 const verdictOf = (outcome: SkewOutcome): SkewVerdict => ({
   outcome,
+  cause: outcome === 'unmeasurable' ? 'content' : null,
   profile: outcome === 'unmeasurable' ? null : PROFILE,
 });
 
