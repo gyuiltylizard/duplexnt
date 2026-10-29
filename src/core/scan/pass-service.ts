@@ -57,11 +57,7 @@ import { openSettingsStore, type SettingsStore } from '../storage/settings-store
 import { createSkewScores, type SkewScores } from '../storage/skew-scores';
 import { sameScanner, storedScannerOf, type StoredScanner } from '../storage/stored-scanner';
 import { ioOf, storageFailure } from '../storage/storage-fs';
-import {
-  createStraightened,
-  type Straightened,
-  type StraightenedFile,
-} from '../storage/straightened';
+import { createStraightened, type Straightened } from '../storage/straightened';
 import { pagePixelLimit } from '../storage/thumbnails';
 import { openUnclosedJobs, type UnclosedJobs } from '../storage/unclosed-jobs';
 import { assembleSession } from './assembly';
@@ -74,6 +70,7 @@ import {
   straightenFactsOf,
   straightenProgressOf,
   type StraightenQueue,
+  type StraightenQueueState,
 } from './straighten-flow';
 
 /** Задач над производным в main одновременно — на всё: миниатюры, пустота, измерение (KTD-4). */
@@ -215,11 +212,11 @@ export interface PassService {
   pageInfo(key: string): PageInfo | null;
   readPage(key: string): Promise<Result<Uint8Array>>;
   /**
-   * Выправленный файл страницы любой известной версии (M6, KTD-11) — единственный источник пути
-   * для миниатюр выправленных; `null` — выправленного вида нет.
+   * Выправленные файлы текущей сессии (M6, KTD-11): `resolve` — единственный источник пути для
+   * миниатюр выправленных, `read` — байты со сверкой размера по записи о коррекции.
    */
-  straightenedFile(key: string): StraightenedFile | null;
-  /** Байты выправленной страницы для протокола картинок; размер сверяется с записью о коррекции. */
+  straightenedFiles(): Pick<Straightened, 'resolve' | 'read'>;
+  /** Байты выправленной страницы для протокола картинок; нет записи — `notStraightened`. */
   readStraightened(key: string): Promise<Result<Uint8Array>>;
 }
 
@@ -298,12 +295,16 @@ export function createPassService(
     options.onChange?.(seq);
   };
   const straightenQueue = deps.straightenQueue(notify);
-  // Сборка ленты с оценками пустоты и фактами выравнивания (KTD-9) — одна на снимок и пакет.
-  const assembly = (session: SessionSnapshot): SessionAssembly =>
+  // Сборка ленты с оценками пустоты и фактами выравнивания (KTD-9) — одна на снимок и пакет;
+  // состояние очереди снимается один раз на снимок (оно же идёт в прогресс).
+  const assembly = (
+    session: SessionSnapshot,
+    queue: StraightenQueueState = straightenQueue.state(),
+  ): SessionAssembly =>
     assembleSession(
       session,
       blank.verdicts(),
-      straightenFactsOf(session, skew.verdicts(), straightened, straightenQueue.state()),
+      straightenFactsOf(session, skew.verdicts(), straightened, queue),
     );
   const writer = createDocumentWriter({
     store,
@@ -411,11 +412,12 @@ export function createPassService(
   function snapshot(): Snapshot {
     const session = store.snapshot();
     const last = session?.passes.at(-1);
+    const queue = straightenQueue.state();
     return {
       seq,
       scanner: scanner.state(),
       session,
-      assembly: session === null ? null : assembly(session),
+      assembly: session === null ? null : assembly(session, queue),
       pass:
         run === null
           ? null
@@ -433,7 +435,7 @@ export function createPassService(
       notices,
       blankMode: settings.get().blankMode,
       straightenMode: settings.get().straightenMode,
-      straightenProgress: straightenProgressOf(session, straightenQueue.state()),
+      straightenProgress: straightenProgressOf(session, queue),
       seenHints: settings.get().seenHints,
     };
   }
@@ -542,6 +544,10 @@ export function createPassService(
         return begun;
       }
       notify();
+      // Режимы сессии заморожены в журнале (R2, R14): читаются раз на проход, а не на каждую
+      // страницу — `store.snapshot()` собирает все проходы, а `sink` не должен ждать лишнего.
+      const scoring = detectsBlank(current.kind);
+      const measuring = straightens();
 
       // Исход, записанный обработчиком задания; `null` — обработчик не вызывался (задание не
       // создано, адрес негоден, отмена до `POST`), и исход переводится по отчёту. Поле объекта,
@@ -558,10 +564,10 @@ export function createPassService(
           const accepted = await store.acceptPage(body);
           current.pages += 1;
           notify();
-          if (detectsBlank(current.kind)) {
+          if (scoring) {
             // Оборот сначала получает вердикт пустоты; измерение перекоса — по нему (R6).
             detectBlank(accepted.key);
-          } else if (straightens()) {
+          } else if (measuring) {
             measureSkew(accepted.key);
           }
         },
@@ -874,21 +880,13 @@ export function createPassService(
 
     pageInfo: (key) => store.pageInfo(key),
     readPage: (key) => store.readPage(key),
-    straightenedFile: (key) => straightened.resolve(key),
+    straightenedFiles: () => straightened,
 
-    async readStraightened(key) {
+    readStraightened(key) {
       const file = straightened.resolve(key);
-      if (file === null) {
-        return fail('pageUnavailable', { reason: 'notStraightened' });
-      }
-      try {
-        const bytes = await ioOf(options).fs.readFile(file.path);
-        return bytes.byteLength === file.bytes
-          ? ok(bytes)
-          : fail('pageUnavailable', { reason: 'straightened' });
-      } catch {
-        return fail('pageUnavailable', { reason: 'straightened' });
-      }
+      return file === null
+        ? Promise.resolve(fail('pageUnavailable', { reason: 'notStraightened' }))
+        : straightened.read(file);
     },
   };
 }
@@ -925,13 +923,15 @@ export async function openPassService(
     (bytes, pixelLimit, measure) => worker.measure(bytes, pixelLimit, measure),
     { ...options, limiter },
   );
-  await skew.load(pagesToMeasure(store.snapshot(), blank.verdicts()).map((page) => page.key));
   // Выправленные страницы и очередь коррекции (KTD-11, KTD-12, KTD-13): записи читаются при
-  // открытии, недостающее — в очередь; место проверяется тем же резервом, что перед проходом.
+  // открытии — параллельно с кэшем оценок перекоса, они независимы; недостающее — в очередь;
+  // место проверяется тем же резервом, что перед проходом.
   const straightened = createStraightened(derivedDir, store, options);
-  await straightened.load(
-    store.snapshot()?.passes.flatMap((pass) => pass.pages.map((page) => page.key)) ?? [],
-  );
+  const session = store.snapshot();
+  await Promise.all([
+    skew.load(pagesToMeasure(session, blank.verdicts()).map((page) => page.key)),
+    straightened.load(session?.passes.flatMap((pass) => pass.pages.map((page) => page.key)) ?? []),
+  ]);
   const { fs } = ioOf(options);
   const service = createPassService(
     {

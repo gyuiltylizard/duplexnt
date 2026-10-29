@@ -12,6 +12,7 @@ import { SKEW_DETECTOR_VERSION } from '../detect/skew';
 import type { ImageWorker } from '../image/image-worker';
 import { writeFileAtomic } from './atomic-file';
 import { skewDirIn, skewFileName } from './layout';
+import { isAlive, pruneStale } from './liveness';
 import { limiterOf, type Limiter } from './limiter';
 import type { PageInfo } from './session-store';
 import { ioOf, type StorageOptions } from './storage-fs';
@@ -133,8 +134,7 @@ export function createSkewScores(
   const fileOf = (key: string, info: PageInfo): string =>
     join(skewDirIn(derivedDir, info.sessionId), skewFileName(key));
 
-  const alive = (key: string, info: PageInfo): boolean =>
-    source.pageInfo(key)?.sessionId === info.sessionId;
+  const alive = (key: string, info: PageInfo): boolean => isAlive(source, key, info);
 
   const verdictOf = (record: CacheRecord): SkewVerdict => ({
     outcome: record.outcome,
@@ -265,11 +265,7 @@ export function createSkewScores(
     },
 
     prune() {
-      for (const [key, entry] of entries) {
-        if (source.pageInfo(key)?.sessionId !== entry.sessionId) {
-          entries.delete(key);
-        }
-      }
+      pruneStale(entries, source);
     },
 
     abort() {

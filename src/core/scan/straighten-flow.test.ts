@@ -112,9 +112,9 @@ describe('выравнивание: факты для статусов и ход
     const queue = queueOf({ deferred: new Map([[keyOf(1, 3), 'noSpace']]) });
     expect(straightenFactsOf(session, verdicts, straightened, queue)).toEqual(
       new Map([
-        [keyOf(1, 1), { outcome: 'willStraighten', corrected: true, version: 1, deferred: null }],
-        [keyOf(1, 2), { outcome: 'level', corrected: false, version: null, deferred: null }],
-        [keyOf(1, 3), { outcome: null, corrected: false, version: null, deferred: 'noSpace' }],
+        [keyOf(1, 1), { outcome: 'willStraighten', version: 1, deferred: null }],
+        [keyOf(1, 2), { outcome: 'level', version: null, deferred: null }],
+        [keyOf(1, 3), { outcome: null, version: null, deferred: 'noSpace' }],
       ]),
     );
     expect(straightenFactsOf(session, new Map(), { resolve: () => null }, queueOf()).size).toBe(0);

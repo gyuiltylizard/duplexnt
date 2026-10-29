@@ -4,6 +4,7 @@ import type { BlankVerdicts } from '@shared';
 import { BLANK_DETECTOR_VERSION, isBlank, type BlankDetector } from '../detect/blank';
 import { writeFileAtomic } from './atomic-file';
 import { blankDirIn, blankFileName } from './layout';
+import { isAlive, pruneStale } from './liveness';
 import { limiterOf, type Limiter } from './limiter';
 import type { PageInfo } from './session-store';
 import { ioOf, type StorageOptions } from './storage-fs';
@@ -81,8 +82,7 @@ export function createBlankScores(
   const fileOf = (key: string, info: PageInfo): string =>
     join(blankDirIn(derivedDir, info.sessionId), blankFileName(key));
 
-  const alive = (key: string, info: PageInfo): boolean =>
-    source.pageInfo(key)?.sessionId === info.sessionId;
+  const alive = (key: string, info: PageInfo): boolean => isAlive(source, key, info);
 
   /** Доля из кэша текущей версии; нет файла, не читается, другая версия — `undefined`. */
   async function readCached(file: string): Promise<number | null | undefined> {
@@ -180,11 +180,7 @@ export function createBlankScores(
     },
 
     prune() {
-      for (const [key, entry] of entries) {
-        if (source.pageInfo(key)?.sessionId !== entry.sessionId) {
-          entries.delete(key);
-        }
-      }
+      pruneStale(entries, source);
     },
   };
 }

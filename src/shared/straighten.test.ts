@@ -16,8 +16,7 @@ import {
 /** Факт; у «есть файл» версия — 1, если не задана иная. */
 const fact = (overrides: Partial<StraightenFact> = {}): StraightenFact => ({
   outcome: null,
-  corrected: false,
-  version: overrides.corrected === true ? 1 : null,
+  version: null,
   deferred: null,
   ...overrides,
 });
@@ -41,7 +40,7 @@ describe('статус страницы (KTD-9)', () => {
   it.each<[string, StraightenMarkInput, StraightenMark]>([
     [
       'режим «не выравнивать» — null при любых фактах',
-      input({ mode: 'off', fact: fact({ outcome: 'willStraighten', corrected: true }) }),
+      input({ mode: 'off', fact: fact({ outcome: 'willStraighten', version: 1 }) }),
       NO_STRAIGHTEN_MARK,
     ],
     [
@@ -51,13 +50,13 @@ describe('статус страницы (KTD-9)', () => {
     ],
     [
       'пустой оборот — null, даже измеренный',
-      input({ blank: true, fact: fact({ outcome: 'willStraighten', corrected: true }) }),
+      input({ blank: true, fact: fact({ outcome: 'willStraighten', version: 1 }) }),
       NO_STRAIGHTEN_MARK,
     ],
     ['фактов нет — ждёт', input(), mark('pending')],
     [
       'файл есть, исхода нет (кэш оценок потерян) — ждёт измерения',
-      input({ fact: fact({ corrected: true }) }),
+      input({ fact: fact({ version: 1 }) }),
       mark('pending'),
     ],
     [
@@ -78,12 +77,12 @@ describe('статус страницы (KTD-9)', () => {
     ],
     [
       'выправлять, файл есть — выправлена с версией файла',
-      input({ fact: fact({ outcome: 'willStraighten', corrected: true, version: 3 }) }),
+      input({ fact: fact({ outcome: 'willStraighten', version: 3 }) }),
       mark('straightened', null, 3),
     ],
     [
       'выправлена, откат пользователя — оригинал оставлен',
-      input({ keepOriginal: true, fact: fact({ outcome: 'willStraighten', corrected: true }) }),
+      input({ keepOriginal: true, fact: fact({ outcome: 'willStraighten', version: 1 }) }),
       mark('kept', null, 1),
     ],
     [
@@ -108,7 +107,7 @@ describe('статус страницы (KTD-9)', () => {
     ],
     [
       'отложена, но файл прежней версии есть — выправлена',
-      input({ fact: fact({ outcome: 'willStraighten', corrected: true, deferred: 'failed' }) }),
+      input({ fact: fact({ outcome: 'willStraighten', version: 1, deferred: 'failed' }) }),
       mark('straightened', null, 1),
     ],
   ])('%s', (_name, given, expected) => {

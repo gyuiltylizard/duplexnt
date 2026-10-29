@@ -10,8 +10,7 @@ import { useTranslation } from 'react-i18next';
 import {
   isPairKind,
   isBacksKind,
-  pageImageUrl,
-  pageImageViewOf,
+  pageImageSrc,
   type AssembledPage,
   type BlankFlag,
   type PageAngle,
@@ -169,7 +168,6 @@ export const EditorThumb = memo(function EditorThumb({
   // Поворот — анимация на дельту команды (B-4); конечный угол — классами.
   const imgRef = useRef<HTMLImageElement>(null);
   useTurnMotion(imgRef, pageKey, angle, 'thumb');
-  const view = pageImageViewOf({ key: pageKey, straighten }, 'thumb');
 
   const click = (event: MouseEvent<HTMLElement>): void => {
     onPick(pageKey, modeOf(event));
@@ -214,7 +212,7 @@ export const EditorThumb = memo(function EditorThumb({
           draggable={false}
           loading="lazy"
           decoding="async"
-          src={pageImageUrl(sessionId, view.view, view.key, view.version)}
+          src={pageImageSrc(sessionId, { key: pageKey, straighten }, 'thumb')}
           onLoad={image.onLoad}
           onError={image.onError}
         />

@@ -19,6 +19,7 @@ import {
 } from '@shared';
 import type { ImageWorker } from '../image/image-worker';
 import { STRAIGHT_SIZE_RATIO } from '../image/straighten';
+import { isAlive, pruneStale } from '../storage/liveness';
 import type { PageInfo } from '../storage/session-store';
 import type { SkewScores } from '../storage/skew-scores';
 import { storageFailure } from '../storage/storage-fs';
@@ -85,7 +86,7 @@ export function straightenFactsOf(
       const version = straightened.resolve(page.key)?.version ?? null;
       const deferred = queue.deferred.get(page.key) ?? null;
       if (outcome !== null || version !== null || deferred !== null) {
-        facts.set(page.key, { outcome, corrected: version !== null, version, deferred });
+        facts.set(page.key, { outcome, version, deferred });
       }
     }
   }
@@ -194,8 +195,7 @@ export function createStraightenQueue(deps: StraightenQueueDeps): StraightenQueu
   let current: string | null = null;
   let controller = new AbortController();
 
-  const alive = (key: string, info: PageInfo): boolean =>
-    source.pageInfo(key)?.sessionId === info.sessionId;
+  const alive = (key: string, info: PageInfo): boolean => isAlive(source, key, info);
 
   /** Страница и её профиль, если коррекция ей нужна; иначе `null`. */
   const needs = (
@@ -346,16 +346,8 @@ export function createStraightenQueue(deps: StraightenQueueDeps): StraightenQueu
     },
 
     prune() {
-      for (const [key, entry] of deferred) {
-        if (source.pageInfo(key)?.sessionId !== entry.sessionId) {
-          deferred.delete(key);
-        }
-      }
-      for (const key of [...queue]) {
-        if (source.pageInfo(key) === null) {
-          queue.splice(queue.indexOf(key), 1);
-        }
-      }
+      pruneStale(deferred, source);
+      queue.splice(0, queue.length, ...queue.filter((key) => source.pageInfo(key) !== null));
     },
   };
 }

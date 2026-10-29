@@ -361,7 +361,7 @@ describe('миниатюры выправленных страниц (M6, U6; KT
     expect(valueOf(await thumbnails.getStraight(KEY))).toEqual(straight);
   });
 
-  it('миниатюры прежних версий убираются после записи новой; запись без файла нужного размера — отказ', async () => {
+  it('миниатюра версии новее известной и чужой ключ не трогаются; запись без файла нужного размера — отказ', async () => {
     const { store, layout } = await sessionWith([pageFixture(1)]);
     const straightened = createStraightened(layout.derivedDir, store);
     const thumbnails = createThumbnails(layout.derivedDir, store, { straightened });
@@ -373,8 +373,11 @@ describe('миниатюры выправленных страниц (M6, U6; KT
 
     await straightened.store(KEY, resultOf(2));
     valueOf(await thumbnails.getStraight(KEY));
+    // Прежние версии (у версии 1 их нет) убираются; новее известной — от будущего приложения,
+    // не наша; чужой ключ не трогается.
     expect((await readdir(straightThumbs)).sort()).toEqual([
       `${KEY}.v1.jpg`,
+      `${KEY}.v7.jpg`,
       `p01-s01-0002.v7.jpg`,
     ]);
 

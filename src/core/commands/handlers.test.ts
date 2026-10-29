@@ -81,7 +81,10 @@ function setup(
     settleDerived: vi.fn(() => Promise.resolve()),
     pageInfo: vi.fn(() => null),
     readPage: vi.fn(() => Promise.resolve(fail('pageUnavailable'))),
-    straightenedFile: vi.fn(() => null),
+    straightenedFiles: vi.fn(() => ({
+      resolve: () => null,
+      read: () => Promise.resolve(fail('pageUnavailable')),
+    })),
     readStraightened: vi.fn(() => Promise.resolve(fail('pageUnavailable'))),
   } satisfies PassService;
 

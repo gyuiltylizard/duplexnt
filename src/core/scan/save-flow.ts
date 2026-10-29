@@ -56,7 +56,7 @@ export interface DocumentWriterDeps {
   >;
   /** Сборка текущего снимка сессии — с оценками и фактами выравнивания службы. */
   readonly assemble: (session: SessionSnapshot) => SessionAssembly;
-  readonly straightened: Pick<Straightened, 'resolve'>;
+  readonly straightened: Pick<Straightened, 'resolve' | 'read'>;
   readonly io: StorageIo;
   /** Отметка «сохранено» записана — новый снимок. */
   readonly onSaved: () => void;
@@ -98,20 +98,8 @@ export function createDocumentWriter(deps: DocumentWriterDeps): DocumentWriter {
     for (const page of pages) {
       const info = store.pageInfo(page.key);
       const file = straight.get(page.key);
-      let bytes: Result<Uint8Array>;
-      if (file === undefined) {
-        bytes = await store.readPage(page.key);
-      } else {
-        try {
-          const read = await deps.io.fs.readFile(file.path);
-          bytes =
-            read.byteLength === file.bytes
-              ? ok(read)
-              : fail('pageUnavailable', { reason: 'straightened' });
-        } catch {
-          bytes = fail('pageUnavailable', { reason: 'straightened' });
-        }
-      }
+      const bytes =
+        file === undefined ? await store.readPage(page.key) : await straightened.read(file);
       if (!bytes.ok) {
         return bytes;
       }

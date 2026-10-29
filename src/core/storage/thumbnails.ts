@@ -7,9 +7,10 @@ import { REGION_UNITS_PER_INCH } from '../escl/region';
 import { writeFileAtomic } from './atomic-file';
 import { pageFileName, straightFileName, straightThumbsDirIn, thumbsDirIn } from './layout';
 import { limiterOf, type Limiter } from './limiter';
+import { isAlive } from './liveness';
 import type { PageInfo } from './session-store';
-import { ioOf, listDir, type StorageOptions } from './storage-fs';
-import type { Straightened, StraightenedFile } from './straightened';
+import { ioOf, type StorageOptions } from './storage-fs';
+import type { Straightened } from './straightened';
 
 // Миниатюры — производное (ADR 0004; план M1, U16, KTD-22, KTD-37). Строятся по требованию из
 // исходника и кэшируются вне каталога сессии, под её идентификатором: кэш прошлой сессии не
@@ -78,7 +79,7 @@ export interface ThumbnailOptions extends StorageOptions {
   /** Сколько миниатюр строится одновременно, когда лимитер не передан. */
   readonly concurrency?: number;
   /** Выправленные страницы (M6, KTD-7) — для варианта `straight`; без них он всегда отказывает. */
-  readonly straightened?: Pick<Straightened, 'resolve'>;
+  readonly straightened?: Pick<Straightened, 'resolve' | 'read'>;
 }
 
 export interface Thumbnails {
@@ -130,7 +131,10 @@ export function createThumbnails(
   const io = ioOf(options);
   const { fs } = io;
   const limited = options.limiter ?? limiterOf(options.concurrency ?? DEFAULT_CONCURRENCY);
-  const straightened = options.straightened ?? { resolve: () => null };
+  const straightened: Pick<Straightened, 'resolve' | 'read'> = options.straightened ?? {
+    resolve: () => null,
+    read: () => Promise.resolve(NOT_STRAIGHTENED),
+  };
 
   /** Миниатюра из байтов источника в кэш `dir/file`; страницу могли отбросить, пока строилась. */
   async function build(
@@ -159,7 +163,7 @@ export function createThumbnails(
       );
     // Пока миниатюра строилась, страницу могли отбросить («Остановить», «Новая пачка») или
     // откатить к другой версии: такая миниатюра не отдаётся и в кэше не остаётся.
-    if (source.pageInfo(key)?.sessionId !== info.sessionId || !stillWanted()) {
+    if (!isAlive(source, key, info) || !stillWanted()) {
       if (cached) {
         await fs.unlink(file).catch(() => undefined);
       }
@@ -168,22 +172,10 @@ export function createThumbnails(
     return rendered;
   }
 
-  /** Выправленный файл в байтах; размер сверяется с записью о коррекции (KTD-11). */
-  async function readStraight(file: StraightenedFile): Promise<Result<Uint8Array>> {
-    try {
-      const bytes = await fs.readFile(file.path);
-      return bytes.byteLength === file.bytes ? ok(bytes) : NOT_STRAIGHTENED;
-    } catch {
-      return NOT_STRAIGHTENED;
-    }
-  }
-
-  /** Миниатюры прежних версий страницы — после записи новой. */
-  async function dropOldVersions(dir: string, key: string, keep: string): Promise<void> {
-    for (const name of await listDir(fs, dir)) {
-      if (name !== keep && name.startsWith(`${key}.v`) && name.endsWith('.jpg')) {
-        await fs.unlink(join(dir, name)).catch(() => undefined);
-      }
+  /** Миниатюры прежних версий страницы — после записи новой; версии известны, листать незачем. */
+  async function dropOldVersions(dir: string, key: string, version: number): Promise<void> {
+    for (let old = 1; old < version; old += 1) {
+      await fs.unlink(join(dir, straightFileName(key, old))).catch(() => undefined);
     }
   }
 
@@ -229,19 +221,18 @@ export function createThumbnails(
         return Promise.resolve(NOT_STRAIGHTENED);
       }
       const dir = straightThumbsDirIn(derivedDir, info.sessionId);
-      const name = straightFileName(key, straight.version);
-      const file = join(dir, name);
+      const file = join(dir, straightFileName(key, straight.version));
       return cachedOrBuilt(file, async () => {
         const built = await build(
           key,
           info,
           dir,
           file,
-          () => readStraight(straight),
+          () => straightened.read(straight),
           () => straightened.resolve(key)?.version === straight.version,
         );
         if (built.ok) {
-          await dropOldVersions(dir, key, name);
+          await dropOldVersions(dir, key, straight.version);
         }
         return built;
       });

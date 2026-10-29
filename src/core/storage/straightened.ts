@@ -1,8 +1,9 @@
 import { join } from 'node:path';
 import { z } from 'zod';
-import { STRAIGHTEN_GEOMETRY_VERSION } from '@shared';
+import { fail, ok, STRAIGHTEN_GEOMETRY_VERSION, type Result } from '@shared';
 import type { StraightenResult } from '../image/straighten';
 import { isTempName, writeFileAtomic } from './atomic-file';
+import { isAlive, pruneStale } from './liveness';
 import {
   parseStraightFileName,
   straightDirIn,
@@ -52,6 +53,13 @@ export interface Straightened {
    */
   resolve(key: string): StraightenedFile | null;
   /**
+   * Байты выправленного файла, который отдал `resolve` или снимок пакета (KTD-8): размер
+   * сверяется с записью о коррекции (KTD-11); файла нет или он другого размера —
+   * `pageUnavailable` с причиной `straightened`. Единственный читатель для протокола картинок,
+   * миниатюр и сборки PDF.
+   */
+  read(file: StraightenedFile): Promise<Result<Uint8Array>>;
+  /**
    * Открытие сессии: читает записи указанных страниц и сверяет размер файла; временные файлы
    * незаконченных записей и JPEG без записи убираются. Записи новее известной версии не
    * трогаются и не отдаются.
@@ -82,8 +90,7 @@ export function createStraightened(
   const entries = new Map<string, Entry>();
 
   const dirOf = (info: PageInfo): string => straightDirIn(derivedDir, info.sessionId);
-  const alive = (key: string, info: PageInfo): boolean =>
-    source.pageInfo(key)?.sessionId === info.sessionId;
+  const alive = (key: string, info: PageInfo): boolean => isAlive(source, key, info);
 
   /** Запись версии `version` страницы, если она действительна: файл на месте и того размера. */
   async function readRecord(
@@ -168,23 +175,37 @@ export function createStraightened(
       }
       const dir = dirOf(first.value);
       const files = await filesIn(dir);
-      for (const [key, info] of wanted) {
-        const versions = [...(files.get(key)?.keys() ?? [])]
-          .filter((version) => version <= STRAIGHTEN_GEOMETRY_VERSION)
-          .sort((p, q) => q - p);
-        let found: StraightenedFile | null = null;
-        for (const version of versions) {
-          found = await readRecord(dir, key, version);
-          if (found !== null) {
-            break;
+      // Страницы независимы: записи читаются параллельно, а не по одной.
+      await Promise.all(
+        [...wanted].map(async ([key, info]) => {
+          const versions = [...(files.get(key)?.keys() ?? [])]
+            .filter((version) => version <= STRAIGHTEN_GEOMETRY_VERSION)
+            .sort((p, q) => q - p);
+          let found: StraightenedFile | null = null;
+          for (const version of versions) {
+            found = await readRecord(dir, key, version);
+            if (found !== null) {
+              break;
+            }
+            // Сирота: JPEG без записи или запись без файла нужного размера — не отдаётся и
+            // убирается, чтобы не копиться. Новее известной версии — не наша, не трогаем.
+            await removeVersion(dir, key, version);
           }
-          // Сирота: JPEG без записи или запись без файла нужного размера — не отдаётся и
-          // убирается, чтобы не копиться. Новее известной версии — не наша, не трогаем.
-          await removeVersion(dir, key, version);
-        }
-        if (found !== null && alive(key, info)) {
-          entries.set(key, { sessionId: info.sessionId, file: found });
-        }
+          if (found !== null && alive(key, info)) {
+            entries.set(key, { sessionId: info.sessionId, file: found });
+          }
+        }),
+      );
+    },
+
+    async read(file) {
+      try {
+        const bytes = await fs.readFile(file.path);
+        return bytes.byteLength === file.bytes
+          ? ok(bytes)
+          : fail('pageUnavailable', { reason: 'straightened' });
+      } catch {
+        return fail('pageUnavailable', { reason: 'straightened' });
       }
     },
 
@@ -226,21 +247,15 @@ export function createStraightened(
           dpi: result.dpi,
         },
       });
-      // Прежние версии — после записи новой (AE13): до неё показывалась старая. Новее известной
-      // (от будущего приложения) — не наша, не трогаем.
-      for (const old of [...((await filesIn(dir)).get(key)?.keys() ?? [])]) {
-        if (old < version) {
-          await removeVersion(dir, key, old);
-        }
+      // Прежние версии — после записи новой (AE13): до неё показывалась старая. Версии известны
+      // наперёд, листать каталог незачем; новее известной (от будущего приложения) — не наша.
+      for (let old = 1; old < version; old += 1) {
+        await removeVersion(dir, key, old);
       }
     },
 
     prune() {
-      for (const [key, entry] of entries) {
-        if (source.pageInfo(key)?.sessionId !== entry.sessionId) {
-          entries.delete(key);
-        }
-      }
+      pruneStale(entries, source);
     },
   };
 }

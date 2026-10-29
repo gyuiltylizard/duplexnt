@@ -4,7 +4,7 @@
 // старте первого прохода. Статус страницы — чистая функция над снимком и фактами ядра, как
 // `blankFlagOf`: одно правило на сборку ядра и зеркало renderer'а. Порогов renderer не знает.
 
-import type { PageImageView } from './bridge';
+import { pageImageUrl, type PageImageView } from './bridge';
 import type { SkewOutcome } from './skew';
 
 export const STRAIGHTEN_MODES = ['auto', 'off'] as const;
@@ -30,8 +30,7 @@ export type StraightenDeferredReason = (typeof STRAIGHTEN_DEFERRED_REASONS)[numb
  */
 export interface StraightenFact {
   readonly outcome: SkewOutcome | null;
-  readonly corrected: boolean;
-  /** Версия геометрии выправленного файла; `null` — файла нет. */
+  /** Версия геометрии выправленного файла любой известной версии; `null` — файла нет. */
   readonly version: number | null;
   readonly deferred: StraightenDeferredReason | null;
 }
@@ -117,7 +116,7 @@ export function straightenMarkOf(input: StraightenMarkInput): StraightenMark {
     case 'level':
       return { status: 'level', reason: null, version: null };
     case 'willStraighten':
-      if (fact.corrected) {
+      if (fact.version !== null) {
         return {
           status: input.keepOriginal ? 'kept' : 'straightened',
           reason: null,
@@ -223,4 +222,14 @@ export function straightenSummaryOf(
 export interface StraightenProgress {
   readonly queued: number;
   readonly running: string | null;
+}
+
+/** Адрес картинки страницы текущей сессии по её статусу — для `<img src>` ленты, превью и полосы прохода. */
+export function pageImageSrc(
+  sessionId: string,
+  page: { readonly key: string; readonly straighten?: StraightenMark },
+  size: 'page' | 'thumb',
+): string {
+  const ref = pageImageViewOf(page, size);
+  return pageImageUrl(sessionId, ref.view, ref.key, ref.version);
 }

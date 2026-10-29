@@ -160,6 +160,7 @@ export {
   STRAIGHTEN_MODES,
   STRAIGHTEN_REASONS,
   STRAIGHTEN_STATUSES,
+  pageImageSrc,
   pageImageViewOf,
   straightenMarkOf,
   straightenSummaryOf,

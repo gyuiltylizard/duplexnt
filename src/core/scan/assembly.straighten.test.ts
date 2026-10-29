@@ -19,8 +19,7 @@ const B = (index: number): string => keyOf(2, index);
 
 const fact = (overrides: Partial<StraightenFact>): StraightenFact => ({
   outcome: null,
-  corrected: false,
-  version: overrides.corrected === true ? 1 : null,
+  version: null,
   deferred: null,
   ...overrides,
 });
@@ -39,7 +38,7 @@ describe('сборка: статусы выравнивания (M6, KTD-9)', ()
 
   it('статусы для всех исходов; без фактов — ждёт; сводка считает все, кроме null', () => {
     const facts: StraightenFacts = new Map([
-      [F(1), fact({ outcome: 'willStraighten', corrected: true })],
+      [F(1), fact({ outcome: 'willStraighten', version: 1 })],
       [F(2), fact({ outcome: 'unmeasurable' })],
       [B(2), fact({ outcome: 'level' })],
     ]);
@@ -94,7 +93,7 @@ describe('сборка: статусы выравнивания (M6, KTD-9)', ()
   it('режим сессии «не выравнивать»: статусы null, сводка нулевая с режимом', () => {
     const off = sessionOf([passOf(1, 2)], { straighten: 'off' });
     const facts: StraightenFacts = new Map([
-      [F(1), fact({ outcome: 'willStraighten', corrected: true })],
+      [F(1), fact({ outcome: 'willStraighten', version: 1 })],
     ]);
 
     expect(statusesOf(off, facts)).toEqual({ [F(1)]: null, [F(2)]: null });
@@ -105,7 +104,7 @@ describe('сборка: статусы выравнивания (M6, KTD-9)', ()
 
   it('откат «Оставить оригинал» даёт kept только выправленной; мёртвый ключ вычищен; отложенные — deferred с причиной, не pending', () => {
     const facts: StraightenFacts = new Map([
-      [F(1), fact({ outcome: 'willStraighten', corrected: true })],
+      [F(1), fact({ outcome: 'willStraighten', version: 1 })],
       [F(2), fact({ outcome: 'willStraighten', deferred: 'noSpace' })],
       [B(1), fact({ outcome: 'willStraighten', deferred: 'failed' })],
       [B(2), fact({ outcome: 'level' })],
@@ -133,7 +132,7 @@ describe('сборка: статусы выравнивания (M6, KTD-9)', ()
 
   it('удалённые правкой страницы в сводку не входят; статусы не двигают ленту', () => {
     const facts: StraightenFacts = new Map([
-      [F(1), fact({ outcome: 'willStraighten', corrected: true })],
+      [F(1), fact({ outcome: 'willStraighten', version: 1 })],
     ]);
     const session = sessionOf([passOf(1, 2), passOf(2, 2)], {
       straighten: 'auto',

@@ -3,8 +3,7 @@ import { useTranslation } from 'react-i18next';
 import {
   isMainKind,
   isPairKind,
-  pageImageUrl,
-  pageImageViewOf,
+  pageImageSrc,
   type PageSnapshot,
   type PassProgress,
   type PassSnapshot,
@@ -122,7 +121,7 @@ function StripCard({
       <img
         className="strip__img"
         alt={t('thumb.alt', { number: page.number })}
-        src={pageImageUrl(sessionId, pageImageViewOf(page, 'thumb').view, page.key)}
+        src={pageImageSrc(sessionId, page, 'thumb')}
         onLoad={image.onLoad}
         onError={image.onError}
       />

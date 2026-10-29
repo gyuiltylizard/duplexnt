@@ -141,7 +141,7 @@ async function start(): Promise<void> {
   // виды — по записи о коррекции через службу (M6, KTD-7, KTD-11).
   const thumbnails = createThumbnails(layoutOf(dataRoot).derivedDir, service, {
     limiter: derivedLimiter,
-    straightened: { resolve: (key) => service.straightenedFile(key) },
+    straightened: service.straightenedFiles(),
   });
   protocol.handle(PAGE_IMAGE_SCHEME, (request) =>
     handlePageImageRequest(request, {
