@@ -152,6 +152,22 @@ describe('детектор перекоса на сканах ET-3850 (M6, U2)',
     expect(Math.min(...validInk)).toBeGreaterThanOrEqual(0.01);
   });
 
+  it('причина «не измерена»: строки не сходятся у ловушек, не по чему мерить у фото и чистых; у измеренных — нет', async () => {
+    for (const name of names) {
+      const result = await measured(name);
+      if (result === null) {
+        continue;
+      }
+      const expected =
+        result.outcome !== 'unmeasurable'
+          ? null
+          : ['fan-twocol-gray-300', 'fan-graphic-gray-300'].includes(name)
+            ? 'shape'
+            : 'content';
+      expect(result.cause, `${name}: ${describeMeasure(result)}`).toBe(expected);
+    }
+  });
+
   it('выправляемые — с ростом контраста не меньше запаса; ровные — ниже порога движения', async () => {
     for (const name of names) {
       const result = await measured(name);

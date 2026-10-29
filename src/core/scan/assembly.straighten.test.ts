@@ -21,6 +21,7 @@ const fact = (overrides: Partial<StraightenFact>): StraightenFact => ({
   outcome: null,
   version: null,
   deferred: null,
+  cause: null,
   ...overrides,
 });
 
@@ -62,7 +63,7 @@ describe('сборка: статусы выравнивания (M6, KTD-9)', ()
       deferred: 0,
       pending: 1,
       total: 4,
-      reasons: { measure: 1, nohelp: 0, disk: 0, fail: 0 },
+      reasons: { measure: 1, shape: 0, nohelp: 0, disk: 0, fail: 0 },
     });
   });
 

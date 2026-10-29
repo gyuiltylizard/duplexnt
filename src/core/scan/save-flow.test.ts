@@ -62,8 +62,8 @@ async function setup() {
   };
   const facts = (): StraightenFacts =>
     new Map([
-      [F1, { outcome: 'willStraighten', version: current.version, deferred: null }],
-      ['p01-s01-0002', { outcome: 'level', version: null, deferred: null }],
+      [F1, { outcome: 'willStraighten', version: current.version, deferred: null, cause: null }],
+      ['p01-s01-0002', { outcome: 'level', version: null, deferred: null, cause: null }],
     ]);
   const writer = createDocumentWriter({
     store,

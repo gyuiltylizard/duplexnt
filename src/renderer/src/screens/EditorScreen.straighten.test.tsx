@@ -48,6 +48,7 @@ const fact = (
   outcome,
   version: null,
   deferred: null,
+  cause: null,
   ...extra,
 });
 
@@ -124,6 +125,35 @@ describe('выравнивание в редакторе (M6)', () => {
     expect(option(4).querySelectorAll('.thumb__pending i')).toHaveLength(3);
     // Подвал на месте: слот вне потока, номер и теги не сдвигаются.
     expect(option(4).querySelector('.thumb__foot')?.textContent).toBe('5');
+  });
+
+  it('строки есть, но наклон не сходится — своя причина на карточке, превью, в факте и ПРОВЕРКЕ', () => {
+    const facts: StraightenFacts = new Map([
+      ...DONE,
+      [P(3), fact('unmeasurable', { cause: 'shape' })],
+    ]);
+    stubApi();
+    renderEditor(straightSnapshot(facts));
+
+    expect(option(2).getAttribute('aria-label')).toBe(
+      'Страница 3, не выровнена: наклон строк не сходится',
+    );
+    expect(option(2).querySelector('.thumb__straight--undone')?.getAttribute('title')).toBe(
+      'Не выровнено: наклон строк не сходится в одну форму',
+    );
+    fireEvent.click(option(2));
+    expect(screen.getByText('НЕ ВЫРОВНЕНО').getAttribute('title')).toBe(
+      'Не выровнено: наклон строк не сходится в одну форму',
+    );
+    expect(
+      within(inspector()).getByText(
+        'Строки на странице есть, но их наклон не сходится в одну форму — так бывает у двух колонок. Страница оставлена как есть.',
+      ),
+    ).toBeDefined();
+    expect(within(inspector()).getByText('наклон строк не сходится')).toBeDefined();
+    expect(checkTexts()).toContain(
+      '✓Выровнено 3 стр.Не выровнено 2: наклон строк не сходится — 1, мало места на диске — 1. Освободите место на диске — при следующем запуске приложение попробует снова.',
+    );
   });
 
   it('превью: пилюля и вид по статусу текущей; откат — исходник без пилюли', async () => {

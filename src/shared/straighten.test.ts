@@ -18,6 +18,7 @@ const fact = (overrides: Partial<StraightenFact> = {}): StraightenFact => ({
   outcome: null,
   version: null,
   deferred: null,
+  cause: null,
   ...overrides,
 });
 
@@ -68,6 +69,11 @@ describe('статус страницы (KTD-9)', () => {
       'не по чему мерить',
       input({ fact: fact({ outcome: 'unmeasurable' }) }),
       mark('unmeasurable', 'measure'),
+    ],
+    [
+      'строки есть, но наклон не сходится в одну форму',
+      input({ fact: fact({ outcome: 'unmeasurable', cause: 'shape' }) }),
+      mark('unmeasurable', 'shape'),
     ],
     [
       'коррекция не помогла',
@@ -142,7 +148,7 @@ describe('сводка по ленте', () => {
       deferred: 1,
       pending: 1,
       total: 8,
-      reasons: { measure: 1, nohelp: 1, disk: 1, fail: 0 },
+      reasons: { measure: 1, shape: 0, nohelp: 1, disk: 1, fail: 0 },
     });
   });
 
