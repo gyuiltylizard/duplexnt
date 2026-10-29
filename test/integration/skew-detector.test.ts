@@ -5,6 +5,7 @@ import {
   CONFIDENCE_MIN,
   FALLBACK_BAND_MM,
   IMPROVE_RATIO,
+  MIN_BANDS,
   LEVEL_DEG,
   measureSkewJpeg,
 } from '../../src/core/detect/skew';
@@ -55,6 +56,9 @@ const EXPECTED: Readonly<Record<string, readonly SkewOutcome[]>> = {
   'signature-gray-300': ['unmeasurable'],
   'text-gray-300': ['willStraighten'],
   'text-line-gray-300': ['unmeasurable'],
+  'sheet-front-gray-200': ['willStraighten'],
+  'sheet-back-gray-200': ['willStraighten'],
+  'rulers-gray-200': ['willStraighten'],
 };
 
 /**
@@ -62,7 +66,11 @@ const EXPECTED: Readonly<Record<string, readonly SkewOutcome[]>> = {
  * проваливает гейт формы. Закреплено, чтобы запасной проход нельзя было убрать, оставив таблицу
  * зелёной; неизмеримые листы не закрепляются — у них 50 означает лишь провал формы при 30.
  */
-const EXPECTED_FALLBACK: readonly string[] = ['text-gray-300'];
+const EXPECTED_FALLBACK: readonly string[] = [
+  'text-gray-300',
+  'sheet-front-gray-200',
+  'rulers-gray-200',
+];
 
 const names = scanFixtureNames();
 const results = new Map<string, SkewMeasure | null>();
@@ -122,6 +130,26 @@ describe('детектор перекоса на сканах ET-3850 (M6, U2)',
         );
       }
     }
+  });
+
+  it('половина с плоским пиком не накладывает вето: низ листа с линейками входит в профиль, блок строк рядом с плашкой держит оборот', async () => {
+    // Приёмка M6 (2026-10-29): у половины полосы с одной плашкой или миллиметровыми рисками
+    // пик резкости плоский, её угол — шум, и прежний гейт половин отбрасывал всю полосу. Низ
+    // калибровочного листа (u 0,77 и 0,82, −0,95 / −0,90°) терялся, и лист поворачивался на
+    // угол верха; оборот с плашкой оставался с двумя полосами из трёх нужных. Без правила
+    // возражения (`HALF_OBJECTION_MIN`) тест падает.
+    const rulers = await measured('rulers-gray-200');
+    expect(rulers?.outcome).toBe('willStraighten');
+    expect(Math.max(...(rulers?.profile?.us ?? [0]))).toBeGreaterThan(0.7);
+    expect(rulers?.fanMm ?? 0).toBeGreaterThan(2);
+    const back = await measured('sheet-back-gray-200');
+    expect(back?.outcome).toBe('willStraighten');
+    // Полоса пустой бумаги с просвечиванием (0,3 % чернил) — не полоса: порог `MIN_INK_FRACTION`.
+    const validInk = (back?.bands ?? [])
+      .filter((band) => band.reason === null)
+      .map((band) => band.inkFraction);
+    expect(validInk.length).toBeGreaterThanOrEqual(MIN_BANDS);
+    expect(Math.min(...validInk)).toBeGreaterThanOrEqual(0.01);
   });
 
   it('выправляемые — с ростом контраста не меньше запаса; ровные — ниже порога движения', async () => {

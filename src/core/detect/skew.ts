@@ -35,7 +35,7 @@ import {
 // `@shared`.
 
 /** Версия алгоритма и констант детектора; пишется в запись измерения вместе с геометрией. */
-export const SKEW_DETECTOR_VERSION = 1;
+export const SKEW_DETECTOR_VERSION = 2;
 
 /** Номинальная высота листа — для перевода миллиметров полосы в пиксели рабочей картинки. */
 const PAGE_HEIGHT_MM = 297;
@@ -65,14 +65,21 @@ const STRIDE_ABOVE = 20_000;
 const MIN_PIXELS = 50;
 
 /** Доля чернил полосы: ниже — пусто; выше — не документ (фото, заливка), строк там нет. */
-export const MIN_INK_FRACTION = 0.002;
+export const MIN_INK_FRACTION = 0.005;
 export const MAX_INK_FRACTION = 0.3;
 
 /** Уверенность полосы — лучший счёт резкости к худшему по грубому перебору. */
 export const CONFIDENCE_MIN = 3;
 
-/** Левая и правая половины полосы обязаны дать один угол: две колонки и графика расходятся. */
+/** Возражающие половины полосы обязаны дать один угол: две колонки и графика расходятся. */
 export const HALVES_TOLERANCE_DEG = 0.25;
+/**
+ * Половина полосы возражает углу целой полосы, если её собственный пик резкости лучше счёта при
+ * угле целой хотя бы во столько раз. У половины с одной плашкой, рисками линейки или пустой
+ * бумагой пик плоский (1,00–1,12 на сканах ET-3850) — её угол шум, и вето полосе он не
+ * накладывает; у колонки с другой фазой строк и у косой штриховки — 1,28–1,98.
+ */
+export const HALF_OBJECTION_MIN = 1.2;
 
 /** Валидных полос не меньше и покрывают они не меньше такой доли высоты. */
 export const MIN_BANDS = 3;
@@ -175,6 +182,8 @@ function filterPixels(pixels: Pixels, keep: (x: number) => boolean): Pixels {
 interface AngleEstimate {
   readonly angle: number | null;
   readonly confidence: number;
+  /** Счёт резкости в пике (полный перебор, шаг 1). */
+  readonly score: number;
 }
 
 /**
@@ -189,7 +198,7 @@ function angleOf(
 ): AngleEstimate {
   const total = xs.length;
   if (total < MIN_PIXELS) {
-    return { angle: null, confidence: 0 };
+    return { angle: null, confidence: 0, score: 0 };
   }
   const stride = total > STRIDE_ABOVE ? 2 : 1;
   let best = -Infinity;
@@ -233,7 +242,32 @@ function angleOf(
   }
   // Счёт полного перебора приводится к масштабу грубого (шаг 2 — четверть счёта).
   const bestAtCoarseScale = peak.score / (stride * stride);
-  return { angle, confidence: worst > 0 ? bestAtCoarseScale / worst : Infinity };
+  return {
+    angle,
+    confidence: worst > 0 ? bestAtCoarseScale / worst : Infinity,
+    score: peak.score,
+  };
+}
+
+interface HalfEstimate {
+  readonly angle: number | null;
+  /** Собственный угол половины заметно лучше угла целой полосы (`HALF_OBJECTION_MIN`). */
+  readonly objects: boolean;
+}
+
+/** Угол половины полосы в окрестности угла целой и её возражение ему. */
+function halfOf(
+  half: Pixels,
+  bins: Float64Array,
+  offset: number,
+  wholeAngle: number,
+): HalfEstimate {
+  const estimate = angleOf(half, bins, offset, wholeAngle);
+  if (estimate.angle === null) {
+    return { angle: null, objects: false };
+  }
+  const atWhole = projectAt(half.xs, half.ys, half.ws, 1, wholeAngle, bins, offset);
+  return { angle: estimate.angle, objects: estimate.score >= HALF_OBJECTION_MIN * atWhole };
 }
 
 interface BandsPass {
@@ -321,13 +355,13 @@ async function bandAngles(
       if (whole.angle === null) {
         bands.push(empty('no-ink'));
       } else {
-        const left = angleOf(
+        const left = halfOf(
           filterPixels(pixels, (x) => x < 0),
           bins,
           offset,
           whole.angle,
         );
-        const right = angleOf(
+        const right = halfOf(
           filterPixels(pixels, (x) => x >= 0),
           bins,
           offset,
@@ -337,17 +371,26 @@ async function bandAngles(
           left.angle === null || right.angle === null
             ? Infinity
             : Math.abs(left.angle - right.angle);
+        // Вето половин — только когда хотя бы одна из них возражает: половина с плоским пиком
+        // (плашка, риски линейки, пустая бумага с просвечиванием) мерит шум и уверенную целую
+        // полосу не отменяет — иначе блок строк рядом с плашкой и низ листа с линейками
+        // терялись целиком.
+        const contradicted = (left.objects || right.objects) && halvesGap > HALVES_TOLERANCE_DEG;
         const reason: SkewBandReason | null =
           whole.confidence < CONFIDENCE_MIN
             ? 'low-confidence'
-            : halvesGap > HALVES_TOLERANCE_DEG
+            : contradicted
               ? 'halves-disagree'
               : null;
-        // Угол — по целой полосе (плечо шире, точнее), кроме случая, когда целая полоса
-        // расходится с половинами: у двух колонок с разной фазой строк целая полоса врёт, а
-        // каждая половина видит одну колонку и меряет верно — тогда среднее половин.
+        // Угол — по целой полосе (плечо шире, точнее), кроме случая, когда обе половины
+        // согласны между собой и обе возражают целой: у двух колонок с разной фазой строк целая
+        // полоса врёт, а каждая половина видит одну колонку и меряет верно — тогда среднее.
         const halvesMean =
-          reason === null && left.angle !== null && right.angle !== null
+          reason === null &&
+          left.objects &&
+          right.objects &&
+          left.angle !== null &&
+          right.angle !== null
             ? (left.angle + right.angle) / 2
             : whole.angle;
         const angle =
@@ -581,6 +624,14 @@ async function measurePass(
   }));
   const quad = fitQuadratic(points, linear);
   const shapeResidual = linear ? quad.maxResidual : Math.min(quad.maxResidual, fitStep(points));
+  // Все валидные полосы ниже порога движения — страница ровная и без согласия формы: вопрос
+  // «верить ли профилю для коррекции» не стоит, коррекции не будет. Почти пустой лист после
+  // коррекции (три полосы −0,08 / +0,10 / −0,08°) давал остаток формы 0,105° и «не по чему
+  // мерить» вместо «ровная». Профиль — узлами: константа за крайними держит его под порогом.
+  const level = valid.every((b) => Math.abs(b.angle ?? 0) < LEVEL_DEG);
+  if (level) {
+    return { ok: true, profile: knotsOf(points), bands, coverage, shapeResidual };
+  }
   if (shapeResidual > SHAPE_RESIDUAL_MAX_DEG) {
     return {
       ok: false,
