@@ -531,12 +531,12 @@ describe('зеркало со статусами выравнивания про
     [B2, false],
   ]);
   const facts: StraightenFacts = new Map([
-    [F1, { outcome: 'willStraighten', corrected: true, deferred: null }],
-    [F2, { outcome: 'unmeasurable', corrected: false, deferred: null }],
-    [F3, { outcome: 'willStraighten', corrected: false, deferred: 'noSpace' }],
-    [B1, { outcome: 'willStraighten', corrected: true, deferred: null }],
-    [B2, { outcome: 'level', corrected: false, deferred: null }],
-    ['p03-s01-0001', { outcome: 'notImproved', corrected: false, deferred: null }],
+    [F1, { outcome: 'willStraighten', corrected: true, version: 1, deferred: null }],
+    [F2, { outcome: 'unmeasurable', corrected: false, version: null, deferred: null }],
+    [F3, { outcome: 'willStraighten', corrected: false, version: null, deferred: 'noSpace' }],
+    [B1, { outcome: 'willStraighten', corrected: true, version: 1, deferred: null }],
+    [B2, { outcome: 'level', corrected: false, version: null, deferred: null }],
+    ['p03-s01-0001', { outcome: 'notImproved', corrected: false, version: null, deferred: null }],
   ]);
   const sets3x2 = [passOf(1, 'fronts', 3), passOf(2, 'backs', 2)];
 

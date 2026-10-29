@@ -1,15 +1,24 @@
 import { isPageKey, isSessionId } from '@core/storage/layout';
-import { PAGE_IMAGE_SCHEME, PAGE_IMAGE_VIEWS, type PageImageView, type Result } from '@shared';
+import {
+  isStraightView,
+  PAGE_IMAGE_SCHEME,
+  PAGE_IMAGE_VIEWS,
+  type PageImageView,
+  type Result,
+} from '@shared';
 
-// Схема изображений страниц (ADR 0005; план M1, U18, KTD-38). Адрес:
-// `duplexnt-page://<сессия>/<вид>/<ключ>`. Electron не импортируется: привилегии — чистый объект с
-// литеральными типами, как у настроек окна; обработчик принимает WHATWG `Request` и отдаёт
-// `Response` — оба есть и под обычным Node, поэтому контракт ответа проверяется тестом.
+// Схема изображений страниц (ADR 0005; план M1, U18, KTD-38; M6, U6, KTD-7). Адрес:
+// `duplexnt-page://<сессия>/<вид>/<ключ>`, у выправленных видов — `<вид>/<версия>/<ключ>`.
+// Electron не импортируется: привилегии — чистый объект с литеральными типами, как у настроек
+// окна; обработчик принимает WHATWG `Request` и отдаёт `Response` — оба есть и под обычным
+// Node, поэтому контракт ответа проверяется тестом.
 //
 // Минимум привилегий: только `standard` — чтобы адрес разбирался как `схема://хост/путь`.
 // Всё, что дало бы странице новые возможности (fetch, CORS, service worker, обход CSP, потоки,
 // кэш кода), выключено явно. Ответ всегда `image/jpeg`, `nosniff`, `no-store`; любой отказ — 404
 // без подробностей: чужая сессия, неизвестный ключ и потерянная страница неразличимы снаружи.
+// Выправленный вид без файла отдаёт оригинал / обычную миниатюру (KTD-7): истина для пометки —
+// статус в снимке, а не ответ сервера; версия в адресе — только чтобы адрес менялся.
 
 export interface PageSchemePrivileges {
   readonly standard: true;
@@ -45,6 +54,10 @@ export interface PageImageSource {
   sessionId(): string | null;
   readPage(key: string): Promise<Result<Uint8Array>>;
   readThumbnail(key: string): Promise<Result<Uint8Array>>;
+  /** Выправленная страница (M6, KTD-7); отказ — выправленного вида нет, идёт оригинал. */
+  readStraight(key: string): Promise<Result<Uint8Array>>;
+  /** Миниатюра выправленной; отказ — обычная миниатюра. */
+  readStraightThumbnail(key: string): Promise<Result<Uint8Array>>;
 }
 
 // Ключ и идентификатор сессии проверяются грамматикой ядра (`isPageKey`, `isSessionId`) по сырому
@@ -55,12 +68,20 @@ interface PageAddress {
   readonly sessionId: string;
   readonly view: PageImageView;
   readonly key: string;
+  /** Версия геометрии из адреса выправленного вида; у остальных `null`. */
+  readonly version: number | null;
 }
 
 const isView = (value: string): value is PageImageView =>
   (PAGE_IMAGE_VIEWS as readonly string[]).includes(value);
 
-/** Разбор адреса; всё, что не ровно `схема://сессия/вид/ключ`, — `null`. */
+/** Версия геометрии в адресе: целое от единицы, без ведущих нулей, не длиннее четырёх цифр. */
+const VERSION = /^[1-9]\d{0,3}$/;
+
+/**
+ * Разбор адреса; всё, что не ровно `схема://сессия/вид/ключ` (у выправленных видов —
+ * `схема://сессия/вид/версия/ключ`), — `null`.
+ */
 export function parsePageImageUrl(raw: string): PageAddress | null {
   let url: URL;
   try {
@@ -78,19 +99,49 @@ export function parsePageImageUrl(raw: string): PageAddress | null {
     return null;
   }
   const segments = url.pathname.split('/');
-  const [empty, view, key, ...rest] = segments;
-  if (empty !== '' || view === undefined || key === undefined || rest.length > 0) {
+  const [empty, view, ...rest] = segments;
+  if (empty !== '' || view === undefined || !isView(view) || !isSessionId(url.hostname)) {
     return null;
   }
-  if (!isSessionId(url.hostname) || !isView(view) || !isPageKey(key)) {
+  let version: number | null = null;
+  if (isStraightView(view)) {
+    const raw = rest.shift();
+    if (raw === undefined || !VERSION.test(raw)) {
+      return null;
+    }
+    version = Number(raw);
+  }
+  const [key, ...extra] = rest;
+  if (key === undefined || extra.length > 0 || !isPageKey(key)) {
     return null;
   }
-  return { sessionId: url.hostname, view, key };
+  return { sessionId: url.hostname, view, key, version };
 }
 
 const NO_STORE = { 'Cache-Control': 'no-store' } as const;
 
 const notFound = (): Response => new Response(null, { status: 404, headers: NO_STORE });
+
+/** Байты вида; выправленный вид без файла — оригинал того же размера (KTD-7). */
+async function readView(
+  address: PageAddress,
+  source: PageImageSource,
+): Promise<Result<Uint8Array>> {
+  switch (address.view) {
+    case 'page':
+      return source.readPage(address.key);
+    case 'thumb':
+      return source.readThumbnail(address.key);
+    case 'straight': {
+      const straight = await source.readStraight(address.key);
+      return straight.ok ? straight : source.readPage(address.key);
+    }
+    case 'straight-thumb': {
+      const straight = await source.readStraightThumbnail(address.key);
+      return straight.ok ? straight : source.readThumbnail(address.key);
+    }
+  }
+}
 
 /** Обработчик `protocol.handle`: только `GET`, только страницы текущей сессии. */
 export async function handlePageImageRequest(
@@ -108,10 +159,7 @@ export async function handlePageImageRequest(
   if (address.sessionId !== source.sessionId()) {
     return notFound();
   }
-  const image =
-    address.view === 'thumb'
-      ? await source.readThumbnail(address.key)
-      : await source.readPage(address.key);
+  const image = await readView(address, source);
   if (!image.ok) {
     return notFound();
   }

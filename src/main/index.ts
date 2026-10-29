@@ -137,15 +137,19 @@ async function start(): Promise<void> {
     return;
   }
 
-  // Схема изображений: страницы и миниатюры текущей сессии по ключу (KTD-38).
+  // Схема изображений: страницы и миниатюры текущей сессии по ключу (KTD-38); выправленные
+  // виды — по записи о коррекции через службу (M6, KTD-7, KTD-11).
   const thumbnails = createThumbnails(layoutOf(dataRoot).derivedDir, service, {
     limiter: derivedLimiter,
+    straightened: { resolve: (key) => service.straightenedFile(key) },
   });
   protocol.handle(PAGE_IMAGE_SCHEME, (request) =>
     handlePageImageRequest(request, {
       sessionId: () => service.sessionId(),
       readPage: (key) => service.readPage(key),
       readThumbnail: (key) => thumbnails.get(key),
+      readStraight: (key) => service.readStraightened(key),
+      readStraightThumbnail: (key) => thumbnails.getStraight(key),
     }),
   );
 

@@ -437,6 +437,7 @@ export function EditorRail({
       angle={entry.angle}
       lost={entry.lost}
       blank={entry.blank}
+      straighten={entry.straighten}
       position={position + 1}
       inSets={sets !== null}
       addedSet={entry.addedSet}

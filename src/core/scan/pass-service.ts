@@ -57,7 +57,11 @@ import { openSettingsStore, type SettingsStore } from '../storage/settings-store
 import { createSkewScores, type SkewScores } from '../storage/skew-scores';
 import { sameScanner, storedScannerOf, type StoredScanner } from '../storage/stored-scanner';
 import { ioOf, storageFailure } from '../storage/storage-fs';
-import { createStraightened, type Straightened } from '../storage/straightened';
+import {
+  createStraightened,
+  type Straightened,
+  type StraightenedFile,
+} from '../storage/straightened';
 import { pagePixelLimit } from '../storage/thumbnails';
 import { openUnclosedJobs, type UnclosedJobs } from '../storage/unclosed-jobs';
 import { assembleSession } from './assembly';
@@ -210,6 +214,13 @@ export interface PassService {
   /** Страницы текущей сессии — для схемы изображений и миниатюр. */
   pageInfo(key: string): PageInfo | null;
   readPage(key: string): Promise<Result<Uint8Array>>;
+  /**
+   * Выправленный файл страницы любой известной версии (M6, KTD-11) — единственный источник пути
+   * для миниатюр выправленных; `null` — выправленного вида нет.
+   */
+  straightenedFile(key: string): StraightenedFile | null;
+  /** Байты выправленной страницы для протокола картинок; размер сверяется с записью о коррекции. */
+  readStraightened(key: string): Promise<Result<Uint8Array>>;
 }
 
 interface Dependencies {
@@ -863,6 +874,22 @@ export function createPassService(
 
     pageInfo: (key) => store.pageInfo(key),
     readPage: (key) => store.readPage(key),
+    straightenedFile: (key) => straightened.resolve(key),
+
+    async readStraightened(key) {
+      const file = straightened.resolve(key);
+      if (file === null) {
+        return fail('pageUnavailable', { reason: 'notStraightened' });
+      }
+      try {
+        const bytes = await ioOf(options).fs.readFile(file.path);
+        return bytes.byteLength === file.bytes
+          ? ok(bytes)
+          : fail('pageUnavailable', { reason: 'straightened' });
+      } catch {
+        return fail('pageUnavailable', { reason: 'straightened' });
+      }
+    },
   };
 }
 

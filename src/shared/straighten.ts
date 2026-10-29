@@ -4,6 +4,7 @@
 // старте первого прохода. Статус страницы — чистая функция над снимком и фактами ядра, как
 // `blankFlagOf`: одно правило на сборку ядра и зеркало renderer'а. Порогов renderer не знает.
 
+import type { PageImageView } from './bridge';
 import type { SkewOutcome } from './skew';
 
 export const STRAIGHTEN_MODES = ['auto', 'off'] as const;
@@ -30,6 +31,8 @@ export type StraightenDeferredReason = (typeof STRAIGHTEN_DEFERRED_REASONS)[numb
 export interface StraightenFact {
   readonly outcome: SkewOutcome | null;
   readonly corrected: boolean;
+  /** Версия геометрии выправленного файла; `null` — файла нет. */
+  readonly version: number | null;
   readonly deferred: StraightenDeferredReason | null;
 }
 
@@ -61,14 +64,19 @@ export type StraightenStatus = (typeof STRAIGHTEN_STATUSES)[number] | null;
 export const STRAIGHTEN_REASONS = ['measure', 'nohelp', 'disk', 'fail'] as const;
 export type StraightenReason = (typeof STRAIGHTEN_REASONS)[number];
 
-/** Пометка страницы в ленте: статус и причина (только у `unmeasurable` и `deferred`). */
+/**
+ * Пометка страницы в ленте: статус, причина (только у `unmeasurable` и `deferred`) и версия
+ * геометрии выправленного файла (у `straightened` и `kept`) — она входит в адрес картинки
+ * (KTD-7), чтобы откат, пересчёт и смена версии меняли адрес.
+ */
 export interface StraightenMark {
   readonly status: StraightenStatus;
   readonly reason: StraightenReason | null;
+  readonly version: number | null;
 }
 
-export const NO_STRAIGHTEN_MARK: StraightenMark = { status: null, reason: null };
-const PENDING_MARK: StraightenMark = { status: 'pending', reason: null };
+export const NO_STRAIGHTEN_MARK: StraightenMark = { status: null, reason: null, version: null };
+const PENDING_MARK: StraightenMark = { status: 'pending', reason: null, version: null };
 
 /** Что нужно знать о странице, чтобы поставить статус (KTD-9). */
 export interface StraightenMarkInput {
@@ -103,20 +111,56 @@ export function straightenMarkOf(input: StraightenMarkInput): StraightenMark {
   }
   switch (fact.outcome) {
     case 'unmeasurable':
-      return { status: 'unmeasurable', reason: 'measure' };
+      return { status: 'unmeasurable', reason: 'measure', version: null };
     case 'notImproved':
-      return { status: 'unmeasurable', reason: 'nohelp' };
+      return { status: 'unmeasurable', reason: 'nohelp', version: null };
     case 'level':
-      return { status: 'level', reason: null };
+      return { status: 'level', reason: null, version: null };
     case 'willStraighten':
       if (fact.corrected) {
-        return { status: input.keepOriginal ? 'kept' : 'straightened', reason: null };
+        return {
+          status: input.keepOriginal ? 'kept' : 'straightened',
+          reason: null,
+          version: fact.version,
+        };
       }
       if (fact.deferred !== null) {
-        return { status: 'deferred', reason: fact.deferred === 'noSpace' ? 'disk' : 'fail' };
+        return {
+          status: 'deferred',
+          reason: fact.deferred === 'noSpace' ? 'disk' : 'fail',
+          version: null,
+        };
       }
       return PENDING_MARK;
   }
+}
+
+/** Адрес картинки страницы: вид, ключ и версия (только у выправленных видов). */
+export interface PageImageRef {
+  readonly view: PageImageView;
+  readonly key: string;
+  readonly version: number | null;
+}
+
+/**
+ * Какой вид картинки показывать (KTD-7) — одно правило на ленту, превью и полосу прохода:
+ * выправленный вид только при статусе «выправлена» и известной версии файла; откат, ожидание,
+ * режим «не выравнивать» и страница прохода без статуса — оригинал. Истина для пометки —
+ * статус в снимке; сервер при отсутствии файла отдаёт оригинал.
+ */
+export function pageImageViewOf(
+  page: { readonly key: string; readonly straighten?: StraightenMark },
+  size: 'page' | 'thumb',
+): PageImageRef {
+  const mark = page.straighten;
+  if (mark?.status === 'straightened' && mark.version !== null) {
+    return {
+      view: size === 'page' ? 'straight' : 'straight-thumb',
+      key: page.key,
+      version: mark.version,
+    };
+  }
+  return { view: size, key: page.key, version: null };
 }
 
 /**

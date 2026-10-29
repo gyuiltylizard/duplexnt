@@ -81,6 +81,8 @@ function setup(
     settleDerived: vi.fn(() => Promise.resolve()),
     pageInfo: vi.fn(() => null),
     readPage: vi.fn(() => Promise.resolve(fail('pageUnavailable'))),
+    straightenedFile: vi.fn(() => null),
+    readStraightened: vi.fn(() => Promise.resolve(fail('pageUnavailable'))),
   } satisfies PassService;
 
   let state: DiscoveryState = { scanners: [], failure: null };

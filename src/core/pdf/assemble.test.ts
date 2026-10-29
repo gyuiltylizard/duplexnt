@@ -5,6 +5,7 @@ import {
   pageFixture as fixture,
   pdfImageStreams as rawImageStreams,
 } from '../../../test/support/fixtures';
+import { straighten } from '../image/straighten';
 import { assemblePdf, jfifDpi, type PdfPageInput } from './assemble';
 
 // Сборка PDF (план M2, U5) — обязательная зона тест-политики: против реальных JPEG устройства
@@ -77,6 +78,49 @@ describe('сборка PDF: без перекодирования, порядо�
     const page = (await PDFDocument.load(pdf)).getPage(0);
     expect(page.getWidth()).toBeCloseTo((meta.width / 300) * 72, 3);
     expect(page.getHeight()).toBeCloseTo((meta.height / 300) * 72, 3);
+  });
+});
+
+describe('сборка PDF: выправленная страница (M6, U6; KTD-8)', () => {
+  const PROFILE = { kind: 'knots' as const, us: [0.2, 0.8], thetas: [0.1, 0.5] };
+
+  /** Выправленный JPEG фикстуры: плотность прохода записана в JFIF. */
+  const straightened = async (dpi: number) => {
+    const result = await straighten(fixture(1), PROFILE, { pixelLimit: null, dpi });
+    if (result === null) {
+      throw new Error('коррекция не удалась');
+    }
+    return result.jpeg;
+  };
+
+  it('размер страницы в пунктах — как у исходной при DPI прохода; поток — не исходник; /Rotate как у остальных', async () => {
+    const source = fixture(1);
+    const jpeg = await straightened(300);
+    const pdf = unwrap(
+      await assemblePdf([pageOf(source, { dpi: 300 }), pageOf(jpeg, { dpi: 300, angle: 180 })]),
+    );
+
+    const document = await PDFDocument.load(pdf);
+    const [original, corrected] = document.getPages();
+    expect(corrected?.getWidth()).toBeCloseTo(original?.getWidth() ?? 0, 3);
+    expect(corrected?.getHeight()).toBeCloseTo(original?.getHeight() ?? 0, 3);
+    expect(corrected?.getRotation().angle).toBe(180);
+    const streams = await imageStreams(pdf);
+    expect(Buffer.from(streams[0] ?? []).equals(source)).toBe(true);
+    expect(Buffer.from(streams[1] ?? []).equals(source)).toBe(false);
+    expect(Buffer.from(streams[1] ?? []).equals(jpeg)).toBe(true);
+  });
+
+  it('защитная ветка: без DPI прохода плотность берётся из JFIF выправленного файла', async () => {
+    const jpeg = await straightened(150);
+    expect(jfifDpi(jpeg)).toBe(150);
+    const meta = await sharp(jpeg).metadata();
+
+    const page = (
+      await PDFDocument.load(unwrap(await assemblePdf([pageOf(jpeg, { dpi: null })])))
+    ).getPage(0);
+    expect(page.getWidth()).toBeCloseTo((meta.width / 150) * 72, 3);
+    expect(page.getHeight()).toBeCloseTo((meta.height / 150) * 72, 3);
   });
 });
 

@@ -11,10 +11,12 @@ import {
   isPairKind,
   isBacksKind,
   pageImageUrl,
+  pageImageViewOf,
   type AssembledPage,
   type BlankFlag,
   type PageAngle,
   type PassKind,
+  type StraightenMark,
 } from '@shared';
 import type { TFunction } from 'i18next';
 import { useImageLoad } from '../components/useImageLoad';
@@ -107,6 +109,7 @@ export const EditorThumb = memo(function EditorThumb({
   angle,
   lost,
   blank,
+  straighten,
   position,
   inSets,
   addedSet,
@@ -134,6 +137,8 @@ export const EditorThumb = memo(function EditorThumb({
   readonly lost: boolean;
   /** Пустой оборот из ядра (M4, R10): помечена или скрыта (показана переключателем). */
   readonly blank: BlankFlag;
+  /** Выравнивание из ядра (M6, KTD-7, KTD-9): по статусу выбирается вид миниатюры. */
+  readonly straighten: StraightenMark;
   /** Номер по порядку в показанной ленте, с единицы — сквозной через документы и группы. */
   readonly position: number;
   /** Режим наборов: подпись — «что это за страница» теми же словами, что ДЕТАЛИ (KTD9). */
@@ -164,6 +169,7 @@ export const EditorThumb = memo(function EditorThumb({
   // Поворот — анимация на дельту команды (B-4); конечный угол — классами.
   const imgRef = useRef<HTMLImageElement>(null);
   useTurnMotion(imgRef, pageKey, angle, 'thumb');
+  const view = pageImageViewOf({ key: pageKey, straighten }, 'thumb');
 
   const click = (event: MouseEvent<HTMLElement>): void => {
     onPick(pageKey, modeOf(event));
@@ -208,7 +214,7 @@ export const EditorThumb = memo(function EditorThumb({
           draggable={false}
           loading="lazy"
           decoding="async"
-          src={pageImageUrl(sessionId, 'thumb', pageKey)}
+          src={pageImageUrl(sessionId, view.view, view.key, view.version)}
           onLoad={image.onLoad}
           onError={image.onError}
         />

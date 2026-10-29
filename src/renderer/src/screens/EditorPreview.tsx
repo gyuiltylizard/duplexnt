@@ -1,6 +1,6 @@
 import { useRef, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { pageImageUrl, type AssembledPage, type BlankFlag } from '@shared';
+import { pageImageUrl, pageImageViewOf, type AssembledPage, type BlankFlag } from '@shared';
 import { multiline } from '../components/multiline';
 import { useImageLoad } from '../components/useImageLoad';
 import { useTurnMotion } from './useTurnMotion';
@@ -11,6 +11,10 @@ import { useTurnMotion } from './useTurnMotion';
  * оборот (S8 M4) — скан как есть, пустоту проверяют глазами, пилюля «ПУСТАЯ СТОРОНА» в углу.
  * Перемонтируется на каждую страницу (`key` по ключу) — так требует `useImageLoad`.
  */
+/** Аргументы адреса из выбранного вида (KTD-7): вид, ключ, версия. */
+const viewArgs = (ref: ReturnType<typeof pageImageViewOf>) =>
+  [ref.view, ref.key, ref.version] as const;
+
 export function EditorPreview({
   sessionId,
   entry,
@@ -78,7 +82,7 @@ export function EditorPreview({
       <img
         className="preview__img"
         alt={t('thumb.alt', { number: position })}
-        src={pageImageUrl(sessionId, 'page', entry.key)}
+        src={pageImageUrl(sessionId, ...viewArgs(pageImageViewOf(entry, 'page')))}
         onLoad={image.onLoad}
         onError={image.onError}
       />

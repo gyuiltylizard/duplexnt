@@ -20,6 +20,7 @@ const B = (index: number): string => keyOf(2, index);
 const fact = (overrides: Partial<StraightenFact>): StraightenFact => ({
   outcome: null,
   corrected: false,
+  version: overrides.corrected === true ? 1 : null,
   deferred: null,
   ...overrides,
 });
@@ -85,7 +86,7 @@ describe('сборка: статусы выравнивания (M6, KTD-9)', ()
     const hidden = assembleSession(pairs, new Map([[B(1), true]]), facts);
     expect(hidden.order.find((page) => page.key === B(1))).toMatchObject({
       blank: 'hidden',
-      straighten: { status: null, reason: null },
+      straighten: { status: null, reason: null, version: null },
     });
     expect(hidden.straighten.total).toBe(3);
   });
@@ -116,10 +117,10 @@ describe('сборка: статусы выравнивания (M6, KTD-9)', ()
 
     const assembly = assembleSession(session, undefined, facts);
     expect(Object.fromEntries(assembly.order.map((page) => [page.key, page.straighten]))).toEqual({
-      [F(1)]: { status: 'kept', reason: null },
-      [B(2)]: { status: 'level', reason: null },
-      [F(2)]: { status: 'deferred', reason: 'disk' },
-      [B(1)]: { status: 'deferred', reason: 'fail' },
+      [F(1)]: { status: 'kept', reason: null, version: 1 },
+      [B(2)]: { status: 'level', reason: null, version: null },
+      [F(2)]: { status: 'deferred', reason: 'disk', version: null },
+      [B(1)]: { status: 'deferred', reason: 'fail', version: null },
     });
     expect(assembly.straighten).toMatchObject({
       kept: 1,

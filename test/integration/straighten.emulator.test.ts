@@ -1,7 +1,7 @@
 import { readdir, readFile, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { StraightenStatus } from '../../src/shared';
+import { EMPTY_EDITS, pageImageViewOf, type StraightenStatus } from '../../src/shared';
 import type { ScanJobLimits } from '../../src/core/escl/scan-job';
 import { inlineImageWorker } from '../../src/core/image/image-worker';
 import type { PassService, PassServiceOptions } from '../../src/core/scan/pass-service';
@@ -197,5 +197,69 @@ describe('выравнивание на эмуляторе: измерение �
     await service.settleDerived();
     expect(service.snapshot().session).toBeNull();
     expect(await readdir(layoutOf(root).derivedDir).catch(() => [])).toEqual([]);
+  });
+
+  it('AE3: «Оставить оригинал» — статус kept, вид картинки и байты PDF — исходник; «Вернуть» возвращает выправленный', async () => {
+    const { root, service } = await connectService(
+      { trays: [['fan-text-gray-300', 'photo-gray-300']] },
+      OPTIONS,
+      { imageWorker: inlineImageWorker() },
+    );
+    await scanned(service, 2);
+    await expect
+      .poll(() => service.snapshot().assembly?.straighten.pending, {
+        timeout: 20_000,
+        interval: 50,
+      })
+      .toBe(0);
+    const page = service.snapshot().assembly?.order[0];
+    expect(page).toMatchObject({ key: F(1), straighten: { status: 'straightened', version: 1 } });
+    expect(pageImageViewOf(page ?? { key: F(1) }, 'thumb')).toEqual({
+      view: 'straight-thumb',
+      key: F(1),
+      version: 1,
+    });
+
+    unwrap(await service.setEdits({ ...EMPTY_EDITS, keepOriginal: [F(1)] }, {}));
+    const kept = service.snapshot().assembly?.order[0];
+    expect(kept?.straighten).toEqual({ status: 'kept', reason: null, version: 1 });
+    expect(pageImageViewOf(kept ?? { key: F(1) }, 'page').view).toBe('page');
+    expect(service.snapshot().assembly?.hasEdits).toBe(true);
+
+    const pdf = await saveSingle(service, root);
+    const streams = (await pdfImageStreams(await readFile(pdf))).map((stream) =>
+      Buffer.from(stream.getContents()),
+    );
+    const pagesDir = layoutOf(root).pagesDir;
+    expect(streams[0]?.equals(await readFile(join(pagesDir, `${F(1)}.jpg`)))).toBe(true);
+    expect(streams[1]?.equals(await readFile(join(pagesDir, `${F(2)}.jpg`)))).toBe(true);
+
+    unwrap(await service.setEdits(EMPTY_EDITS, {}));
+    expect(service.snapshot().assembly?.order[0]?.straighten.status).toBe('straightened');
+    await service.settleDerived();
+  }, 40_000);
+
+  it('AE6: режим «не выравнивать» — статусов нет, оценок в derived/ нет, PDF байт в байт как до M6', async () => {
+    const { root, service } = await connectService(
+      { trays: [['fan-text-gray-300', 'fan-table-gray-300']] },
+      OPTIONS,
+      { imageWorker: inlineImageWorker() },
+    );
+    unwrap(await service.setStraightenMode('off'));
+    await scanned(service, 2);
+    expect(service.snapshot().session?.straighten).toBe('off');
+
+    await untilScored(() => service.snapshot());
+    expect(statusesOf(service)).toEqual({ [F(1)]: null, [F(2)]: null });
+    expect(service.snapshot().straightenProgress).toBeNull();
+    const pdf = await saveSingle(service, root);
+    const streams = (await pdfImageStreams(await readFile(pdf))).map((stream) =>
+      Buffer.from(stream.getContents()),
+    );
+    const pagesDir = layoutOf(root).pagesDir;
+    expect(streams[0]?.equals(await readFile(join(pagesDir, `${F(1)}.jpg`)))).toBe(true);
+    expect(streams[1]?.equals(await readFile(join(pagesDir, `${F(2)}.jpg`)))).toBe(true);
+    const sessionId = service.snapshot().session?.id ?? '';
+    expect(await readdir(join(layoutOf(root).derivedDir, sessionId)).catch(() => [])).toEqual([]);
   });
 });

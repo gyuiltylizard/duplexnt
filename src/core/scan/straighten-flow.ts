@@ -82,10 +82,10 @@ export function straightenFactsOf(
   for (const pass of session.passes) {
     for (const page of pass.pages) {
       const outcome = verdicts.get(page.key)?.outcome ?? null;
-      const corrected = straightened.resolve(page.key) !== null;
+      const version = straightened.resolve(page.key)?.version ?? null;
       const deferred = queue.deferred.get(page.key) ?? null;
-      if (outcome !== null || corrected || deferred !== null) {
-        facts.set(page.key, { outcome, corrected, deferred });
+      if (outcome !== null || version !== null || deferred !== null) {
+        facts.set(page.key, { outcome, corrected: version !== null, version, deferred });
       }
     }
   }

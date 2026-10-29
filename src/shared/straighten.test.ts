@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   NO_STRAIGHTEN,
   NO_STRAIGHTEN_MARK,
+  pageImageViewOf,
   straightenMarkOf,
   straightenSummaryOf,
   type StraightenFact,
@@ -12,9 +13,11 @@ import {
 // Статус страницы и сводка (план M6, U12; KTD-9): одно правило на ядро и зеркало renderer'а.
 // Табличный тест режим × факты × откат; `null` в сводку не входит, отложенные — не «ждут».
 
+/** Факт; у «есть файл» версия — 1, если не задана иная. */
 const fact = (overrides: Partial<StraightenFact> = {}): StraightenFact => ({
   outcome: null,
   corrected: false,
+  version: overrides.corrected === true ? 1 : null,
   deferred: null,
   ...overrides,
 });
@@ -28,10 +31,11 @@ const input = (overrides: Partial<StraightenMarkInput> = {}): StraightenMarkInpu
   ...overrides,
 });
 
-const mark = (status: StraightenMark['status'], reason: StraightenMark['reason'] = null) => ({
-  status,
-  reason,
-});
+const mark = (
+  status: StraightenMark['status'],
+  reason: StraightenMark['reason'] = null,
+  version: number | null = null,
+): StraightenMark => ({ status, reason, version });
 
 describe('статус страницы (KTD-9)', () => {
   it.each<[string, StraightenMarkInput, StraightenMark]>([
@@ -73,14 +77,14 @@ describe('статус страницы (KTD-9)', () => {
       mark('pending'),
     ],
     [
-      'выправлять, файл есть — выправлена',
-      input({ fact: fact({ outcome: 'willStraighten', corrected: true }) }),
-      mark('straightened'),
+      'выправлять, файл есть — выправлена с версией файла',
+      input({ fact: fact({ outcome: 'willStraighten', corrected: true, version: 3 }) }),
+      mark('straightened', null, 3),
     ],
     [
       'выправлена, откат пользователя — оригинал оставлен',
       input({ keepOriginal: true, fact: fact({ outcome: 'willStraighten', corrected: true }) }),
-      mark('kept'),
+      mark('kept', null, 1),
     ],
     [
       'откат без файла не действует: ждёт',
@@ -105,7 +109,7 @@ describe('статус страницы (KTD-9)', () => {
     [
       'отложена, но файл прежней версии есть — выправлена',
       input({ fact: fact({ outcome: 'willStraighten', corrected: true, deferred: 'failed' }) }),
-      mark('straightened'),
+      mark('straightened', null, 1),
     ],
   ])('%s', (_name, given, expected) => {
     expect(straightenMarkOf(given)).toEqual(expected);
@@ -136,6 +140,28 @@ describe('сводка по ленте', () => {
       total: 8,
       reasons: { measure: 1, nohelp: 1, disk: 1, fail: 0 },
     });
+  });
+
+  it('вид картинки: выправленный — только у «выправлена» с версией; остальным и странице прохода — оригинал', () => {
+    const page = (status: StraightenMark['status'], version: number | null = 1) => ({
+      key: 'p01-s01-0001',
+      straighten: mark(status, null, version),
+    });
+    expect(pageImageViewOf(page('straightened', 2), 'page')).toEqual({
+      view: 'straight',
+      key: 'p01-s01-0001',
+      version: 2,
+    });
+    expect(pageImageViewOf(page('straightened', 2), 'thumb').view).toBe('straight-thumb');
+    expect(pageImageViewOf(page('straightened', null), 'thumb').view).toBe('thumb');
+    for (const status of ['kept', 'level', 'pending', 'deferred', 'unmeasurable', null] as const) {
+      expect(pageImageViewOf(page(status), 'page'), String(status)).toEqual({
+        view: 'page',
+        key: 'p01-s01-0001',
+        version: null,
+      });
+    }
+    expect(pageImageViewOf({ key: 'p01-s01-0001' }, 'thumb').view).toBe('thumb');
   });
 
   it('пустая лента и режим «не выравнивать» — нули', () => {
