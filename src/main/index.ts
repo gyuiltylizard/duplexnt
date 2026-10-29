@@ -14,6 +14,7 @@ import {
   createCommands,
   createThumbnails,
   layoutOf,
+  limiterOf,
   openPassService,
   openWindowStateStore,
 } from '@core';
@@ -79,6 +80,9 @@ function loadRenderer(window: BrowserWindow): void {
 // остальное. Блокировка лежит в `userData`, поэтому каталог `dev` выбирается до неё.
 const dataRoot = resolveDataRoot(app);
 
+/** Задач над производным одновременно (KTD-4): два декода `sharp` рядом с приёмом страниц. */
+const DERIVED_CONCURRENCY = 2;
+
 let mainWindow: BrowserWindow | null = null;
 
 // Исключение при запуске оставило бы процесс без окна, но с блокировкой экземпляра: приложение
@@ -117,9 +121,13 @@ async function start(): Promise<void> {
   });
   const send = createEventSender(window);
 
+  // Один лимитер на всё производное в main (M6, KTD-4): миниатюры, оценки пустоты, измерение
+  // перекоса — не больше двух декодов разом рядом с `fsync` приёма страницы.
+  const derivedLimiter = limiterOf(DERIVED_CONCURRENCY);
   let service;
   try {
     service = await openPassService(dataRoot, {
+      derivedLimiter,
       onChange: (seq) => {
         send('snapshotChanged', { seq });
       },
@@ -129,13 +137,19 @@ async function start(): Promise<void> {
     return;
   }
 
-  // Схема изображений: страницы и миниатюры текущей сессии по ключу (KTD-38).
-  const thumbnails = createThumbnails(layoutOf(dataRoot).derivedDir, service);
+  // Схема изображений: страницы и миниатюры текущей сессии по ключу (KTD-38); выправленные
+  // виды — по записи о коррекции через службу (M6, KTD-7, KTD-11).
+  const thumbnails = createThumbnails(layoutOf(dataRoot).derivedDir, service, {
+    limiter: derivedLimiter,
+    straightened: service.straightenedFiles(),
+  });
   protocol.handle(PAGE_IMAGE_SCHEME, (request) =>
     handlePageImageRequest(request, {
       sessionId: () => service.sessionId(),
       readPage: (key) => service.readPage(key),
       readThumbnail: (key) => thumbnails.get(key),
+      readStraight: (key) => service.readStraightened(key),
+      readStraightThumbnail: (key) => thumbnails.getStraight(key),
     }),
   );
 
@@ -178,6 +192,9 @@ async function start(): Promise<void> {
   app.on('will-quit', () => {
     startupCheck.abort();
     commands.dispose();
+    // Измерения перекоса в полёте отменяются (M6, KTD-12): страница без вердикта дождётся
+    // следующего запуска, кэш закрытой сессии не пересоздаётся.
+    void service.settleDerived();
   });
 
   loadRenderer(window);

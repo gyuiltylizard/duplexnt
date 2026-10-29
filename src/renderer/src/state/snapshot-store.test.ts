@@ -5,6 +5,8 @@ import { createSnapshotStore, type SnapshotApi } from './snapshot-store';
 function makeSnapshot(seq: number): Snapshot {
   return {
     blankMode: 'hide',
+    straightenMode: 'auto',
+    straightenProgress: null,
     seenHints: [],
     seq,
     scanner: { kind: 'none' },

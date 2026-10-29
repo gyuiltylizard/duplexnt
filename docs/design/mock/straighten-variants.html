@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Duplexn't — M6 выравнивание: варианты пометок</title>
+    <link rel="stylesheet" href="../reference/fonts/fonts.css" />
+    <link rel="stylesheet" href="../reference/app.css" />
+    <link rel="stylesheet" href="../reference/wrapper.css" />
+    <link rel="stylesheet" href="variants.css" />
+    <link rel="stylesheet" href="straighten-variants.css" />
+  </head>
+  <body class="ref-page mv-page">
+    <header class="mv-head">
+      <div>
+        <div class="kicker">M6 · ВЫРАВНИВАНИЕ · СТАДИЯ ВАРИАНТОВ</div>
+        <h1 class="mv-head__title">Пометки «выровнено / не выровнено» и индикатор обработки</h1>
+        <p class="mv-head__lead">Лента в настоящую ширину (288 px), карточки в настоящем размере. Рядом — «ПУСТО», «об», «Д1», выделение и показанная скрытая. Косой скан изображён наклоном картинки. Щелчок по выровненной карточке — «Оставить оригинал», по откаченной — «Выровнять»: вид меняется на месте. Откаченная (стр. 11) пометки не получает — как в плане; вернёмся к этому в контексте. Выберите по одному в каждой группе, например «1b + 2a».</p>
+      </div>
+      <div class="mv-head__toggles">
+        <button type="button" class="btn btn--primary btn--small" id="sv-run">▶ Обработка заново</button>
+        <label class="toggle-row mv-reduce">
+          <span class="toggle"><input class="toggle__input" id="sv-reduce" type="checkbox" autocomplete="off" /><span class="toggle__track" aria-hidden="true"></span></span>
+          <span class="toggle-row__label">prefers-reduced-motion</span>
+        </label>
+        <label class="toggle-row mv-reduce">
+          <span class="toggle"><input class="toggle__input" id="sv-slow" type="checkbox" autocomplete="off" /><span class="toggle__track" aria-hidden="true"></span></span>
+          <span class="toggle-row__label">замедлить ×4</span>
+        </label>
+        <span class="mv-controls__state" id="sv-state"></span>
+      </div>
+    </header>
+
+    <section class="mv-group" id="g3">
+      <div class="mv-group__head">
+        <h2 class="mv-group__title"><span class="mv-group__num">3</span> Глиф «не выровнено» для 1b</h2>
+        <p class="mv-group__note">Выбрано <a href="#1b">1b</a> + <a href="#2a">2a</a>. Глиф «выровнено» прежний — три ровные строки; ниже — замены веера. Над лентой — пара «выровнено · не выровнено» в настоящем размере и ×5, чтобы судить о форме. Ленты живые: обработка, щелчок по карточке.</p>
+      </div>
+      <div class="mv-row">
+        <article class="mv-opt sv-opt" id="3a">
+          <div class="mv-opt__head"><span class="mv-badge">3a</span><span class="mv-opt__name">Наклон</span></div>
+          <div class="sv-spec" data-gl="tilt"></div>
+          <div class="sv-rail" data-mark="b" data-wait="a" data-gl="tilt" data-group="3"></div>
+          <p class="mv-opt__text">Три параллельные строки под углом ~13°. Прямее всех говорит «лист остался косым»; отличие от ровных видно сразу, даже краем глаза.</p>
+        </article>
+        <article class="mv-opt sv-opt" id="3b">
+          <div class="mv-opt__head"><span class="mv-badge">3b</span><span class="mv-opt__name">Наклон, как абзац</span></div>
+          <div class="sv-spec" data-gl="tilt-text"></div>
+          <div class="sv-rail" data-mark="b" data-wait="a" data-gl="tilt-text" data-group="3"></div>
+          <p class="mv-opt__text">Тот же наклон, последняя строка короче — абзац на странице, а не штриховка. Пару «выровнено · не выровнено» тогда тоже стоит рисовать с короткой строкой (здесь ровный глиф прежний).</p>
+        </article>
+        <article class="mv-opt sv-opt" id="3c">
+          <div class="mv-opt__head"><span class="mv-badge">3c</span><span class="mv-opt__name">Волна</span></div>
+          <div class="sv-spec" data-gl="wave"></div>
+          <div class="sv-rail" data-mark="b" data-wait="a" data-gl="wave" data-group="3"></div>
+          <p class="mv-opt__text">Три горизонтальные волнистые строки — «строки шли неровно», без конкретного угла. Мягче наклона; на 10 px волна читается как рябь, различимость ниже, чем у 3a.</p>
+        </article>
+        <article class="mv-opt sv-opt" id="3d">
+          <div class="mv-opt__head"><span class="mv-badge">3d</span><span class="mv-opt__name">Наклон и волна</span></div>
+          <div class="sv-spec" data-gl="tilt-wave"></div>
+          <div class="sv-rail" data-mark="b" data-wait="a" data-gl="tilt-wave" data-group="3"></div>
+          <p class="mv-opt__text">Волнистые строки под углом ~10°. Ближе всего к настоящему косому скану; самый «рисованный» из четырёх — на 10 px форма на пределе.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="mv-group" id="g1">
+      <div class="mv-group__head">
+        <h2 class="mv-group__title"><span class="mv-group__num">1</span> Пометка на миниатюре</h2>
+        <p class="mv-group__note">Одна пометка «не выровнено» на все причины (не по чему мерить, не помогло, мало места, сбой) — причина в подсказке при наведении и в подписи для скринридера. У ровной, откаченной и пустой — ничего.</p>
+        <div class="mv-controls">
+          <span class="sv-ctl-label">Обработка в этой группе — как</span>
+          <div class="segments sv-seg" role="radiogroup" aria-label="Индикатор обработки в группе 1" data-target="wait1">
+            <button type="button" class="segment segment--selected" role="radio" aria-checked="true" data-value="a">2a</button>
+            <button type="button" class="segment" role="radio" aria-checked="false" data-value="b">2b</button>
+            <button type="button" class="segment" role="radio" aria-checked="false" data-value="c">2c</button>
+          </div>
+        </div>
+      </div>
+      <div class="mv-row">
+        <article class="mv-opt sv-opt" id="1a">
+          <div class="mv-opt__head"><span class="mv-badge">1a</span><span class="mv-opt__name">Пилюля на листе</span></div>
+          <div class="sv-rail" data-mark="a" data-group="1"></div>
+          <p class="mv-opt__text">Пилюля в левом нижнем углу листа — форма «ПУСТО» и «ПУСТАЯ СТОРОНА»: mono 8,5 px капсом на бумаге. «ВЫРОВНЕНО» — сплошная волосяная рамка, «НЕ ВЫРОВНЕНО» — пунктир и тон бледнее. Читается без расшифровки; цена — слово на большей части ленты и перекрытый угол скана.</p>
+        </article>
+        <article class="mv-opt sv-opt" id="1b">
+          <div class="mv-opt__head"><span class="mv-badge">1b</span><span class="mv-opt__name">Глиф в подвале</span></div>
+          <div class="sv-rail" data-mark="b" data-group="1"></div>
+          <p class="mv-opt__text">Значок 10×8 после тегов: три ровные строки — выровнено, три строки веером — не выровнено (то, что осталось на листе). Скан не перекрыт, место в подвале уже есть; ряд «7 · Д1 · ≡» читается как одна строка фактов. Значение нужно один раз узнать — из подсказки или инспектора.</p>
+        </article>
+        <article class="mv-opt sv-opt" id="1c">
+          <div class="mv-opt__head"><span class="mv-badge">1c</span><span class="mv-opt__name">Уголок листа</span></div>
+          <div class="sv-rail" data-mark="c" data-group="1"></div>
+          <p class="mv-opt__text">Треугольник 12 px в правом нижнем углу листа: залитый тоном акцента — выровнено, контурный — не выровнено. Не спорит со split-баром сверху и «ПУСТО» в центре; по ленте читается как «эти листы тронуты». Контур на светлом скане различим хуже, чем заливка.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="mv-group" id="g2">
+      <div class="mv-group__head">
+        <h2 class="mv-group__title"><span class="mv-group__num">2</span> Индикатор «в обработке»</h2>
+        <p class="mv-group__note">«Обработка заново» ставит в обработку всё, кроме пустых и откаченной, и отпускает по странице раз в 0,8 с. Индикаторы всех карточек идут в одной фазе — лента «дышит» целиком, а не мерцает вразнобой. Уходит индикатор проявлением 150 мс, на его место приходит пометка; размеры карточки не меняются.</p>
+        <div class="mv-controls">
+          <span class="sv-ctl-label">Пометки в этой группе — как</span>
+          <div class="segments sv-seg" role="radiogroup" aria-label="Пометки в группе 2" data-target="mark2">
+            <button type="button" class="segment segment--selected" role="radio" aria-checked="true" data-value="a">1a</button>
+            <button type="button" class="segment" role="radio" aria-checked="false" data-value="b">1b</button>
+            <button type="button" class="segment" role="radio" aria-checked="false" data-value="c">1c</button>
+          </div>
+        </div>
+      </div>
+      <div class="mv-row">
+        <article class="mv-opt sv-opt" id="2a">
+          <div class="mv-opt__head"><span class="mv-badge">2a</span><span class="mv-opt__name">Точки в углу карточки</span></div>
+          <div class="sv-rail" data-wait="a" data-group="2"></div>
+          <p class="mv-opt__text">Три точки 3 px справа в подвале, <code>pulse</code> 1,2 с со сдвигом 200 мс — родня ожиданию первой страницы на <code>scan</code>. Самый узнаваемый «идёт работа», на лист не ложится. Reduced-motion: три ровные точки на 55 %.</p>
+        </article>
+        <article class="mv-opt sv-opt" id="2b">
+          <div class="mv-opt__head"><span class="mv-badge">2b</span><span class="mv-opt__name">Полоса по нижнему краю листа</span></div>
+          <div class="sv-rail" data-wait="b" data-group="2"></div>
+          <p class="mv-opt__text">Дорожка 2 px по низу листа и отрезок, который не спеша проходит её за 3,8 с (<code>--duration-loop-long</code>). Тише точек, читается как «процесс над этим листом». На десятке карточек — ровная рябь. Reduced-motion: только неподвижная дорожка.</p>
+        </article>
+        <article class="mv-opt sv-opt" id="2c">
+          <div class="mv-opt__head"><span class="mv-badge">2c</span><span class="mv-opt__name">Приглушённый скан</span></div>
+          <div class="sv-rail" data-wait="c" data-group="2"></div>
+          <p class="mv-opt__text">Ни одного нового элемента: скан медленно дышит между 50 и 80 % (3,8 с), с приходом статуса проявляется и выпрямляется одним движением. Объясняет «почему ещё косая» лучше всех; но приглушение уже значит «скрытая пустая» — различает только пунктир рамки (стр. 12). Reduced-motion: ровные 55 %.</p>
+        </article>
+      </div>
+    </section>
+
+    <script src="straighten-variants.js"></script>
+  </body>
+</html>

@@ -48,6 +48,7 @@ function withSet(
 ): Snapshot {
   const session: Session = {
     blankMode,
+    straighten: 'off',
     id: 'session.x',
     backsDeclined: false,
     saved: false,
@@ -207,6 +208,7 @@ describe('M4.5: посадка пары набора (KTD7; handoff S6, S10)', (
       scanner: READY,
       session: {
         blankMode: 'keep',
+        straighten: 'off',
         id: 'session.x',
         backsDeclined: false,
         saved: false,

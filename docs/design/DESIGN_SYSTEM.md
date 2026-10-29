@@ -307,6 +307,7 @@ flip / merge / editor, модалки device / add / save / mismatch / newscan).
 - Multi-selected: граница `--color-border-inverse`, `box-shadow:--shadow-ring-selected`, фон `--color-bg-selected`.
 - Dragging: `opacity:--opacity-dragging`. Drop-маркер: полоса `--border-width-thick` шириной, `--radius-xs`, `--color-accent`, слева/справа от карточки на 7 px.
 - Blank: по центру листа «ПУСТО» `--font-size-xxs --font-family-mono --color-text-faint --tracking-wide`.
+- Straight (M6): один абсолютный слот у правого края подвала (`right --space-4`, вне потока — подвал не сдвигается): глиф `straight-glyph` 10×9, штрих `currentColor` в `--color-text-subtle` («выровнено» — три ровные строки, «не выровнено» — строки волной), либо три точки обработки с общим циклом `--duration-loop` и фазой `--straight-phase = −(now mod цикл)`; появление — проявление за `--duration-fast`. Та же пилюля-форма, что у «ПУСТАЯ СТОРОНА», в превью: «ВЫРОВНЕНО» / «НЕ ВЫРОВНЕНО» / «ВЫРАВНИВАЕТСЯ».
 - Hover: split-бар (см. ниже) появляется `opacity 0→1` за `--duration-fast`.
 
 ### Разделитель «Новый документ»

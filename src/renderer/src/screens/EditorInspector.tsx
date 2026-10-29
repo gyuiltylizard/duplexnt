@@ -12,6 +12,9 @@ import {
 import type { TFunction } from 'i18next';
 import { noteOf, toneOf, whatOf } from '../state/page-text';
 import type { ShownDocument } from '../state/shown';
+import { straightFactText, type StraightSelection } from '../state/straighten-text';
+import { StraightCheck, StraightSection, straightSectionDue } from './EditorInspectorStraight';
+import { Check } from './InspectorCheck';
 import { useHintAttention } from './useHintAttention';
 
 // Инспектор редактора (handoff M3, S11–S13; M3.5, S6–S7; M3.6, S8–S9): ДЕТАЛИ текущей страницы,
@@ -22,25 +25,9 @@ import { useHintAttention } from './useHintAttention';
 // заголовок и пояснение ДЕТАЛЕЙ — по режиму (KTD9), теми же словами, что подпись миниатюры и
 // сводка `add`. M4 (handoff M4, S9–S11): секция «ПУСТОЙ ОБОРОТ» с действием «Это не пустая
 // страница» у пустой текущей, факт «Содержимое» в ДЕТАЛЯХ, пункт ПРОВЕРКИ о пустых; список
-// документов — в координатах показанной ленты.
-
-/** Строка ПРОВЕРКИ: ✓ — всё хорошо, • — стоит взглянуть. */
-function Check({
-  warning,
-  children,
-}: {
-  readonly warning: boolean;
-  readonly children: ReactNode;
-}): ReactNode {
-  return (
-    <li className={warning ? 'check check--warning' : 'check'}>
-      <span className="check__icon" aria-hidden="true">
-        {warning ? '•' : '✓'}
-      </span>
-      <span className="check__text">{children}</span>
-    </li>
-  );
-}
+// документов — в координатах показанной ленты. M6 (handoff M6): секция «ВЫРАВНИВАНИЕ» после
+// ДЕТАЛЕЙ с «Оставить оригинал» / «Выровнять», факт «Выравнивание», пункт ПРОВЕРКИ
+// (`EditorInspectorStraight.tsx`).
 
 /**
  * Пункт ПРОВЕРКИ о лицах и оборотах (R22): наборы — точка со счётчиками, иначе галочка с числом
@@ -211,6 +198,8 @@ function Details({
   const note = noteOf(t, entry, mode, frontsOnly, origin);
   const back = entry.side === 'back';
   const content = contentText(t, entry, notBlank);
+  // M6: факт «Выравнивание» — только при статусе (у пустой, потерянной и при «Не трогать» нет).
+  const straight = straightFactText(t, entry.straighten);
 
   let facts: ReactNode;
   if (mode === 'sets' && sets !== null) {
@@ -321,6 +310,7 @@ function Details({
         <dl className="facts">
           {facts}
           {content !== null && <Fact name={t('inspector.fact.content')} value={content} />}
+          {straight !== null && <Fact name={t('inspector.fact.straight')} value={straight} />}
           <Fact
             name={t('inspector.fact.angle')}
             value={t('inspector.fact.angleValue', { angle: entry.angle })}
@@ -344,8 +334,11 @@ export function EditorInspector({
   notBlank,
   locked,
   hintSeen,
+  straight,
   onPickDocument,
   onNotBlank,
+  onKeepOriginal,
+  onRestoreStraight,
   onMouseDown,
   onRevert,
 }: {
@@ -370,9 +363,14 @@ export function EditorInspector({
   readonly locked: boolean;
   /** Подсказка про границы (Ctrl/Shift) уже показывалась с привлечением внимания (B-4). */
   readonly hintSeen: boolean;
+  /** Выделение по статусам выравнивания (M6): секция ВЫРАВНИВАНИЕ и подписи её кнопок. */
+  readonly straight: StraightSelection;
   readonly onPickDocument: (document: number) => void;
   /** «Это не пустая страница» (M4, S9) — пометка текущей одним шагом undo. */
   readonly onNotBlank: () => void;
+  /** «Оставить оригинал» / «Выровнять» (M6) — на текущую или выделение, один шаг undo. */
+  readonly onKeepOriginal: () => void;
+  readonly onRestoreStraight: () => void;
   /** Клик по поверхности инспектора — сжатие мультивыделения решает экран (M3.5, R21). */
   readonly onMouseDown?: (event: MouseEvent<HTMLElement>) => void;
   /** «Вернуть» — открыть подтверждение `revert`. */
@@ -385,6 +383,7 @@ export function EditorInspector({
   const docsId = useId();
   const checksId = useId();
   const blankId = useId();
+  const straightId = useId();
   const listed = assembly.order.length === 0 ? [] : documents;
   // Подсказка про границы — при первом показе на установку мигает (B-4).
   const noteRef = useRef<HTMLParagraphElement>(null);
@@ -430,6 +429,21 @@ export function EditorInspector({
           </button>
         </section>
       )}
+
+      {/* M6: при «Не трогать» секции нет; у пустой статуса нет — с секцией пустого не пересекается. */}
+      {entry !== undefined &&
+        assembly.straighten.mode === 'auto' &&
+        straightSectionDue(t, straight, entry.straighten) && (
+          <StraightSection
+            t={t}
+            headingId={straightId}
+            selection={straight}
+            current={entry.straighten}
+            locked={locked}
+            onKeep={onKeepOriginal}
+            onRestore={onRestoreStraight}
+          />
+        )}
 
       <section className="inspector__section" aria-labelledby={docsId}>
         <div className="inspector__heading">
@@ -496,6 +510,7 @@ export function EditorInspector({
         <ul className="checks">
           <PairsCheck t={t} assembly={assembly} />
           <BlankCheck t={t} blank={assembly.blank} inSets={inSets} />
+          <StraightCheck t={t} straighten={assembly.straighten} />
           <Check warning={assembly.orderEdited}>
             {assembly.orderEdited
               ? t('inspector.check.orderEdited')

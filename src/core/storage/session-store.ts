@@ -8,6 +8,7 @@ import {
   sessionConflict,
   type AddedPassIntent,
   type BlankMode,
+  type StraightenMode,
   type Result,
   type SessionEdits,
   type SessionSnapshot,
@@ -59,6 +60,12 @@ import {
   pageKey,
   PAGES_DIR_NAME,
   segmentPrefix,
+  SKEW_FILE,
+  skewDirOf,
+  STRAIGHT_FILE,
+  STRAIGHT_THUMB_FILE,
+  straightDirOf,
+  straightThumbsDirOf,
   thumbsDirOf,
 } from './layout';
 import {
@@ -103,12 +110,22 @@ import { isSetAsideName, setAside, writeVersioned } from './versioned-file';
 // (страница, исход сегмента, снятие пометки) при отказе записи остаётся в памяти несохранённым:
 // страница уже на диске, и следующая перезапись журнала это доводит (KTD-36).
 
-/** Запас свободного места перед проходом (KTD-36): 50 листов по 3,5 МБ с запасом (журнал, U1). */
-const MIN_FREE_BYTES = 500 * 1024 * 1024;
+/**
+ * Запас свободного места перед проходом (KTD-36): 50 листов по 3,5 МБ с запасом (журнал, U1).
+ * Тот же резерв держит очередь коррекции перед каждой страницей (M6, KTD-13).
+ */
+export const MIN_FREE_BYTES = 500 * 1024 * 1024;
 
 export interface SessionStoreOptions extends StorageOptions {
   readonly newSessionId?: () => string;
   readonly minFreeBytes?: number;
+  /**
+   * Отмена и ожидание фоновой работы над производным — измерений перекоса и очереди коррекции
+   * (M6, KTD-12): `closeDirectory` ждёт её до удаления каталога производного на обоих путях —
+   * закрытие сессии и «Остановить» с нулём оставшихся страниц. Иначе задача, дожившая до
+   * `mkdir`, пересоздала бы каталог закрытой сессии.
+   */
+  readonly settleDerived?: () => Promise<void>;
 }
 
 /** С чем хранилище открывается: результат сверки при запуске (./reconcile.ts). */
@@ -186,12 +203,13 @@ export interface SessionStore {
    * пишутся сразу (журнал v4): по намерению (`AddedPassIntent`) или по очереди (`nextKindOf`).
    * Намерение проверяется той же проверкой, что в `planPass`. Режим пустых оборотов (M4, R2)
    * замораживается в журнале, когда проход открывает сессию — новую или заново после пустой;
-   * дальше аргумент не читается.
+   * дальше аргумент не читается. Режим выравнивания (M6, R15) — так же.
    */
   beginPass(
     origin: PassOrigin,
     intent: AddedPassIntent | null,
     blankMode?: BlankMode,
+    straighten?: StraightenMode,
   ): Promise<Result<SegmentStart>>;
   /** С чем можно досканировать последний проход; отказ — досканировать нельзя. */
   resumeTarget(): Result<PassOrigin>;
@@ -399,6 +417,7 @@ export function createSessionStore(
     closing = true;
     try {
       await settleReads();
+      await options.settleDerived?.().catch(() => undefined);
       const target = closingDirOf(layout, sessionId);
       try {
         await renameWithRetry(layout.sessionDir, target, io);
@@ -432,6 +451,19 @@ export function createSessionStore(
       await removeByPrefix(blankDirOf(layout, sessionId), prefix, BLANK_FILE, io).catch(
         () => undefined,
       );
+      // Оценки перекоса, выправленные страницы и их миниатюры (M6, R26) — по тем же правилам.
+      await removeByPrefix(skewDirOf(layout, sessionId), prefix, SKEW_FILE, io).catch(
+        () => undefined,
+      );
+      await removeByPrefix(straightDirOf(layout, sessionId), prefix, STRAIGHT_FILE, io).catch(
+        () => undefined,
+      );
+      await removeByPrefix(
+        straightThumbsDirOf(layout, sessionId),
+        prefix,
+        STRAIGHT_THUMB_FILE,
+        io,
+      ).catch(() => undefined);
       if (report.failed.length === 0 && journal !== null) {
         const deletions = journal.deletions.filter((it) => it !== prefix);
         await commit({ ...journal, deletions }, 'soft');
@@ -464,6 +496,7 @@ export function createSessionStore(
         edits: journal.edits,
         assembled: journal.assembled,
         blankMode: journal.blankMode,
+        straighten: journal.straighten,
       };
     },
 
@@ -473,7 +506,7 @@ export function createSessionStore(
 
     planPass: (request) => planPass(state(), request),
 
-    beginPass: (origin, intent, blankMode = 'keep') =>
+    beginPass: (origin, intent, blankMode = 'keep', straighten = 'off') =>
       mutating(async () => {
         if (runningSegmentOf(journal) !== null) {
           return conflict('passRunning');
@@ -494,7 +527,7 @@ export function createSessionStore(
         // оборотов, отметка о сохранении, правки) с ней и уходят.
         const base =
           journal === null || (isVacant(journal) && journal.deletions.length === 0)
-            ? { ...newJournal(newSessionId()), blankMode }
+            ? { ...newJournal(newSessionId()), blankMode, straighten }
             : isVacant(journal)
               ? {
                   ...journal,
@@ -504,6 +537,7 @@ export function createSessionStore(
                   edits: EMPTY_EDITS,
                   assembled: null,
                   blankMode,
+                  straighten,
                 }
               : journal;
         const number = base.nextPass;

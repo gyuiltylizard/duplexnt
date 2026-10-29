@@ -10,16 +10,20 @@ import { useTranslation } from 'react-i18next';
 import {
   isPairKind,
   isBacksKind,
-  pageImageUrl,
+  pageImageSrc,
   type AssembledPage,
   type BlankFlag,
   type PageAngle,
   type PassKind,
+  type StraightenMark,
 } from '@shared';
 import type { TFunction } from 'i18next';
+import { StraightDots, StraightGlyph, useEntering } from '../components/StraightGlyph';
 import { useImageLoad } from '../components/useImageLoad';
+import { useImageSwap } from '../components/useImageSwap';
 import type { DropSide } from '../state/edits';
 import { whatOf } from '../state/page-text';
+import { straightTitle, thumbStraightLabel } from '../state/straighten-text';
 import { useTurnMotion } from './useTurnMotion';
 
 /** Как выбрали миниатюру: клик, Shift — диапазон, Ctrl — по одной (handoff M3, S4). */
@@ -87,13 +91,67 @@ function thumbLabelOf(
   return t('thumb.alt', { number: page.position });
 }
 
+/** Что лежит в слоте подвала (handoff M6): точки обработки, глиф «выровнено» или «не выровнено». */
+type SlotKind = 'pending' | 'done' | 'undone' | null;
+
+function slotKindOf(mark: StraightenMark): SlotKind {
+  switch (mark.status) {
+    case 'pending':
+      return 'pending';
+    case 'straightened':
+      return 'done';
+    case 'unmeasurable':
+    case 'deferred':
+      return 'undone';
+    default:
+      return null;
+  }
+}
+
+/**
+ * Слот у правого края подвала (handoff M6 «Placement», «Behaviour»): индикатор обработки или
+ * пометка — одно место вне потока, подвал не сдвигается. Монтируется заново на смену вида
+ * (ключ по виду): точки гаснут, глиф проявляется на том же месте. `kept`, `level` и `null`
+ * слот оставляют пустым.
+ */
+function ThumbSlot({
+  t,
+  kind,
+  mark,
+}: {
+  readonly t: TFunction;
+  readonly kind: Exclude<SlotKind, null>;
+  readonly mark: StraightenMark;
+}): ReactNode {
+  const entering = useEntering();
+  const title = straightTitle(t, mark) ?? undefined;
+  if (kind === 'pending') {
+    return (
+      <StraightDots
+        className={entering ? 'thumb__pending thumb__pending--entering' : 'thumb__pending'}
+        title={title}
+      />
+    );
+  }
+  const classes = ['thumb__straight', `thumb__straight--${kind}`];
+  if (entering) {
+    classes.push('thumb__straight--entering');
+  }
+  return (
+    <span className={classes.join(' ')} title={title}>
+      <StraightGlyph kind={kind === 'done' ? 'level' : 'undone'} />
+    </span>
+  );
+}
+
 /**
  * Миниатюра в ленте: обычная, потерянная (S18 M1), строится или не построилась (S19 M1),
  * страница прохода оборотов с тегом «об» (по происхождению — R11 M3.6; обороты набора — тоже,
  * M4.5), угол из ядра (S4 M3), перетаскивание с маркером вставки (S6 M3), split-бар границы
  * (S7 M3), страница добавленного набора с тегом «Д1» (S5 M3.5; у пары — на обеих сторонах,
  * S8 M4.5), пустой оборот с меткой «ПУСТО» и скрытая, показанная переключателем, — пунктир и
- * приглушённый лист (S2–S3 M4).
+ * приглушённый лист (S2–S3 M4). Выравнивание (M6; handoff M6): глиф или точки обработки в слоте
+ * подвала, вид миниатюры по статусу (KTD-7), смена вида на месте без мигания (`useImageSwap`).
  * Пропсы — примитивы, чтобы `memo` переживал новый снимок (объекты порядка пересоздаются
  * десериализацией IPC): тумблер и отметка сохранения не перерисовывают всю ленту, смена
  * выделения — только затронутые карточки.
@@ -107,6 +165,9 @@ export const EditorThumb = memo(function EditorThumb({
   angle,
   lost,
   blank,
+  straightStatus,
+  straightReason,
+  straightVersion,
   position,
   inSets,
   addedSet,
@@ -134,6 +195,10 @@ export const EditorThumb = memo(function EditorThumb({
   readonly lost: boolean;
   /** Пустой оборот из ядра (M4, R10): помечена или скрыта (показана переключателем). */
   readonly blank: BlankFlag;
+  /** Выравнивание из ядра (M6, KTD-7, KTD-9) полями `StraightenMark`: по статусу — вид миниатюры. */
+  readonly straightStatus: StraightenMark['status'];
+  readonly straightReason: StraightenMark['reason'];
+  readonly straightVersion: StraightenMark['version'];
   /** Номер по порядку в показанной ленте, с единицы — сквозной через документы и группы. */
   readonly position: number;
   /** Режим наборов: подпись — «что это за страница» теми же словами, что ДЕТАЛИ (KTD9). */
@@ -160,7 +225,16 @@ export const EditorThumb = memo(function EditorThumb({
   readonly drag: ThumbDrag;
 }): ReactNode {
   const { t } = useTranslation();
-  const image = useImageLoad();
+  const straighten: StraightenMark = {
+    status: straightStatus,
+    reason: straightReason,
+    version: straightVersion,
+  };
+  // Вид по статусу (KTD-7); откат, «Выровнять» и поздняя коррекция меняют адрес — прежний кадр
+  // остаётся до готовности нового (handoff M6, «Смена вида на месте»).
+  const src = pageImageSrc(sessionId, { key: pageKey, straighten }, 'thumb');
+  const image = useImageLoad(src);
+  const swap = useImageSwap(src, image.state === 'ok');
   // Поворот — анимация на дельту команды (B-4); конечный угол — классами.
   const imgRef = useRef<HTMLImageElement>(null);
   useTurnMotion(imgRef, pageKey, angle, 'thumb');
@@ -208,10 +282,23 @@ export const EditorThumb = memo(function EditorThumb({
           draggable={false}
           loading="lazy"
           decoding="async"
-          src={pageImageUrl(sessionId, 'thumb', pageKey)}
+          src={swap.shown}
           onLoad={image.onLoad}
           onError={image.onError}
         />
+        {swap.incoming !== null && (
+          <img
+            className={
+              swap.incomingIn
+                ? 'thumb__img thumb__img--incoming is-in'
+                : 'thumb__img thumb__img--incoming'
+            }
+            alt=""
+            draggable={false}
+            src={swap.incoming}
+            onTransitionEnd={swap.settle}
+          />
+        )}
         {image.state === 'loading' && <span className="skeleton skeleton--cover" />}
         {blank !== null && (
           <span className="thumb__blank" aria-hidden="true">
@@ -242,10 +329,13 @@ export const EditorThumb = memo(function EditorThumb({
 
   const base = thumbLabelOf(t, { lost, inSets, origin, side, sheet, addedSet, position });
   const turned = angle === 0 ? base : `${base}, ${t('thumb.angle', { angle })}`;
-  const label =
+  const flagged =
     blank === null
       ? turned
       : t(blank === 'hidden' ? 'thumb.blankHiddenLabel' : 'thumb.blankLabel', { label: turned });
+  // M6: суффикс статуса выравнивания — у пустой статуса нет, суффиксы не пересекаются.
+  const label = thumbStraightLabel(t, flagged, straighten);
+  const slot = lost ? null : slotKindOf(straighten);
 
   return (
     <li
@@ -304,6 +394,7 @@ export const EditorThumb = memo(function EditorThumb({
           <span className="thumb__tag">{t('thumb.tagBacks')}</span>
         )}
       </div>
+      {slot !== null && <ThumbSlot key={slot} t={t} kind={slot} mark={straighten} />}
     </li>
   );
 });

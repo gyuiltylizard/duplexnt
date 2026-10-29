@@ -5,150 +5,32 @@ import { EMPTY_EDITS, type SessionEdits } from '@shared';
 import { dirSnapshot } from '../../../test/support/dir-snapshot';
 import { fsError, interceptFs } from '../../../test/support/intercept-fs';
 import { makeTempDataRoot } from '../../../test/support/temp-data-root';
-import type { PassOrigin } from './journal';
-import { layoutOf, type DataLayout } from './layout';
+import {
+  journalOf,
+  journalOnDisk,
+  ORIGIN,
+  OTHER_SESSION,
+  page,
+  pageName,
+  pagesOfFirstSegment,
+  pass,
+  reconciled,
+  seed,
+  segment,
+  SESSION,
+} from '../../../test/support/reconcile';
 import { rolesOf } from '../../../test/support/session-store';
+import { JOURNAL_VERSION } from './journal';
+import { layoutOf, type DataLayout } from './layout';
 import { openSessionStore, reconcileSession } from './reconcile';
 import { createSessionStore } from './session-store';
 import { realStorageFs } from './storage-fs';
 
 // Сверка при запуске — по таблице плана M1 («Сверка при запуске»). Каждая строка таблицы —
 // тест с тем же названием. Последняя строка («незакрытое задание») — шаг службы прохода (U17):
-// файл незакрытых заданий сверка не трогает.
-
-const SESSION = 'a1b2c3d4e5f60718';
-const OTHER_SESSION = 'ffffffffffffffff';
-
-const ORIGIN: PassOrigin = {
-  scanner: {
-    scheme: 'https',
-    host: 'scanner.test',
-    port: 443,
-    basePath: '/eSCL',
-    fingerprint: 'ab'.repeat(32),
-    uuid: '00000000-0000-4000-8000-000000000001',
-    name: 'Test Scanner',
-  },
-  params: { colorMode: 'Grayscale8', resolution: 300, paperSize: 'A4' },
-  pixelLimit: 5100 * 8400,
-};
-
-type SegmentState = 'running' | 'completed' | 'interrupted';
-const segment = (number: number, state: SegmentState, pageCount: number) => ({
-  number,
-  state,
-  pageCount,
-});
-const pass = (number: number, segments: ReturnType<typeof segment>[], extra: object = {}) => ({
-  number,
-  accepted: false,
-  origin: ORIGIN,
-  nextSegment: Math.max(...segments.map((it) => it.number)) + 1,
-  segments,
-  kind: number === 1 ? 'fronts' : 'backs',
-  after: null,
-  pair: null,
-  backsDecision: null,
-  rotate180: false,
-  ...extra,
-});
-const journalOf = (passes: ReturnType<typeof pass>[], extra: object = {}) => ({
-  version: 7,
-  sessionId: SESSION,
-  nextPass: passes.length + 1,
-  passes,
-  deletions: [] as string[],
-  backsDeclined: false,
-  saved: false,
-  edits: EMPTY_EDITS,
-  assembled: null as readonly string[] | null,
-  blankMode: 'keep' as const,
-  ...extra,
-});
-function omit<T extends object, K extends keyof T>(value: T, ...keys: K[]): Omit<T, K> {
-  const dropped: readonly string[] = keys as readonly string[];
-  return Object.fromEntries(
-    Object.entries(value).filter(([key]) => !dropped.includes(key)),
-  ) as Omit<T, K>;
-}
-
-/** Журнал версии 6 (M4): тот же состав без ролей пары — ссылки пары и решения по оборотам. */
-const journalV6Of = (passes: ReturnType<typeof pass>[], extra: object = {}) => ({
-  ...journalOf(passes, extra),
-  version: 6,
-  passes: passes.map((one) => omit(one, 'pair', 'backsDecision')),
-});
-
-/** Журнал версии 4 (M3.5): тот же состав без записи сборки и границы наборов. */
-const journalV4Of = (passes: ReturnType<typeof pass>[], extra: object = {}) => ({
-  ...omit(journalV6Of(passes, extra), 'assembled', 'blankMode'),
-  version: 4,
-  edits: omit(EMPTY_EDITS, 'divider', 'notBlank'),
-});
-
-/** Журнал версии 3 (M3): тот же состав, роль прохода — по позиции, якоря нет. */
-const journalV3Of = (passes: ReturnType<typeof pass>[], extra: object = {}) => ({
-  ...journalV4Of(passes, extra),
-  version: 3,
-  passes: passes.map((one) => omit(one, 'kind', 'after', 'pair', 'backsDecision')),
-});
-
-/** Журнал версии 2 (M2): тот же состав без правок редактора. */
-const journalV2Of = (passes: ReturnType<typeof pass>[], extra: object = {}) => ({
-  ...omit(journalV3Of(passes, extra), 'edits'),
-  version: 2,
-});
-
-/** Журнал версии 1 (M1): тот же состав без полей v2–v4. */
-const journalV1Of = (passes: ReturnType<typeof pass>[], extra: object = {}) => ({
-  ...omit(journalV3Of(passes, extra), 'backsDeclined', 'saved', 'edits'),
-  version: 1,
-  passes: passes.map((one) => omit(one, 'rotate180', 'kind', 'after', 'pair', 'backsDecision')),
-});
-
-const page = (number: number): Uint8Array => Uint8Array.of(0xff, 0xd8, number, 0xff, 0xd9);
-const pageName = (passNumber: number, segmentNumber: number, index: number): string =>
-  `p0${passNumber}-s0${segmentNumber}-${String(index).padStart(4, '0')}.jpg`;
-
-async function seed(journal: unknown, pages: readonly string[] = []) {
-  const root = await makeTempDataRoot();
-  const layout = layoutOf(root);
-  await mkdir(layout.pagesDir, { recursive: true });
-  if (journal !== null) {
-    await writeFile(
-      layout.journalFile,
-      typeof journal === 'string' || journal instanceof Uint8Array
-        ? journal
-        : JSON.stringify(journal),
-    );
-  }
-  for (const [index, name] of pages.entries()) {
-    await writeFile(join(layout.pagesDir, name), page(index + 1));
-  }
-  return { root, layout };
-}
-
-/** Проход 1, сегмент 1: файлы страниц с 1 по `count`. */
-const pagesOfFirstSegment = (count: number): string[] =>
-  Array.from({ length: count }, (_value, index) => pageName(1, 1, index + 1));
-
-async function journalOnDisk(layout: DataLayout): Promise<ReturnType<typeof journalOf>> {
-  return JSON.parse(await readFile(layout.journalFile, 'utf8')) as ReturnType<typeof journalOf>;
-}
-
-/** Сверка и то, что после неё видит интерфейс. */
-async function reconciled(root: string) {
-  const { store, notices } = await openSessionStore(root);
-  const passes = store.snapshot()?.passes ?? [];
-  return {
-    store,
-    notices,
-    session: store.snapshot(),
-    passes,
-    keys: passes.flatMap((it) => it.pages.filter((one) => !one.lost).map((one) => one.key)),
-    lost: passes.flatMap((it) => it.pages.filter((one) => one.lost).map((one) => one.key)),
-  };
-}
+// файл незакрытых заданий сверка не трогает. Журналы прежних версий —
+// `reconcile.versions.test.ts`, сбой на каждом шаге записи — `reconcile.failures.test.ts`;
+// сборщики журнала и посев — test/support/reconcile.ts.
 
 describe('сверка при запуске: таблица плана', () => {
   it('каталога сессии нет → сессии нет', async () => {
@@ -164,7 +46,7 @@ describe('сверка при запуске: таблица плана', () => 
 
   it('маркер версии новее понятного → ничего не трогается; режим отказа (AE9)', async () => {
     const { root } = await seed(
-      { ...journalOf([pass(1, [segment(1, 'running', 2)])]), version: 8 },
+      { ...journalOf([pass(1, [segment(1, 'running', 2)])]), version: JOURNAL_VERSION + 1 },
       [...pagesOfFirstSegment(3)],
     );
     const before = await dirSnapshot(root);
@@ -179,95 +61,6 @@ describe('сверка при запуске: таблица плана', () => 
       error: { code: 'storageIncompatible' },
     });
     expect(await store.closeSession()).toMatchObject({ ok: false });
-    expect(await dirSnapshot(root)).toEqual(before);
-  });
-
-  it('журнал версии 1 читается и переписывается текущей версией; флаги — дефолты (M2, R13)', async () => {
-    const { root, layout } = await seed(
-      journalV1Of([pass(1, [segment(1, 'completed', 2)])]),
-      pagesOfFirstSegment(2),
-    );
-
-    const { session, notices } = await reconciled(root);
-
-    expect(notices).toEqual([]);
-    expect(session).toMatchObject({ backsDeclined: false, saved: false });
-    expect(session?.passes[0]).toMatchObject({ rotate180: false, kind: 'fronts', after: null });
-    const journal = await journalOnDisk(layout);
-    expect(journal.version).toBe(7);
-    expect(journal).toMatchObject({
-      backsDeclined: false,
-      saved: false,
-      edits: EMPTY_EDITS,
-      assembled: null,
-    });
-    expect(journal.passes[0]).toMatchObject({ rotate180: false, kind: 'fronts', after: null });
-
-    // Повторный прогон уже ничего не меняет: сверка идемпотентна.
-    const before = await dirSnapshot(root);
-    await reconciled(root);
-    expect(await dirSnapshot(root)).toEqual(before);
-  });
-
-  it('журнал версии 2 переписывается текущей версией: правок нет, флаги целы (M3, R2)', async () => {
-    const { root, layout } = await seed(
-      journalV2Of([pass(1, [segment(1, 'completed', 2)])], { saved: true }),
-      pagesOfFirstSegment(2),
-    );
-
-    const { session } = await reconciled(root);
-
-    expect(session).toMatchObject({ saved: true, edits: EMPTY_EDITS });
-    const journal = await journalOnDisk(layout);
-    expect(journal).toMatchObject({ version: 7, saved: true, edits: EMPTY_EDITS });
-
-    const before = await dirSnapshot(root);
-    await reconciled(root);
-    expect(await dirSnapshot(root)).toEqual(before);
-  });
-
-  it('журнал версии 4 переписывается текущей версией: сборки нет, граница авто (M3.6, R1)', async () => {
-    const { root, layout } = await seed(
-      journalV4Of([pass(1, [segment(1, 'completed', 2)])], { saved: true }),
-      pagesOfFirstSegment(2),
-    );
-
-    const { session } = await reconciled(root);
-
-    expect(session).toMatchObject({ saved: true, edits: EMPTY_EDITS, assembled: null });
-    const journal = await journalOnDisk(layout);
-    expect(journal).toMatchObject({ version: 7, saved: true, edits: EMPTY_EDITS, assembled: null });
-
-    const before = await dirSnapshot(root);
-    await reconciled(root);
-    expect(await dirSnapshot(root)).toEqual(before);
-  });
-
-  it('журнал версии 3 переписывается текущей версией: роль — по позиции, якоря `null`, флаг поворота цел (M3.5, R1)', async () => {
-    const { root, layout } = await seed(
-      journalV3Of([
-        pass(1, [segment(1, 'completed', 2)]),
-        pass(2, [segment(1, 'completed', 2)], { rotate180: true }),
-        pass(3, [segment(1, 'completed', 1)]),
-      ]),
-      [...pagesOfFirstSegment(2), pageName(2, 1, 1), pageName(2, 1, 2), pageName(3, 1, 1)],
-    );
-
-    const { session, notices } = await reconciled(root);
-
-    expect(notices).toEqual([]);
-    expect(rolesOf(session?.passes ?? [])).toEqual([
-      [1, 'fronts', null],
-      [2, 'backs', null],
-      [3, 'added', null],
-    ]);
-    const journal = await journalOnDisk(layout);
-    expect(journal.version).toBe(7);
-    expect(rolesOf(journal.passes)).toEqual(rolesOf(session?.passes ?? []));
-    expect(journal.passes[1]).toMatchObject({ rotate180: true });
-
-    const before = await dirSnapshot(root);
-    await reconciled(root);
     expect(await dirSnapshot(root)).toEqual(before);
   });
 
@@ -317,6 +110,7 @@ describe('сверка при запуске: таблица плана', () => 
       names: ['', 'Оборот'],
       divider: null,
       notBlank: [],
+      keepOriginal: [],
     };
     const { root } = await seed(
       journalOf([pass(1, [segment(1, 'completed', 1)]), pass(2, [segment(1, 'completed', 1)])], {
@@ -350,6 +144,7 @@ describe('сверка при запуске: таблица плана', () => 
           names: ['Договор'],
           divider: null,
           notBlank: [],
+          keepOriginal: [],
         },
       }),
       pagesOfFirstSegment(2),
@@ -365,6 +160,7 @@ describe('сверка при запуске: таблица плана', () => 
       names: ['Договор'],
       divider: null,
       notBlank: [],
+      keepOriginal: [],
     };
     expect(session?.edits).toEqual(expected);
     expect((await journalOnDisk(layout)).edits).toEqual(expected);
@@ -396,7 +192,7 @@ describe('сверка при запуске: таблица плана', () => 
     const { root, layout } = await seed(
       {
         ...journalOf([pass(1, [segment(1, 'running', 1)])], { deletions: ['p01-s02-'] }),
-        version: 8,
+        version: JOURNAL_VERSION + 1,
       },
       [pageName(1, 1, 1), pageName(1, 2, 1)],
     );
@@ -935,238 +731,23 @@ describe('сверка при запуске: миниатюры отброше�
     for (const name of [pageName(1, 1, 1), pageName(1, 2, 1), pageName(1, 2, 2)]) {
       await writeFile(join(thumbs, name), page(7));
     }
+    // Производное выравнивания (M6, R26) — по тому же префиксу.
+    const straight = join(layout.derivedDir, SESSION, 'straight');
+    await mkdir(straight, { recursive: true });
+    for (const name of ['p01-s01-0001.v1.jpg', 'p01-s02-0001.v1.jpg', 'p01-s02-0001.v1.json']) {
+      await writeFile(join(straight, name), page(7));
+    }
+    const skew = join(layout.derivedDir, SESSION, 'skew');
+    await mkdir(skew, { recursive: true });
+    for (const name of ['p01-s01-0001.json', 'p01-s02-0002.json']) {
+      await writeFile(join(skew, name), page(7));
+    }
 
     await reconciled(root);
 
     expect(await readdir(thumbs)).toEqual([pageName(1, 1, 1)]);
-  });
-});
-
-describe('сверка при запуске: сбой на каждом шаге записи хранилища', () => {
-  const READS = new Set(['readdir', 'readFile', 'size', 'freeBytes']);
-
-  // «Процесс убит» на шаге N: этот и все следующие изменения диска не выполняются.
-  function dyingFs(dieAt: number) {
-    let step = 0;
-    let dead = false;
-    const { fs } = interceptFs(realStorageFs, (call) => {
-      if (dead) {
-        throw fsError('ECRASH');
-      }
-      if (!READS.has(call.op)) {
-        step += 1;
-        if (step === dieAt) {
-          dead = true;
-          throw fsError('ECRASH');
-        }
-      }
-    });
-    return { fs, steps: () => step, dead: () => dead };
-  }
-
-  async function* body(number: number): AsyncGenerator<Uint8Array> {
-    await Promise.resolve();
-    yield page(number);
-  }
-
-  interface Outcome {
-    /** Страницы, приём которых подтверждён и которые никто не удалял: ключ → принятые байты. */
-    readonly kept: Map<string, Uint8Array>;
-    /** Страницы сегмента, удаление которого подтверждено. */
-    readonly discarded: Set<string>;
-    /** Страницы сегмента, удаление которого началось, но не подтверждено: все или ни одной. */
-    readonly limbo: Set<string>;
-    closing: boolean;
-  }
-
-  // Сценарий: проход, обрыв, досканирование, «Остановить», новое досканирование, второй проход,
-  // «оставить как есть», «Новая пачка».
-  async function scenario(root: string, fs: typeof realStorageFs): Promise<Outcome> {
-    const outcome: Outcome = {
-      kept: new Map(),
-      discarded: new Set(),
-      limbo: new Set(),
-      closing: false,
-    };
-    const { store } = await openSessionStore(root, { fs, retry: { ceilingMs: 0 } });
-    const must = <T>(result: { ok: true; value: T } | { ok: false }): T => {
-      if (!result.ok) {
-        throw new Error('операция отклонена');
-      }
-      return result.value;
-    };
-    let content = 0;
-    const accept = async (count: number, into?: Set<string>): Promise<void> => {
-      for (let index = 0; index < count; index += 1) {
-        content += 1;
-        const { key } = await store.acceptPage(body(content));
-        if (into === undefined) {
-          outcome.kept.set(key, page(content));
-        } else {
-          into.add(key);
-        }
-      }
-    };
-
-    try {
-      must(await store.beginPass(ORIGIN, null));
-      await accept(3);
-      must(await store.endSegment('interrupted'));
-
-      must(await store.resumePass());
-      const stopped = new Set<string>();
-      await accept(2, stopped);
-      stopped.forEach((key) => outcome.limbo.add(key));
-      must(await store.discardSegment());
-      outcome.limbo.clear();
-      stopped.forEach((key) => outcome.discarded.add(key));
-
-      must(await store.resumePass());
-      await accept(2);
-      must(await store.endSegment('completed'));
-
-      must(await store.beginPass(ORIGIN, null));
-      await accept(1);
-      must(await store.endSegment('interrupted'));
-      must(await store.acceptPass());
-
-      outcome.closing = true;
-      must(await store.closeSession());
-    } catch {
-      // Процесс «убит»: дальше — только сверка.
-    }
-    return outcome;
-  }
-
-  it('после каждого сбоя сверка проводится дважды: полученное не потеряно, удалённое не вернулось, второй прогон ничего не меняет', async () => {
-    const dryRoot = await makeTempDataRoot();
-    const dry = dyingFs(Number.POSITIVE_INFINITY);
-    await scenario(dryRoot, dry.fs);
-    const total = dry.steps();
-    expect(total).toBeGreaterThan(60);
-
-    for (let dieAt = 1; dieAt <= total; dieAt += 1) {
-      const root = await makeTempDataRoot();
-      const dying = dyingFs(dieAt);
-      const outcome = await scenario(root, dying.fs);
-      expect(dying.dead(), `шаг ${dieAt}`).toBe(true);
-
-      const first = await reconciled(root);
-      const afterFirst = await dirSnapshot(root);
-      const second = await reconciled(root);
-
-      expect(await dirSnapshot(root), `шаг ${dieAt}: второй прогон`).toEqual(afterFirst);
-      expect(second.keys, `шаг ${dieAt}: второй прогон`).toEqual(first.keys);
-      expect(second.lost, `шаг ${dieAt}`).toEqual([]);
-
-      const present = new Set(first.keys);
-      // «Новая пачка» оборвана: сессия либо цела, либо её нет — половины не бывает.
-      if (!outcome.closing || present.size > 0) {
-        for (const [key, bytes] of outcome.kept) {
-          expect(present.has(key), `шаг ${dieAt}: страница ${key} потеряна`).toBe(true);
-          // Не только имя: байты на диске — те, что были приняты.
-          expect(await second.store.readPage(key), `шаг ${dieAt}: страница ${key}`).toEqual({
-            ok: true,
-            value: bytes,
-          });
-        }
-      }
-      for (const key of outcome.discarded) {
-        expect(present.has(key), `шаг ${dieAt}: страница ${key} вернулась`).toBe(false);
-      }
-      const limbo = [...outcome.limbo].filter((key) => present.has(key));
-      expect([0, outcome.limbo.size], `шаг ${dieAt}: удаление наполовину`).toContain(limbo.length);
-    }
-  }, 120_000);
-  // Сама сверка тоже может быть убита посередине: следующий запуск обязан довести её до того же.
-  it.each([
-    [
-      'журнал с идущим сегментом, пометкой об удалении, временными файлами и закрываемым каталогом',
-      journalOf([pass(1, [segment(1, 'running', 2)], { nextSegment: 3 })], {
-        deletions: ['p01-s02-'],
-      }),
-    ],
-    ['нечитаемый журнал', 'не журнал'],
-  ])(
-    'сверка, убитая на каждом своём шаге, доводится следующими запусками: %s',
-    async (_title, journal) => {
-      const prepare = async () => {
-        const seeded = await seed(journal, [
-          ...pagesOfFirstSegment(3),
-          ...(typeof journal === 'string' ? [] : [pageName(1, 2, 1), pageName(1, 2, 2)]),
-        ]);
-        const { root, layout } = seeded;
-        await writeFile(join(layout.pagesDir, 'p01-s01-0004.jpg.0123456789ab.tmp'), page(4));
-        await writeFile(join(layout.sessionDir, 'session.json.ba9876543210.tmp'), '{');
-        await mkdir(join(root, `session.closing-${OTHER_SESSION}`, 'pages'), { recursive: true });
-        await writeFile(
-          join(root, `session.closing-${OTHER_SESSION}`, 'pages', pageName(1, 1, 1)),
-          page(1),
-        );
-        await mkdir(join(layout.derivedDir, OTHER_SESSION, 'thumbs'), { recursive: true });
-        return seeded;
-      };
-      const expectedKeys = ['p01-s01-0001', 'p01-s01-0002', 'p01-s01-0003'];
-
-      const dry = dyingFs(Number.POSITIVE_INFINITY);
-      await reconcileSession((await prepare()).root, { fs: dry.fs, retry: { ceilingMs: 0 } });
-      const total = dry.steps();
-      expect(total).toBeGreaterThan(5);
-
-      for (let dieAt = 1; dieAt <= total; dieAt += 1) {
-        const { root, layout } = await prepare();
-        const dying = dyingFs(dieAt);
-        await reconcileSession(root, { fs: dying.fs, retry: { ceilingMs: 0 } }).catch(
-          () => undefined,
-        );
-        expect(dying.dead(), `шаг ${dieAt}`).toBe(true);
-
-        const first = await reconciled(root);
-        const afterFirst = await dirSnapshot(root);
-        const second = await reconciled(root);
-
-        expect(first.keys, `шаг ${dieAt}`).toEqual(expectedKeys);
-        expect(first.lost, `шаг ${dieAt}`).toEqual([]);
-        expect(first.passes[0]?.state, `шаг ${dieAt}`).toBe('interrupted');
-        expect(second.keys, `шаг ${dieAt}: второй прогон`).toEqual(expectedKeys);
-        expect(await dirSnapshot(root), `шаг ${dieAt}: второй прогон`).toEqual(afterFirst);
-        // Страницы отброшенного сегмента не вернулись, временные файлы не стали страницами.
-        expect(await readdir(layout.pagesDir), `шаг ${dieAt}`).toEqual(pagesOfFirstSegment(3));
-        if (typeof journal === 'string') {
-          // Нечитаемый журнал не потерян, сколько бы раз сверка ни начиналась заново.
-          const copies = (await readdir(layout.sessionDir)).filter((name) =>
-            name.includes('.unreadable-'),
-          );
-          expect(copies, `шаг ${dieAt}`).toHaveLength(1);
-          expect(await readFile(join(layout.sessionDir, copies[0] ?? ''), 'utf8')).toBe(journal);
-        }
-      }
-    },
-    120_000,
-  );
-});
-
-describe('сверка при запуске: режим пустых оборотов (M4, R8)', () => {
-  it('журнал версии 5 переписывается текущей версией: режим «оставлять», пометок нет', async () => {
-    const { root, layout } = await seed(
-      {
-        ...omit(journalV6Of([pass(1, [segment(1, 'completed', 2)])], { saved: true }), 'blankMode'),
-        version: 5,
-        edits: omit(EMPTY_EDITS, 'notBlank'),
-      },
-      pagesOfFirstSegment(2),
-    );
-
-    const { session, notices } = await reconciled(root);
-
-    expect(notices).toEqual([]);
-    expect(session).toMatchObject({ saved: true, blankMode: 'keep', edits: EMPTY_EDITS });
-    const journal = await journalOnDisk(layout);
-    expect(journal).toMatchObject({ version: 7, blankMode: 'keep', edits: EMPTY_EDITS });
-
-    const before = await dirSnapshot(root);
-    await reconciled(root);
-    expect(await dirSnapshot(root)).toEqual(before);
+    expect(await readdir(straight)).toEqual(['p01-s01-0001.v1.jpg']);
+    expect(await readdir(skew)).toEqual(['p01-s01-0001.json']);
   });
 });
 

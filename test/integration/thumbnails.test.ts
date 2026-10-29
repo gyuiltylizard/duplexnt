@@ -17,6 +17,8 @@ import {
   THUMBNAIL_BOX,
   type ThumbnailSource,
 } from '../../src/core/storage/thumbnails';
+import { STRAIGHTEN_ENCODING, type StraightenResult } from '../../src/core/image/straighten';
+import { createStraightened } from '../../src/core/storage/straightened';
 import { dirSnapshot } from '../support/dir-snapshot';
 import { ET_3850, pageFixture, readFixture } from '../support/fixtures';
 import { makeTempDataRoot } from '../support/temp-data-root';
@@ -320,6 +322,93 @@ describe('миниатюры', () => {
     expect(peak).toBe(2);
     const sessionId = store.snapshot()?.id ?? '';
     expect(await readdir(join(layout.derivedDir, sessionId, 'thumbs'))).toHaveLength(5);
+  });
+});
+
+describe('миниатюры выправленных страниц (M6, U6; KTD-7)', () => {
+  /** Исход коррекции — другая страница-фикстура: миниатюра из неё отличима от оригинала. */
+  const resultOf = (fixture: number): StraightenResult => ({
+    jpeg: new Uint8Array(pageFixture(fixture)),
+    info: { width: 1240, height: 1754, channels: 1 },
+    encoding: STRAIGHTEN_ENCODING,
+    dpi: 300,
+  });
+
+  it('вариант straight строится из файла по записи о коррекции в straight-thumbs/ с версией; без записи — отказ; обычная миниатюра не трогается', async () => {
+    const { store, layout } = await sessionWith([pageFixture(1), pageFixture(2)]);
+    const straightened = createStraightened(layout.derivedDir, store);
+    const thumbnails = createThumbnails(layout.derivedDir, store, { straightened });
+    const sessionId = store.snapshot()?.id ?? '';
+    const straightThumbs = join(layout.derivedDir, sessionId, 'straight-thumbs');
+
+    expect(await thumbnails.getStraight(KEY)).toEqual({
+      ok: false,
+      error: { code: 'pageUnavailable', details: { reason: 'notStraightened' } },
+    });
+    expect(await readdir(straightThumbs).catch(() => 'нет')).toBe('нет');
+
+    await straightened.store(KEY, resultOf(2));
+    const straight = valueOf(await thumbnails.getStraight(KEY));
+    const plain = valueOf(await thumbnails.get(KEY));
+    const metadata = await sharp(straight).metadata();
+    expect(metadata.format).toBe('jpeg');
+    expect(metadata.height).toBe(THUMBNAIL_BOX.height);
+    // Миниатюра выправленной — из другого файла: отличается от обычной той же страницы.
+    expect(Buffer.from(straight).equals(Buffer.from(plain))).toBe(false);
+    expect(await readdir(straightThumbs)).toEqual([`${KEY}.v1.jpg`]);
+    expect(await readdir(join(layout.derivedDir, sessionId, 'thumbs'))).toEqual([`${KEY}.jpg`]);
+    // Повтор — из кэша, байт в байт.
+    expect(valueOf(await thumbnails.getStraight(KEY))).toEqual(straight);
+  });
+
+  it('миниатюра версии новее известной и чужой ключ не трогаются; запись без файла нужного размера — отказ', async () => {
+    const { store, layout } = await sessionWith([pageFixture(1)]);
+    const straightened = createStraightened(layout.derivedDir, store);
+    const thumbnails = createThumbnails(layout.derivedDir, store, { straightened });
+    const sessionId = store.snapshot()?.id ?? '';
+    const straightThumbs = join(layout.derivedDir, sessionId, 'straight-thumbs');
+    await mkdir(straightThumbs, { recursive: true });
+    await writeFile(join(straightThumbs, `${KEY}.v7.jpg`), Buffer.alloc(3, 1));
+    await writeFile(join(straightThumbs, `p01-s01-0002.v7.jpg`), Buffer.alloc(3, 1));
+
+    await straightened.store(KEY, resultOf(2));
+    valueOf(await thumbnails.getStraight(KEY));
+    // Прежние версии (у версии 1 их нет) убираются; новее известной — от будущего приложения,
+    // не наша; чужой ключ не трогается.
+    expect((await readdir(straightThumbs)).sort()).toEqual([
+      `${KEY}.v1.jpg`,
+      `${KEY}.v7.jpg`,
+      `p01-s01-0002.v7.jpg`,
+    ]);
+
+    // Файл выправленной подменён другим размером: запись негодна — миниатюра не строится и не
+    // отдаётся из кэша другой записи (кэш той же версии стёрт вместе с производным).
+    await rm(straightThumbs, { recursive: true });
+    await writeFile(
+      join(layout.derivedDir, sessionId, 'straight', `${KEY}.v1.jpg`),
+      Buffer.alloc(9),
+    );
+    expect(await thumbnails.getStraight(KEY)).toMatchObject({
+      ok: false,
+      error: { code: 'pageUnavailable' },
+    });
+  });
+
+  it('страница, отброшенная, пока строилась миниатюра выправленной, не отдаётся и в кэше не остаётся', async () => {
+    const { store, layout } = await sessionWith([pageFixture(1)]);
+    const straightened = createStraightened(layout.derivedDir, store);
+    await straightened.store(KEY, resultOf(2));
+    let asked = 0;
+    const source: ThumbnailSource = {
+      // Первый вопрос — до построения, второй — после: к этому времени страницы уже нет.
+      pageInfo: (key) => ((asked += 1) === 1 ? store.pageInfo(key) : null),
+      readPage: (key) => store.readPage(key),
+    };
+    const thumbnails = createThumbnails(layout.derivedDir, source, { straightened });
+
+    expect(await thumbnails.getStraight(KEY)).toMatchObject(UNAVAILABLE);
+    const sessionId = store.snapshot()?.id ?? '';
+    expect(await readdir(join(layout.derivedDir, sessionId, 'straight-thumbs'))).toEqual([]);
   });
 });
 

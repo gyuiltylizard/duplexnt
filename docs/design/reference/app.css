@@ -2983,6 +2983,11 @@ samp {
   cursor: grab;
 }
 
+/* B-13, R6: склеенный пустой оборот сам не тянется — курсор обычный, подпись объясняет. */
+.thumb--glued[draggable='false'] {
+  cursor: default;
+}
+
 .thumb--selected {
   background: var(--color-bg-selected);
   border-color: var(--color-border-focus);

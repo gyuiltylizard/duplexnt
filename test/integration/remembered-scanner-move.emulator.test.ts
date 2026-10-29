@@ -11,6 +11,7 @@ import { startTestEmulator } from '../support/emulator';
 import { unwrap } from '../support/result';
 import { makeTempDataRoot } from '../support/temp-data-root';
 import { until } from '../support/until';
+import { levelWorker } from '../support/image-worker';
 
 // Переезд запомненного сканера сквозь настоящий транспорт (M5, U5): эмулятор на порту A
 // запомнен, затем закрыт и поднят на порту B — с тем же сертификатом (тот же сканер на новом
@@ -76,6 +77,7 @@ function gate() {
 function launch(root: string, findByUuid: StartUuidSearch): Promise<PassService> {
   return openPassService(root, {
     jobLimits: FAST,
+    imageWorker: levelWorker,
     minFreeBytes: 1,
     retry: { ceilingMs: 50 },
     findByUuid,

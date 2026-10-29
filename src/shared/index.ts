@@ -9,6 +9,7 @@ export {
   BRIDGE_CHANNELS,
   BRIDGE_EVENT_CHANNELS,
   PAGE_IMAGE_SCHEME,
+  isStraightView,
   PAGE_IMAGE_VIEWS,
   pageImageUrl,
   PROBE_TOKEN_MAX_LENGTH,
@@ -55,6 +56,29 @@ export {
 } from './blank';
 
 export type { DiscoveredScanner, DiscoveryState } from './discovery';
+
+export {
+  FAN_LINE_MM,
+  isSkewProfile,
+  NO_SKEW_VERDICTS,
+  SKEW_OUTCOMES,
+  skewFanMm,
+  skewLateralRows,
+  skewMaxAbsDeg,
+  skewProfileOf,
+  skewTanRows,
+  skewThetaAt,
+  STRAIGHTEN_GEOMETRY_VERSION,
+  type SkewBand,
+  type SkewBandReason,
+  type SkewContrast,
+  type SkewMeasure,
+  type SkewOutcome,
+  type SkewPrior,
+  type SkewProfile,
+  type SkewVerdict,
+  type SkewVerdicts,
+} from './skew';
 
 export {
   EDIT_ANGLES,
@@ -127,3 +151,28 @@ export {
   type ErrorDetails,
   type Result,
 } from './errors';
+export {
+  DEFAULT_STRAIGHTEN_MODE,
+  NO_STRAIGHTEN,
+  NO_STRAIGHTEN_FACTS,
+  NO_STRAIGHTEN_MARK,
+  STRAIGHTEN_DEFERRED_REASONS,
+  STRAIGHTEN_MODES,
+  STRAIGHTEN_REASONS,
+  STRAIGHTEN_STATUSES,
+  pageImageSrc,
+  pageImageViewOf,
+  straightenMarkOf,
+  straightenSummaryOf,
+  type PageImageRef,
+  type StraightenDeferredReason,
+  type StraightenFact,
+  type StraightenFacts,
+  type StraightenMark,
+  type StraightenMarkInput,
+  type StraightenMode,
+  type StraightenProgress,
+  type StraightenReason,
+  type StraightenStatus,
+  type StraightenSummary,
+} from './straighten';

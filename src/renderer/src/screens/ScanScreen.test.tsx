@@ -26,6 +26,8 @@ function makeSnapshot(overrides: Partial<Snapshot>): Snapshot {
     storage: { incompatible: false, unsaved: false },
     notices: [],
     blankMode: 'hide',
+    straightenMode: 'auto',
+    straightenProgress: null,
     seenHints: [],
     ...overrides,
   };
@@ -44,6 +46,7 @@ function running(pageCount: number, passPages: number, phase: PassProgress['phas
     pass,
     session: {
       blankMode: 'keep',
+      straighten: 'off',
       id: 'session.x',
       backsDeclined: false,
       saved: false,
@@ -93,6 +96,7 @@ describe('экран scan', () => {
       pass,
       session: {
         blankMode: 'keep',
+        straighten: 'off',
         id: 'session.x',
         backsDeclined: false,
         saved: false,
@@ -183,6 +187,7 @@ describe('экран scan', () => {
       pass,
       session: {
         blankMode: 'keep',
+        straighten: 'off',
         id: 'session.x',
         backsDeclined: false,
         saved: false,
@@ -313,6 +318,7 @@ describe('экран scan', () => {
       pass,
       session: {
         blankMode: 'keep',
+        straighten: 'off',
         id: 'session.x',
         backsDeclined: false,
         saved: false,
@@ -357,6 +363,7 @@ describe('экран scan', () => {
       pass,
       session: {
         blankMode: 'keep',
+        straighten: 'off',
         id: 'session.x',
         backsDeclined: false,
         saved: false,
@@ -423,6 +430,7 @@ describe('экран scan', () => {
       pass,
       session: {
         blankMode: 'keep',
+        straighten: 'off',
         id: 'session.x',
         backsDeclined: false,
         saved: false,

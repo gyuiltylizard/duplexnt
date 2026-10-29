@@ -4,13 +4,17 @@ import {
   BLANK_MODES,
   DEFAULT_BLANK_MODE,
   DEFAULT_SCAN_PARAMS,
+  DEFAULT_STRAIGHTEN_MODE,
   resolveScanParams,
+  STRAIGHTEN_MODES,
   type BlankMode,
+  type CommandResult,
   type DomainError,
   type ScanOptions,
   type ScanParams,
   type ScannerInfo,
   type Snapshot,
+  type StraightenMode,
 } from '@shared';
 import { LaunchFailureNotice } from '../components/LaunchFailureNotice';
 import { Segments } from '../components/Segments';
@@ -23,7 +27,9 @@ import './setup-screen.css';
 // полные тексты макета (план M2, U8): сценарий двух проходов и колонка «Как это работает».
 // Строка «Авто» по-прежнему отсутствует (R14). Ряд «Пустые обороты» (M4, R1) — настройка
 // приложения, не устройства: доступен и без сканера, значения — словарь `BLANK_MODES`, а не
-// capabilities.
+// capabilities. Ряд «Выравнивание» (M6, R13; handoff M6) — такой же ряд приложения: по умолчанию
+// «Выравнивать», «Сбросить параметры» возвращает его; при старте первого прохода режим
+// замораживается в сессии, новый выбор действует со следующего сканирования.
 
 export interface SetupScreenProps {
   readonly snapshot: Snapshot;
@@ -93,17 +99,27 @@ export function SetupScreen({
     );
   };
 
-  const sendBlankMode = (mode: BlankMode): void => {
-    window.api.setBlankMode(mode).then(
+  /** Режим пустых оборотов или выравнивания; `what` — чей режим, для лога. */
+  const sendMode = (
+    sent: Promise<CommandResult<'setBlankMode' | 'setStraightenMode'>>,
+    what: string,
+  ): void => {
+    sent.then(
       (result) => {
         if (!result.ok) {
-          console.error('[renderer] режим пустых оборотов не принят', result.error);
+          console.error(`[renderer] режим ${what} не принят`, result.error);
         }
       },
       (error: unknown) => {
-        console.error('[renderer] режим пустых оборотов не отправлен', error);
+        console.error(`[renderer] режим ${what} не отправлен`, error);
       },
     );
+  };
+  const sendBlankMode = (mode: BlankMode): void => {
+    sendMode(window.api.setBlankMode(mode), 'пустых оборотов');
+  };
+  const sendStraightenMode = (mode: StraightenMode): void => {
+    sendMode(window.api.setStraightenMode(mode), 'выравнивания');
   };
 
   const recheck = (): void => {
@@ -325,6 +341,17 @@ export function SetupScreen({
               onSelect={sendBlankMode}
             />
           </div>
+          <div className="param-row">
+            <div className="param-row__label">{t('setup.params.straighten')}</div>
+            <Segments
+              label={t('setup.params.straighten')}
+              values={STRAIGHTEN_MODES}
+              selected={snapshot.straightenMode}
+              format={(value) => t(`setup.params.straightenMode.${value}`)}
+              titleOf={(value) => t(`setup.params.straightenModeHint.${value}`)}
+              onSelect={sendStraightenMode}
+            />
+          </div>
 
           <div className="params__footer">
             <button
@@ -334,6 +361,7 @@ export function SetupScreen({
               onClick={() => {
                 sendParams(resolveScanParams(null, shown.options));
                 sendBlankMode(DEFAULT_BLANK_MODE);
+                sendStraightenMode(DEFAULT_STRAIGHTEN_MODE);
               }}
             >
               {t('setup.params.reset')}

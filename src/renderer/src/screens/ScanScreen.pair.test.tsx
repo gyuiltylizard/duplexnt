@@ -39,6 +39,7 @@ function makeSnapshot(setPasses: readonly PassSnapshot[], pass: PassProgress): S
     scanner: { kind: 'none' },
     session: {
       blankMode: 'keep',
+      straighten: 'off',
       id: 'session.x',
       backsDeclined: false,
       saved: false,
@@ -57,6 +58,8 @@ function makeSnapshot(setPasses: readonly PassSnapshot[], pass: PassProgress): S
     storage: { incompatible: false, unsaved: false },
     notices: [],
     blankMode: 'hide',
+    straightenMode: 'auto',
+    straightenProgress: null,
     seenHints: [],
   };
 }

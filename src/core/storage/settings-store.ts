@@ -2,7 +2,9 @@ import { z } from 'zod';
 import {
   BLANK_MODES,
   DEFAULT_BLANK_MODE,
+  DEFAULT_STRAIGHTEN_MODE,
   HINTS,
+  STRAIGHTEN_MODES,
   fail,
   ok,
   type BlankMode,
@@ -11,6 +13,7 @@ import {
   type Result,
   type ScanParams,
   type StartupNotice,
+  type StraightenMode,
 } from '@shared';
 import type { ConnectedScanner, ConnectorOptions } from '../escl/connect';
 import { resolveScanParams, scanParamsSchema } from '../escl/scan-settings';
@@ -42,8 +45,12 @@ import {
 //
 // Версия 4 (B-4): какие подсказки уже показаны с привлечением внимания (`seenHints`); файлы
 // версий 1–3 читаются с пустым списком и переписываются только при следующей записи.
+//
+// Версия 5 (M6, R13): режим выравнивания перекоса помнится между запусками; файлы версий 1–4
+// читаются с режимом по умолчанию и переписываются только при следующей записи. Приложение до
+// M6 видит файл v5 как несовместимый и работает на дефолтах без записи (KTD-35).
 
-export const SETTINGS_VERSION = 4;
+export const SETTINGS_VERSION = 5;
 
 const settingsV1Schema = z.strictObject({
   version: z.literal(1),
@@ -65,13 +72,19 @@ const settingsV3Schema = settingsV2Schema.extend({
   blankMode: z.enum(BLANK_MODES),
 });
 
-const settingsSchema = settingsV3Schema.extend({
-  version: z.literal(SETTINGS_VERSION),
+const settingsV4Schema = settingsV3Schema.extend({
+  version: z.literal(4),
   /** Подсказки, уже показанные с привлечением внимания (B-4) — без повторов. */
   seenHints: z
     .array(z.enum(HINTS))
     .max(HINTS.length)
     .refine((hints) => new Set(hints).size === hints.length),
+});
+
+const settingsSchema = settingsV4Schema.extend({
+  version: z.literal(SETTINGS_VERSION),
+  /** Режим выравнивания перекоса, выбранный последним (M6, R13); решение приложения. */
+  straightenMode: z.enum(STRAIGHTEN_MODES),
 });
 
 export interface Settings {
@@ -80,42 +93,68 @@ export interface Settings {
   readonly saveFolder: string | null;
   readonly blankMode: BlankMode;
   readonly seenHints: readonly HintId[];
+  readonly straightenMode: StraightenMode;
 }
 
 /**
  * Разбор файла настроек: версия 1 поднимается без папки, версия 2 — с режимом пустых по
- * умолчанию, версии 1–3 — с пустым списком показанных подсказок.
+ * умолчанию, версии 1–3 — с пустым списком показанных подсказок, версии 1–4 — с режимом
+ * выравнивания по умолчанию.
  */
 function parseSettings(bytes: Uint8Array): VersionedRead<Settings> {
   const marker = readVersionMarker(bytes);
+  const straightenMode = DEFAULT_STRAIGHTEN_MODE;
   if (marker === 1) {
     const v1 = parseVersioned(bytes, settingsV1Schema, 1);
     return v1.kind === 'ok'
       ? {
           kind: 'ok',
-          value: { ...v1.value, saveFolder: null, blankMode: DEFAULT_BLANK_MODE, seenHints: [] },
+          value: {
+            ...v1.value,
+            saveFolder: null,
+            blankMode: DEFAULT_BLANK_MODE,
+            seenHints: [],
+            straightenMode,
+          },
         }
       : v1;
   }
   if (marker === 2) {
     const v2 = parseVersioned(bytes, settingsV2Schema, 2);
     return v2.kind === 'ok'
-      ? { kind: 'ok', value: { ...v2.value, blankMode: DEFAULT_BLANK_MODE, seenHints: [] } }
+      ? {
+          kind: 'ok',
+          value: { ...v2.value, blankMode: DEFAULT_BLANK_MODE, seenHints: [], straightenMode },
+        }
       : v2;
   }
   if (marker === 3) {
     const v3 = parseVersioned(bytes, settingsV3Schema, 3);
-    return v3.kind === 'ok' ? { kind: 'ok', value: { ...v3.value, seenHints: [] } } : v3;
+    return v3.kind === 'ok'
+      ? { kind: 'ok', value: { ...v3.value, seenHints: [], straightenMode } }
+      : v3;
+  }
+  if (marker === 4) {
+    const v4 = parseVersioned(bytes, settingsV4Schema, 4);
+    return v4.kind === 'ok' ? { kind: 'ok', value: { ...v4.value, straightenMode } } : v4;
   }
   return parseVersioned(bytes, settingsSchema, SETTINGS_VERSION);
 }
 
-const settingsOf = ({ scanner, params, saveFolder, blankMode, seenHints }: Settings): Settings => ({
+const settingsOf = ({
   scanner,
   params,
   saveFolder,
   blankMode,
   seenHints,
+  straightenMode,
+}: Settings): Settings => ({
+  scanner,
+  params,
+  saveFolder,
+  blankMode,
+  seenHints,
+  straightenMode,
 });
 
 export interface SettingsStore {
@@ -130,6 +169,8 @@ export interface SettingsStore {
   setParams(params: ScanParams): Promise<Result<void>>;
   /** Режим пустых оборотов (M4, R1): помнится между запусками. */
   setBlankMode(mode: BlankMode): Promise<Result<void>>;
+  /** Режим выравнивания перекоса (M6, R13): помнится между запусками. */
+  setStraightenMode(mode: StraightenMode): Promise<Result<void>>;
   /** Папка, выбранная в модалке `save` (M3): предлагается при следующем запуске. */
   rememberSaveFolder(folder: string): Promise<Result<void>>;
   /** Подсказка показана с привлечением внимания (B-4): больше не мигает. Повтор — без изменений. */
@@ -150,6 +191,7 @@ export async function openSettingsStore(
     saveFolder: null,
     blankMode: DEFAULT_BLANK_MODE,
     seenHints: [],
+    straightenMode: DEFAULT_STRAIGHTEN_MODE,
   };
   let notice: SettingsStore['notice'] = null;
   const readSettings = async (): Promise<VersionedRead<Settings>> => {
@@ -208,6 +250,7 @@ export async function openSettingsStore(
     rememberScanner: (scanner) => update({ scanner }),
     setParams: (params) => update({ params }),
     setBlankMode: (blankMode) => update({ blankMode }),
+    setStraightenMode: (straightenMode) => update({ straightenMode }),
     rememberSaveFolder: (saveFolder) => update({ saveFolder }),
     markHintSeen: (hint) =>
       settings.seenHints.includes(hint)

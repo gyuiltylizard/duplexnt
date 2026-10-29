@@ -40,6 +40,7 @@ function session(backsState: PassSnapshot['state']): SessionSnapshot {
     edits: EMPTY_EDITS,
     assembled: null,
     blankMode: 'hide',
+    straighten: 'off',
     passes: [pass({}), pass({ number: 2, kind: 'backs', state: backsState, pages: BACKS })],
   };
 }

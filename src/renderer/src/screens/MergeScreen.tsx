@@ -15,10 +15,16 @@ import './merge-sort.css';
 // доигрывалась — о несовпадении сообщает модалка). Строка состояния — фактический результат
 // сборки. После «Обороты не нужны» экрана нет (App). С M4 (S12) у строки хвост про пустые
 // обороты, а App держит экран, пока оценки не пришли (решение автора: без потолка). С M4.5
-// (S6) та же пауза после пары набора «ДN»: тег и заголовок набора, статус по набору.
+// (S6) та же пауза после пары набора «ДN»: тег и заголовок набора, статус по набору. С M6
+// (handoff M6, `merge`) — второй хвост про выравнивание: число обновляется без проявления,
+// проявление — только при появлении хвоста и при переходе в итог; App держит экран, пока
+// страницы в обработке, и ещё немного после итога.
 
 /** Пауза `merge` (KTD-5, UI_SPEC раздел 9). */
 export const MERGE_PAUSE_MS = 1600;
+
+/** После итога выравнивания экран держится ещё столько, чтобы итог успели прочесть (handoff M6). */
+export const MERGE_RESULT_MS = 500;
 
 export interface MergeScreenProps {
   readonly assembly: SessionAssembly;
@@ -65,6 +71,30 @@ function blankStatus(t: TFunction, assembly: SessionAssembly, pack: Pack): strin
     return t('merge.blank.scoring');
   }
   return blank.found === 0 ? t('merge.blank.none') : t('merge.blank.found', { count: blank.found });
+}
+
+/** Хвост про выравнивание (M6): узел по виду — счёт меняется без проявления, вид — с ним. */
+interface StraightTail {
+  readonly kind: 'pending' | 'done';
+  readonly text: string;
+}
+
+/**
+ * Хвоста нет при «Не трогать», в режиме раздельных наборов (там нет и хвоста пустых) и когда ни
+ * одна страница не получила статуса (лицевые без оборотов, ничего не меряли).
+ */
+function straightTail(t: TFunction, assembly: SessionAssembly): StraightTail | null {
+  const { straighten, report } = assembly;
+  if (straighten.mode !== 'auto' || report.mode === 'sets') {
+    return null;
+  }
+  if (straighten.pending > 0) {
+    return { kind: 'pending', text: t('merge.straight.pending', { count: straighten.pending }) };
+  }
+  if (straighten.total === 0) {
+    return null;
+  }
+  return { kind: 'done', text: t('merge.straight.done', { count: straighten.straightened }) };
 }
 
 function outcomeText(t: TFunction, report: AssemblyReport): string {
@@ -134,6 +164,7 @@ export function MergeScreen({ assembly, set = null }: MergeScreenProps): ReactNo
   const warning = pack.mismatch;
   const status = pack.set === null ? outcomeText(t, assembly.report) : setOutcomeText(t, pack.set);
   const blank = blankStatus(t, assembly, pack);
+  const straight = straightTail(t, assembly);
 
   // Фокусируемых элементов нет — фокус на контейнере экрана (handoff, «Клавиатура»).
   useFocusWhen(screenRef, true);
@@ -162,6 +193,11 @@ export function MergeScreen({ assembly, set = null }: MergeScreenProps): ReactNo
         {blank !== null && (
           <span key={blank} className="merge-screen__tail">
             {t('merge.blank.tail', { blank })}
+          </span>
+        )}
+        {straight !== null && (
+          <span key={`straight-${straight.kind}`} className="merge-screen__tail">
+            {straight.text}
           </span>
         )}
       </p>

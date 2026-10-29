@@ -138,6 +138,7 @@ describe('правки: канонический вид', () => {
       names: ['B', 'D'],
       divider: null,
       notBlank: [],
+      keepOriginal: [],
     });
   });
 
@@ -514,5 +515,42 @@ describe('правки: пометки «не пустая» (M4, U3)', () => {
     expect(hasEdits(EMPTY_EDITS, false)).toBe(false);
     expect(sameEdits(edits({ notBlank: ['a'] }), EMPTY_EDITS)).toBe(false);
     expect(sameEdits(edits({ notBlank: ['a'] }), edits({ notBlank: ['a'] }))).toBe(true);
+  });
+});
+
+describe('правки: откат выравнивания (M6, U4)', () => {
+  it('нормализация: мёртвые ключи и повторы вычищены, порядок ключей — как у EMPTY_EDITS', () => {
+    const normalized = normalizeEdits(AUTO, edits({ keepOriginal: ['x', 'b', 'b', 'e'] }));
+
+    expect(normalized.keepOriginal).toEqual(['b', 'e']);
+    expect(Object.keys(normalized)).toEqual(Object.keys(EMPTY_EDITS));
+    expect(Object.keys(normalizeEdits(AUTO, edits({}), setsContext(2)))).toEqual(
+      Object.keys(EMPTY_EDITS),
+    );
+    expect(Object.keys(normalizeEdits(AUTO, edits({}), TRANSIT_CONTEXT))).toEqual(
+      Object.keys(EMPTY_EDITS),
+    );
+  });
+
+  it('удалённая страница откат сохраняет: Ctrl+Z удаления вернёт её с оригиналом', () => {
+    expect(
+      normalizeEdits(AUTO, edits({ deleted: ['b'], keepOriginal: ['b'] })).keepOriginal,
+    ).toEqual(['b']);
+  });
+
+  it('перебазирование при смене ленты откат не трогает', () => {
+    const rebased = rebaseEdits(
+      AUTO,
+      ['a', 'b', 'n', 'c', 'd', 'e'],
+      edits({ keepOriginal: ['c'] }),
+    );
+
+    expect(rebased.keepOriginal).toEqual(['c']);
+  });
+
+  it('один откат — уже правка: «Вернуть» есть что откатывать; sameEdits его различает', () => {
+    expect(hasEdits(edits({ keepOriginal: ['a'] }), false)).toBe(true);
+    expect(sameEdits(edits({ keepOriginal: ['a'] }), EMPTY_EDITS)).toBe(false);
+    expect(sameEdits(edits({ keepOriginal: ['a'] }), edits({ keepOriginal: ['a'] }))).toBe(true);
   });
 });

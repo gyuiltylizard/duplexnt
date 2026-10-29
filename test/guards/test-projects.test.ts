@@ -59,6 +59,12 @@ describe('тестовые прогоны', () => {
     expect(projectsOf('test/integration/imaging-probe.test.ts', TEST_PROJECTS)).toEqual([
       'integration',
     ]);
+    expect(projectsOf('test/integration/pdf-worst-case.test.ts', TEST_PROJECTS)).toEqual([
+      'worst-case',
+    ]);
+    expect(projectsOf('test/integration/straighten-worst-case.test.ts', TEST_PROJECTS)).toEqual([
+      'worst-case',
+    ]);
     expect(projectsOf('test/design-snapshot/reference.test.tsx', TEST_PROJECTS)).toEqual([
       'design',
     ]);

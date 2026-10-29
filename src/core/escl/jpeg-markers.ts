@@ -16,3 +16,75 @@ export function hasJpegMarkers(bytes: Uint8Array): boolean {
     bytes[length - 1] === EOI[1]
   );
 }
+
+/** Заголовок JFIF (APP0 длиной 16) с плотностью в точках на дюйм, X = Y = dpi, без миниатюры. */
+function jfifApp0(dpi: number): Uint8Array {
+  return Uint8Array.of(
+    0xff,
+    0xe0,
+    0x00,
+    0x10,
+    0x4a,
+    0x46,
+    0x49,
+    0x46,
+    0x00,
+    0x01,
+    0x01,
+    0x01,
+    dpi >> 8,
+    dpi & 0xff,
+    dpi >> 8,
+    dpi & 0xff,
+    0x00,
+    0x00,
+  );
+}
+
+/**
+ * Заголовок JFIF на месте: SOI, сразу за ним APP0 заявленной длины не меньше 16 с сигнатурой
+ * `JFIF\0` — только тогда байты единиц и плотности (13–17) лежат в этом сегменте. Одно правило
+ * на чтение плотности (`jfifDpi`) и запись (`withJfifDensity`).
+ */
+export function hasJfifHeader(bytes: Uint8Array): boolean {
+  return (
+    bytes.length >= 18 &&
+    bytes[0] === SOI[0] &&
+    bytes[1] === SOI[1] &&
+    bytes[2] === 0xff &&
+    bytes[3] === 0xe0 &&
+    (((bytes[4] ?? 0) << 8) | (bytes[5] ?? 0)) >= 16 &&
+    bytes[6] === 0x4a &&
+    bytes[7] === 0x46 &&
+    bytes[8] === 0x49 &&
+    bytes[9] === 0x46 &&
+    bytes[10] === 0
+  );
+}
+
+/**
+ * JPEG с плотностью в заголовке JFIF — APP0 сразу после SOI, как читает `jfifDpi`: уже есть
+ * заголовок — плотность переписывается в копии, нет (mozjpeg в `sharp` его не пишет) —
+ * заголовок вставляется. `withMetadata({density})` у `sharp` 0.35 заодно переводит выход в
+ * sRGB с профилем ICC — серый становится трёхканальным, файл тяжелее; поэтому плотность
+ * пишется руками, без профиля. Не JPEG или dpi вне JFIF — вход как есть, `null`.
+ */
+export function withJfifDensity(
+  jpeg: Uint8Array,
+  dpi: number,
+): { jpeg: Uint8Array; dpi: number | null } {
+  if (!Number.isInteger(dpi) || dpi <= 0 || dpi > 0xffff || !hasJpegMarkers(jpeg)) {
+    return { jpeg, dpi: null };
+  }
+  const app0 = jfifApp0(dpi);
+  if (hasJfifHeader(jpeg)) {
+    const copy = jpeg.slice();
+    copy.set(app0.subarray(11, 16), 13);
+    return { jpeg: copy, dpi };
+  }
+  const out = new Uint8Array(jpeg.length + app0.length);
+  out.set(jpeg.subarray(0, 2), 0);
+  out.set(app0, 2);
+  out.set(jpeg.subarray(2), 2 + app0.length);
+  return { jpeg: out, dpi };
+}

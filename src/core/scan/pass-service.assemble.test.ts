@@ -43,7 +43,8 @@ async function seedSession(root: string, fronts: number, backs: number): Promise
       deletions: [],
       backsDeclined: false,
       saved: false,
-      edits: EMPTY_EDITS,
+      // Правки формы v6: без отката выравнивания (M6) — `undefined` JSON не пишет.
+      edits: { ...EMPTY_EDITS, keepOriginal: undefined },
       assembled: null,
       blankMode: 'keep',
     }),

@@ -33,6 +33,13 @@ export interface SessionEdits {
    * «считать пустой» нет: лишнее удаляется.
    */
   readonly notBlank: readonly string[];
+  /**
+   * Страницы, для которых пользователь вернул оригинал вместо выправленной (M6; ADR 0004,
+   * амендмент 2026-10-28): коллекция по ключу, как `notBlank`. Обычная правка — шаг undo,
+   * плашка, «Вернуть» снимает. Оценка и файл коррекции — производное, в журнал не пишутся.
+   * Действует только на выправленную страницу (статус `kept`); у остальных не читается.
+   */
+  readonly keepOriginal: readonly string[];
 }
 
 /** Правок нет: автосортировка, без поворотов и удалений, один документ с именем по умолчанию. */
@@ -44,6 +51,7 @@ export const EMPTY_EDITS: SessionEdits = {
   names: [''],
   divider: null,
   notBlank: [],
+  keepOriginal: [],
 };
 
 /**
@@ -94,6 +102,7 @@ export function sameEdits(left: SessionEdits, right: SessionEdits): boolean {
     sameList(left.names, right.names) &&
     left.divider === right.divider &&
     sameList(left.notBlank, right.notBlank) &&
+    sameList(left.keepOriginal, right.keepOriginal) &&
     leftAngles.length === Object.keys(right.rotations).length &&
     leftAngles.every(([key, angle]) => right.rotations[key] === angle)
   );

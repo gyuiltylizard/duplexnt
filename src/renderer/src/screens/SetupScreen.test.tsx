@@ -24,6 +24,8 @@ const READY: ScannerState = { kind: 'ready', scanner: INFO, options: OPTIONS, pa
 function makeSnapshot(scanner: ScannerState): Snapshot {
   return {
     blankMode: 'hide',
+    straightenMode: 'auto',
+    straightenProgress: null,
     seenHints: [],
     seq: 1,
     scanner,
@@ -41,9 +43,15 @@ function stubApi() {
   const setScanParams = vi.fn(() => Promise.resolve(ok(undefined)));
   const recheckScanner = vi.fn(() => Promise.resolve(ok(undefined)));
   const setBlankMode = vi.fn(() => Promise.resolve(ok(undefined)));
-  const api = { setScanParams, recheckScanner, setBlankMode } as unknown as Api;
+  const setStraightenMode = vi.fn(() => Promise.resolve(ok(undefined)));
+  const api = {
+    setScanParams,
+    recheckScanner,
+    setBlankMode,
+    setStraightenMode,
+  } as unknown as Api;
   vi.stubGlobal('api', api);
-  return { setScanParams, recheckScanner, setBlankMode };
+  return { setScanParams, recheckScanner, setBlankMode, setStraightenMode };
 }
 
 function renderSetup(
@@ -130,13 +138,14 @@ describe('SetupScreen', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Сменить' }));
     expect(onOpenDevice).toHaveBeenCalledTimes(1);
 
-    // Ряд «Пустые обороты» — настройка приложения, не устройства: доступен и без сканера (M4).
-    const blank = screen.getByRole('radiogroup', { name: 'Пустые обороты' });
-    expect(blank.getAttribute('aria-disabled')).toBeNull();
+    // Ряды «Пустые обороты» и «Выравнивание» — настройки приложения, не устройства: доступны и
+    // без сканера (M4; M6).
+    const app = [
+      screen.getByRole('radiogroup', { name: 'Пустые обороты' }),
+      screen.getByRole('radiogroup', { name: 'Выравнивание' }),
+    ];
     for (const group of screen.getAllByRole('radiogroup')) {
-      if (group !== blank) {
-        expect(group.getAttribute('aria-disabled')).toBe('true');
-      }
+      expect(group.getAttribute('aria-disabled')).toBe(app.includes(group) ? null : 'true');
     }
   });
 
@@ -223,12 +232,46 @@ describe('SetupScreen', () => {
     ).toBe('true');
   });
 
-  it('«Сбросить параметры» возвращает и режим пустых оборотов к «Скрывать» (M4, R1)', () => {
-    const { setBlankMode } = stubApi();
-    renderSetup(READY, { snapshot: { ...makeSnapshot(READY), blankMode: 'mark' } });
+  it('«Сбросить параметры» возвращает режим пустых оборотов к «Скрывать» (M4, R1) и выравнивание к «Выравнивать» (M6, R13)', () => {
+    const { setBlankMode, setStraightenMode } = stubApi();
+    renderSetup(READY, {
+      snapshot: { ...makeSnapshot(READY), blankMode: 'mark', straightenMode: 'off' },
+    });
 
     fireEvent.click(screen.getByRole('button', { name: 'Сбросить параметры' }));
     expect(setBlankMode).toHaveBeenCalledExactlyOnceWith('hide');
+    expect(setStraightenMode).toHaveBeenCalledExactlyOnceWith('auto');
+  });
+
+  it('ряд «Выравнивание» показывает режим из снимка, клик шлёт команду, доступен без сканера (M6, R13)', () => {
+    const { setStraightenMode, setScanParams } = stubApi();
+    const { view } = renderSetup({ kind: 'none' });
+
+    const group = screen.getByRole('radiogroup', { name: 'Выравнивание' });
+    expect(group.getAttribute('aria-disabled')).toBeNull();
+    expect(
+      within(group).getByRole('radio', { name: 'Выравнивать' }).getAttribute('aria-checked'),
+    ).toBe('true');
+    // Подсказка говорит, что смена подействует со следующего сканирования (handoff M6).
+    expect(within(group).getByRole('radio', { name: 'Не трогать' }).getAttribute('title')).toMatch(
+      /^страницы останутся как со сканера\. .*со следующего сканирования$/u,
+    );
+
+    fireEvent.click(within(group).getByRole('radio', { name: 'Не трогать' }));
+    expect(setStraightenMode).toHaveBeenCalledExactlyOnceWith('off');
+    expect(setScanParams).not.toHaveBeenCalled();
+
+    view.rerender(
+      <SetupScreen
+        snapshot={{ ...makeSnapshot({ kind: 'none' }), straightenMode: 'off' }}
+        launchFailure={null}
+        onStart={vi.fn()}
+        onOpenDevice={vi.fn()}
+      />,
+    );
+    expect(
+      within(group).getByRole('radio', { name: 'Не трогать' }).getAttribute('aria-checked'),
+    ).toBe('true');
   });
 
   it('отказ «нет бумаги» — плашка-предупреждение текстом кода, без префикса', () => {

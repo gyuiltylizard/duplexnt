@@ -1,4 +1,0 @@
-/* — страница вариантов — */
-.mx-opt { width: 420px; }
-.mx-stage { display: flex; align-items: center; justify-content: center; height: 260px; border-radius: var(--radius-xl); background: var(--color-bg-app); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.16); }
-.mv-head__toggles .toggle-row__label { white-space: nowrap; }

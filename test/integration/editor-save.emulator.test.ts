@@ -15,6 +15,7 @@ import { fsError, interceptFs } from '../support/intercept-fs';
 import { makeTempDataRoot } from '../support/temp-data-root';
 import { unwrap } from '../support/result';
 import { untilScored } from '../support/until';
+import { levelWorker } from '../support/image-worker';
 
 // Правки и пакетное сохранение на настоящей цепочке (план M3, U10): эмулятор → клиент →
 // хранилище → служба. Ядро проверяет то же на посеянной сессии; здесь — что страницы настоящих
@@ -31,6 +32,7 @@ const FAST: Partial<ScanJobLimits> = {
 
 const OPTIONS = {
   jobLimits: FAST,
+  imageWorker: levelWorker,
   minFreeBytes: 1,
   retry: { ceilingMs: 0 },
 } satisfies PassServiceOptions;
@@ -74,6 +76,7 @@ describe('правки и сохранение через эмулятор (M3, 
     names: NAMES,
     divider: null,
     notBlank: [],
+    keepOriginal: [],
   };
 
   it('AE1, AE7: правки переживают перезапуск; пакет — занятое имя, сбой записи, повтор', async () => {
@@ -177,6 +180,7 @@ describe('правки и сохранение через эмулятор (M3, 
       names: ['', 'Хвост'],
       divider: null,
       notBlank: [],
+      keepOriginal: [],
     };
     unwrap(await service.setEdits(manual, {}));
 

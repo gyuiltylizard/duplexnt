@@ -4,6 +4,7 @@ import {
   BACKS_DECISIONS,
   isAnchoredKind,
   BLANK_MODES,
+  STRAIGHTEN_MODES,
   EMPTY_EDITS,
   PASS_KINDS,
   passesByKind,
@@ -15,7 +16,13 @@ import {
   type PassState,
 } from '@shared';
 import { scanParamsSchema } from '../escl/scan-settings';
-import { editsSchemaOf, editsV4Schema, editsV5Schema, pageKeySchema } from './edits-schema';
+import {
+  editsSchemaOf,
+  editsV4Schema,
+  editsV5Schema,
+  editsV6Schema,
+  pageKeySchema,
+} from './edits-schema';
 import {
   MAX_PAGE_INDEX,
   MAX_PASS_NUMBER,
@@ -41,7 +48,7 @@ import { parseVersioned, type VersionedParse } from './versioned-file';
 // «Набор ждёт обороты» (M4.5) — выводимое из ролей, ссылки пары и решения по оборотам набора
 // (`pendingPairOf`); в журнале его нет (амендмент 2026-10-23).
 
-export const JOURNAL_VERSION = 7;
+export const JOURNAL_VERSION = 8;
 
 const segmentSchema = z.strictObject({
   number: z.number().int().min(1).max(MAX_SEGMENT_NUMBER),
@@ -231,18 +238,30 @@ const journalV5Fields = {
 // пометки «не пустая» в правках. Оценок детектора в журнале нет — они производное.
 const journalV6Fields = {
   ...journalV5Fields,
-  edits: editsSchema,
+  edits: editsV6Schema,
   blankMode: z.enum(BLANK_MODES),
 };
 
 // Журнал версии 7 (M4.5; амендмент ADR 0004 от 2026-10-23): роли пары добавленного набора,
 // ссылка пары и решение по оборотам набора на проходах. «Набор ждёт обороты» выводится.
+const journalV7Fields = { ...journalV6Fields, passes: z.array(passSchema) };
+
+// Журнал версии 8 (M6; амендмент ADR 0004 от 2026-10-28): режим выравнивания на сессии и откат
+// выравнивания в правках. Оценок перекоса и файлов коррекции в журнале нет — они производное.
 export const journalSchema = z
   .strictObject({
     version: z.literal(JOURNAL_VERSION),
-    ...journalV6Fields,
-    passes: z.array(passSchema),
+    ...journalV7Fields,
+    edits: editsSchema,
+    straighten: z.enum(STRAIGHTEN_MODES),
   })
+  .refine(countersHold)
+  .refine(rolesHold)
+  .refine(pairsHold)
+  .refine(assembledUnique);
+
+const journalV7Schema = z
+  .strictObject({ version: z.literal(7), ...journalV7Fields })
   .refine(countersHold)
   .refine(rolesHold)
   .refine(pairsHold)
@@ -289,14 +308,26 @@ type JournalV3 = z.infer<typeof journalV3Schema>;
 type JournalV4 = z.infer<typeof journalV4Schema>;
 type JournalV5 = z.infer<typeof journalV5Schema>;
 type JournalV6 = z.infer<typeof journalV6Schema>;
+type JournalV7 = z.infer<typeof journalV7Schema>;
+
+/**
+ * Чтение v7: выравнивания не было — режим сессии `off`, откатов нет (M6, R15): старая сессия
+ * открывается как до M6, страницы не меряются и не выправляются.
+ */
+const upgradeToV8 = (journal: JournalV7): Journal => ({
+  ...journal,
+  version: JOURNAL_VERSION,
+  edits: { ...journal.edits, keepOriginal: [] },
+  straighten: 'off',
+});
 
 /**
  * Чтение v6: пар нет — добавленные наборы прежних сессий остаются односторонними, ссылка пары и
  * решение по оборотам у всех проходов `null` (M4.5, R21).
  */
-const upgradeToV7 = (journal: JournalV6): Journal => ({
+const upgradeToV7 = (journal: JournalV6): JournalV7 => ({
   ...journal,
-  version: JOURNAL_VERSION,
+  version: 7,
   passes: journal.passes.map((pass) => ({ ...pass, pair: null, backsDecision: null })),
 });
 
@@ -348,7 +379,7 @@ const upgradeToV2 = (journal: z.infer<typeof journalV1Schema>): JournalV2 => ({
 });
 
 /**
- * Разбор журнала: текущая версия, затем прежние цепочкой дефолтов (v1 → … → v6 → v7).
+ * Разбор журнала: текущая версия, затем прежние цепочкой дефолтов (v1 → … → v7 → v8).
  * Несовместимость (маркер новее, неизвестное поле) решается по текущей схеме и прежние не
  * пробует: файл с неизвестным полем несовместим при любой версии.
  */
@@ -357,35 +388,42 @@ export function parseJournal(bytes: Uint8Array): VersionedParse<Journal> {
   if (current.kind !== 'unreadable') {
     return current;
   }
+  const v7 = parseVersioned(bytes, journalV7Schema, JOURNAL_VERSION);
+  if (v7.kind === 'ok') {
+    return { kind: 'ok', value: upgradeToV8(v7.value) };
+  }
   const v6 = parseVersioned(bytes, journalV6Schema, JOURNAL_VERSION);
   if (v6.kind === 'ok') {
-    return { kind: 'ok', value: upgradeToV7(v6.value) };
+    return { kind: 'ok', value: upgradeToV8(upgradeToV7(v6.value)) };
   }
   const v5 = parseVersioned(bytes, journalV5Schema, JOURNAL_VERSION);
   if (v5.kind === 'ok') {
-    return { kind: 'ok', value: upgradeToV7(upgradeToV6(v5.value)) };
+    return { kind: 'ok', value: upgradeToV8(upgradeToV7(upgradeToV6(v5.value))) };
   }
   const v4 = parseVersioned(bytes, journalV4Schema, JOURNAL_VERSION);
   if (v4.kind === 'ok') {
-    return { kind: 'ok', value: upgradeToV7(upgradeToV6(upgradeToV5(v4.value))) };
+    return { kind: 'ok', value: upgradeToV8(upgradeToV7(upgradeToV6(upgradeToV5(v4.value)))) };
   }
   const v3 = parseVersioned(bytes, journalV3Schema, JOURNAL_VERSION);
   if (v3.kind === 'ok') {
-    return { kind: 'ok', value: upgradeToV7(upgradeToV6(upgradeToV5(upgradeToV4(v3.value)))) };
+    return {
+      kind: 'ok',
+      value: upgradeToV8(upgradeToV7(upgradeToV6(upgradeToV5(upgradeToV4(v3.value))))),
+    };
   }
   const v2 = parseVersioned(bytes, journalV2Schema, JOURNAL_VERSION);
   if (v2.kind === 'ok') {
     return {
       kind: 'ok',
-      value: upgradeToV7(upgradeToV6(upgradeToV5(upgradeToV4(upgradeToV3(v2.value))))),
+      value: upgradeToV8(upgradeToV7(upgradeToV6(upgradeToV5(upgradeToV4(upgradeToV3(v2.value)))))),
     };
   }
   const v1 = parseVersioned(bytes, journalV1Schema, JOURNAL_VERSION);
   return v1.kind === 'ok'
     ? {
         kind: 'ok',
-        value: upgradeToV7(
-          upgradeToV6(upgradeToV5(upgradeToV4(upgradeToV3(upgradeToV2(v1.value))))),
+        value: upgradeToV8(
+          upgradeToV7(upgradeToV6(upgradeToV5(upgradeToV4(upgradeToV3(upgradeToV2(v1.value)))))),
         ),
       }
     : current;
@@ -404,6 +442,8 @@ export function newJournal(sessionId: string): Journal {
     assembled: null,
     // Пересобранный сверкой журнал тоже начинается отсюда: параметры неизвестны — не скрываем.
     blankMode: 'keep',
+    // И не выправляем (M6, R15): режим сессии известен только из настроек при `beginPass`.
+    straighten: 'off',
   };
 }
 

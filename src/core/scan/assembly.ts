@@ -6,13 +6,18 @@ import {
   hasPages,
   isAnchoredKind,
   isBacksKind,
+  NO_STRAIGHTEN_FACTS,
   NO_VERDICTS,
   passesByKind,
   pendingSetOf,
+  straightenMarkOf,
+  straightenSummaryOf,
   type AddedSet,
   type AssembledPage,
   type BlankFlag,
   type BlankVerdicts,
+  type StraightenFacts,
+  type StraightenMark,
   type AssemblyMode,
   type AssemblyReport,
   type PageSnapshot,
@@ -532,6 +537,7 @@ export function frozenSequenceOf(
 export function assembleSession(
   session: SessionSnapshot,
   blank: BlankVerdicts = NO_VERDICTS,
+  straighten: StraightenFacts = NO_STRAIGHTEN_FACTS,
 ): SessionAssembly {
   const base = baseAssembly(session.passes, session.assembled);
   const byKey = new Map(base.pages.map((page) => [page.key, page]));
@@ -574,6 +580,21 @@ export function assembleSession(
     blankFlags.push(flag);
     return flag === 'pending' ? null : flag;
   };
+  // Статус выравнивания — тем же правилом, что у зеркала (`straightenMarkOf`, M6, KTD-9):
+  // пустой оборот (скрыт или помечен) не выравнивается, откат пользователя — из правок.
+  const keepOriginal = new Set(edits.keepOriginal);
+  const straightenMarks: StraightenMark[] = [];
+  const markOf = (page: BasePage, blankFlag: BlankFlag): StraightenMark => {
+    const mark = straightenMarkOf({
+      mode: session.straighten,
+      lost: page.lost,
+      blank: blankFlag !== null,
+      keepOriginal: keepOriginal.has(page.key),
+      fact: straighten.get(page.key),
+    });
+    straightenMarks.push(mark);
+    return mark;
+  };
 
   const order: AssembledPage[] = visible.flatMap((key, index) => {
     const page = byKey.get(key);
@@ -593,6 +614,7 @@ export function assembleSession(
               sheet: Math.floor(position / 2) + 1,
             }
           : { side: page.side, sheet: page.sheet };
+    const blankFlag = flagOf(page);
     return [
       {
         key,
@@ -600,7 +622,8 @@ export function assembleSession(
         angle: pageAngle(edits.rotations[key], page.rotate180),
         lost: page.lost,
         addedSet: base.addedSetOf.get(key) ?? null,
-        blank: flagOf(page),
+        blank: blankFlag,
+        straighten: markOf(page, blankFlag),
       },
     ];
   });
@@ -620,5 +643,6 @@ export function assembleSession(
       mismatch: base.mode === 'sets',
     },
     blank: blankSummaryOf(blankMode, blankFlags),
+    straighten: straightenSummaryOf(session.straighten, straightenMarks),
   };
 }

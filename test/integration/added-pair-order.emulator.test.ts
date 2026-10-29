@@ -4,6 +4,7 @@ import type { ScanJobLimits } from '../../src/core/escl/scan-job';
 import type { PassService, PassServiceOptions } from '../../src/core/scan/pass-service';
 import { connectService, scanned } from '../support/pass-service';
 import { unwrap } from '../support/result';
+import { levelWorker } from '../support/image-worker';
 
 // B-13, часть 2 — воспроизведение на настоящей цепочке (эмулятор → служба → хранилище →
 // сборка): двусторонние добавленные наборы при явном порядке ленты и после «Вернуть». Основная
@@ -22,6 +23,7 @@ const FAST: Partial<ScanJobLimits> = {
 
 const OPTIONS = {
   jobLimits: FAST,
+  imageWorker: levelWorker,
   minFreeBytes: 1,
   retry: { ceilingMs: 0 },
 } satisfies PassServiceOptions;

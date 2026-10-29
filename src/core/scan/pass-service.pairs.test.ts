@@ -2,12 +2,14 @@ import { mkdir, readdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { EMPTY_EDITS, fail } from '@shared';
 import { describe, expect, it } from 'vitest';
-import { ET_3850, readFixture } from '../../../test/support/fixtures';
+import {
+  gatedConnector,
+  refusingConnector,
+  SESSION,
+  serviceOver,
+} from '../../../test/support/pass-service-seed';
 import { makeTempDataRoot } from '../../../test/support/temp-data-root';
-import { parseCapabilities } from '../escl/capabilities';
-import type { ConnectedScanner, ConnectorOptions } from '../escl/connect';
-import { scanOptionsOf } from '../escl/scan-settings';
-import type { JournalPass, PassOrigin } from '../storage/journal';
+import { JOURNAL_VERSION, type JournalPass, type PassOrigin } from '../storage/journal';
 import { layoutOf } from '../storage/layout';
 import { openPassService } from './pass-service';
 
@@ -15,26 +17,7 @@ import { openPassService } from './pass-service';
 // набора, обороты набора по очереди с «из F», сканер пары, команды решения набора через службу.
 // Полный путь с эмулятором — test/integration/added-pair*.emulator.test.ts (U8).
 
-const SESSION = 'a1b2c3d4e5f60718';
 const PAGE = Uint8Array.of(0xff, 0xd8, 0xff, 0xd9);
-
-function connected(): ConnectedScanner {
-  const capabilities = parseCapabilities(readFixture(...ET_3850, 'ScannerCapabilities.xml'));
-  if (!capabilities.ok) {
-    throw new Error('фикстура capabilities не разобрана');
-  }
-  return {
-    profile: {
-      scheme: 'https',
-      host: '127.0.0.1',
-      port: 9443,
-      basePath: '/eSCL',
-      fingerprint: null,
-    },
-    capabilities: capabilities.value,
-    options: scanOptionsOf(capabilities.value),
-  };
-}
 
 /** Параметры прохода с другого сканера: досканировать на подключённом нельзя (KTD-27). */
 const OTHER_SCANNER: PassOrigin = {
@@ -75,7 +58,7 @@ const setFronts = (count: number, extra: Partial<JournalPass> = {}): JournalPass
 const setBacks = (count: number, extra: Partial<JournalPass> = {}): JournalPass =>
   passAt(4, count, { kind: 'addedBacks', pair: 3, ...extra });
 
-/** Сессия на диске: журнал v7 и файлы страниц всех проходов. */
+/** Сессия на диске: журнал текущей версии и файлы страниц всех проходов. */
 async function seed(passes: readonly JournalPass[], extra: Record<string, unknown> = {}) {
   const root = await makeTempDataRoot();
   const layout = layoutOf(root);
@@ -83,7 +66,7 @@ async function seed(passes: readonly JournalPass[], extra: Record<string, unknow
   await writeFile(
     layout.journalFile,
     JSON.stringify({
-      version: 7,
+      version: JOURNAL_VERSION,
       sessionId: SESSION,
       nextPass: Math.max(...passes.map((pass) => pass.number)) + 1,
       passes,
@@ -93,6 +76,7 @@ async function seed(passes: readonly JournalPass[], extra: Record<string, unknow
       edits: EMPTY_EDITS,
       assembled: null,
       blankMode: 'keep',
+      straighten: 'off',
       ...extra,
     }),
   );
@@ -103,47 +87,6 @@ async function seed(passes: readonly JournalPass[], extra: Record<string, unknow
     }
   }
   return { root, layout };
-}
-
-/** Транспорт, отвечающий отказом сети: дошли до него — политика проход пропустила. */
-function refusingConnector() {
-  const requests: string[] = [];
-  const connector: ConnectorOptions = {
-    createTransport: () => ({
-      request: (options) => {
-        requests.push(options.path);
-        return Promise.resolve(fail('scannerUnreachable', { reason: 'refused' }));
-      },
-      stream: () => Promise.resolve(fail('scannerUnreachable', { reason: 'refused' })),
-      close: () => undefined,
-    }),
-  };
-  return { requests, connector };
-}
-
-/** Транспорт, который держит первый запрос до `release`: снимок идущего прохода виден снаружи. */
-function gatedConnector() {
-  let release = (): void => undefined;
-  const gate = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  const connector: ConnectorOptions = {
-    createTransport: () => ({
-      request: async () => {
-        await gate;
-        return fail('scannerUnreachable', { reason: 'refused' });
-      },
-      stream: () => Promise.resolve(fail('scannerUnreachable', { reason: 'refused' })),
-      close: () => undefined,
-    }),
-  };
-  return { connector, release };
-}
-
-async function serviceOver(root: string, connector: ConnectorOptions) {
-  const service = await openPassService(root, { connector });
-  await service.useScanner(connected());
-  return service;
 }
 
 const conflict = (reason: string) => fail('sessionConflict', { reason });

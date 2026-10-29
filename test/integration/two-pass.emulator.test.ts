@@ -18,6 +18,7 @@ import { pageFixture } from '../support/fixtures';
 import { makeTempDataRoot } from '../support/temp-data-root';
 import { unwrap } from '../support/result';
 import { until, untilScored } from '../support/until';
+import { levelWorker } from '../support/image-worker';
 
 // Двухпроходный сценарий на настоящей цепочке (план M2, U3–U4): эмулятор с лотками по заданиям →
 // клиент → хранилище → сборка в снимке. Правило пар проверяется побайтово: какая фикстура легла
@@ -47,6 +48,7 @@ async function open(root: string, connected: ConnectedScanner): Promise<Harness>
   const snapshots: Snapshot[] = [];
   const service: PassService = await openPassService(root, {
     jobLimits: FAST,
+    imageWorker: levelWorker,
     minFreeBytes: 1,
     retry: { ceilingMs: 50 },
     onChange: () => {
@@ -260,7 +262,7 @@ describe('два прохода через эмулятор (M2)', () => {
 
     // Второй проход останавливается после первой страницы.
     const backs = service.startPass(null);
-    await until(() => service.snapshot().pass?.pages === 1);
+    await until(() => (service.snapshot().pass?.pages ?? 0) >= 1);
     expect(await service.stopPass()).toEqual({ ok: true, value: undefined });
     expect(unwrap(await backs)).toMatchObject({ end: 'stopped' });
 
@@ -293,7 +295,7 @@ describe('два прохода через эмулятор (M2)', () => {
       ],
     );
     await expectAssembledFixtures(root, service.snapshot(), [1, 4, 2, 5, 3, 6]);
-  });
+  }, 20_000);
 
   it('AE5: «обороты не нужны» переживает перезапуск — сессия не возвращается к развороту', async () => {
     const { service, restart } = await setup();

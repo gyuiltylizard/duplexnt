@@ -32,6 +32,7 @@ function makeSession(overrides: Partial<SessionSnapshot>): SessionSnapshot {
     edits: EMPTY_EDITS,
     assembled: null,
     blankMode: 'keep',
+    straighten: 'off',
     passes: [makePass({})],
     ...overrides,
   };
@@ -60,6 +61,8 @@ function makeSnapshot(overrides: Partial<Snapshot>): Snapshot {
     storage: { incompatible: false, unsaved: false },
     notices: [],
     blankMode: 'hide',
+    straightenMode: 'auto',
+    straightenProgress: null,
     seenHints: [],
     ...overrides,
   };

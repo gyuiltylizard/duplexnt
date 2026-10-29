@@ -4,7 +4,8 @@ import type { BlankVerdicts } from '@shared';
 import { BLANK_DETECTOR_VERSION, isBlank, type BlankDetector } from '../detect/blank';
 import { writeFileAtomic } from './atomic-file';
 import { blankDirIn, blankFileName } from './layout';
-import { limiterOf } from './limiter';
+import { isAlive, pruneStale } from './liveness';
+import { limiterOf, type Limiter } from './limiter';
 import type { PageInfo } from './session-store';
 import { ioOf, type StorageOptions } from './storage-fs';
 import type { ThumbnailSource } from './thumbnails';
@@ -32,7 +33,12 @@ const cacheSchema = z.strictObject({
 export type BlankScoreSource = ThumbnailSource;
 
 export interface BlankScoresOptions extends StorageOptions {
-  /** Сколько страниц оценивается одновременно. */
+  /**
+   * Общий лимитер производного (M6, KTD-4): оценки пустоты идут в нём с обычным приоритетом.
+   * Без него — свой, на `concurrency` задач.
+   */
+  readonly limiter?: Limiter;
+  /** Сколько страниц оценивается одновременно, когда лимитер не передан. */
   readonly concurrency?: number;
 }
 
@@ -67,7 +73,7 @@ export function createBlankScores(
 ): BlankScores {
   const io = ioOf(options);
   const { fs } = io;
-  const limited = limiterOf(options.concurrency ?? DEFAULT_CONCURRENCY);
+  const limited = options.limiter ?? limiterOf(options.concurrency ?? DEFAULT_CONCURRENCY);
   const entries = new Map<string, Entry>();
   // Одна страница оценивается один раз, сколько бы запросов ни пришло одновременно; ключ —
   // путь кэша, то есть вместе с сессией: тот же ключ новой сессии — другая страница.
@@ -76,8 +82,7 @@ export function createBlankScores(
   const fileOf = (key: string, info: PageInfo): string =>
     join(blankDirIn(derivedDir, info.sessionId), blankFileName(key));
 
-  const alive = (key: string, info: PageInfo): boolean =>
-    source.pageInfo(key)?.sessionId === info.sessionId;
+  const alive = (key: string, info: PageInfo): boolean => isAlive(source, key, info);
 
   /** Доля из кэша текущей версии; нет файла, не читается, другая версия — `undefined`. */
   async function readCached(file: string): Promise<number | null | undefined> {
@@ -175,11 +180,7 @@ export function createBlankScores(
     },
 
     prune() {
-      for (const [key, entry] of entries) {
-        if (source.pageInfo(key)?.sessionId !== entry.sessionId) {
-          entries.delete(key);
-        }
-      }
+      pruneStale(entries, source);
     },
   };
 }

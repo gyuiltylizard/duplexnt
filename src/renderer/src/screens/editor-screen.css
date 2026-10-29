@@ -689,6 +689,8 @@
 
 .preview__paper {
   position: relative;
+  /* Свой контекст наложения: пилюли и кромка листа (--z-raised) не всплывают над модалкой (U10). */
+  isolation: isolate;
   height: 100%;
   aspect-ratio: 1 / 1.414;
   background: var(--color-bg-paper);

@@ -23,6 +23,12 @@ import {
   thumbsDirOf,
   BLANK_FILE,
   blankDirOf,
+  SKEW_FILE,
+  skewDirOf,
+  STRAIGHT_FILE,
+  STRAIGHT_THUMB_FILE,
+  straightDirOf,
+  straightThumbsDirOf,
 } from './layout';
 import {
   createSessionStore,
@@ -261,6 +267,19 @@ export async function reconcileSession(
       const report = await attempt(removeByPrefix(layout.pagesDir, prefix, PAGE_FILE, io));
       await attempt(removeByPrefix(thumbsDirOf(layout, journal.sessionId), prefix, PAGE_FILE, io));
       await attempt(removeByPrefix(blankDirOf(layout, journal.sessionId), prefix, BLANK_FILE, io));
+      // Производное выравнивания (M6, R26) — по тем же правилам, что миниатюры и оценки пустоты.
+      await attempt(removeByPrefix(skewDirOf(layout, journal.sessionId), prefix, SKEW_FILE, io));
+      await attempt(
+        removeByPrefix(straightDirOf(layout, journal.sessionId), prefix, STRAIGHT_FILE, io),
+      );
+      await attempt(
+        removeByPrefix(
+          straightThumbsDirOf(layout, journal.sessionId),
+          prefix,
+          STRAIGHT_THUMB_FILE,
+          io,
+        ),
+      );
       if (report === undefined || report.failed.length > 0) {
         deletions.push(prefix);
       }

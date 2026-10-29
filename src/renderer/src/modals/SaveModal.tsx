@@ -7,6 +7,7 @@ import {
   type BlankSummary,
   type SaveDocumentsReport,
   type SaveMode,
+  type StraightenSummary,
 } from '@shared';
 import { Modal } from '../components/Modal';
 import { useUnmounted } from '../components/useUnmounted';
@@ -24,7 +25,9 @@ import './save-modal.css';
 // пакет. На время записи модалка занята и не закрывается: отменять пакет ядро не умеет.
 // С M4 (handoff M4, S14; R16–R17) счёт страниц — по тем, что уйдут в файл (без скрытых пустых
 // оборотов), сводка несёт ряд «Пустых оборотов», а отказы ядра `documentBlank` и `blankPending`
-// видны до клика: кнопка недоступна, статус объясняет.
+// видны до клика: кнопка недоступна, статус объясняет. С M6 (handoff M6, `save`) — ряд
+// «Выровнено» и отказ `straightenPending` в том же ряду, что `blankPending`: пока страницы в
+// обработке, кнопка недоступна, снимок с нулём открывает её сам; отложенные не блокируют.
 
 export interface SaveModalProps {
   /** Документы со счётом страниц, которые уйдут в файл (без скрытых); `count: 0` — одни скрытые. */
@@ -37,6 +40,8 @@ export interface SaveModalProps {
   readonly total: number;
   /** Сводка пустых оборотов снимка: ряд сводки и причины отказа до клика (S14 M4). */
   readonly blank: BlankSummary;
+  /** Сводка выравнивания снимка (M6): ряд «Выровнено» и отказ `straightenPending` до клика. */
+  readonly straighten: StraightenSummary;
   /**
    * Записать имена, тронутые в модалке (номер документа → имя), одной правкой; `false` — не
    * записались (об этом уже сказано).
@@ -85,6 +90,21 @@ function blankFact(t: TFunction, blank: BlankSummary): string {
     : t('save.fact.blankMarked', { count: blank.found });
 }
 
+/** Ряд «Выровнено» (M6): «N стр.» или «нет», хвост — ещё в обработке или не выровнено. */
+function straightFact(t: TFunction, straighten: StraightenSummary): string {
+  let text =
+    straighten.straightened === 0
+      ? t('save.fact.straightNone')
+      : t('save.fact.straightValue', { count: straighten.straightened });
+  const undone = straighten.unmeasurable + straighten.deferred;
+  if (straighten.pending > 0) {
+    text += t('save.fact.straightPendingTail', { count: straighten.pending });
+  } else if (undone > 0) {
+    text += t('save.fact.straightUndoneTail', { count: undone });
+  }
+  return text;
+}
+
 /** Отказ повтора, после которого пакета у ядра больше нет: выбор снова доступен (S16). */
 const BATCH_GONE: readonly unknown[] = ['batchStale', 'noFailedFiles'];
 
@@ -101,6 +121,7 @@ export function SaveModal({
   singleDefault,
   total,
   blank,
+  straighten,
   onRename,
   editsBusy,
   onWriting,
@@ -179,7 +200,8 @@ export function SaveModal({
   // `blankPending`: снимок с `pending === 0` снимет блок сам.
   const emptyDoc = documents.findIndex((doc) => doc.count === 0);
   const blankDocument = emptyDoc >= 0 && (perDocument || total === 0) ? emptyDoc : -1;
-  const unsaveable = blankDocument >= 0 || blank.pending > 0;
+  // M6: выравнивание ещё идёт — `straightenPending`, тот же ряд, что `blankPending`.
+  const unsaveable = blankDocument >= 0 || blank.pending > 0 || straighten.pending > 0;
 
   const write = (requested: readonly string[], retry: boolean): void => {
     setWriting(true);
@@ -304,10 +326,22 @@ export function SaveModal({
         {t('save.documentBlank', { name })}
       </p>
     );
+  } else if (blank.pending > 0 && straighten.pending > 0) {
+    status = (
+      <p className="modal__status" role="status" aria-live="polite">
+        {t('save.bothPending', { count: blank.pending + straighten.pending })}
+      </p>
+    );
   } else if (blank.pending > 0) {
     status = (
       <p className="modal__status" role="status" aria-live="polite">
         {t('save.blankPending', { count: blank.pending })}
+      </p>
+    );
+  } else if (straighten.pending > 0) {
+    status = (
+      <p className="modal__status" role="status" aria-live="polite">
+        {t('save.straightPending', { left: straighten.pending, total: straighten.total })}
       </p>
     );
   } else {
@@ -497,6 +531,12 @@ export function SaveModal({
             <div className="facts__row">
               <dt className="facts__key">{t('save.fact.blank')}</dt>
               <dd className="facts__value">{blankFact(t, blank)}</dd>
+            </div>
+          )}
+          {straighten.mode === 'auto' && (
+            <div className="facts__row">
+              <dt className="facts__key">{t('save.fact.straight')}</dt>
+              <dd className="facts__value">{straightFact(t, straighten)}</dd>
             </div>
           )}
           <div className="facts__row">

@@ -23,6 +23,7 @@ import { journalOnDisk } from '../support/session-store';
 import { makeTempDataRoot } from '../support/temp-data-root';
 import { unwrap } from '../support/result';
 import { until, untilScored } from '../support/until';
+import { levelWorker } from '../support/image-worker';
 
 // Раздельные наборы — полный путь на настоящей цепочке (план M3.6, U7; R27): эмулятор с лотками
 // по заданиям → служба → журнал v5 → режим наборов в снимке → «Добавить» в группу якоря → перенос
@@ -41,6 +42,7 @@ const FAST: Partial<ScanJobLimits> = {
 
 const OPTIONS = {
   jobLimits: FAST,
+  imageWorker: levelWorker,
   minFreeBytes: 1,
   retry: { ceilingMs: 0 },
 } satisfies PassServiceOptions;
@@ -445,7 +447,7 @@ describe('раздельные наборы — полный путь через
     expect(snapshot.assembly?.documents).toEqual([{ name: '', start: 0, count: 5 }]);
     const journal = await journalOnDisk(root);
     expect(journal).toMatchObject({
-      version: 7,
+      version: 8,
       assembled: null,
       edits: { divider: null, cuts: [], names: [''] },
     });

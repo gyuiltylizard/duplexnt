@@ -8,6 +8,7 @@ import { startTestEmulator } from '../support/emulator';
 import { journalOnDisk, rolesOf } from '../support/session-store';
 import { makeTempDataRoot } from '../support/temp-data-root';
 import { unwrap } from '../support/result';
+import { levelWorker } from '../support/image-worker';
 
 // Добавленный набор на настоящей цепочке (план M3.5, U3; KTD-5): эмулятор с лотками по заданиям
 // → служба прохода с намерением → хранилище пишет роль и якорь → сборка ставит набор за якорем.
@@ -24,6 +25,7 @@ const FAST: Partial<ScanJobLimits> = {
 
 const OPTIONS = {
   jobLimits: FAST,
+  imageWorker: levelWorker,
   minFreeBytes: 1,
   retry: { ceilingMs: 0 },
 } satisfies PassServiceOptions;

@@ -6,6 +6,12 @@
 // В снимке нет абсолютных путей и адресов заданий (KTD-39): страница адресуется ключом.
 
 import type { BlankFlag, BlankMode, BlankSummary } from './blank';
+import type {
+  StraightenMark,
+  StraightenMode,
+  StraightenProgress,
+  StraightenSummary,
+} from './straighten';
 import type { HintId } from './hints';
 import type { SessionEdits } from './edits';
 import type { DomainError } from './errors';
@@ -229,6 +235,11 @@ export interface SessionSnapshot {
    * первого прохода, в редакторе не меняется; сессии журнала v5 — «оставлять».
    */
   readonly blankMode: BlankMode;
+  /**
+   * Режим выравнивания перекоса сессии (M6; ADR 0004, амендмент 2026-10-28): заморожен при
+   * старте первого прохода, в редакторе не меняется; сессии журнала v7 — «не выравнивать».
+   */
+  readonly straighten: StraightenMode;
 }
 
 /** Угол страницы при показе и в PDF по часовой стрелке (M3, KTD-4). */
@@ -279,6 +290,12 @@ export interface AssembledPage {
    * режиму сессии, пометке «не пустая» и режиму сборки; в журнал не пишется.
    */
   readonly blank: BlankFlag;
+  /**
+   * Выравнивание перекоса (M6, KTD-9): статус и причина «не выровнено». Считается ядром по
+   * режиму сессии, исходу измерения, записи о коррекции, очереди и откату пользователя; в
+   * журнал не пишется. По статусу `straightened` выбирается выправленный вид картинки.
+   */
+  readonly straighten: StraightenMark;
 }
 
 /** Документ ленты: отрезок `order` от `start` длиной `count` (M3, R10). */
@@ -375,6 +392,8 @@ export interface SessionAssembly {
   readonly report: AssemblyReport;
   /** Пустые обороты видимой ленты (M4, KTD4): режим, найдено, скрыто, ждут оценки. */
   readonly blank: BlankSummary;
+  /** Выравнивание перекоса видимой ленты (M6, KTD-9): счёт по статусам и причинам. */
+  readonly straighten: StraightenSummary;
 }
 
 /** Что сверка при запуске нашла и о чём интерфейс сообщает один раз. */
@@ -500,6 +519,16 @@ export interface Snapshot {
    * текущей сессии — в `session.blankMode`: он заморожен и может отличаться.
    */
   readonly blankMode: BlankMode;
+  /**
+   * Режим выравнивания перекоса из настроек (M6, R13) — для ряда в `setup`. Режим текущей
+   * сессии — в `session.straighten`: он заморожен и может отличаться.
+   */
+  readonly straightenMode: StraightenMode;
+  /**
+   * Ход коррекции перекоса (M6, U12): очередь ядра; `null` — сессии нет или режим сессии «не
+   * выравнивать». Страницы, которые ещё ждут, — в `assembly.straighten.pending`.
+   */
+  readonly straightenProgress: StraightenProgress | null;
   /** Подсказки, уже показанные с привлечением внимания (B-4): больше не мигают. */
   readonly seenHints: readonly HintId[];
 }

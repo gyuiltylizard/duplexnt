@@ -3,7 +3,6 @@ import {
   fail,
   isBacksKind,
   ok,
-  type AssembledPage,
   type BlankMode,
   type HintId,
   type DomainError,
@@ -15,14 +14,15 @@ import {
   type ScanParams,
   type SaveDocumentsReport,
   type SaveDocumentsRequest,
-  type SavedFile,
-  type SaveMode,
+  type SessionAssembly,
   type SessionConflictReason,
   type SessionEdits,
+  type SessionSnapshot,
   type StartPassRequest,
   type SetEditsReport,
   type Snapshot,
   type StartupNotice,
+  type StraightenMode,
 } from '@shared';
 import type { ConnectedScanner, ConnectorOptions } from '../escl/connect';
 import { jobPathFromLocation } from '../escl/device-path';
@@ -37,25 +37,44 @@ import {
 import { buildScanSettings } from '../escl/scan-settings';
 import { blankRatio, type BlankDetector } from '../detect/blank';
 import { findByUuid } from '../discovery/find-by-uuid';
+import { inlineImageWorker, type ImageWorker } from '../image/image-worker';
 import { parseStatus } from '../escl/status';
 import { createTransport, type ScannerTransport } from '../escl/transport';
-import { assemblePdf, type PdfPageInput } from '../pdf/assemble';
-import { writeBatch } from '../pdf/save-batch';
 import { createBlankScores, type BlankScores } from '../storage/blank-scores';
 import type { PassOrigin } from '../storage/journal';
 import { layoutOf } from '../storage/layout';
+import { limiterOf, type Limiter } from '../storage/limiter';
 import { stopKeepsPages } from '../storage/pass-policy';
 import { openSessionStore } from '../storage/reconcile';
 import type { StartUuidSearch } from '../storage/remembered-search';
-import type { PageInfo, SessionStore, SessionStoreOptions } from '../storage/session-store';
+import {
+  MIN_FREE_BYTES,
+  type PageInfo,
+  type SessionStore,
+  type SessionStoreOptions,
+} from '../storage/session-store';
 import { openSettingsStore, type SettingsStore } from '../storage/settings-store';
+import { createSkewScores, type SkewScores } from '../storage/skew-scores';
 import { sameScanner, storedScannerOf, type StoredScanner } from '../storage/stored-scanner';
 import { ioOf, storageFailure } from '../storage/storage-fs';
+import { createStraightened, type Straightened } from '../storage/straightened';
 import { pagePixelLimit } from '../storage/thumbnails';
 import { openUnclosedJobs, type UnclosedJobs } from '../storage/unclosed-jobs';
 import { assembleSession } from './assembly';
-import { blankRefusal, pagesToScore, shownSpansOf } from './blank-flow';
+import { pagesToScore } from './blank-flow';
+import { createDocumentWriter } from './save-flow';
 import { createScannerSlot } from './scanner-slot';
+import {
+  createStraightenQueue,
+  pagesToMeasure,
+  straightenFactsOf,
+  straightenProgressOf,
+  type StraightenQueue,
+  type StraightenQueueState,
+} from './straighten-flow';
+
+/** Задач над производным в main одновременно — на всё: миниатюры, пустота, измерение (KTD-4). */
+const DERIVED_CONCURRENCY = 2;
 
 // Служба прохода (план M1, U17): связывает клиент сканера, хранилище сессии, настройки и
 // незакрытые задания в один сценарий и выдаёт снимок, из которого интерфейс выводит экран
@@ -88,6 +107,13 @@ export interface PassServiceOptions extends SessionStoreOptions {
   readonly blankDetector?: BlankDetector;
   /** Поиск запомненного сканера по UUID (M5, KTD9); по умолчанию — настоящий, по mDNS. */
   readonly findByUuid?: StartUuidSearch;
+  /**
+   * Общий лимитер производного (M6, KTD-4): main создаёт один и отдаёт его сюда и миниатюрам;
+   * без опции служба создаёт свой (тесты).
+   */
+  readonly derivedLimiter?: Limiter;
+  /** Исполнитель измерения и коррекции (M6, KTD-10); по умолчанию — прямой, в этом потоке. */
+  readonly imageWorker?: ImageWorker;
 }
 
 export interface PassService {
@@ -101,6 +127,8 @@ export interface PassService {
   setParams(params: ScanParams): Promise<Result<void>>;
   /** Режим пустых оборотов (M4, R1): настройка приложения; принимается и без сканера. */
   setBlankMode(mode: BlankMode): Promise<Result<void>>;
+  /** Режим выравнивания (M6, R13, R14): настройка приложения; открытую сессию не трогает. */
+  setStraightenMode(mode: StraightenMode): Promise<Result<void>>;
   /** Подсказка показана с привлечением внимания (B-4): в настройки, в снимок. */
   markHintSeen(hint: HintId): Promise<Result<void>>;
   /**
@@ -149,8 +177,9 @@ export interface PassService {
   rescanSetBacks(set: number): Promise<Result<void>>;
   /**
    * Пакетное сохранение в папку (M3, U4): документы ленты (или вся лента одним файлом) в PDF по
-   * одному, best-effort. «Сохранено» — только когда записаны все файлы пакета и журнал не
-   * менялся с первой попытки. `retry` пишет только неудавшиеся прошлого пакета — в его папку.
+   * одному, best-effort. «Сохранено» — только когда записаны все файлы пакета, журнал и
+   * выправленные страницы не менялись с первой попытки (KTD-8). `retry` пишет только
+   * неудавшиеся прошлого пакета — в его папку. Гарды ленты и пакет — `save-flow.ts`.
    */
   saveDocuments(
     folder: string,
@@ -172,24 +201,23 @@ export interface PassService {
    * `DELETE` уходит в пределах срока. Возвращается не позже срока.
    */
   interrupt(deadlineMs: number): Promise<void>;
+  /**
+   * Отменяет и дожидается фоновую работу над производным — измерения перекоса и очередь
+   * коррекции (M6, KTD-12): выход из приложения (`will-quit`; окно и проход — `interrupt`) и
+   * закрытие каталога сессии хранилищем. Отменённые страницы остаются без записи до следующего
+   * открытия сессии.
+   */
+  settleDerived(): Promise<void>;
   /** Страницы текущей сессии — для схемы изображений и миниатюр. */
   pageInfo(key: string): PageInfo | null;
   readPage(key: string): Promise<Result<Uint8Array>>;
-}
-
-/** Незавершённый пакет сохранения (M3, U4). */
-interface PendingBatch {
-  /** Пакет принадлежит сессии: после «Нового сканирования» повторять нечего. */
-  readonly sessionId: string;
-  readonly mode: SaveMode;
-  readonly folder: string;
-  readonly documents: number;
-  /** Ревизия журнала первой попытки. */
-  readonly revision: number;
-  /** Записанные — накопительно. */
-  readonly written: readonly SavedFile[];
-  /** Номера документов, которые ещё предстоит записать. */
-  readonly failed: readonly number[];
+  /**
+   * Выправленные файлы текущей сессии (M6, KTD-11): `resolve` — единственный источник пути для
+   * миниатюр выправленных, `read` — байты со сверкой размера по записи о коррекции.
+   */
+  straightenedFiles(): Pick<Straightened, 'resolve' | 'read'>;
+  /** Байты выправленной страницы для протокола картинок; нет записи — `notStraightened`. */
+  readStraightened(key: string): Promise<Result<Uint8Array>>;
 }
 
 interface Dependencies {
@@ -199,6 +227,15 @@ interface Dependencies {
   readonly notices: readonly StartupNotice[];
   /** Оценки пустых страниц (M4, KTD3): кэш уже прочитан при открытии. */
   readonly blank: BlankScores;
+  /** Оценки перекоса (M6, KTD-11): кэш уже прочитан при открытии. */
+  readonly skew: SkewScores;
+  /** Выправленные страницы (M6, KTD-11): записи уже прочитаны при открытии. */
+  readonly straightened: Straightened;
+  /**
+   * Очередь коррекции (M6, KTD-12) — фабрикой: её «снимок изменился» — это `notify` службы,
+   * который появляется только внутри неё.
+   */
+  readonly straightenQueue: (onChange: () => void) => StraightenQueue;
 }
 
 /** Идущий запуск прохода. */
@@ -240,7 +277,7 @@ export function interruptionError(end: ScanJobEnd): DomainError | null {
 }
 
 export function createPassService(
-  { store, settings, unclosedJobs, notices, blank }: Dependencies,
+  { store, settings, unclosedJobs, notices, blank, skew, straightened, ...deps }: Dependencies,
   options: PassServiceOptions = {},
 ): PassService {
   const jobLimits: ScanJobLimits = { ...SCAN_JOB_LIMITS, ...options.jobLimits };
@@ -251,19 +288,31 @@ export function createPassService(
   let run: Run | null = null;
   /** Сохранение PDF идёт: второй вызов — конфликт, а не два диалога и две записи в один путь. */
   let saving = false;
-  /**
-   * Незавершённый пакет (M3, U4): записанное накапливается, повтор пишет только неудавшиеся.
-   * Ревизия — первой попытки: правка между попытками делает уже записанные файлы устаревшими,
-   * и «сохранено» не ставится.
-   */
-  let pendingBatch: PendingBatch | null = null;
-  let lastBatchFolder: string | null = null;
   let seq = 0;
 
   const notify = (): void => {
     seq += 1;
     options.onChange?.(seq);
   };
+  const straightenQueue = deps.straightenQueue(notify);
+  // Сборка ленты с оценками пустоты и фактами выравнивания (KTD-9) — одна на снимок и пакет;
+  // состояние очереди снимается один раз на снимок (оно же идёт в прогресс).
+  const assembly = (
+    session: SessionSnapshot,
+    queue: StraightenQueueState = straightenQueue.state(),
+  ): SessionAssembly =>
+    assembleSession(
+      session,
+      blank.verdicts(),
+      straightenFactsOf(session, skew.verdicts(), straightened, queue),
+    );
+  const writer = createDocumentWriter({
+    store,
+    assemble: assembly,
+    straightened,
+    io: ioOf(options),
+    onSaved: notify,
+  });
   const scanner = createScannerSlot({
     settings,
     connector,
@@ -276,11 +325,37 @@ export function createPassService(
   // (`pagesToScore`, KTD3, KTD9); приход вердикта — новый снимок. Оценка не бросает (сбой —
   // вердикт «не пусто»), но фоновая цепочка всё равно не остаётся без обработчика: иначе
   // необработанный отказ в main.
+  // Измерение перекоса (M6, U5; KTD-4): по ходу прохода, без `await`, с низким приоритетом в
+  // общем лимитере — приём следующей страницы его не ждёт. Отмена (`abort`) — не сбой: `ensure`
+  // отвечает `false`, снимок не меняется.
+  const measureSkew = (key: string): void => {
+    skew.ensure(key).then(
+      (changed) => {
+        if (changed) {
+          notify();
+          // Исход «выправлять» — в очередь коррекции; остальным очередь отказывает сама (KTD-12).
+          straightenQueue.enqueue(key);
+        }
+      },
+      () => undefined,
+    );
+  };
+  const straightens = (): boolean => store.snapshot()?.straighten === 'auto';
+  /** Всё, что по снимку подлежит измерению и ещё не измерено: открытие, пометка «не пустая». */
+  const measurePending = (): void => {
+    for (const page of pagesToMeasure(store.snapshot(), blank.verdicts())) {
+      measureSkew(page.key);
+    }
+  };
   const detectBlank = (key: string): void => {
     blank.ensure(key).then(
       (changed) => {
         if (changed) {
           notify();
+          // Оборот с вердиктом «не пусто» измеряется только теперь (R6): пустые не меряются.
+          if (straightens() && blank.verdicts().get(key) === false) {
+            measureSkew(key);
+          }
         }
       },
       () => undefined,
@@ -297,6 +372,29 @@ export function createPassService(
   for (const page of pagesToScore(store.snapshot())) {
     detectBlank(page.key);
   }
+  // Страницы без кэша оценки перекоса — тоже в фоне; обороты без вердикта пустоты дождутся его.
+  // Страницы с исходом «выправлять» без записи текущей версии — в очередь коррекции (AE8, AE13;
+  // отложенные по месту или сбою в прошлый раз — попытка снова, R27).
+  measurePending();
+  straightenQueue.ensureAll();
+  /** Отброшенные страницы («Остановить», «Новая пачка», пересъём) теряют и вердикты. */
+  const pruneScores = (): void => {
+    blank.prune();
+    skew.prune();
+    straightened.prune();
+    straightenQueue.prune();
+  };
+  /**
+   * Возобновляет измерения и коррекцию после отмены (KTD-12), которую сделало закрытие каталога
+   * сессии: если закрытие не состоялось (`sessionCloseFailed`, KTD-33) или сессия осталась
+   * после «Остановить», отменённые страницы иначе ждали бы перезапуска, а сохранение отказывало
+   * бы `straightenPending` навечно (ревью сессий 3–4). Идемпотентно: измеренным и выправленным
+   * страницам `ensure` и `enqueue` ничего не делают.
+   */
+  const resumeDerived = (): void => {
+    measurePending();
+    straightenQueue.ensureAll();
+  };
 
   // Досканировать можно только тот же сканер, что вёл проход (KTD-27).
   function resumeTarget(): Result<PassOrigin> {
@@ -322,128 +420,15 @@ export function createPassService(
     return store.snapshot() === null ? conflict('noSession') : null;
   }
 
-  /** Страницы ленты → PDF; потерянная страница — отказ, а не молча короче (M2, R11). */
-  async function buildPdf(pages: readonly AssembledPage[]): Promise<Result<Uint8Array>> {
-    const inputs: PdfPageInput[] = [];
-    for (const page of pages) {
-      const info = store.pageInfo(page.key);
-      const bytes = await store.readPage(page.key);
-      if (!bytes.ok) {
-        return bytes;
-      }
-      inputs.push({
-        bytes: bytes.value,
-        angle: page.angle,
-        dpi: info?.dpi ?? null,
-        pixelLimit: info?.pixelLimit ?? null,
-      });
-    }
-    return assemblePdf(inputs);
-  }
-
-  async function writeDocuments(
-    folder: string,
-    request: SaveDocumentsRequest,
-  ): Promise<Result<SaveDocumentsReport>> {
-    const refused = refusedSave();
-    if (refused !== null) {
-      return refused;
-    }
-    const session = store.snapshot();
-    if (session === null) {
-      return conflict('noSession');
-    }
-    const { order, documents, report, blank: blanks } = assembleSession(session, blank.verdicts());
-    // Несобранный документ не сохраняется ни одним путём (M3.6, R16; KTD6): лента из двух
-    // наборов — ещё не документ.
-    if (report.mode === 'sets') {
-      return conflict('notAssembled');
-    }
-    if (order.length === 0) {
-      return conflict('nothingToSave');
-    }
-    // «Один файл» не смотрит на границы (R15): разрезы и имена в журнале остаются. Скрытые
-    // пустые обороты в файл не идут (M4, R10): документы режутся по полной ленте, пишутся без них.
-    const spans = shownSpansOf(
-      request.mode === 'single'
-        ? [order]
-        : documents.map((doc) => order.slice(doc.start, doc.start + doc.count)),
-    );
-    if (request.names.length !== spans.length) {
-      return fail('invalidInput', { field: 'names', problem: 'count' });
-    }
-    // Оценки ещё идут или документ из одних скрытых — отказ до записи (M4, KTD4).
-    const refusedByBlank = blankRefusal(blanks, spans);
-    if (refusedByBlank !== null) {
-      return refusedByBlank;
-    }
-
-    // Новый пакет забывает прежний незавершённый: повтор относится только к последнему.
-    const previous = request.retry ? pendingBatch : null;
-    pendingBatch = previous;
-    if (
-      request.retry &&
-      (previous?.sessionId !== session.id ||
-        previous.mode !== request.mode ||
-        previous.documents !== spans.length)
-    ) {
-      return conflict('noFailedFiles');
-    }
-    // Лента менялась после первой попытки: записанные файлы собраны со старой, и дописать к
-    // ним неудавшиеся по новой — значит молча получить пакет, где страница в двух файлах или
-    // ни в одном. Пакет пишется заново целиком.
-    if (previous !== null && previous.revision !== store.revision()) {
-      pendingBatch = null;
-      return conflict('batchStale');
-    }
-    const batch: PendingBatch = previous ?? {
-      sessionId: session.id,
-      mode: request.mode,
-      folder,
-      documents: spans.length,
-      revision: store.revision(),
-      written: [],
-      failed: spans.map((_pages, index) => index),
-    };
-
-    const outcome = await writeBatch(
-      batch.folder,
-      batch.failed.map((index) => ({
-        index,
-        name: request.names[index] ?? '',
-        build: () => buildPdf(spans[index] ?? []),
-      })),
-      ioOf(options),
-    );
-    if (!outcome.ok) {
-      return outcome;
-    }
-    const written = [...batch.written, ...outcome.value.written].sort(
-      (left, right) => left.index - right.index,
-    );
-    const { failed } = outcome.value;
-    if (written.length > 0) {
-      lastBatchFolder = batch.folder;
-    }
-    if (failed.length === 0) {
-      pendingBatch = null;
-      // Отметка — на набор первой попытки: правка между попытками её не получит (R13).
-      await store.markSaved(batch.revision);
-      notify();
-    } else {
-      pendingBatch = { ...batch, written, failed: failed.map((file) => file.index) };
-    }
-    return ok({ folder: batch.folder, written, failed });
-  }
-
   function snapshot(): Snapshot {
     const session = store.snapshot();
     const last = session?.passes.at(-1);
+    const queue = straightenQueue.state();
     return {
       seq,
       scanner: scanner.state(),
       session,
-      assembly: session === null ? null : assembleSession(session, blank.verdicts()),
+      assembly: session === null ? null : assembly(session, queue),
       pass:
         run === null
           ? null
@@ -460,6 +445,8 @@ export function createPassService(
       storage: { incompatible: store.incompatible, unsaved: store.unsaved() },
       notices,
       blankMode: settings.get().blankMode,
+      straightenMode: settings.get().straightenMode,
+      straightenProgress: straightenProgressOf(session, queue),
       seenHints: settings.get().seenHints,
     };
   }
@@ -558,11 +545,20 @@ export function createPassService(
       }
       const begun = current.resumed
         ? await store.resumePass()
-        : await store.beginPass(origin, current.request, settings.get().blankMode);
+        : await store.beginPass(
+            origin,
+            current.request,
+            settings.get().blankMode,
+            settings.get().straightenMode,
+          );
       if (!begun.ok) {
         return begun;
       }
       notify();
+      // Режимы сессии заморожены в журнале (R2, R14): читаются раз на проход, а не на каждую
+      // страницу — `store.snapshot()` собирает все проходы, а `sink` не должен ждать лишнего.
+      const scoring = detectsBlank(current.kind);
+      const measuring = straightens();
 
       // Исход, записанный обработчиком задания; `null` — обработчик не вызывался (задание не
       // создано, адрес негоден, отмена до `POST`), и исход переводится по отчёту. Поле объекта,
@@ -579,8 +575,11 @@ export function createPassService(
           const accepted = await store.acceptPage(body);
           current.pages += 1;
           notify();
-          if (detectsBlank(current.kind)) {
+          if (scoring) {
+            // Оборот сначала получает вердикт пустоты; измерение перекоса — по нему (R6).
             detectBlank(accepted.key);
+          } else if (measuring) {
+            measureSkew(accepted.key);
           }
         },
         onPhase: (phase) => {
@@ -694,7 +693,9 @@ export function createPassService(
     current.done = runPass(current, connected, origin).finally(() => {
       run = null;
       // «Остановить» и «Новая пачка» по пустому остатку отбросили страницы: их вердикты — тоже.
-      blank.prune();
+      // Закрытие каталога на этом пути могло отменить производное и не состояться — возобновить.
+      pruneScores();
+      resumeDerived();
       notify();
     });
     notify();
@@ -726,6 +727,13 @@ export function createPassService(
     async setBlankMode(mode) {
       // Не параметр устройства: сканер не нужен, по capabilities не сверяется (KTD1).
       const saved = await settings.setBlankMode(mode);
+      notify();
+      return saved;
+    },
+
+    async setStraightenMode(mode) {
+      // Настройка приложения: сессия берёт её только при старте первого прохода (R14).
+      const saved = await settings.setStraightenMode(mode);
       notify();
       return saved;
     },
@@ -805,7 +813,7 @@ export function createPassService(
         return busy;
       }
       const rescanned = await store.rescanSetBacks(set);
-      blank.prune();
+      pruneScores();
       notify();
       return rescanned;
     },
@@ -819,6 +827,11 @@ export function createPassService(
       }
       const set = await store.setEdits(edits, rotate180);
       notify();
+      // «Это не пустая страница» ставит оборот в очередь измерения (R6); остальным правкам
+      // измерять нечего — `ensure` у измеренных молчит.
+      if (set.ok) {
+        measurePending();
+      }
       return set.ok ? ok({ seq }) : set;
     },
 
@@ -830,7 +843,7 @@ export function createPassService(
       }
       saving = true;
       try {
-        return await writeDocuments(folder, request);
+        return refusedSave() ?? (await writer.write(folder, request));
       } finally {
         saving = false;
       }
@@ -844,17 +857,22 @@ export function createPassService(
       if (saving) {
         return conflict('saving');
       }
+      // Идущие измерения отменяет и дожидается само хранилище (`settleDerived`, KTD-12) — до
+      // удаления каталога производного.
       const closed = await store.closeSession();
       if (closed.ok) {
         // Незавершённый пакет принадлежал закрытой сессии: повтор не допишет новую в её папку.
-        pendingBatch = null;
-        blank.prune();
+        writer.forget();
+        pruneScores();
+      } else {
+        // Сессия осталась (KTD-33), а производное уже отменено — вернуть его в работу.
+        resumeDerived();
       }
       notify();
       return closed;
     },
 
-    lastBatchFolder: () => lastBatchFolder,
+    lastBatchFolder: () => writer.lastFolder(),
     rememberedSaveFolder: () => settings.get().saveFolder,
     rememberSaveFolder: (folder) => settings.rememberSaveFolder(folder),
 
@@ -870,8 +888,22 @@ export function createPassService(
       await Promise.race([current.done, delay(deadlineMs)]);
     },
 
+    async settleDerived() {
+      skew.abort();
+      straightenQueue.abort();
+      await Promise.all([skew.settle(), straightenQueue.settle()]);
+    },
+
     pageInfo: (key) => store.pageInfo(key),
     readPage: (key) => store.readPage(key),
+    straightenedFiles: () => straightened,
+
+    readStraightened(key) {
+      const file = straightened.resolve(key);
+      return file === null
+        ? Promise.resolve(fail('pageUnavailable', { reason: 'notStraightened' }))
+        : straightened.read(file);
+    },
   };
 }
 
@@ -880,26 +912,65 @@ export async function openPassService(
   dataRoot: string,
   options: PassServiceOptions = {},
 ): Promise<PassService> {
-  const { store, notices } = await openSessionStore(dataRoot, options);
+  // Фоновую работу над производным хранилище отменяет и дожидается перед удалением каталога
+  // (KTD-12); оценки создаются после хранилища, поэтому связь — через позднюю привязку.
+  const derived = { settle: (): Promise<void> => Promise.resolve() };
+  const { store, notices } = await openSessionStore(dataRoot, {
+    ...options,
+    settleDerived: () => derived.settle(),
+  });
   const settings = await openSettingsStore(dataRoot, options);
   const unclosedJobs = await openUnclosedJobs(dataRoot, options);
+  const { derivedDir, root } = layoutOf(dataRoot);
+  // Один лимитер на всё производное main-стороны (KTD-4): main отдаёт его и миниатюрам.
+  const limiter = options.derivedLimiter ?? limiterOf(DERIVED_CONCURRENCY);
   // Кэш оценок страниц оборотов читается до первого снимка (KTD3): лента после перезапуска
   // сразу с флагами, без детектора. Режим «Оставлять» оценок не имеет.
-  const blank = createBlankScores(
-    layoutOf(dataRoot).derivedDir,
-    store,
-    options.blankDetector ?? blankRatio,
-    options,
-  );
+  const blank = createBlankScores(derivedDir, store, options.blankDetector ?? blankRatio, {
+    ...options,
+    limiter,
+  });
   await blank.load(pagesToScore(store.snapshot()).map((page) => page.key));
-  return createPassService(
+  // Кэш оценок перекоса — так же (KTD-11); обороты без вердикта пустоты измеряются после него.
+  const worker = options.imageWorker ?? inlineImageWorker();
+  const skew = createSkewScores(
+    derivedDir,
+    store,
+    (bytes, pixelLimit, measure) => worker.measure(bytes, pixelLimit, measure),
+    { ...options, limiter },
+  );
+  // Выправленные страницы и очередь коррекции (KTD-11, KTD-12, KTD-13): записи читаются при
+  // открытии — параллельно с кэшем оценок перекоса, они независимы; недостающее — в очередь;
+  // место проверяется тем же резервом, что перед проходом.
+  const straightened = createStraightened(derivedDir, store, options);
+  const session = store.snapshot();
+  await Promise.all([
+    skew.load(pagesToMeasure(session, blank.verdicts()).map((page) => page.key)),
+    straightened.load(session?.passes.flatMap((pass) => pass.pages.map((page) => page.key)) ?? []),
+  ]);
+  const { fs } = ioOf(options);
+  const service = createPassService(
     {
       store,
       settings,
       unclosedJobs,
       notices: settings.notice === null ? notices : [...notices, settings.notice],
       blank,
+      skew,
+      straightened,
+      straightenQueue: (onChange) =>
+        createStraightenQueue({
+          source: store,
+          skew,
+          straightened,
+          worker: { straighten: (bytes, profile, job) => worker.straighten(bytes, profile, job) },
+          freeBytes: () => fs.freeBytes(root),
+          minFreeBytes: options.minFreeBytes ?? MIN_FREE_BYTES,
+          onChange,
+        }),
     },
     options,
   );
+  derived.settle = () => service.settleDerived();
+  return service;
 }

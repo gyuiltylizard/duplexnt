@@ -9,7 +9,8 @@ export type DurationToken =
   | '--duration-fast'
   | '--duration-screen'
   | '--duration-base'
-  | '--duration-turn';
+  | '--duration-turn'
+  | '--duration-loop';
 
 export type EasingToken = '--ease-out' | '--ease-standard';
 

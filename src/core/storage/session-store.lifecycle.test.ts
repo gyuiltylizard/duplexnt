@@ -183,6 +183,7 @@ describe('хранилище сессии: пустая сессия равна 
       edits: EMPTY_EDITS,
       assembled: null,
       blankMode: 'keep',
+      straighten: 'off',
       sessionId: SESSION,
       nextPass: 2,
       passes: [
@@ -258,6 +259,7 @@ describe('хранилище сессии: потолки счётчиков', (
     edits: EMPTY_EDITS,
     assembled: null,
     blankMode: 'keep',
+    straighten: 'off',
     sessionId: SESSION,
     nextPass: 2,
     passes: [
@@ -351,16 +353,42 @@ describe('хранилище сессии: миниатюры отброшенн
     for (const name of ['p01-s01-0001.jpg', 'p01-s02-0001.jpg', 'p01-s02-0002.jpg']) {
       await writeFile(join(thumbs, name), page(7));
     }
+    // Производное выравнивания (M6, R26) чистится по тому же префиксу.
+    const derived = {
+      skew: ['p01-s01-0001.json', 'p01-s02-0001.json'],
+      straight: [
+        'p01-s01-0001.v1.jpg',
+        'p01-s01-0001.v1.json',
+        'p01-s02-0002.v1.jpg',
+        'p01-s02-0002.v1.json',
+      ],
+      'straight-thumbs': ['p01-s01-0001.v1.jpg', 'p01-s02-0001.v1.jpg'],
+    };
+    for (const [dir, names] of Object.entries(derived)) {
+      await mkdir(join(layout.derivedDir, SESSION, dir), { recursive: true });
+      for (const name of names) {
+        await writeFile(join(layout.derivedDir, SESSION, dir, name), page(7));
+      }
+    }
 
     ok(await store.discardSegment());
 
     expect(await readdir(thumbs)).toEqual(['p01-s01-0001.jpg']);
+    expect(await readdir(join(layout.derivedDir, SESSION, 'skew'))).toEqual(['p01-s01-0001.json']);
+    expect((await readdir(join(layout.derivedDir, SESSION, 'straight'))).sort()).toEqual([
+      'p01-s01-0001.v1.jpg',
+      'p01-s01-0001.v1.json',
+    ]);
+    expect(await readdir(join(layout.derivedDir, SESSION, 'straight-thumbs'))).toEqual([
+      'p01-s01-0001.v1.jpg',
+    ]);
   });
 });
 
 describe('хранилище сессии: нечитаемый журнал, который сверка не сохранила в стороне', () => {
   const JOURNAL: Journal = {
     blankMode: 'keep',
+    straighten: 'off',
     version: JOURNAL_VERSION,
     edits: EMPTY_EDITS,
     assembled: null,

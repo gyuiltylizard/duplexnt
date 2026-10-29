@@ -55,15 +55,30 @@ export const editsV5Schema = z
   .refine(namesMatchCuts);
 
 /**
- * Текущая форма правок (M4; амендмент 2026-10-22): к полям v5 — `notBlank`, ключи страниц,
+ * Поля правок версии 6 (M4; амендмент 2026-10-22): к полям v5 — `notBlank`, ключи страниц,
  * принятых пользователем непустыми. Повторы и мёртвые ключи схема пропускает: их вычищает
  * нормализация.
+ */
+const editsV6FieldsOf = (maxItems: number) => ({
+  ...editsV5FieldsOf(maxItems),
+  notBlank: z.array(pageKeySchema).max(maxItems).readonly(),
+});
+
+/** Правки журнала версий 6–7: без отката выравнивания — только для чтения прежних файлов. */
+export const editsV6Schema = z
+  .strictObject(editsV6FieldsOf(Number.POSITIVE_INFINITY))
+  .refine(namesMatchCuts);
+
+/**
+ * Текущая форма правок (M6; амендмент 2026-10-28): к полям v6 — `keepOriginal`, ключи страниц,
+ * для которых пользователь вернул оригинал вместо выправленной. Повторы и мёртвые ключи схема
+ * пропускает, как у `notBlank`.
  */
 export function editsSchemaOf(maxItems = Number.POSITIVE_INFINITY) {
   return z
     .strictObject({
-      ...editsV5FieldsOf(maxItems),
-      notBlank: z.array(pageKeySchema).max(maxItems).readonly(),
+      ...editsV6FieldsOf(maxItems),
+      keepOriginal: z.array(pageKeySchema).max(maxItems).readonly(),
     })
     .refine(namesMatchCuts);
 }

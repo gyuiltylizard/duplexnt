@@ -1,6 +1,7 @@
 import { setImmediate as nextTick } from 'node:timers/promises';
 import { degrees, PDFDocument, type PDFImage } from '@cantoo/pdf-lib';
 import { fail, ok, type PageAngle, type Result } from '@shared';
+import { hasJfifHeader } from '../escl/jpeg-markers';
 import { decodePixelLimit } from '../storage/thumbnails';
 
 // Сборка PDF (план M2, U5; ADR 0007): упорядоченный список JPEG-страниц → байты документа.
@@ -37,26 +38,9 @@ const DPCM_TO_DPI = 2.54;
  * квадратно-пиксельные.
  */
 export function jfifDpi(bytes: Uint8Array): number | null {
-  // SOI, затем APP0 длиной не меньше 16: маркер, длина, "JFIF\0", версия, единицы, плотности.
-  if (bytes.length < 18 || bytes[0] !== 0xff || bytes[1] !== 0xd8) {
-    return null;
-  }
-  if (bytes[2] !== 0xff || bytes[3] !== 0xe0) {
-    return null;
-  }
-  const isJfif =
-    bytes[6] === 0x4a &&
-    bytes[7] === 0x46 &&
-    bytes[8] === 0x49 &&
-    bytes[9] === 0x46 &&
-    bytes[10] === 0;
-  if (!isJfif) {
-    return null;
-  }
-  // Заявленная длина сегмента меньше полного заголовка JFIF: байты плотности лежали бы уже в
-  // следующем сегменте — на битом файле это дало бы случайный размер страницы вместо дефолта.
-  const declaredLength = ((bytes[4] ?? 0) << 8) | (bytes[5] ?? 0);
-  if (declaredLength < 16) {
+  // Заголовок на месте и заявленной длины хватает на байты плотности (`hasJfifHeader`): иначе
+  // на битом файле они читались бы из следующего сегмента — случайный размер страницы.
+  if (!hasJfifHeader(bytes)) {
     return null;
   }
   const units = bytes[13];

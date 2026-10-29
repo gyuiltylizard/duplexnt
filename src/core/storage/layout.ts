@@ -14,6 +14,10 @@ import { join } from 'node:path';
 //     session.closing-<id>/       закрываемая сессия, дочищается при запуске
 //     derived/<id сессии>/thumbs/ производное: удаляется без потерь
 //     derived/<id сессии>/blank/  оценки детектора пустых страниц (M4): тоже производное
+//     derived/<id сессии>/skew/   оценки перекоса подачи (M6, KTD-11): `<ключ>.json`
+//     derived/<id сессии>/straight/        выправленные страницы: `<ключ>.v<N>.jpg` и запись
+//                                          о коррекции `<ключ>.v<N>.json`, N — версия геометрии
+//     derived/<id сессии>/straight-thumbs/ миниатюры выправленных: `<ключ>.v<N>.jpg`
 //
 // Ключ стоит в имени файла: сессию можно пересобрать по именам, даже если журнал потерян. Номера
 // проходов и сегментов внутри сессии не переиспользуются — иначе файл отброшенного сегмента
@@ -30,6 +34,15 @@ export const PAGES_DIR_NAME = 'pages';
 export const PAGE_FILE = /^p(\d{2})-s(\d{2})-(\d{4})\.jpg$/;
 /** Имя файла оценки пустой страницы: ключ и `.json` (M4, KTD3). */
 export const BLANK_FILE = /^p(\d{2})-s(\d{2})-(\d{4})\.json$/;
+/** Имя файла оценки перекоса: ключ и `.json` (M6, KTD-11) — та же форма, другой каталог. */
+export const SKEW_FILE = /^p(\d{2})-s(\d{2})-(\d{4})\.json$/;
+/**
+ * Файлы выправленной страницы (M6, KTD-11): JPEG и запись о коррекции с версией геометрии в
+ * имени — файлы разных версий сосуществуют, пока пересчёт не запишет новую.
+ */
+export const STRAIGHT_FILE = /^p(\d{2})-s(\d{2})-(\d{4})\.v(\d+)\.(?:jpg|json)$/;
+/** Миниатюра выправленной страницы: ключ, версия, `.jpg`. */
+export const STRAIGHT_THUMB_FILE = /^p(\d{2})-s(\d{2})-(\d{4})\.v(\d+)\.jpg$/;
 const PAGE_KEY = /^p(\d{2})-s(\d{2})-(\d{4})$/;
 
 export const SESSION_ID = /^[0-9a-f]{16}$/;
@@ -95,6 +108,37 @@ export function blankDirOf(layout: DataLayout, sessionId: string): string {
   return blankDirIn(layout.derivedDir, sessionId);
 }
 
+/** Каталог оценок перекоса сессии от корня производного кэша (M6, KTD-11). */
+export function skewDirIn(derivedDir: string, sessionId: string): string {
+  return join(derivedDir, sessionId, 'skew');
+}
+
+export function skewDirOf(layout: DataLayout, sessionId: string): string {
+  return skewDirIn(layout.derivedDir, sessionId);
+}
+
+/**
+ * Каталог выправленных страниц сессии (M6, KTD-11). Путь к файлу всем потребителям отдаёт
+ * только `straightened.resolve` — страж `test/guards/straight-paths.test.ts` запрещает вызов
+ * вне модуля выправленных файлов и путей очистки.
+ */
+export function straightDirIn(derivedDir: string, sessionId: string): string {
+  return join(derivedDir, sessionId, 'straight');
+}
+
+export function straightDirOf(layout: DataLayout, sessionId: string): string {
+  return straightDirIn(layout.derivedDir, sessionId);
+}
+
+/** Каталог миниатюр выправленных страниц сессии (M6, KTD-7). */
+export function straightThumbsDirIn(derivedDir: string, sessionId: string): string {
+  return join(derivedDir, sessionId, 'straight-thumbs');
+}
+
+export function straightThumbsDirOf(layout: DataLayout, sessionId: string): string {
+  return straightThumbsDirIn(layout.derivedDir, sessionId);
+}
+
 export interface PageAddress {
   readonly pass: number;
   readonly segment: number;
@@ -119,6 +163,33 @@ export function pageFileName(key: string): string {
 
 export function blankFileName(key: string): string {
   return `${key}.json`;
+}
+
+export function skewFileName(key: string): string {
+  return `${key}.json`;
+}
+
+/** Имя выправленного JPEG: ключ и версия геометрии (M6, KTD-11). */
+export function straightFileName(key: string, version: number): string {
+  return `${key}.v${version}.jpg`;
+}
+
+/** Имя записи о коррекции рядом с JPEG той же версии. */
+export function straightRecordName(key: string, version: number): string {
+  return `${key}.v${version}.json`;
+}
+
+/** Ключ и версия из имени файла выправленной страницы или её записи; иначе `null`. */
+export function parseStraightFileName(
+  name: string,
+): { readonly key: string; readonly version: number } | null {
+  const match = STRAIGHT_FILE.exec(name);
+  const address = addressOf(match);
+  if (match === null || address === null) {
+    return null;
+  }
+  const version = Number(match[4]);
+  return version >= 1 ? { key: pageKey(address), version } : null;
 }
 
 function addressOf(match: RegExpExecArray | null): PageAddress | null {

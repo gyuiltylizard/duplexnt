@@ -41,7 +41,14 @@ const REMEMBERED = storedScannerOf(connectedAt('192.0.2.10'));
 
 /** Настройки в памяти: что запомнено и какие записи сканера пришли. */
 function settingsWith(scanner: StoredScanner | null, params: ScanParams | null = PARAMS) {
-  let settings: Settings = { scanner, params, saveFolder: null, blankMode: 'hide', seenHints: [] };
+  let settings: Settings = {
+    scanner,
+    params,
+    saveFolder: null,
+    blankMode: 'hide',
+    seenHints: [],
+    straightenMode: 'auto',
+  };
   const remembered: StoredScanner[] = [];
   const store: SettingsStore = {
     notice: null,
@@ -56,6 +63,7 @@ function settingsWith(scanner: StoredScanner | null, params: ScanParams | null =
       return Promise.resolve(ok(undefined));
     },
     setBlankMode: () => Promise.resolve(ok(undefined)),
+    setStraightenMode: () => Promise.resolve(ok(undefined)),
     rememberSaveFolder: () => Promise.resolve(ok(undefined)),
     markHintSeen: () => Promise.resolve(ok(undefined)),
   };

@@ -19,16 +19,39 @@ import type { SessionEdits } from './edits';
 import type { DomainError, Result } from './errors';
 import type { ScanParams } from './scan-params';
 import type { PassReport, Snapshot } from './snapshot';
+import type { StraightenMode } from './straighten';
 
 export const PROBE_TOKEN_MAX_LENGTH = 64;
 
-/** Схема изображений страниц (ADR 0005; план M1, KTD-38): `<схема>://<сессия>/<вид>/<ключ>`. */
+/**
+ * Схема изображений страниц (ADR 0005; план M1, KTD-38): `<схема>://<сессия>/<вид>/<ключ>`;
+ * выправленные виды (M6, KTD-7) несут версию геометрии: `<схема>://<сессия>/<вид>/<v>/<ключ>`
+ * — откат, пересчёт и смена версии меняют адрес, и `<img>` перезагружается без хаков.
+ */
 export const PAGE_IMAGE_SCHEME = 'duplexnt-page';
-export const PAGE_IMAGE_VIEWS = ['page', 'thumb'] as const;
+export const PAGE_IMAGE_VIEWS = ['page', 'thumb', 'straight', 'straight-thumb'] as const;
 export type PageImageView = (typeof PAGE_IMAGE_VIEWS)[number];
 
-/** Адрес изображения страницы текущей сессии — единственный способ его собрать в интерфейсе. */
-export function pageImageUrl(sessionId: string, view: PageImageView, key: string): string {
+/** Виды с версией в адресе: выправленная страница и её миниатюра. */
+export const isStraightView = (view: PageImageView): boolean =>
+  view === 'straight' || view === 'straight-thumb';
+
+/**
+ * Адрес изображения страницы текущей сессии — единственный способ его собрать в интерфейсе.
+ * Выправленному виду нужна версия (`pageImageViewOf` её даёт); без неё — ошибка программы.
+ */
+export function pageImageUrl(
+  sessionId: string,
+  view: PageImageView,
+  key: string,
+  version: number | null = null,
+): string {
+  if (isStraightView(view)) {
+    if (version === null) {
+      throw new Error(`вид ${view} требует версии геометрии`);
+    }
+    return `${PAGE_IMAGE_SCHEME}://${sessionId}/${view}/${String(version)}/${key}`;
+  }
   return `${PAGE_IMAGE_SCHEME}://${sessionId}/${view}/${key}`;
 }
 
@@ -180,6 +203,11 @@ export interface BridgeCommands {
    * первого прохода. Не параметр устройства — принимается и без сканера.
    */
   readonly setBlankMode: { readonly request: BlankMode; readonly value: undefined };
+  /**
+   * Режим выравнивания перекоса (M6, R13, R14): помнится в настройках, в сессию замораживается
+   * при старте первого прохода — открытую сессию не трогает. Принимается и без сканера.
+   */
+  readonly setStraightenMode: { readonly request: StraightenMode; readonly value: undefined };
   /** Подсказка показана с привлечением внимания (B-4): помнится в настройках, больше не мигает. */
   readonly markHintSeen: { readonly request: HintId; readonly value: undefined };
   /**
@@ -249,6 +277,7 @@ export const BRIDGE_CHANNELS = {
   recheckScanner: 'duplexnt:recheck-scanner',
   setScanParams: 'duplexnt:set-scan-params',
   setBlankMode: 'duplexnt:set-blank-mode',
+  setStraightenMode: 'duplexnt:set-straighten-mode',
   markHintSeen: 'duplexnt:mark-hint-seen',
   startPass: 'duplexnt:start-pass',
   stopPass: 'duplexnt:stop-pass',

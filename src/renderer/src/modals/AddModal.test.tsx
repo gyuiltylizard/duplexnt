@@ -1,4 +1,4 @@
-import type { AssembledPage, ScannerState } from '@shared';
+import { NO_STRAIGHTEN_MARK, type AssembledPage, type ScannerState } from '@shared';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { i18n } from '../i18n';
@@ -205,6 +205,7 @@ describe('модалка add в режиме наборов (M3.6, KTD11; M4.5, 
     lost: false,
     addedSet,
     blank: null,
+    straighten: NO_STRAIGHTEN_MARK,
   });
   // Лента f1 f2 f3 | b2 a1 b1: граница 3, добавленный набор в группе оборотов.
   const visible = ['f1', 'f2', 'f3', 'b2', 'a1', 'b1'];
@@ -354,6 +355,7 @@ describe('якоря add при скрытых пустых оборотах (M4
       lost: false,
       addedSet: null,
       blank: null,
+      straighten: NO_STRAIGHTEN_MARK,
     });
     const visible = ['f1', 'b1', 'f2'];
     const shown = ['f1', 'f2'];

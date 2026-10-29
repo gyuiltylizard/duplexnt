@@ -75,6 +75,7 @@ const journalOf = (passes: readonly JournalPass[], extra: Partial<Journal> = {})
   edits: EMPTY_EDITS,
   assembled: null,
   blankMode: 'keep',
+  straighten: 'off',
   ...extra,
 });
 
@@ -173,14 +174,15 @@ describe('журнал v7: роли пары и решение по оборот
   });
 
   it('новый журнал — текущей версии', () => {
-    expect(newJournal(SESSION).version).toBe(7);
+    expect(newJournal(SESSION).version).toBe(JOURNAL_VERSION);
   });
 });
 
 describe('журнал v7: чтение v6 (M4.5, R21)', () => {
   const v6Of = (passes: readonly JournalPass[]) => ({
-    ...journalOf(passes),
+    ...omit(journalOf(passes), 'straighten'),
     version: 6,
+    edits: omit(EMPTY_EDITS, 'keepOriginal'),
     passes: passes.map((pass) => omit(pass, 'pair', 'backsDecision')),
   });
 

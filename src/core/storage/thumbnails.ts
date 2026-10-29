@@ -5,10 +5,12 @@ import type { InputCaps } from '../escl/capabilities';
 import { hasJpegMarkers } from '../escl/jpeg-markers';
 import { REGION_UNITS_PER_INCH } from '../escl/region';
 import { writeFileAtomic } from './atomic-file';
-import { pageFileName, thumbsDirIn } from './layout';
-import { limiterOf } from './limiter';
+import { pageFileName, straightFileName, straightThumbsDirIn, thumbsDirIn } from './layout';
+import { limiterOf, type Limiter } from './limiter';
+import { isAlive } from './liveness';
 import type { PageInfo } from './session-store';
 import { ioOf, type StorageOptions } from './storage-fs';
+import type { Straightened } from './straightened';
 
 // Миниатюры — производное (ADR 0004; план M1, U16, KTD-22, KTD-37). Строятся по требованию из
 // исходника и кэшируются вне каталога сессии, под её идентификатором: кэш прошлой сессии не
@@ -18,6 +20,12 @@ import { ioOf, type StorageOptions } from './storage-fs';
 // `sharp` видит только JPEG (KTD-37): libvips выбирает загрузчик по содержимому, и без проверки
 // под видом страницы в main попал бы любой его формат. Маркеры проверяются до декодирования,
 // формат и размер — по заголовку, предел пикселей — ещё раз самим декодером.
+//
+// Миниатюра выправленной страницы (M6, U6; KTD-7) — отдельный вариант в `straight-thumbs/` с
+// версией геометрии в имени: строится из файла, который отдаёт `straightened.resolve`
+// (единственный источник пути, KTD-11), тем же конвейером и с тем же пределом; миниатюры
+// прежних версий убираются после записи новой. Нет записи о коррекции — отказ `pageUnavailable`,
+// и протокол отдаёт обычную миниатюру.
 
 /** Миниатюра вписывается в эту рамку; пропорции — как у A4. Вдвое крупнее, чем показывает лента. */
 export const THUMBNAIL_BOX = { width: 320, height: 452 } as const;
@@ -63,8 +71,15 @@ export interface ThumbnailSource {
 }
 
 export interface ThumbnailOptions extends StorageOptions {
-  /** Сколько миниатюр строится одновременно. */
+  /**
+   * Общий лимитер производного (M6, KTD-4): миниатюры идут в нём с обычным приоритетом. Без него
+   * — свой, на `concurrency` задач.
+   */
+  readonly limiter?: Limiter;
+  /** Сколько миниатюр строится одновременно, когда лимитер не передан. */
   readonly concurrency?: number;
+  /** Выправленные страницы (M6, KTD-7) — для варианта `straight`; без них он всегда отказывает. */
+  readonly straightened?: Pick<Straightened, 'resolve' | 'read'>;
 }
 
 export interface Thumbnails {
@@ -73,11 +88,17 @@ export interface Thumbnails {
    * отказывает даже при тёплом кэше.
    */
   get(key: string): Promise<Result<Uint8Array>>;
+  /**
+   * Миниатюра выправленной страницы (M6, KTD-7) — из кэша или построенная по файлу из
+   * `straightened.resolve`; без записи о коррекции отказывает `pageUnavailable`.
+   */
+  getStraight(key: string): Promise<Result<Uint8Array>>;
 }
 
 type FailureReason = 'notJpeg' | 'tooLarge' | 'decode';
 const failed = (reason: FailureReason): Result<never> => fail('thumbnailFailed', { reason });
 const UNAVAILABLE = fail('pageUnavailable', { reason: 'unknown' });
+const NOT_STRAIGHTENED = fail('pageUnavailable', { reason: 'notStraightened' });
 
 async function render(source: Uint8Array, pixelLimit: number): Promise<Result<Uint8Array>> {
   if (!hasJpegMarkers(source)) {
@@ -109,10 +130,22 @@ export function createThumbnails(
 ): Thumbnails {
   const io = ioOf(options);
   const { fs } = io;
-  const limited = limiterOf(options.concurrency ?? DEFAULT_CONCURRENCY);
+  const limited = options.limiter ?? limiterOf(options.concurrency ?? DEFAULT_CONCURRENCY);
+  const straightened: Pick<Straightened, 'resolve' | 'read'> = options.straightened ?? {
+    resolve: () => null,
+    read: () => Promise.resolve(NOT_STRAIGHTENED),
+  };
 
-  async function build(key: string, info: PageInfo, file: string): Promise<Result<Uint8Array>> {
-    const page = await source.readPage(key);
+  /** Миниатюра из байтов источника в кэш `dir/file`; страницу могли отбросить, пока строилась. */
+  async function build(
+    key: string,
+    info: PageInfo,
+    dir: string,
+    file: string,
+    read: () => Promise<Result<Uint8Array>>,
+    stillWanted: () => boolean = () => true,
+  ): Promise<Result<Uint8Array>> {
+    const page = await read();
     if (!page.ok) {
       return page;
     }
@@ -122,15 +155,15 @@ export function createThumbnails(
     }
     // Кэш — по возможности: миниатюра отдаётся и тогда, когда записать её не удалось.
     const cached = await fs
-      .mkdir(thumbsDirIn(derivedDir, info.sessionId))
+      .mkdir(dir)
       .then(() => writeFileAtomic(file, rendered.value, io))
       .then(
         () => true,
         () => false,
       );
-    // Пока миниатюра строилась, страницу могли отбросить («Остановить», «Новая пачка»): такая
-    // миниатюра не отдаётся и в кэше не остаётся.
-    if (source.pageInfo(key)?.sessionId !== info.sessionId) {
+    // Пока миниатюра строилась, страницу могли отбросить («Остановить», «Новая пачка») или
+    // откатить к другой версии: такая миниатюра не отдаётся и в кэше не остаётся.
+    if (!isAlive(source, key, info) || !stillWanted()) {
       if (cached) {
         await fs.unlink(file).catch(() => undefined);
       }
@@ -139,32 +172,70 @@ export function createThumbnails(
     return rendered;
   }
 
+  /** Миниатюры прежних версий страницы — после записи новой; версии известны, листать незачем. */
+  async function dropOldVersions(dir: string, key: string, version: number): Promise<void> {
+    for (let old = 1; old < version; old += 1) {
+      await fs.unlink(join(dir, straightFileName(key, old))).catch(() => undefined);
+    }
+  }
+
   // Одна страница строится один раз, сколько бы запросов ни пришло одновременно.
   const building = new Map<string, Promise<Result<Uint8Array>>>();
 
+  async function cachedOrBuilt(
+    file: string,
+    make: () => Promise<Result<Uint8Array>>,
+  ): Promise<Result<Uint8Array>> {
+    try {
+      const cached = await fs.readFile(file);
+      if (cached.byteLength > 0) {
+        return ok(cached);
+      }
+    } catch {
+      // Кэша нет или он не читается — миниатюра строится заново.
+    }
+    const inFlight = building.get(file);
+    if (inFlight !== undefined) {
+      return inFlight;
+    }
+    const run = limited(make).finally(() => building.delete(file));
+    building.set(file, run);
+    return run;
+  }
+
   return {
-    async get(key) {
+    get(key) {
       const info = source.pageInfo(key);
       if (info === null) {
-        return UNAVAILABLE;
+        return Promise.resolve(UNAVAILABLE);
       }
-      const file = join(thumbsDirIn(derivedDir, info.sessionId), pageFileName(key));
-      try {
-        const cached = await fs.readFile(file);
-        if (cached.byteLength > 0) {
-          return ok(cached);
-        }
-      } catch {
-        // Кэша нет или он не читается — миниатюра строится заново.
-      }
+      const dir = thumbsDirIn(derivedDir, info.sessionId);
+      const file = join(dir, pageFileName(key));
+      return cachedOrBuilt(file, () => build(key, info, dir, file, () => source.readPage(key)));
+    },
 
-      const inFlight = building.get(file);
-      if (inFlight !== undefined) {
-        return inFlight;
+    getStraight(key) {
+      const info = source.pageInfo(key);
+      const straight = straightened.resolve(key);
+      if (info === null || straight === null) {
+        return Promise.resolve(NOT_STRAIGHTENED);
       }
-      const run = limited(() => build(key, info, file)).finally(() => building.delete(file));
-      building.set(file, run);
-      return run;
+      const dir = straightThumbsDirIn(derivedDir, info.sessionId);
+      const file = join(dir, straightFileName(key, straight.version));
+      return cachedOrBuilt(file, async () => {
+        const built = await build(
+          key,
+          info,
+          dir,
+          file,
+          () => straightened.read(straight),
+          () => straightened.resolve(key)?.version === straight.version,
+        );
+        if (built.ok) {
+          await dropOldVersions(dir, key, straight.version);
+        }
+        return built;
+      });
     },
   };
 }

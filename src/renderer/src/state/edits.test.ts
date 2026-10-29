@@ -4,6 +4,8 @@ import {
   deleted,
   dividerAfterMove,
   grouped,
+  keptOriginal,
+  restoredStraight,
   markedNotBlank,
   moved,
   movedAcross,
@@ -461,5 +463,31 @@ describe('«Выделить в документ» — извлечение в �
     expect(grouped(edits({}), SIX, [])).toBeNull();
     expect(grouped(edits({}), SIX, SIX)).toBeNull();
     expect(grouped(edits({ cuts: [2], names: ['А', 'Б'] }), SIX, [...SIX].reverse())).toBeNull();
+  });
+});
+
+// M6 (R14; handoff M6): «Оставить оригинал» — ключи в `keepOriginal`, как пометка «не пустая»;
+// «Выровнять» снимает их. Какие страницы подходят по статусу (AE17), решает экран.
+describe('откат выравнивания (M6)', () => {
+  it('добавляет ключи в keepOriginal, остальное не трогает; уже бывшие не дублируются', () => {
+    const base = { ...EMPTY_EDITS, deleted: ['x'] };
+    expect(keptOriginal(base, ['b', 'c'])).toEqual({ ...base, keepOriginal: ['b', 'c'] });
+    expect(keptOriginal({ ...base, keepOriginal: ['a'] }, ['b', 'a']).keepOriginal).toEqual([
+      'a',
+      'b',
+    ]);
+  });
+
+  it('все уже откачены или ключей нет — без изменений (шага нет)', () => {
+    const base = { ...EMPTY_EDITS, keepOriginal: ['b'] };
+    expect(keptOriginal(base, ['b'])).toBe(base);
+    expect(keptOriginal(base, [])).toBe(base);
+  });
+
+  it('«Выровнять» снимает только названные ключи; чужих и отсутствующих не трогает', () => {
+    const base = { ...EMPTY_EDITS, keepOriginal: ['a', 'b', 'c'], deleted: ['x'] };
+    expect(restoredStraight(base, ['b', 'z'])).toEqual({ ...base, keepOriginal: ['a', 'c'] });
+    expect(restoredStraight(base, ['z'])).toBe(base);
+    expect(restoredStraight(EMPTY_EDITS, ['a'])).toBe(EMPTY_EDITS);
   });
 });

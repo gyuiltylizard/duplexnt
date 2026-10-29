@@ -15,6 +15,8 @@ const SESSION = '0123456789abcdef';
 const OTHER_SESSION = 'fedcba9876543210';
 const PAGE = Uint8Array.of(0xff, 0xd8, 1, 0xff, 0xd9);
 const THUMB = Uint8Array.of(0xff, 0xd8, 2, 0xff, 0xd9);
+const STRAIGHT = Uint8Array.of(0xff, 0xd8, 3, 0xff, 0xd9);
+const STRAIGHT_THUMB = Uint8Array.of(0xff, 0xd8, 4, 0xff, 0xd9);
 
 function source(sessionId: string | null = SESSION) {
   const readPage = vi.fn((key: string): Promise<Result<Uint8Array>> =>
@@ -29,8 +31,29 @@ function source(sessionId: string | null = SESSION) {
   const readThumbnail = vi.fn((key: string): Promise<Result<Uint8Array>> =>
     Promise.resolve(key === 'p01-s01-0001' ? ok(THUMB) : fail('thumbnailFailed')),
   );
-  const pages: PageImageSource = { sessionId: () => sessionId, readPage, readThumbnail };
-  return { pages, readPage, readThumbnail };
+  // Выправленный вид есть только у третьей страницы (M6, KTD-7).
+  const readStraight = vi.fn((key: string): Promise<Result<Uint8Array>> =>
+    Promise.resolve(
+      key === 'p01-s01-0003'
+        ? ok(STRAIGHT)
+        : fail('pageUnavailable', { reason: 'notStraightened' }),
+    ),
+  );
+  const readStraightThumbnail = vi.fn((key: string): Promise<Result<Uint8Array>> =>
+    Promise.resolve(
+      key === 'p01-s01-0003'
+        ? ok(STRAIGHT_THUMB)
+        : fail('pageUnavailable', { reason: 'notStraightened' }),
+    ),
+  );
+  const pages: PageImageSource = {
+    sessionId: () => sessionId,
+    readPage,
+    readThumbnail,
+    readStraight,
+    readStraightThumbnail,
+  };
+  return { pages, readPage, readThumbnail, readStraight, readStraightThumbnail };
 }
 
 const get = (url: string, pages = source().pages) =>
@@ -58,8 +81,41 @@ describe('parsePageImageUrl', () => {
       sessionId: SESSION,
       view: 'page',
       key: 'p01-s01-0001',
+      version: null,
     });
     expect(parsePageImageUrl(pageImageUrl(SESSION, 'thumb', 'p02-s03-9999'))?.view).toBe('thumb');
+  });
+
+  it('выправленные виды несут версию геометрии в пути (M6, KTD-7)', () => {
+    expect(parsePageImageUrl(pageImageUrl(SESSION, 'straight', 'p01-s01-0001', 2))).toEqual({
+      sessionId: SESSION,
+      view: 'straight',
+      key: 'p01-s01-0001',
+      version: 2,
+    });
+    expect(
+      parsePageImageUrl(`duplexnt-page://${SESSION}/straight-thumb/1234/p01-s01-0001`),
+    ).toEqual({
+      sessionId: SESSION,
+      view: 'straight-thumb',
+      key: 'p01-s01-0001',
+      version: 1234,
+    });
+    expect(parsePageImageUrl(pageImageUrl(SESSION, 'page', 'p01-s01-0001'))?.version).toBeNull();
+    expect(() => pageImageUrl(SESSION, 'straight', 'p01-s01-0001')).toThrow();
+  });
+
+  it.each([
+    ['выправленный вид без версии', `duplexnt-page://${SESSION}/straight/p01-s01-0001`],
+    ['версия 0', `duplexnt-page://${SESSION}/straight/0/p01-s01-0001`],
+    ['версия с ведущим нулём', `duplexnt-page://${SESSION}/straight-thumb/01/p01-s01-0001`],
+    ['версия длиннее четырёх цифр', `duplexnt-page://${SESSION}/straight/12345/p01-s01-0001`],
+    ['версия не число', `duplexnt-page://${SESSION}/straight/v1/p01-s01-0001`],
+    ['версия у обычного вида', `duplexnt-page://${SESSION}/page/1/p01-s01-0001`],
+    ['лишний сегмент после ключа', `duplexnt-page://${SESSION}/straight/1/p01-s01-0001/x`],
+    ['строка запроса', `duplexnt-page://${SESSION}/straight/1/p01-s01-0001?v=2`],
+  ])('отклоняет выправленный адрес: %s', (_name, url) => {
+    expect(parsePageImageUrl(url)).toBeNull();
   });
 
   it.each([
@@ -105,6 +161,40 @@ describe('handlePageImageRequest', () => {
     expect(new Uint8Array(await response.arrayBuffer())).toEqual(THUMB);
     expect(readThumbnail).toHaveBeenCalledExactlyOnceWith('p01-s01-0001');
     expect(readPage).not.toHaveBeenCalled();
+  });
+
+  it('выправленный вид: файл есть — его байты; нет — оригинал / обычная миниатюра (KTD-7)', async () => {
+    const { pages, readPage, readThumbnail, readStraight, readStraightThumbnail } = source();
+
+    const straight = await get(pageImageUrl(SESSION, 'straight', 'p01-s01-0003', 1), pages);
+    expect(straight.status).toBe(200);
+    expect(new Uint8Array(await straight.arrayBuffer())).toEqual(STRAIGHT);
+    const thumb = await get(pageImageUrl(SESSION, 'straight-thumb', 'p01-s01-0003', 1), pages);
+    expect(new Uint8Array(await thumb.arrayBuffer())).toEqual(STRAIGHT_THUMB);
+    expect(readPage).not.toHaveBeenCalled();
+    expect(readThumbnail).not.toHaveBeenCalled();
+
+    // Версия в адресе — только для смены адреса: отдаётся то, что есть сейчас.
+    const stale = await get(pageImageUrl(SESSION, 'straight', 'p01-s01-0003', 9), pages);
+    expect(new Uint8Array(await stale.arrayBuffer())).toEqual(STRAIGHT);
+
+    const fallback = await get(pageImageUrl(SESSION, 'straight', 'p01-s01-0001', 1), pages);
+    expect(fallback.status).toBe(200);
+    expect(new Uint8Array(await fallback.arrayBuffer())).toEqual(PAGE);
+    const thumbFallback = await get(
+      pageImageUrl(SESSION, 'straight-thumb', 'p01-s01-0001', 1),
+      pages,
+    );
+    expect(new Uint8Array(await thumbFallback.arrayBuffer())).toEqual(THUMB);
+    expect(readStraight).toHaveBeenCalledTimes(3);
+    expect(readStraightThumbnail).toHaveBeenCalledTimes(2);
+    expect(readPage).toHaveBeenCalledExactlyOnceWith('p01-s01-0001');
+    expect(readThumbnail).toHaveBeenCalledExactlyOnceWith('p01-s01-0001');
+
+    // Нет ни выправленного, ни оригинала (потеряна) — 404.
+    expect((await get(pageImageUrl(SESSION, 'straight', 'p01-s01-0002', 1), pages)).status).toBe(
+      404,
+    );
   });
 
   it('не GET — 404 без обращения к источнику', async () => {
@@ -157,6 +247,8 @@ describe('handlePageImageRequest', () => {
       sessionId: () => SESSION,
       readPage: () => Promise.resolve(ok(bytes)),
       readThumbnail: () => Promise.resolve(fail('thumbnailFailed')),
+      readStraight: () => Promise.resolve(fail('pageUnavailable')),
+      readStraightThumbnail: () => Promise.resolve(fail('pageUnavailable')),
     };
 
     const response = await get(pageImageUrl(SESSION, 'page', 'p01-s01-0001'), pages);
