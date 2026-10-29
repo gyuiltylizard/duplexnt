@@ -1,20 +1,27 @@
 import { useEffect, useEffectEvent, useState } from 'react';
-import type { AssembledPage, StraightenStatus } from '@shared';
+import {
+  STRAIGHTEN_GEOMETRY_VERSION,
+  type AssembledPage,
+  type StraightenMark,
+  type StraightenStatus,
+} from '@shared';
 
 // Поздние статусы выравнивания (план M6, U8; handoff M6 «Тост поздних изменений»): порция —
-// страницы, вставшие в обработку уже в `editor` (досканирование, поздняя коррекция, пересчёт
-// после обновления приложения) или бывшие в ней при входе; один тост на порцию, когда в ней не
-// осталось `pending`, — статусы приходят по одному, и тост на каждый шёл бы подряд. Считаются
-// только страницы, выровненные впервые: страница, ушедшая в пересчёт уже выровненной и
-// вернувшаяся такой же, — не «ещё». Пересчёт (в обработку встала страница со статусом) даёт
-// текст «пересчитано» и при нуле новых. Правки — откат и его undo — в обработку не ведут: тоста
-// нет (урок M4 про ложные тосты при undo). Корректировка состояния при рендере, тост — эффектом
-// по номеру события (как `useLateHidden`).
+// страницы, вставшие в обработку уже в `editor` (досканирование, поздняя коррекция) или бывшие
+// в ней при входе; один тост на порцию, когда в ней не осталось `pending`, — статусы приходят по
+// одному, и тост на каждый шёл бы подряд. Считаются только страницы, выровненные впервые:
+// страница, ушедшая в пересчёт уже выровненной и вернувшаяся такой же, — не «ещё». Пересчёт (в
+// обработку встала страница со статусом) даёт текст «пересчитано» и при нуле новых. Пересчёт
+// после обновления приложения (AE13, U9): страница с файлом прежней версии геометрии показывает
+// прежний вид без «ждёт» — она тоже входит в порцию как пересчёт, а порция закончена, когда не
+// осталось ни ждущих, ни прежних версий. Правки — откат и его undo — в обработку не ведут:
+// тоста нет (урок M4 про ложные тосты при undo). Корректировка состояния при рендере, тост —
+// эффектом по номеру события (как `useLateHidden`).
 
 interface Watch {
   /** Лента, по которой состояние посчитано: новая ссылка — новый снимок. */
   readonly order: readonly AssembledPage[];
-  readonly statuses: ReadonlyMap<string, StraightenStatus>;
+  readonly marks: ReadonlyMap<string, StraightenMark>;
   /** Порция: ключ → статус до обработки; `undefined` — страницы раньше не было или она ждала при входе. */
   readonly batch: ReadonlyMap<string, StraightenStatus | undefined>;
   /** В порции есть пересчёт: в обработку встала страница, уже имевшая статус. */
@@ -25,41 +32,56 @@ interface Watch {
   readonly eventRecalc: boolean;
 }
 
-const statusesOf = (order: readonly AssembledPage[]): ReadonlyMap<string, StraightenStatus> =>
-  new Map(order.map((page) => [page.key, page.straighten.status]));
+const marksOf = (order: readonly AssembledPage[]): ReadonlyMap<string, StraightenMark> =>
+  new Map(order.map((page) => [page.key, page.straighten]));
 
-const anyPending = (statuses: ReadonlyMap<string, StraightenStatus>): boolean =>
-  [...statuses.values()].includes('pending');
+/** Файл прежней версии геометрии: пересчёт идёт фоном, прежний вид показан (AE13). */
+const stale = (mark: StraightenMark): boolean =>
+  mark.version !== null && mark.version < STRAIGHTEN_GEOMETRY_VERSION;
+
+/** Порция не закончена: кто-то ждёт или показан прежней версией. */
+const unsettled = (marks: ReadonlyMap<string, StraightenMark>): boolean =>
+  [...marks.values()].some((mark) => mark.status === 'pending' || stale(mark));
 
 function initialWatch(order: readonly AssembledPage[]): Watch {
-  const statuses = statusesOf(order);
+  const marks = marksOf(order);
   const batch = new Map<string, StraightenStatus | undefined>();
-  for (const [key, status] of statuses) {
-    if (status === 'pending') {
+  let recalc = false;
+  for (const [key, mark] of marks) {
+    if (mark.status === 'pending') {
       batch.set(key, undefined);
+    } else if (stale(mark)) {
+      batch.set(key, mark.status);
+      recalc = true;
     }
   }
-  return { order, statuses, batch, recalc: false, event: 0, count: 0, eventRecalc: false };
+  return { order, marks, batch, recalc, event: 0, count: 0, eventRecalc: false };
 }
 
 function nextWatch(watch: Watch, order: readonly AssembledPage[]): Watch {
-  const statuses = statusesOf(order);
+  const marks = marksOf(order);
   let batch = new Map(watch.batch);
   let { recalc } = watch;
-  for (const [key, status] of statuses) {
-    const before = watch.statuses.get(key);
-    if (status === 'pending' && before !== 'pending' && !batch.has(key)) {
-      batch.set(key, before);
-      if (before !== undefined && before !== null) {
+  for (const [key, mark] of marks) {
+    if (batch.has(key)) {
+      continue;
+    }
+    const before = watch.marks.get(key);
+    if (mark.status === 'pending' && before?.status !== 'pending') {
+      batch.set(key, before?.status);
+      if (before !== undefined && before.status !== null) {
         recalc = true;
       }
+    } else if (stale(mark) && (before === undefined || !stale(before))) {
+      batch.set(key, before?.status ?? mark.status);
+      recalc = true;
     }
   }
   let { event, count, eventRecalc } = watch;
-  if (batch.size > 0 && !anyPending(statuses)) {
+  if (batch.size > 0 && !unsettled(marks)) {
     let fresh = 0;
     for (const [key, before] of batch) {
-      if (statuses.get(key) === 'straightened' && before !== 'straightened') {
+      if (marks.get(key)?.status === 'straightened' && before !== 'straightened') {
         fresh += 1;
       }
     }
@@ -71,7 +93,7 @@ function nextWatch(watch: Watch, order: readonly AssembledPage[]): Watch {
     batch = new Map();
     recalc = false;
   }
-  return { order, statuses, batch, recalc, event, count, eventRecalc };
+  return { order, marks, batch, recalc, event, count, eventRecalc };
 }
 
 export function useLateStraighten({

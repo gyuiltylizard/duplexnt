@@ -8,6 +8,7 @@ import {
   type PassService,
   type PassServiceOptions,
 } from '../../src/core/scan/pass-service';
+import { storedScannerOf, type StoredScanner } from '../../src/core/storage/stored-scanner';
 import type { Scenario } from '../emulator/scenarios';
 import { startTestEmulator } from './emulator';
 import { levelWorker } from './image-worker';
@@ -28,10 +29,13 @@ export async function connectService(
   scenario: Partial<Scenario>,
   base: PassServiceOptions,
   extra: Partial<PassServiceOptions> = {},
+  /** Посев корня до открытия службы (M6, U9): журнал прежней версии, страницы на диске. */
+  prepare?: (root: string, scanner: StoredScanner) => Promise<void>,
 ) {
   const emulator = await startTestEmulator({ scenario });
   const connected = unwrap(await probeScanner({ ...emulator, fingerprint: null }));
   const root = await makeTempDataRoot();
+  await prepare?.(root, storedScannerOf(connected));
   const snapshots: Snapshot[] = [];
   const open = async (options: Partial<PassServiceOptions> = extra): Promise<PassService> => {
     let opened: PassService | null = null;

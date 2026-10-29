@@ -77,6 +77,13 @@ export interface StraightenMark {
 export const NO_STRAIGHTEN_MARK: StraightenMark = { status: null, reason: null, version: null };
 const PENDING_MARK: StraightenMark = { status: 'pending', reason: null, version: null };
 
+/** Выправленный файл есть: «выправлена», при откате пользователя — «оригинал оставлен». */
+const withFile = (input: StraightenMarkInput, version: number): StraightenMark => ({
+  status: input.keepOriginal ? 'kept' : 'straightened',
+  reason: null,
+  version,
+});
+
 /** Что нужно знать о странице, чтобы поставить статус (KTD-9). */
 export interface StraightenMarkInput {
   /** Режим сессии — заморожен в журнале. */
@@ -93,9 +100,10 @@ export interface StraightenMarkInput {
 
 /**
  * Статус страницы — одно правило на ядро и зеркало renderer'а (KTD-9): режим «не выравнивать»,
- * потерянная и пустая — `null`; без исхода измерения — «ждёт»; «не по чему мерить» и «не
- * помогла» — «не померить» с причиной; «ровная»; «выправлять» — «выправлена» при файле (откат
- * пользователя — «оригинал оставлен»), иначе «отложена» с причиной или «ждёт».
+ * потерянная и пустая — `null`; без исхода измерения — «ждёт», если нет и выправленного файла
+ * прежней версии; «не по чему мерить» и «не помогла» — «не померить» с причиной; «ровная»;
+ * «выправлять» — «выправлена» при файле (откат пользователя — «оригинал оставлен»), иначе
+ * «отложена» с причиной или «ждёт».
  */
 export function straightenMarkOf(input: StraightenMarkInput): StraightenMark {
   if (input.mode !== 'auto' || input.lost || input.blank) {
@@ -106,7 +114,10 @@ export function straightenMarkOf(input: StraightenMarkInput): StraightenMark {
     return PENDING_MARK;
   }
   if (fact.outcome === null) {
-    return PENDING_MARK;
+    // Исхода текущих версий нет, а файл известной версии есть: кэш оценок потерян (AE8) или
+    // версия геометрии сменилась (AE13) — прежний выправленный вид показывается и сохраняется,
+    // измерение и пересчёт идут фоном: ни «ждёт», ни отказа сохранения (найдено U9).
+    return fact.version === null ? PENDING_MARK : withFile(input, fact.version);
   }
   switch (fact.outcome) {
     case 'unmeasurable':
@@ -117,11 +128,7 @@ export function straightenMarkOf(input: StraightenMarkInput): StraightenMark {
       return { status: 'level', reason: null, version: null };
     case 'willStraighten':
       if (fact.version !== null) {
-        return {
-          status: input.keepOriginal ? 'kept' : 'straightened',
-          reason: null,
-          version: fact.version,
-        };
+        return withFile(input, fact.version);
       }
       if (fact.deferred !== null) {
         return {
