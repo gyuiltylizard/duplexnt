@@ -18,6 +18,7 @@ import { pageFixtureOf, pdfImageStreams, scanFixture } from '../support/fixtures
 import { makeTempDataRoot } from '../support/temp-data-root';
 import { unwrap } from '../support/result';
 import { until, untilScored } from '../support/until';
+import { levelWorker } from '../support/image-worker';
 
 // Пустые обороты — полный путь на настоящей цепочке (план M4, U8): эмулятор с настоящими
 // пустыми сканами в лотке оборотов → служба с детектором → оценки как производное (кэш в
@@ -38,6 +39,7 @@ const FAST: Partial<ScanJobLimits> = {
 
 const OPTIONS = {
   jobLimits: FAST,
+  imageWorker: levelWorker,
   minFreeBytes: 1,
   retry: { ceilingMs: 0 },
 } satisfies PassServiceOptions;

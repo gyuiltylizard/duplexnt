@@ -18,6 +18,7 @@ import { pageFixture } from '../support/fixtures';
 import { makeTempDataRoot } from '../support/temp-data-root';
 import { unwrap } from '../support/result';
 import { until, untilScored } from '../support/until';
+import { levelWorker } from '../support/image-worker';
 
 // Двухпроходный сценарий на настоящей цепочке (план M2, U3–U4): эмулятор с лотками по заданиям →
 // клиент → хранилище → сборка в снимке. Правило пар проверяется побайтово: какая фикстура легла
@@ -47,6 +48,7 @@ async function open(root: string, connected: ConnectedScanner): Promise<Harness>
   const snapshots: Snapshot[] = [];
   const service: PassService = await openPassService(root, {
     jobLimits: FAST,
+    imageWorker: levelWorker,
     minFreeBytes: 1,
     retry: { ceilingMs: 50 },
     onChange: () => {

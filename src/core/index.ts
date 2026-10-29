@@ -5,6 +5,7 @@ export { createCommands, type CommandContext, type Commands } from './commands/h
 export { handleProbe } from './probe/handle-probe';
 export { openPassService, type PassService, type PassServiceOptions } from './scan/pass-service';
 export { isPageKey, isSessionId, layoutOf } from './storage/layout';
+export { limiterOf, type Limiter } from './storage/limiter';
 export { createThumbnails, type Thumbnails } from './storage/thumbnails';
 export {
   openWindowStateStore,

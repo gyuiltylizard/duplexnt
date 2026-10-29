@@ -110,6 +110,13 @@ const MIN_FREE_BYTES = 500 * 1024 * 1024;
 export interface SessionStoreOptions extends StorageOptions {
   readonly newSessionId?: () => string;
   readonly minFreeBytes?: number;
+  /**
+   * Отмена и ожидание фоновой работы над производным — измерений перекоса и очереди коррекции
+   * (M6, KTD-12): `closeDirectory` ждёт её до удаления каталога производного на обоих путях —
+   * закрытие сессии и «Остановить» с нулём оставшихся страниц. Иначе задача, дожившая до
+   * `mkdir`, пересоздала бы каталог закрытой сессии.
+   */
+  readonly settleDerived?: () => Promise<void>;
 }
 
 /** С чем хранилище открывается: результат сверки при запуске (./reconcile.ts). */
@@ -401,6 +408,7 @@ export function createSessionStore(
     closing = true;
     try {
       await settleReads();
+      await options.settleDerived?.().catch(() => undefined);
       const target = closingDirOf(layout, sessionId);
       try {
         await renameWithRetry(layout.sessionDir, target, io);

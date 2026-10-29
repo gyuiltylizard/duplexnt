@@ -59,6 +59,7 @@ export type { DiscoveredScanner, DiscoveryState } from './discovery';
 export {
   FAN_LINE_MM,
   isSkewProfile,
+  NO_SKEW_VERDICTS,
   SKEW_OUTCOMES,
   skewFanMm,
   skewLateralRows,
@@ -74,6 +75,8 @@ export {
   type SkewOutcome,
   type SkewPrior,
   type SkewProfile,
+  type SkewVerdict,
+  type SkewVerdicts,
 } from './skew';
 
 export {

@@ -10,6 +10,7 @@ import {
 } from '../../src/core/scan/pass-service';
 import type { Scenario } from '../emulator/scenarios';
 import { startTestEmulator } from './emulator';
+import { levelWorker } from './image-worker';
 import { unwrap } from './result';
 import { makeTempDataRoot } from './temp-data-root';
 import { untilScored } from './until';
@@ -37,6 +38,8 @@ export async function connectService(
     // Проверка запомненного не открывает сокеты 5353: поиск по UUID — пустой (M5, KTD9).
     opened = await openPassService(root, {
       findByUuid: noSearch,
+      // Измерение перекоса — заглушка «ровно»: настоящее стоит ~200 мс на страницу (M6, U5).
+      imageWorker: levelWorker,
       ...base,
       ...options,
       onChange: () => {

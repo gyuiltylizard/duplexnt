@@ -307,6 +307,58 @@ worst-case; `STRAIGHT_SIZE_RATIO = 2` привязан к фикстурам ET-
 
 ---
 
+## Сессия 3 — лимитер и измерение по ходу прохода; выправленные файлы и очередь
+
+### U5. Лимитер с приоритетами, оценки перекоса, измерение по ходу прохода — ✅ зелёный
+
+**Сделано (2026-10-29):** `src/core/storage/limiter.ts` — `limited(task, priority)` с очередями
+`normal` / `low` (`low` стартует только при пустой `normal`, предел суммарный; `limiter.test.ts`);
+`thumbnails.ts` и `blank-scores.ts` принимают `limiter` в опциях (без него — свой, как прежде);
+`layout.ts` — `skewDirIn/Of`, `SKEW_FILE`, `skewFileName` и впрок для U11 — `straightDirIn/Of`,
+`straightThumbsDirIn/Of`, `STRAIGHT_FILE`, `STRAIGHT_THUMB_FILE`, `straightFileName`,
+`straightRecordName`, `parseStraightFileName`; `src/shared/skew.ts` — `SkewVerdict`
+(`outcome`, `profile`), `SkewVerdicts`, `NO_SKEW_VERDICTS`; `src/core/storage/skew-scores.ts`
+(новый, по образцу `blank-scores.ts`) — карта вердиктов и кэш `skew/<ключ>.json` формы KTD-11
+(`v: {geometry, detector}`, исход, профиль, контраст, веер, причина, `source.bytes`), пересчёт
+при другой версии или мусоре, измерение с приоритетом `low`, `mkdir` только после `alive`,
+`abort()` одним `AbortController` на всё в полёте и в очереди (новый сигнал после отмены),
+`settle()`; сбой декода и исключение исполнителя — `unmeasurable` в кэше (R3), сбой чтения —
+в памяти до перезапуска без кэша; `src/core/scan/straighten-flow.ts` — чистая `pagesToMeasure`
+(R6: все проходы при `auto`, без потерянных, обороты при оцениваемой пустоте — только с
+вердиктом «не пусто» или пометкой `notBlank`); `session-store.ts` —
+`SessionStoreOptions.settleDerived`, которую `closeDirectory` ждёт после `settleReads` на обоих
+путях (закрытие сессии и «Остановить» с нулём страниц); `pass-service.ts` — опции
+`derivedLimiter` и `imageWorker`, зависимость `skew`, триггер в `sink` без `await` (лица и
+односторонние — сразу, обороты — из колбэка вердикта пустоты при «не пусто»), `measurePending`
+при открытии и после `setEdits` (пометка «не пустая»), `pruneScores` вместо `blank.prune`,
+`shutdown()` (отмена и ожидание измерений — `will-quit` в main), поздняя привязка
+`settleDerived` → `skew.abort` + `settle`; `src/main/index.ts` — один `limiterOf(2)` на службу
+и миниатюры, `service.shutdown()` на `will-quit`.
+
+**Решение по замеру U1 применено:** пауза очереди коррекции на время прохода не нужна (A/B —
+подача от нагрузки хоста не зависит); измерение идёт прямо в `sink`, очередь коррекции U11
+работает и во время прохода.
+
+**Тесты:** `limiter.test.ts`; `straighten-flow.test.ts` (отбор страниц);
+`pass-service.straighten.test.ts` (подставной исполнитель по номеру фикстуры: лица, добавленные и
+непустые обороты измеряются после открытия, скрытый пустой — нет; «не пустая» → измерение;
+`off` — ни вызовов, ни каталога; потерянная — нет; перезапуск с кэшем — без вызовов; «Новая
+пачка» посреди измерения — отмена, производное не пересоздано); `test/integration/skew-scores.test.ts`
+(настоящий детектор на `fan-text` и `photo`, формат кэша, версии геометрии и детектора, мусор,
+сбои, отброшенная страница без каталога, `abort`/`settle`, приоритет `low`, прошлая сессия и
+`prune`); `test/integration/straighten.emulator.test.ts` (косые сканы в лотке → записи `skew/`,
+измерение не задерживает приём страниц, «Остановить» посреди измерения не пересоздаёт
+производное). Общая заглушка исполнителя — `test/support/image-worker.ts` (`stubWorker`,
+`levelWorker`, `realMeasurer`).
+
+**Ловушка, записанная в тесты:** настоящее измерение стоит ~200 мс на страницу-фикстуру в потоке
+теста; с режимом `auto` по умолчанию все эмуляторные сценарии на 24–30 страниц легли в таймаут
+5 с. Все эмуляторные тесты, кроме тестов выравнивания, получили `imageWorker: levelWorker`
+(и `connectService` ставит его по умолчанию); тесты выравнивания передают настоящий
+`inlineImageWorker()` явно.
+
+**Готово (U5):** typecheck, lint, format:check, `npm test`, `test:integration` — зелёные.
+
 ## На чём встали
 
 Сессия 1 открыта 2026-10-28: ветка `feat/m6`, план и брейншторм закоммичены, журнал заведён.

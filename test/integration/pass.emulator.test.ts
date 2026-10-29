@@ -26,6 +26,7 @@ import { until } from '../support/until';
 import { noSearch } from '../support/uuid-search';
 import { fsError, interceptFs } from '../support/intercept-fs';
 import { makeTempDataRoot } from '../support/temp-data-root';
+import { levelWorker } from '../support/image-worker';
 
 // Служба прохода на настоящей цепочке (план M1, U17): эмулятор сканера по HTTPS → клиент →
 // хранилище во временном корне данных. Каждый сценарий плана — своим тестом; «перезапуск» —
@@ -73,6 +74,7 @@ async function open(
   const snapshots: Snapshot[] = [];
   const service = await openPassService(root, {
     jobLimits: FAST,
+    imageWorker: levelWorker,
     minFreeBytes: 1,
     retry: FAST_RETRY,
     findByUuid: noSearch,
@@ -231,7 +233,7 @@ describe('служба прохода: лоток и отказы до зада�
   it('без подключённого сканера проход не начинается', async () => {
     const emulator = await startTestEmulator();
     const root = await makeTempDataRoot();
-    const service = await openPassService(root, { jobLimits: FAST });
+    const service = await openPassService(root, { jobLimits: FAST, imageWorker: levelWorker });
 
     expect(errorOf(await service.startPass(null))).toEqual({ code: 'scannerNotConnected' });
     expect(emulator.requests()).toEqual([]);
@@ -816,6 +818,7 @@ describe('служба прохода: проверка запомненного
     );
     const service = await openPassService(root, {
       jobLimits: FAST,
+      imageWorker: levelWorker,
       connector: { createTransport: hold.create },
       findByUuid: noSearch,
     });

@@ -16,6 +16,7 @@ import { journalOnDisk, rolesOf } from '../support/session-store';
 import { makeTempDataRoot } from '../support/temp-data-root';
 import { unwrap } from '../support/result';
 import { untilScored } from '../support/until';
+import { levelWorker } from '../support/image-worker';
 
 // «Добавить» — полный путь на настоящей цепочке (план M3.5, U8): эмулятор с лотками по заданиям
 // → служба с намерением → журнал v4 с ролью и якорем → сборка по якорям → правки поверх →
@@ -33,6 +34,7 @@ const FAST: Partial<ScanJobLimits> = {
 
 const OPTIONS = {
   jobLimits: FAST,
+  imageWorker: levelWorker,
   minFreeBytes: 1,
   retry: { ceilingMs: 0 },
 } satisfies PassServiceOptions;

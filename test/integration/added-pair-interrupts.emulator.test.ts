@@ -16,6 +16,7 @@ import { pageFixtureOf, pdfPageFixtures } from '../support/fixtures';
 import { journalOnDisk } from '../support/session-store';
 import { unwrap } from '../support/result';
 import { until, untilScored } from '../support/until';
+import { levelWorker } from '../support/image-worker';
 
 // Двусторонний добавленный набор — обрывы, «Остановить» и перезапуск на настоящей цепочке (план
 // M4.5, U8; R5, R7, R8, R12, R14, R17, R20): эмулятор с лотками по заданиям → служба проходов →
@@ -48,6 +49,7 @@ const FAST: Partial<ScanJobLimits> = {
 
 const OPTIONS = {
   jobLimits: FAST,
+  imageWorker: levelWorker,
   minFreeBytes: 1,
   retry: { ceilingMs: 0 },
 } satisfies PassServiceOptions;

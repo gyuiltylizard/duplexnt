@@ -13,6 +13,7 @@ import { pageFixtureOf, pdfPageFixtures } from '../support/fixtures';
 import { journalOnDisk, rolesOf } from '../support/session-store';
 import { unwrap } from '../support/result';
 import { untilScored } from '../support/until';
+import { levelWorker } from '../support/image-worker';
 
 // Несовпадение оборотов двустороннего добавленного набора на настоящей цепочке (план M4.5, U8; F2,
 // AE2, AE3, AE16; R12, R14, R15, R17, R20; KTD3, KTD6): эмулятор `added-pair-mismatch` — основная
@@ -35,6 +36,7 @@ const FAST: Partial<ScanJobLimits> = {
 
 const OPTIONS = {
   jobLimits: FAST,
+  imageWorker: levelWorker,
   minFreeBytes: 1,
   retry: { ceilingMs: 0 },
 } satisfies PassServiceOptions;

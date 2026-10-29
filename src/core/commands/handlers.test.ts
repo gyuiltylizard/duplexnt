@@ -76,6 +76,7 @@ function setup(
     rememberedSaveFolder: vi.fn((): string | null => remembered),
     rememberSaveFolder: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
     interrupt: vi.fn(() => Promise.resolve()),
+    shutdown: vi.fn(() => Promise.resolve()),
     pageInfo: vi.fn(() => null),
     readPage: vi.fn(() => Promise.resolve(fail('pageUnavailable'))),
   } satisfies PassService;

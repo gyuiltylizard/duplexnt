@@ -15,6 +15,7 @@ import { fsError, interceptFs } from '../support/intercept-fs';
 import { makeTempDataRoot } from '../support/temp-data-root';
 import { unwrap } from '../support/result';
 import { untilScored } from '../support/until';
+import { levelWorker } from '../support/image-worker';
 
 // Правки и пакетное сохранение на настоящей цепочке (план M3, U10): эмулятор → клиент →
 // хранилище → служба. Ядро проверяет то же на посеянной сессии; здесь — что страницы настоящих
@@ -31,6 +32,7 @@ const FAST: Partial<ScanJobLimits> = {
 
 const OPTIONS = {
   jobLimits: FAST,
+  imageWorker: levelWorker,
   minFreeBytes: 1,
   retry: { ceilingMs: 0 },
 } satisfies PassServiceOptions;

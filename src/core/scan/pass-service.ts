@@ -37,6 +37,7 @@ import {
 import { buildScanSettings } from '../escl/scan-settings';
 import { blankRatio, type BlankDetector } from '../detect/blank';
 import { findByUuid } from '../discovery/find-by-uuid';
+import { inlineImageWorker, type ImageWorker } from '../image/image-worker';
 import { parseStatus } from '../escl/status';
 import { createTransport, type ScannerTransport } from '../escl/transport';
 import { assemblePdf, type PdfPageInput } from '../pdf/assemble';
@@ -44,11 +45,13 @@ import { writeBatch } from '../pdf/save-batch';
 import { createBlankScores, type BlankScores } from '../storage/blank-scores';
 import type { PassOrigin } from '../storage/journal';
 import { layoutOf } from '../storage/layout';
+import { limiterOf, type Limiter } from '../storage/limiter';
 import { stopKeepsPages } from '../storage/pass-policy';
 import { openSessionStore } from '../storage/reconcile';
 import type { StartUuidSearch } from '../storage/remembered-search';
 import type { PageInfo, SessionStore, SessionStoreOptions } from '../storage/session-store';
 import { openSettingsStore, type SettingsStore } from '../storage/settings-store';
+import { createSkewScores, type SkewScores } from '../storage/skew-scores';
 import { sameScanner, storedScannerOf, type StoredScanner } from '../storage/stored-scanner';
 import { ioOf, storageFailure } from '../storage/storage-fs';
 import { pagePixelLimit } from '../storage/thumbnails';
@@ -56,6 +59,10 @@ import { openUnclosedJobs, type UnclosedJobs } from '../storage/unclosed-jobs';
 import { assembleSession } from './assembly';
 import { blankRefusal, pagesToScore, shownSpansOf } from './blank-flow';
 import { createScannerSlot } from './scanner-slot';
+import { pagesToMeasure } from './straighten-flow';
+
+/** Задач над производным в main одновременно — на всё: миниатюры, пустота, измерение (KTD-4). */
+const DERIVED_CONCURRENCY = 2;
 
 // Служба прохода (план M1, U17): связывает клиент сканера, хранилище сессии, настройки и
 // незакрытые задания в один сценарий и выдаёт снимок, из которого интерфейс выводит экран
@@ -88,6 +95,13 @@ export interface PassServiceOptions extends SessionStoreOptions {
   readonly blankDetector?: BlankDetector;
   /** Поиск запомненного сканера по UUID (M5, KTD9); по умолчанию — настоящий, по mDNS. */
   readonly findByUuid?: StartUuidSearch;
+  /**
+   * Общий лимитер производного (M6, KTD-4): main создаёт один и отдаёт его сюда и миниатюрам;
+   * без опции служба создаёт свой (тесты).
+   */
+  readonly derivedLimiter?: Limiter;
+  /** Исполнитель измерения и коррекции (M6, KTD-10); по умолчанию — прямой, в этом потоке. */
+  readonly imageWorker?: ImageWorker;
 }
 
 export interface PassService {
@@ -172,6 +186,11 @@ export interface PassService {
    * `DELETE` уходит в пределах срока. Возвращается не позже срока.
    */
   interrupt(deadlineMs: number): Promise<void>;
+  /**
+   * Выход из приложения (M6, KTD-12): фоновая работа над производным — измерения перекоса —
+   * отменяется и дожидается; окно и проход — `interrupt`.
+   */
+  shutdown(): Promise<void>;
   /** Страницы текущей сессии — для схемы изображений и миниатюр. */
   pageInfo(key: string): PageInfo | null;
   readPage(key: string): Promise<Result<Uint8Array>>;
@@ -199,6 +218,8 @@ interface Dependencies {
   readonly notices: readonly StartupNotice[];
   /** Оценки пустых страниц (M4, KTD3): кэш уже прочитан при открытии. */
   readonly blank: BlankScores;
+  /** Оценки перекоса (M6, KTD-11): кэш уже прочитан при открытии. */
+  readonly skew: SkewScores;
 }
 
 /** Идущий запуск прохода. */
@@ -240,7 +261,7 @@ export function interruptionError(end: ScanJobEnd): DomainError | null {
 }
 
 export function createPassService(
-  { store, settings, unclosedJobs, notices, blank }: Dependencies,
+  { store, settings, unclosedJobs, notices, blank, skew }: Dependencies,
   options: PassServiceOptions = {},
 ): PassService {
   const jobLimits: ScanJobLimits = { ...SCAN_JOB_LIMITS, ...options.jobLimits };
@@ -276,11 +297,35 @@ export function createPassService(
   // (`pagesToScore`, KTD3, KTD9); приход вердикта — новый снимок. Оценка не бросает (сбой —
   // вердикт «не пусто»), но фоновая цепочка всё равно не остаётся без обработчика: иначе
   // необработанный отказ в main.
+  // Измерение перекоса (M6, U5; KTD-4): по ходу прохода, без `await`, с низким приоритетом в
+  // общем лимитере — приём следующей страницы его не ждёт. Отмена (`abort`) — не сбой: `ensure`
+  // отвечает `false`, снимок не меняется.
+  const measureSkew = (key: string): void => {
+    skew.ensure(key).then(
+      (changed) => {
+        if (changed) {
+          notify();
+        }
+      },
+      () => undefined,
+    );
+  };
+  const straightens = (): boolean => store.snapshot()?.straighten === 'auto';
+  /** Всё, что по снимку подлежит измерению и ещё не измерено: открытие, пометка «не пустая». */
+  const measurePending = (): void => {
+    for (const page of pagesToMeasure(store.snapshot(), blank.verdicts())) {
+      measureSkew(page.key);
+    }
+  };
   const detectBlank = (key: string): void => {
     blank.ensure(key).then(
       (changed) => {
         if (changed) {
           notify();
+          // Оборот с вердиктом «не пусто» измеряется только теперь (R6): пустые не меряются.
+          if (straightens() && blank.verdicts().get(key) === false) {
+            measureSkew(key);
+          }
         }
       },
       () => undefined,
@@ -297,6 +342,13 @@ export function createPassService(
   for (const page of pagesToScore(store.snapshot())) {
     detectBlank(page.key);
   }
+  // Страницы без кэша оценки перекоса — тоже в фоне; обороты без вердикта пустоты дождутся его.
+  measurePending();
+  /** Отброшенные страницы («Остановить», «Новая пачка», пересъём) теряют и вердикты. */
+  const pruneScores = (): void => {
+    blank.prune();
+    skew.prune();
+  };
 
   // Досканировать можно только тот же сканер, что вёл проход (KTD-27).
   function resumeTarget(): Result<PassOrigin> {
@@ -586,7 +638,10 @@ export function createPassService(
           current.pages += 1;
           notify();
           if (detectsBlank(current.kind)) {
+            // Оборот сначала получает вердикт пустоты; измерение перекоса — по нему (R6).
             detectBlank(accepted.key);
+          } else if (straightens()) {
+            measureSkew(accepted.key);
           }
         },
         onPhase: (phase) => {
@@ -700,7 +755,7 @@ export function createPassService(
     current.done = runPass(current, connected, origin).finally(() => {
       run = null;
       // «Остановить» и «Новая пачка» по пустому остатку отбросили страницы: их вердикты — тоже.
-      blank.prune();
+      pruneScores();
       notify();
     });
     notify();
@@ -811,7 +866,7 @@ export function createPassService(
         return busy;
       }
       const rescanned = await store.rescanSetBacks(set);
-      blank.prune();
+      pruneScores();
       notify();
       return rescanned;
     },
@@ -825,6 +880,11 @@ export function createPassService(
       }
       const set = await store.setEdits(edits, rotate180);
       notify();
+      // «Это не пустая страница» ставит оборот в очередь измерения (R6); остальным правкам
+      // измерять нечего — `ensure` у измеренных молчит.
+      if (set.ok) {
+        measurePending();
+      }
       return set.ok ? ok({ seq }) : set;
     },
 
@@ -850,11 +910,13 @@ export function createPassService(
       if (saving) {
         return conflict('saving');
       }
+      // Идущие измерения отменяет и дожидается само хранилище (`settleDerived`, KTD-12) — до
+      // удаления каталога производного.
       const closed = await store.closeSession();
       if (closed.ok) {
         // Незавершённый пакет принадлежал закрытой сессии: повтор не допишет новую в её папку.
         pendingBatch = null;
-        blank.prune();
+        pruneScores();
       }
       notify();
       return closed;
@@ -876,6 +938,11 @@ export function createPassService(
       await Promise.race([current.done, delay(deadlineMs)]);
     },
 
+    async shutdown() {
+      skew.abort();
+      await skew.settle();
+    },
+
     pageInfo: (key) => store.pageInfo(key),
     readPage: (key) => store.readPage(key),
   };
@@ -886,18 +953,38 @@ export async function openPassService(
   dataRoot: string,
   options: PassServiceOptions = {},
 ): Promise<PassService> {
-  const { store, notices } = await openSessionStore(dataRoot, options);
+  // Фоновую работу над производным хранилище отменяет и дожидается перед удалением каталога
+  // (KTD-12); оценки создаются после хранилища, поэтому связь — через позднюю привязку.
+  const derived = { settle: (): Promise<void> => Promise.resolve() };
+  const { store, notices } = await openSessionStore(dataRoot, {
+    ...options,
+    settleDerived: () => derived.settle(),
+  });
   const settings = await openSettingsStore(dataRoot, options);
   const unclosedJobs = await openUnclosedJobs(dataRoot, options);
+  const { derivedDir } = layoutOf(dataRoot);
+  // Один лимитер на всё производное main-стороны (KTD-4): main отдаёт его и миниатюрам.
+  const limiter = options.derivedLimiter ?? limiterOf(DERIVED_CONCURRENCY);
   // Кэш оценок страниц оборотов читается до первого снимка (KTD3): лента после перезапуска
   // сразу с флагами, без детектора. Режим «Оставлять» оценок не имеет.
-  const blank = createBlankScores(
-    layoutOf(dataRoot).derivedDir,
-    store,
-    options.blankDetector ?? blankRatio,
-    options,
-  );
+  const blank = createBlankScores(derivedDir, store, options.blankDetector ?? blankRatio, {
+    ...options,
+    limiter,
+  });
   await blank.load(pagesToScore(store.snapshot()).map((page) => page.key));
+  // Кэш оценок перекоса — так же (KTD-11); обороты без вердикта пустоты измеряются после него.
+  const worker = options.imageWorker ?? inlineImageWorker();
+  const skew = createSkewScores(
+    derivedDir,
+    store,
+    (bytes, pixelLimit, measure) => worker.measure(bytes, pixelLimit, measure),
+    { ...options, limiter },
+  );
+  derived.settle = async (): Promise<void> => {
+    skew.abort();
+    await skew.settle();
+  };
+  await skew.load(pagesToMeasure(store.snapshot(), blank.verdicts()).map((page) => page.key));
   return createPassService(
     {
       store,
@@ -905,6 +992,7 @@ export async function openPassService(
       unclosedJobs,
       notices: settings.notice === null ? notices : [...notices, settings.notice],
       blank,
+      skew,
     },
     options,
   );

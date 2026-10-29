@@ -12,6 +12,7 @@ import { pageFixture, pageFixtureOf, pdfImageStreams } from '../support/fixtures
 import { journalOnDisk, rolesOf } from '../support/session-store';
 import { unwrap } from '../support/result';
 import { untilScored } from '../support/until';
+import { levelWorker } from '../support/image-worker';
 
 // Двусторонний добавленный набор — полный путь на настоящей цепочке (план M4.5, U8; R3, R4,
 // R6–R8, R11, R12, R16, R17, R21, R22): эмулятор с лотками по заданиям → служба с намерением
@@ -37,6 +38,7 @@ const BLANK = 'blank-gray-300';
 
 const OPTIONS = {
   jobLimits: FAST,
+  imageWorker: levelWorker,
   minFreeBytes: 1,
   retry: { ceilingMs: 0 },
 } satisfies PassServiceOptions;

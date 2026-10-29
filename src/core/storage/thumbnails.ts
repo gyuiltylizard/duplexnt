@@ -6,7 +6,7 @@ import { hasJpegMarkers } from '../escl/jpeg-markers';
 import { REGION_UNITS_PER_INCH } from '../escl/region';
 import { writeFileAtomic } from './atomic-file';
 import { pageFileName, thumbsDirIn } from './layout';
-import { limiterOf } from './limiter';
+import { limiterOf, type Limiter } from './limiter';
 import type { PageInfo } from './session-store';
 import { ioOf, type StorageOptions } from './storage-fs';
 
@@ -63,7 +63,12 @@ export interface ThumbnailSource {
 }
 
 export interface ThumbnailOptions extends StorageOptions {
-  /** Сколько миниатюр строится одновременно. */
+  /**
+   * Общий лимитер производного (M6, KTD-4): миниатюры идут в нём с обычным приоритетом. Без него
+   * — свой, на `concurrency` задач.
+   */
+  readonly limiter?: Limiter;
+  /** Сколько миниатюр строится одновременно, когда лимитер не передан. */
   readonly concurrency?: number;
 }
 
@@ -109,7 +114,7 @@ export function createThumbnails(
 ): Thumbnails {
   const io = ioOf(options);
   const { fs } = io;
-  const limited = limiterOf(options.concurrency ?? DEFAULT_CONCURRENCY);
+  const limited = options.limiter ?? limiterOf(options.concurrency ?? DEFAULT_CONCURRENCY);
 
   async function build(key: string, info: PageInfo, file: string): Promise<Result<Uint8Array>> {
     const page = await source.readPage(key);

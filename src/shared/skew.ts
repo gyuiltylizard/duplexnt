@@ -104,6 +104,21 @@ export interface SkewMeasure {
   readonly reason: string | null;
 }
 
+/**
+ * Вердикт измерения в памяти службы (KTD-9, U5): исход и профиль — то, что нужно очереди
+ * коррекции (`willStraighten` с профилем) и статусу страницы; полосы, контраст и причина
+ * остаются в кэше `skew/<ключ>.json` и журнале вехи.
+ */
+export interface SkewVerdict {
+  readonly outcome: SkewOutcome;
+  readonly profile: SkewProfile | null;
+}
+
+/** Вердикты страниц текущей сессии по ключу — по образцу `BlankVerdicts`; ключа нет — оценки нет. */
+export type SkewVerdicts = ReadonlyMap<string, SkewVerdict>;
+
+export const NO_SKEW_VERDICTS: SkewVerdicts = new Map();
+
 /** Длина горизонтальной линии, по которой считается веер (R23: 190 мм на ширину A4). */
 export const FAN_LINE_MM = 190;
 
