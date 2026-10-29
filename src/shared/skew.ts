@@ -65,6 +65,13 @@ export const SKEW_CAUSES = ['content', 'shape'] as const;
 
 export type SkewCause = (typeof SKEW_CAUSES)[number];
 
+/**
+ * По каким углам построен профиль (только у измеренных): `whole` — по целым полосам, `halves`
+ * — по среднему половин, когда форма по целым не сошлась (две колонки). Для журнала и тестов;
+ * в снимок не идёт.
+ */
+export type SkewBasis = 'whole' | 'halves';
+
 /** Полоса измерения — для журнала вехи, тестов и подсказки M6.5; в снимок не идёт. */
 export interface SkewBand {
   /** Доля высоты — центроид чернил полосы. */
@@ -77,6 +84,12 @@ export interface SkewBand {
   readonly inkFraction: number;
   /** Расхождение углов левой и правой половин, градусы; `Infinity` — половина не померена. */
   readonly halvesGap: number;
+  /**
+   * Среднее углов половин, градусы; `null` — половина не померена. Запасной профиль при провале
+   * формы по целым полосам: у двух колонок с разной фазой строк целая полоса шумит, а каждая
+   * половина видит одну колонку и меряет чисто (замечание автора на приёмке M6).
+   */
+  readonly halvesAngle: number | null;
   /** Почему полоса отброшена; `null` — полоса валидна. */
   readonly reason: SkewBandReason | null;
 }
@@ -97,6 +110,8 @@ export interface SkewMeasure {
   readonly outcome: SkewOutcome;
   /** Почему не измерена; у остальных исходов — `null`. */
   readonly cause: SkewCause | null;
+  /** По каким углам построен профиль; у `unmeasurable` — `null`. */
+  readonly basis: SkewBasis | null;
   /** `STRAIGHTEN_GEOMETRY_VERSION` на момент измерения. */
   readonly geometryVersion: number;
   readonly profile: SkewProfile | null;

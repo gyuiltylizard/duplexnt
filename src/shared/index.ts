@@ -74,6 +74,7 @@ export {
   type SkewBandReason,
   type SkewContrast,
   type SkewMeasure,
+  type SkewBasis,
   type SkewCause,
   type SkewOutcome,
   type SkewPrior,

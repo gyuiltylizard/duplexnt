@@ -28,6 +28,12 @@ const PIXEL_LIMIT = 5100 * 8400;
  */
 const RESIDUAL_MAX_DEG = 0.15;
 const RESIDUAL_FAN_MM: Readonly<Record<number, number>> = { 30: 0.5, 50: 1 };
+/**
+ * Профиль по половинам (две колонки): плечо половины вдвое короче, углы грубее, а повторное
+ * измерение двухколоночной страницы само шумит наложением фаз — 0,74–0,81 мм по странице при
+ * 0,13–0,68 мм по колонкам порознь (журнал 0026). Допуск — как у запасного прохода 50 мм.
+ */
+const RESIDUAL_FAN_HALVES_MM = 1;
 
 const names = scanFixtureNames();
 const measures = new Map<string, SkewMeasure | null>();
@@ -133,7 +139,9 @@ describe('ресэмплер на сканах ET-3850 (M6, U3)', () => {
           }
           expect(skewMaxAbsDeg(profile), name).toBeLessThanOrEqual(RESIDUAL_MAX_DEG);
           expect(skewFanMm(profile), name).toBeLessThanOrEqual(
-            RESIDUAL_FAN_MM[measure.bandMm] ?? 0,
+            measure.basis === 'halves'
+              ? RESIDUAL_FAN_HALVES_MM
+              : (RESIDUAL_FAN_MM[measure.bandMm] ?? 0),
           );
         });
       }
