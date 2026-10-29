@@ -222,7 +222,7 @@ describe('служба прохода: измерение перекоса (M6, 
 
     expect(await service.closeSession()).toEqual({ ok: true, value: undefined });
     release();
-    await service.shutdown();
+    await service.settleDerived();
 
     expect(await readdir(layoutOf(root).derivedDir).catch(() => [])).toEqual([]);
     expect(service.snapshot().session).toBeNull();

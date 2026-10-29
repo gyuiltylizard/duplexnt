@@ -1,4 +1,4 @@
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir, readFile, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { ScanJobLimits } from '../../src/core/escl/scan-job';
@@ -8,6 +8,7 @@ import { layoutOf } from '../../src/core/storage/layout';
 import { stubWorker } from '../support/image-worker';
 import { connectService, scanned } from '../support/pass-service';
 import { unwrap } from '../support/result';
+import { journalOnDisk } from '../support/session-store';
 import { until, untilScored } from '../support/until';
 
 // Выравнивание перекоса на настоящей цепочке (план M6, U5; R6, R11, KTD-4, KTD-12): эмулятор с
@@ -47,9 +48,12 @@ async function outcomesIn(dir: string): Promise<Record<string, string>> {
   return Object.fromEntries(entries);
 }
 
+const straightFiles = async (dir: string): Promise<string[]> =>
+  (await readdir(dir).catch(() => [])).filter((name) => !name.endsWith('.tmp')).sort();
+
 describe('выравнивание на эмуляторе: измерение по ходу прохода (M6, U5)', () => {
   it('косые листы в лотке получают «выправлять», фото — «не померить», скрытый пустой оборот не измеряется', async () => {
-    const { root, service } = await connectService(
+    const { root, service, restart } = await connectService(
       {
         trays: [
           ['fan-text-gray-300', 'photo-gray-300'],
@@ -72,7 +76,55 @@ describe('выравнивание на эмуляторе: измерение �
         [B(2)]: 'willStraighten',
       });
     expect(service.snapshot().assembly?.blank.hidden).toBe(1);
-  }, 15_000);
+
+    // U11: очередь коррекции выправила обе косые страницы — JPEG и запись той же версии, размер
+    // в записи совпадает с файлом; фото и пустой оборот файлов не получили.
+    const straight = join(layoutOf(root).derivedDir, sessionId, 'straight');
+    await expect
+      .poll(() => straightFiles(straight), { timeout: 20_000, interval: 50 })
+      .toEqual([`${F(1)}.v1.jpg`, `${F(1)}.v1.json`, `${B(2)}.v1.jpg`, `${B(2)}.v1.json`]);
+    const record = JSON.parse(await readFile(join(straight, `${F(1)}.v1.json`), 'utf8')) as {
+      file: { bytes: number };
+    };
+    expect((await stat(join(straight, `${F(1)}.v1.jpg`))).size).toBe(record.file.bytes);
+    const journalBefore = await journalOnDisk(root);
+
+    // AE8: производное потеряно целиком — после перезапуска всё досчитано заново, журнал цел.
+    await rm(layoutOf(root).derivedDir, { recursive: true, force: true });
+    const again = await restart({ imageWorker: inlineImageWorker() });
+    await expect
+      .poll(() => straightFiles(straight), { timeout: 20_000, interval: 50 })
+      .toHaveLength(4);
+    expect(await outcomesIn(dir)).toEqual({
+      [F(1)]: 'willStraighten',
+      [F(2)]: 'unmeasurable',
+      [B(2)]: 'willStraighten',
+    });
+    expect(await journalOnDisk(root)).toEqual(journalBefore);
+    await again.settleDerived();
+  }, 40_000);
+
+  it('AE16: «Новое сканирование» посреди измерений и коррекции — всё отменено, производное удалено и не пересоздано', async () => {
+    const { root, service } = await connectService(
+      { trays: [['fan-text-gray-300', 'fan-table-gray-300', 'fan-text-gray-300']] },
+      OPTIONS,
+      { imageWorker: inlineImageWorker() },
+    );
+    await scanned(service, 3);
+    const derived = layoutOf(root).derivedDir;
+    // Хоть что-то уже в работе: первый вердикт пришёл, очередь коррекции запущена.
+    await expect
+      .poll(() => readdir(derived).catch(() => []), { timeout: 20_000, interval: 20 })
+      .toHaveLength(1);
+
+    expect(await service.closeSession()).toEqual({ ok: true, value: undefined });
+
+    expect(service.snapshot().session).toBeNull();
+    expect(await readdir(derived).catch(() => [])).toEqual([]);
+    await service.settleDerived();
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(await readdir(derived).catch(() => [])).toEqual([]);
+  }, 30_000);
 
   it('измерение не задерживает приём страниц: проход завершён, пока исполнитель ещё держит первую', async () => {
     const gated = stubWorker({ gated: true });
@@ -84,7 +136,7 @@ describe('выравнивание на эмуляторе: измерение �
     expect(gated.started()).toBeGreaterThanOrEqual(1);
 
     gated.release();
-    await service.shutdown();
+    await service.settleDerived();
   });
 
   it('«Остановить» посреди измерения первого прохода: сессии нет, производное не пересоздано', async () => {
@@ -101,7 +153,7 @@ describe('выравнивание на эмуляторе: измерение �
     expect(unwrap(await pass)).toMatchObject({ end: 'stopped', pages: 0 });
 
     gated.release();
-    await service.shutdown();
+    await service.settleDerived();
     expect(service.snapshot().session).toBeNull();
     expect(await readdir(layoutOf(root).derivedDir).catch(() => [])).toEqual([]);
   });

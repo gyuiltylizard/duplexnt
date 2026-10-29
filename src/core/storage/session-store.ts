@@ -60,6 +60,12 @@ import {
   pageKey,
   PAGES_DIR_NAME,
   segmentPrefix,
+  SKEW_FILE,
+  skewDirOf,
+  STRAIGHT_FILE,
+  STRAIGHT_THUMB_FILE,
+  straightDirOf,
+  straightThumbsDirOf,
   thumbsDirOf,
 } from './layout';
 import {
@@ -104,8 +110,11 @@ import { isSetAsideName, setAside, writeVersioned } from './versioned-file';
 // (страница, исход сегмента, снятие пометки) при отказе записи остаётся в памяти несохранённым:
 // страница уже на диске, и следующая перезапись журнала это доводит (KTD-36).
 
-/** Запас свободного места перед проходом (KTD-36): 50 листов по 3,5 МБ с запасом (журнал, U1). */
-const MIN_FREE_BYTES = 500 * 1024 * 1024;
+/**
+ * Запас свободного места перед проходом (KTD-36): 50 листов по 3,5 МБ с запасом (журнал, U1).
+ * Тот же резерв держит очередь коррекции перед каждой страницей (M6, KTD-13).
+ */
+export const MIN_FREE_BYTES = 500 * 1024 * 1024;
 
 export interface SessionStoreOptions extends StorageOptions {
   readonly newSessionId?: () => string;
@@ -442,6 +451,19 @@ export function createSessionStore(
       await removeByPrefix(blankDirOf(layout, sessionId), prefix, BLANK_FILE, io).catch(
         () => undefined,
       );
+      // Оценки перекоса, выправленные страницы и их миниатюры (M6, R26) — по тем же правилам.
+      await removeByPrefix(skewDirOf(layout, sessionId), prefix, SKEW_FILE, io).catch(
+        () => undefined,
+      );
+      await removeByPrefix(straightDirOf(layout, sessionId), prefix, STRAIGHT_FILE, io).catch(
+        () => undefined,
+      );
+      await removeByPrefix(
+        straightThumbsDirOf(layout, sessionId),
+        prefix,
+        STRAIGHT_THUMB_FILE,
+        io,
+      ).catch(() => undefined);
       if (report.failed.length === 0 && journal !== null) {
         const deletions = journal.deletions.filter((it) => it !== prefix);
         await commit({ ...journal, deletions }, 'soft');

@@ -49,17 +49,23 @@ import { limiterOf, type Limiter } from '../storage/limiter';
 import { stopKeepsPages } from '../storage/pass-policy';
 import { openSessionStore } from '../storage/reconcile';
 import type { StartUuidSearch } from '../storage/remembered-search';
-import type { PageInfo, SessionStore, SessionStoreOptions } from '../storage/session-store';
+import {
+  MIN_FREE_BYTES,
+  type PageInfo,
+  type SessionStore,
+  type SessionStoreOptions,
+} from '../storage/session-store';
 import { openSettingsStore, type SettingsStore } from '../storage/settings-store';
 import { createSkewScores, type SkewScores } from '../storage/skew-scores';
 import { sameScanner, storedScannerOf, type StoredScanner } from '../storage/stored-scanner';
 import { ioOf, storageFailure } from '../storage/storage-fs';
+import { createStraightened, type Straightened } from '../storage/straightened';
 import { pagePixelLimit } from '../storage/thumbnails';
 import { openUnclosedJobs, type UnclosedJobs } from '../storage/unclosed-jobs';
 import { assembleSession } from './assembly';
 import { blankRefusal, pagesToScore, shownSpansOf } from './blank-flow';
 import { createScannerSlot } from './scanner-slot';
-import { pagesToMeasure } from './straighten-flow';
+import { createStraightenQueue, pagesToMeasure, type StraightenQueue } from './straighten-flow';
 
 /** Задач над производным в main одновременно — на всё: миниатюры, пустота, измерение (KTD-4). */
 const DERIVED_CONCURRENCY = 2;
@@ -187,10 +193,12 @@ export interface PassService {
    */
   interrupt(deadlineMs: number): Promise<void>;
   /**
-   * Выход из приложения (M6, KTD-12): фоновая работа над производным — измерения перекоса —
-   * отменяется и дожидается; окно и проход — `interrupt`.
+   * Отменяет и дожидается фоновую работу над производным — измерения перекоса и очередь
+   * коррекции (M6, KTD-12): выход из приложения (`will-quit`; окно и проход — `interrupt`) и
+   * закрытие каталога сессии хранилищем. Отменённые страницы остаются без записи до следующего
+   * открытия сессии.
    */
-  shutdown(): Promise<void>;
+  settleDerived(): Promise<void>;
   /** Страницы текущей сессии — для схемы изображений и миниатюр. */
   pageInfo(key: string): PageInfo | null;
   readPage(key: string): Promise<Result<Uint8Array>>;
@@ -220,6 +228,13 @@ interface Dependencies {
   readonly blank: BlankScores;
   /** Оценки перекоса (M6, KTD-11): кэш уже прочитан при открытии. */
   readonly skew: SkewScores;
+  /** Выправленные страницы (M6, KTD-11): записи уже прочитаны при открытии. */
+  readonly straightened: Straightened;
+  /**
+   * Очередь коррекции (M6, KTD-12) — фабрикой: её «снимок изменился» — это `notify` службы,
+   * который появляется только внутри неё.
+   */
+  readonly straightenQueue: (onChange: () => void) => StraightenQueue;
 }
 
 /** Идущий запуск прохода. */
@@ -261,7 +276,7 @@ export function interruptionError(end: ScanJobEnd): DomainError | null {
 }
 
 export function createPassService(
-  { store, settings, unclosedJobs, notices, blank, skew }: Dependencies,
+  { store, settings, unclosedJobs, notices, blank, skew, straightened, ...deps }: Dependencies,
   options: PassServiceOptions = {},
 ): PassService {
   const jobLimits: ScanJobLimits = { ...SCAN_JOB_LIMITS, ...options.jobLimits };
@@ -285,6 +300,7 @@ export function createPassService(
     seq += 1;
     options.onChange?.(seq);
   };
+  const straightenQueue = deps.straightenQueue(notify);
   const scanner = createScannerSlot({
     settings,
     connector,
@@ -305,6 +321,8 @@ export function createPassService(
       (changed) => {
         if (changed) {
           notify();
+          // Исход «выправлять» — в очередь коррекции; остальным очередь отказывает сама (KTD-12).
+          straightenQueue.enqueue(key);
         }
       },
       () => undefined,
@@ -343,11 +361,16 @@ export function createPassService(
     detectBlank(page.key);
   }
   // Страницы без кэша оценки перекоса — тоже в фоне; обороты без вердикта пустоты дождутся его.
+  // Страницы с исходом «выправлять» без записи текущей версии — в очередь коррекции (AE8, AE13;
+  // отложенные по месту или сбою в прошлый раз — попытка снова, R27).
   measurePending();
+  straightenQueue.ensureAll();
   /** Отброшенные страницы («Остановить», «Новая пачка», пересъём) теряют и вердикты. */
   const pruneScores = (): void => {
     blank.prune();
     skew.prune();
+    straightened.prune();
+    straightenQueue.prune();
   };
 
   // Досканировать можно только тот же сканер, что вёл проход (KTD-27).
@@ -938,9 +961,10 @@ export function createPassService(
       await Promise.race([current.done, delay(deadlineMs)]);
     },
 
-    async shutdown() {
+    async settleDerived() {
       skew.abort();
-      await skew.settle();
+      straightenQueue.abort();
+      await Promise.all([skew.settle(), straightenQueue.settle()]);
     },
 
     pageInfo: (key) => store.pageInfo(key),
@@ -962,7 +986,7 @@ export async function openPassService(
   });
   const settings = await openSettingsStore(dataRoot, options);
   const unclosedJobs = await openUnclosedJobs(dataRoot, options);
-  const { derivedDir } = layoutOf(dataRoot);
+  const { derivedDir, root } = layoutOf(dataRoot);
   // Один лимитер на всё производное main-стороны (KTD-4): main отдаёт его и миниатюрам.
   const limiter = options.derivedLimiter ?? limiterOf(DERIVED_CONCURRENCY);
   // Кэш оценок страниц оборотов читается до первого снимка (KTD3): лента после перезапуска
@@ -980,12 +1004,15 @@ export async function openPassService(
     (bytes, pixelLimit, measure) => worker.measure(bytes, pixelLimit, measure),
     { ...options, limiter },
   );
-  derived.settle = async (): Promise<void> => {
-    skew.abort();
-    await skew.settle();
-  };
   await skew.load(pagesToMeasure(store.snapshot(), blank.verdicts()).map((page) => page.key));
-  return createPassService(
+  // Выправленные страницы и очередь коррекции (KTD-11, KTD-12, KTD-13): записи читаются при
+  // открытии, недостающее — в очередь; место проверяется тем же резервом, что перед проходом.
+  const straightened = createStraightened(derivedDir, store, options);
+  await straightened.load(
+    store.snapshot()?.passes.flatMap((pass) => pass.pages.map((page) => page.key)) ?? [],
+  );
+  const { fs } = ioOf(options);
+  const service = createPassService(
     {
       store,
       settings,
@@ -993,7 +1020,20 @@ export async function openPassService(
       notices: settings.notice === null ? notices : [...notices, settings.notice],
       blank,
       skew,
+      straightened,
+      straightenQueue: (onChange) =>
+        createStraightenQueue({
+          source: store,
+          skew,
+          straightened,
+          worker: { straighten: (bytes, profile, job) => worker.straighten(bytes, profile, job) },
+          freeBytes: () => fs.freeBytes(root),
+          minFreeBytes: options.minFreeBytes ?? MIN_FREE_BYTES,
+          onChange,
+        }),
     },
     options,
   );
+  derived.settle = () => service.settleDerived();
+  return service;
 }

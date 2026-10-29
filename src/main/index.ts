@@ -190,7 +190,7 @@ async function start(): Promise<void> {
     commands.dispose();
     // Измерения перекоса в полёте отменяются (M6, KTD-12): страница без вердикта дождётся
     // следующего запуска, кэш закрытой сессии не пересоздаётся.
-    void service.shutdown();
+    void service.settleDerived();
   });
 
   loadRenderer(window);

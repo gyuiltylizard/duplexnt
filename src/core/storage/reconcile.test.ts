@@ -731,10 +731,23 @@ describe('сверка при запуске: миниатюры отброше�
     for (const name of [pageName(1, 1, 1), pageName(1, 2, 1), pageName(1, 2, 2)]) {
       await writeFile(join(thumbs, name), page(7));
     }
+    // Производное выравнивания (M6, R26) — по тому же префиксу.
+    const straight = join(layout.derivedDir, SESSION, 'straight');
+    await mkdir(straight, { recursive: true });
+    for (const name of ['p01-s01-0001.v1.jpg', 'p01-s02-0001.v1.jpg', 'p01-s02-0001.v1.json']) {
+      await writeFile(join(straight, name), page(7));
+    }
+    const skew = join(layout.derivedDir, SESSION, 'skew');
+    await mkdir(skew, { recursive: true });
+    for (const name of ['p01-s01-0001.json', 'p01-s02-0002.json']) {
+      await writeFile(join(skew, name), page(7));
+    }
 
     await reconciled(root);
 
     expect(await readdir(thumbs)).toEqual([pageName(1, 1, 1)]);
+    expect(await readdir(straight)).toEqual(['p01-s01-0001.v1.jpg']);
+    expect(await readdir(skew)).toEqual(['p01-s01-0001.json']);
   });
 });
 

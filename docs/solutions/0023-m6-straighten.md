@@ -359,6 +359,51 @@ worst-case; `STRAIGHT_SIZE_RATIO = 2` привязан к фикстурам ET-
 
 **Готово (U5):** typecheck, lint, format:check, `npm test`, `test:integration` — зелёные.
 
+### U11. Выправленные файлы, очередь коррекции, жизненный цикл, место, уборка — ✅ зелёный
+
+**Сделано (2026-10-29):** `src/core/storage/straightened.ts` (новый) — одна истина и один
+писатель: `resolve(ключ)` синхронно из индекса (самая новая действительная запись любой
+известной версии; записи новее известной не отдаются и не трогаются), `load(ключи)` при
+открытии (читает `<ключ>.v<N>.json`, сверяет имя файла и размер через `fs.size`, временные
+`*.tmp` и сироты — JPEG без записи, запись без файла нужного размера — убираются), `store`
+(«JPEG целиком, затем запись», повторная проверка живости после записи с `unlink` обоих
+файлов, прежние версии удаляются после новой — AE13), `prune`; `src/core/scan/straighten-flow.ts`
+— `createStraightenQueue` (одна задача за раз, принимает только «выправлять» с профилем без
+записи текущей версии и не отложенные; `ensureAll` по вердиктам; `abort` чистит очередь и рвёт
+текущую задачу сигналом, `settle`; место — `freeBytes − bytes × STRAIGHT_SIZE_RATIO ≥
+minFreeBytes` тем же резервом `MIN_FREE_BYTES`, что перед проходом; сбой коррекции, сбой чтения
+и не-`ENOSPC` записи → `deferred: failed`, нехватка и `ENOSPC` → `deferred: noSpace`; очередь
+не останавливается; отмена оставляет страницы без записи; `state()` для U12); `session-store.ts`
+— `MIN_FREE_BYTES` экспортирован, `removeMarked` чистит `skew/`, `straight/`, `straight-thumbs/`
+по префиксу; `reconcile.ts` — то же для доведённых удалений; `pass-service.ts` — зависимости
+`straightened` и фабрика `straightenQueue(notify)` (её «снимок изменился» — `notify` службы),
+`enqueue` из колбэка вердикта, `ensureAll` при открытии, `prune` в `pruneScores`,
+`settleDerived()` (вместо `shutdown`: отмена и ожидание измерений и очереди — `will-quit` в main
+и `closeDirectory` хранилища через позднюю привязку); `test/guards/straight-paths.test.ts` —
+прямой доступ к `straightDirIn(`/`straightDirOf(` только в `layout.ts`, `straightened.ts`,
+`session-store.ts`, `reconcile.ts`, с синтетической проверкой самого стража.
+
+**Решения по ходу:** (1) пауза очереди на время прохода не заводилась — замер A/B U1
+(журнал, U1); (2) сироты убираются при `load` (открытие сессии), а не отдельным `prune` — у
+`prune` синхронный контракт, как у остальных кэшей; (3) `window-close.ts` не менялся: закрытие
+окна во время прохода идёт через `interrupt`, а отмена производного — `will-quit`;
+(4) исполнитель — прямой (ADR 0008), ветка «поток воркера упал → перезапуск один раз» из
+плана не нужна: сбой исполнителя — `null` → `deferred: failed` без повторов в сессии.
+
+**Тесты:** `test/integration/straightened.test.ts` (запись и запись о коррекции, сироты и
+размер, версии — прежняя действительна до новой, «из будущего» не трогается, `*.tmp`,
+отброшенная страница, `ENOSPC` без временного файла, `prune`); `straighten-flow.queue.test.ts`
+(только «выправлять», снимок на каждый исход, одна задача за раз, `abort`/`settle`, сбой →
+`failed` без повтора, мало места → `noSpace` и выправление после «следующего открытия», место
+неизвестно → идёт, `ENOSPC` при записи, `prune`); `session-store.lifecycle.test.ts` и
+`reconcile.test.ts` — уборка новых каталогов по сегменту; `straighten.emulator.test.ts` —
+очередь выправила косые страницы по ходу (JPEG и запись, размер сходится), AE8 (производное
+стёрто → после перезапуска досчитано, журнал байт в байт), AE16 («Новое сканирование» посреди
+измерений и коррекции — производное удалено и не пересоздано); страж путей.
+
+**Готово (U11):** typecheck, lint, format:check, `npm test`, `test:integration` — зелёные.
+**Сессия 3 закрыта.**
+
 ## На чём встали
 
 Сессия 1 открыта 2026-10-28: ветка `feat/m6`, план и брейншторм закоммичены, журнал заведён.
@@ -387,7 +432,15 @@ worst-case; `STRAIGHT_SIZE_RATIO = 2` привязан к фикстурам ET-
 `skew-scores.ts` (кэш оценок по образцу `blank-scores.ts`), `pass-service.ts` (`derivedLimiter`
 и `imageWorker` в опциях, триггер измерения в `sink` без `await`, `notBlank` → измерение,
 режим `off` — без измерений), `main/index.ts`; затем U11 (выправленные файлы, очередь
-коррекции с жизненным циклом, место, уборка).
+коррекции с жизненным циклом, место, уборка). **Сессия 3 открыта и закрыта 2026-10-29:** U5 (лимитер
+`normal`/`low`, `skew-scores`, измерение по ходу прохода) и U11 (`straightened`, очередь
+коррекции, место, уборка, страж путей) зелёные, коммиты с U-ID. Ревью пары сессий 3–4 — после
+сессии 4. **Дальше — сессия 4, U12:** `src/shared/straighten.ts` (`straightenStatusOf`,
+сводка, `pageImageViewOf`), `assembly.ts` (`assembleSession(session, {blank, skew})`,
+`SkewVerdicts` в снимок), `pass-service.ts` (`straightenRefusal`, снимок и дайджест в
+`PendingBatch`, `retry`, `straightenProgress` из `queue.state()`), мост и команды
+(`setStraightenMode`, `setEdits` с `keepOriginal`), `assembly-fixture.ts` и его страж; затем
+U6 (PDF из снимка, миниатюры `straight-thumbs/`, протокол картинок через `straightened.resolve`).
 
 ## Закрытие вехи
 
