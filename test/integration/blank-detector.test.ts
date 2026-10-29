@@ -17,7 +17,16 @@ const PIXEL_LIMIT = 5100 * 8400;
 // Сканы детектора перекоса (M6, U1: косые листы `fan-*`, сетка с кривой закладкой, фото) —
 // страницы с содержимым: детектор пустых их не скрывает.
 const BLANK_PREFIXES = ['blank-', 'bleed-', 'punched-'];
-const CONTENT_PREFIXES = ['pencil-', 'text-', 'signature-', 'fan-', 'tilt-', 'photo-'];
+const CONTENT_PREFIXES = [
+  'pencil-',
+  'text-',
+  'signature-',
+  'fan-',
+  'tilt-',
+  'photo-',
+  'sheet-',
+  'rulers-',
+];
 
 const classOf = (name: string): 'blank' | 'content' | null =>
   BLANK_PREFIXES.some((prefix) => name.startsWith(prefix))
