@@ -19,6 +19,7 @@ import type { SessionEdits } from './edits';
 import type { DomainError, Result } from './errors';
 import type { ScanParams } from './scan-params';
 import type { PassReport, Snapshot } from './snapshot';
+import type { StraightenMode } from './straighten';
 
 export const PROBE_TOKEN_MAX_LENGTH = 64;
 
@@ -180,6 +181,11 @@ export interface BridgeCommands {
    * первого прохода. Не параметр устройства — принимается и без сканера.
    */
   readonly setBlankMode: { readonly request: BlankMode; readonly value: undefined };
+  /**
+   * Режим выравнивания перекоса (M6, R13, R14): помнится в настройках, в сессию замораживается
+   * при старте первого прохода — открытую сессию не трогает. Принимается и без сканера.
+   */
+  readonly setStraightenMode: { readonly request: StraightenMode; readonly value: undefined };
   /** Подсказка показана с привлечением внимания (B-4): помнится в настройках, больше не мигает. */
   readonly markHintSeen: { readonly request: HintId; readonly value: undefined };
   /**
@@ -249,6 +255,7 @@ export const BRIDGE_CHANNELS = {
   recheckScanner: 'duplexnt:recheck-scanner',
   setScanParams: 'duplexnt:set-scan-params',
   setBlankMode: 'duplexnt:set-blank-mode',
+  setStraightenMode: 'duplexnt:set-straighten-mode',
   markHintSeen: 'duplexnt:mark-hint-seen',
   startPass: 'duplexnt:start-pass',
   stopPass: 'duplexnt:stop-pass',

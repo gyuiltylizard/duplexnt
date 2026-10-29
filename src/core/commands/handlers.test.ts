@@ -24,6 +24,7 @@ import { MAX_EDIT_ITEMS } from './schemas';
 const EMPTY_SNAPSHOT: Snapshot = {
   blankMode: 'hide',
   straightenMode: 'auto',
+  straightenProgress: null,
   seenHints: [],
   seq: 0,
   scanner: { kind: 'none' },
@@ -53,6 +54,7 @@ function setup(
     useScanner: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
     setParams: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
     setBlankMode: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
+    setStraightenMode: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
     markHintSeen: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
     startPass: vi.fn(() =>
       Promise.resolve(ok({ end: 'completed' as const, pages: 3, error: null })),
@@ -336,7 +338,8 @@ describe('снимок и проход', () => {
       names: ['', 'Договор'],
       divider: null,
       notBlank: [],
-      keepOriginal: [],
+      // Откат выравнивания (M6, U12) — коллекция ключей, как `notBlank`: схему проходит.
+      keepOriginal: ['p01-s01-0002'],
     };
 
     expect(await handlers.setEdits({ edits, rotate180: { 2: true } })).toEqual(ok({ seq: 7 }));
@@ -776,6 +779,21 @@ describe('команды: режим пустых оборотов (M4, U3)', ()
       expect(invalid(await handlers.setBlankMode(garbage)), JSON.stringify(garbage)).toBe(true);
     }
     expect(service.setBlankMode).toHaveBeenCalledOnce();
+  });
+});
+
+describe('команды: режим выравнивания (M6, U12)', () => {
+  it('setStraightenMode: строгая схема словаря, затем служба', async () => {
+    const { handlers, service } = setup();
+
+    expect(await handlers.setStraightenMode('off')).toEqual(ok(undefined));
+    expect(service.setStraightenMode).toHaveBeenCalledExactlyOnceWith('off');
+    for (const garbage of ['hide', 'Auto', '', 0, { mode: 'auto' }, null, undefined, true]) {
+      expect(invalid(await handlers.setStraightenMode(garbage)), JSON.stringify(garbage)).toBe(
+        true,
+      );
+    }
+    expect(service.setStraightenMode).toHaveBeenCalledOnce();
   });
 });
 

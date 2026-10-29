@@ -27,6 +27,7 @@ function makeSnapshot(overrides: Partial<Snapshot>): Snapshot {
     notices: [],
     blankMode: 'hide',
     straightenMode: 'auto',
+    straightenProgress: null,
     seenHints: [],
     ...overrides,
   };

@@ -404,6 +404,71 @@ minFreeBytes` тем же резервом `MIN_FREE_BYTES`, что перед �
 **Готово (U11):** typecheck, lint, format:check, `npm test`, `test:integration` — зелёные.
 **Сессия 3 закрыта.**
 
+## Сессия 4 — статусы и снимок на сохранение; PDF, миниатюры, протокол картинок
+
+### U12. Статусы в снимке, команды моста, снимок на сохранение, прогресс — ✅ зелёный
+
+**Сделано (2026-10-29):** `src/shared/straighten.ts` — `StraightenDeferredReason` (переехал из
+ядра), `StraightenFact`/`StraightenFacts` (исход измерения, есть ли файл, отсрочка — карта по
+ключу по образцу `BlankVerdicts`), `StraightenStatus` и `StraightenReason`
+(`measure`/`nohelp`/`disk`/`fail` — словарь handoff'а), `StraightenMark {status, reason}`,
+`straightenMarkOf(...)` (чистое правило KTD-9: `off`/потеряна/пустая → `null`; без исхода →
+`pending`; `unmeasurable`/`notImproved` → `unmeasurable` с причиной; `level`; `willStraighten` →
+`straightened` при файле, `kept` при откате и файле, `deferred` с причиной, иначе `pending`),
+`StraightenSummary` (счёт по статусам, `total`, `reasons`) и `straightenSummaryOf`,
+`StraightenProgress {queued, running}`; `snapshot.ts` — `AssembledPage.straighten: StraightenMark`,
+`SessionAssembly.straighten: StraightenSummary`, `Snapshot.straightenProgress`; `errors.ts` —
+причина конфликта `straightenPending` (+ строка в локали — черновик до U8); `bridge.ts` —
+команда `setStraightenMode`; `edits.ts` — `keepOriginal` действует только на выправленную.
+`assembly.ts` — третий аргумент `straighten: StraightenFacts`, статус считается после флага
+пустоты (скрытый/помеченный → `null`), сводка; `straighten-flow.ts` — `straightenFactsOf`
+(только в режиме `auto`, только страницы с исходом, файлом или отсрочкой), `straightenProgressOf`,
+`straightenRefusal` (ждущие → `straightenPending` с числом; отложенные не держат — AE15),
+`straightSnapshotOf` (снимок `{ключ → файл}` по статусу `straightened` и дайджест sha256 по
+ключам, версиям и размерам); **`src/core/scan/save-flow.ts` (новый)** — `createDocumentWriter`:
+гарды ленты, незавершённый пакет (теперь с `straight` и `digest` рядом с `revision`), `buildPdf`
+читает только по снимку пакета (выправленная — из файла снимка со сверкой размера; файла нет
+или размер другой → `pageUnavailable {reason: 'straightened'}` — сбой документа, не подмена),
+повтор при расхождении ревизии **или** дайджеста → `batchStale`; `pass-service.ts` — сборка
+одной функцией `assembly(session)` (вердикты пустоты + факты), `straightenProgress` в снимке,
+`setStraightenMode`, запись через `writer`, 933 строки (было 1039). Команды: `schemas.ts`
+(`straightenModeSchema`), `handlers.ts`, `preload/api.ts`. Renderer: `assembly-fixture.ts` —
+зеркало ставит статусы тем же `straightenMarkOf` (`withFlags`), `NO_EDITS_ASSEMBLY.straighten`;
+литералы снимков и страниц в тестах — новые поля.
+
+**Отступления от плана (записаны, не переигрываются):** (1) `assembleSession(session, blank,
+straighten)` — третий позиционный аргумент, а не объект `{blank, skew}`: 97 вызовов с
+позиционной картой вердиктов, объект дал бы тот же контракт ценой правки всех; (2) в сборку
+идут `StraightenFacts`, а не `SkewVerdicts`: статусу нужны «есть файл» и «отложена», которых в
+вердикте измерения нет (KTD-9: статус — из записи очереди); (3) причины `deferred`/`unmeasurable`
+несут отдельное поле `reason` на странице — handoff показывает текст причины в `title` и
+инспекторе; (4) «два сохранения подряд побайтно одинаковы» проверено по потокам изображений, не
+по файлу: `pdf-lib` ставит `CreationDate`/`ModDate` текущим временем (поведение M2, не трогали);
+(5) AE13 (смена версии геометрии без отказа сохранения) на уровне службы не воспроизвести —
+`STRAIGHTEN_GEOMETRY_VERSION = 1`, прежней версии нет; правило «запись любой известной версии
+действительна» покрыто `straightened.test.ts` и `straightenMarkOf` (файл есть → `straightened`
+без `pending`); (6) «поздняя коррекция другой страницы между попытками» внутри сессии
+недостижима без досканирования (которое меняет ревизию): дайджест проверен юнитом на
+чувствительность к ключам, версии и размеру, служба — на пропавший файл из снимка (AE14);
+(7) `untilScored` в тестах ждёт и выравнивание — иначе `saveSingle` ловит `straightenPending`
+после пометки «не пустая» (измерение `levelWorker` асинхронно).
+
+**Тесты:** `src/shared/straighten.test.ts` (таблица статусов, сводка);
+`assembly.straighten.test.ts` (статусы по исходам, пустой/потерянная/`off` → `null`, откат только
+выправленной и мёртвый ключ, отложенные не `pending`, удалённые вне сводки, лента не двигается);
+`straighten-flow.test.ts` (факты, ход, гард, снимок и дайджест); `pass-service.straighten.test.ts`
+(отказ `straightenPending` с числом → после измерения статусы и PDF: выправленная — поток из
+`straight/`, ровная — байт в байт, повтор — те же потоки; `kept` → исходник, правка, перезапуск,
+«Вернуть»; AE15 мало места → `deferred: disk`, сохранение не блокирует; AE14 пропавший файл
+снимка → сбой документа с причиной; режим `off` → `null`, прогресса нет; `setStraightenMode`
+помнится); `handlers.test.ts` (`setStraightenMode` — схема, `setEdits` с `keepOriginal`);
+`test/guards/assembly-fixture.test.ts` — девять случаев зеркала со статусами и откатом;
+`straighten.emulator.test.ts` — статусы после прохода, PDF из снимка (выправленные — из
+производного, фото — байт в байт), AE8 — те же статусы после перезапуска без кэша, журнал цел.
+
+**Готово (U12):** typecheck, lint, format:check, `npm test` (2470), `test:integration` (250 +
+worst-case 3) — зелёные.
+
 ## На чём встали
 
 Сессия 1 открыта 2026-10-28: ветка `feat/m6`, план и брейншторм закоммичены, журнал заведён.
@@ -445,6 +510,15 @@ minFreeBytes` тем же резервом `MIN_FREE_BYTES`, что перед �
 `PendingBatch`, `retry`, `straightenProgress` из `queue.state()`), мост и команды
 (`setStraightenMode`, `setEdits` с `keepOriginal`), `assembly-fixture.ts` и его страж; затем
 U6 (PDF из снимка, миниатюры `straight-thumbs/`, протокол картинок через `straightened.resolve`).
+**Сессия 4 открыта 2026-10-29. U12 закрыт** 2026-10-29: статусы и сводка в снимке
+(`straightenMarkOf` в `@shared`, факты ядра, зеркало renderer'а под стражем), гард
+`straightenPending`, снимок выправленных и дайджест в пакете (`save-flow.ts` выделен из службы),
+`setStraightenMode`. **Дальше — U6:** `PAGE_IMAGE_VIEWS` + `straight`/`straight-thumb` с версией
+в пути, `pageImageViewOf(page, size)` в `@shared`, `parsePageImageUrl` на один сегмент,
+`thumbnails.ts` — вариант `straight` из `straightened.resolve` в `straight-thumbs/`,
+`page-protocol.ts` — фолбэк на оригинал/обычную миниатюру, `main/index.ts`, три компонента
+renderer на `pageImageViewOf`, `assemble.test.ts` (защитная ветка DPI из JFIF),
+`pdf-worst-case` (объём после перекодирования), `editor-save.emulator.test.ts` (AE3, AE6).
 
 ## Закрытие вехи
 

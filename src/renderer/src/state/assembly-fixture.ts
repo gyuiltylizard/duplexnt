@@ -7,9 +7,13 @@ import {
   hasPages,
   isAnchoredKind,
   isBacksKind,
+  NO_STRAIGHTEN,
+  NO_STRAIGHTEN_FACTS,
   NO_VERDICTS,
   pendingSetOf,
   sameEdits,
+  straightenMarkOf,
+  straightenSummaryOf,
   type AddedSetReport,
   type AssembledDocument,
   type AssembledPage,
@@ -22,6 +26,9 @@ import {
   type SessionAssembly,
   type SessionSnapshot,
   type SetsLayout,
+  type StraightenFacts,
+  type StraightenMark,
+  type StraightenSummary,
 } from '@shared';
 import { rolesOf } from './screen';
 
@@ -37,6 +44,7 @@ export const NO_EDITS_ASSEMBLY: Omit<SessionAssembly, 'report'> = {
   hasEdits: false,
   deleted: 0,
   blank: NO_BLANK,
+  straighten: NO_STRAIGHTEN,
 };
 
 const isBacksRole = (pass: PassSnapshot): boolean => isBacksKind(pass.kind);
@@ -53,23 +61,31 @@ function modeOf(session: SessionSnapshot): AssemblyMode {
   return backs.pages.length === (fronts?.pages.length ?? 0) ? 'pairs' : 'sets';
 }
 
-interface MirrorPage extends Omit<AssembledPage, 'side' | 'blank'> {
+interface MirrorPage extends Omit<AssembledPage, 'side' | 'blank' | 'straighten'> {
   readonly group: 'fronts' | 'backs' | null;
   readonly ofBacks: boolean;
 }
 
 /**
- * Флаги пустых оборотов поверх ленты — тем же правилом `blankFlagOf`, что и ядро (M4, R10,
- * KTD4, KTD9); зеркало добавляет только сторону по проходу (`ofBacks`) и режим наборов.
+ * Флаги пустых оборотов и статусы выравнивания поверх ленты — теми же правилами `blankFlagOf` и
+ * `straightenMarkOf`, что и ядро (M4, R10, KTD4, KTD9; M6, KTD-9); зеркало добавляет только
+ * сторону по проходу (`ofBacks`) и режим наборов.
  */
-function withBlankFlags(
+function withFlags(
   session: SessionSnapshot,
-  pages: readonly (AssembledPage & Pick<MirrorPage, 'ofBacks'>)[],
+  pages: readonly (Omit<AssembledPage, 'straighten'> & Pick<MirrorPage, 'ofBacks'>)[],
   sets: SetsLayout | null,
   blank: BlankVerdicts,
-): { readonly order: AssembledPage[]; readonly summary: BlankSummary } {
+  straighten: StraightenFacts,
+): {
+  readonly order: AssembledPage[];
+  readonly summary: BlankSummary;
+  readonly straightenSummary: StraightenSummary;
+} {
   const notBlank = new Set(session.edits.notBlank);
+  const keepOriginal = new Set(session.edits.keepOriginal);
   const flags: (BlankFlag | 'pending')[] = [];
+  const marks: StraightenMark[] = [];
   const order = pages.map(({ ofBacks, ...page }): AssembledPage => {
     const flag = blankFlagOf({
       mode: session.blankMode,
@@ -80,9 +96,22 @@ function withBlankFlags(
       inSets: sets !== null,
     });
     flags.push(flag);
-    return { ...page, blank: flag === 'pending' ? null : flag };
+    const blankFlag = flag === 'pending' ? null : flag;
+    const mark = straightenMarkOf({
+      mode: session.straighten,
+      lost: page.lost,
+      blank: blankFlag !== null,
+      keepOriginal: keepOriginal.has(page.key),
+      fact: straighten.get(page.key),
+    });
+    marks.push(mark);
+    return { ...page, blank: blankFlag, straighten: mark };
   });
-  return { order, summary: blankSummaryOf(session.blankMode, flags) };
+  return {
+    order,
+    summary: blankSummaryOf(session.blankMode, flags),
+    straightenSummary: straightenSummaryOf(session.straighten, marks),
+  };
 }
 
 const frontOf = (
@@ -202,6 +231,7 @@ function setsReportOf(passes: readonly PassSnapshot[]): {
 export function assemblyOf(
   session: SessionSnapshot,
   blank: BlankVerdicts = NO_VERDICTS,
+  straighten: StraightenFacts = NO_STRAIGHTEN_FACTS,
 ): SessionAssembly {
   const { passes } = session;
   const { fronts: frontsPass, backs: backsPass } = rolesOf(passes);
@@ -338,7 +368,7 @@ export function assemblyOf(
     placed = order.map((page) => ({ ...page, side: page.ofBacks ? 'back' : 'front' }));
   }
 
-  const flagged = withBlankFlags(
+  const flagged = withFlags(
     session,
     placed.map(({ key, side, sheet, angle, lost, addedSet, ofBacks }) => ({
       key,
@@ -352,6 +382,7 @@ export function assemblyOf(
     })),
     sets,
     blank,
+    straighten,
   );
   return {
     order: flagged.order,
@@ -362,6 +393,7 @@ export function assemblyOf(
     deleted: 0,
     report: { ...report, groups: sets },
     blank: flagged.summary,
+    straighten: flagged.straightenSummary,
   };
 }
 
@@ -376,6 +408,7 @@ export function assemblyOf(
 export function assemblyWithEditsOf(
   session: SessionSnapshot,
   blank: BlankVerdicts = NO_VERDICTS,
+  straighten: StraightenFacts = NO_STRAIGHTEN_FACTS,
 ): SessionAssembly {
   const auto = assemblyOf(session);
   const { edits } = session;
@@ -427,16 +460,18 @@ export function assemblyWithEditsOf(
   }
   const alive = new Set(auto.order.map((entry) => entry.key));
   const deleted = edits.deleted.filter((key) => alive.has(key)).length;
-  const flagged = withBlankFlags(
+  const flagged = withFlags(
     session,
     order.map((entry) => ({ ...entry, ofBacks: backsKeys.has(entry.key) })),
     sets,
     blank,
+    straighten,
   );
   return {
     ...auto,
     order: flagged.order,
     blank: flagged.summary,
+    straighten: flagged.straightenSummary,
     sets,
     report: { ...auto.report, groups: sets },
     documents:

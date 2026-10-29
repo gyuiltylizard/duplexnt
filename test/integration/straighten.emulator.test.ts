@@ -1,19 +1,22 @@
 import { readdir, readFile, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import type { StraightenStatus } from '../../src/shared';
 import type { ScanJobLimits } from '../../src/core/escl/scan-job';
 import { inlineImageWorker } from '../../src/core/image/image-worker';
-import type { PassServiceOptions } from '../../src/core/scan/pass-service';
+import type { PassService, PassServiceOptions } from '../../src/core/scan/pass-service';
 import { layoutOf } from '../../src/core/storage/layout';
+import { pdfImageStreams } from '../support/fixtures';
 import { stubWorker } from '../support/image-worker';
-import { connectService, scanned } from '../support/pass-service';
+import { connectService, saveSingle, scanned } from '../support/pass-service';
 import { unwrap } from '../support/result';
 import { journalOnDisk } from '../support/session-store';
 import { until, untilScored } from '../support/until';
 
-// Выравнивание перекоса на настоящей цепочке (план M6, U5; R6, R11, KTD-4, KTD-12): эмулятор с
-// настоящими косыми сканами в лотке → служба с прямым исполнителем → оценки как производное
-// (`derived/<id>/skew`) по ходу прохода. Измерение не задерживает приём страниц, «Остановить»
+// Выравнивание перекоса на настоящей цепочке (план M6, U5, U12; R6, R11, KTD-4, KTD-8, KTD-9,
+// KTD-12): эмулятор с настоящими косыми сканами в лотке → служба с прямым исполнителем → оценки
+// и выправленные файлы как производное (`derived/<id>/skew`, `straight`) по ходу прохода →
+// статусы в снимке → PDF из снимка. Измерение не задерживает приём страниц, «Остановить»
 // посреди измерения не пересоздаёт каталог производного.
 
 const FAST: Partial<ScanJobLimits> = {
@@ -51,6 +54,11 @@ async function outcomesIn(dir: string): Promise<Record<string, string>> {
 const straightFiles = async (dir: string): Promise<string[]> =>
   (await readdir(dir).catch(() => [])).filter((name) => !name.endsWith('.tmp')).sort();
 
+const statusesOf = (service: PassService): Record<string, StraightenStatus> =>
+  Object.fromEntries(
+    (service.snapshot().assembly?.order ?? []).map((page) => [page.key, page.straighten.status]),
+  );
+
 describe('выравнивание на эмуляторе: измерение по ходу прохода (M6, U5)', () => {
   it('косые листы в лотке получают «выправлять», фото — «не померить», скрытый пустой оборот не измеряется', async () => {
     const { root, service, restart } = await connectService(
@@ -87,6 +95,37 @@ describe('выравнивание на эмуляторе: измерение �
       file: { bytes: number };
     };
     expect((await stat(join(straight, `${F(1)}.v1.jpg`))).size).toBe(record.file.bytes);
+
+    // U12: статусы в снимке — по исходам и файлам; скрытый пустой оборот без статуса; в PDF
+    // выправленные страницы идут из производного, фото — байт в байт (KTD-8).
+    await until(() => service.snapshot().assembly?.straighten.pending === 0);
+    const statuses = {
+      [F(1)]: 'straightened',
+      [B(2)]: 'straightened',
+      [F(2)]: 'unmeasurable',
+      [B(1)]: null,
+    };
+    expect(statusesOf(service)).toEqual(statuses);
+    expect(service.snapshot().assembly?.straighten).toMatchObject({
+      mode: 'auto',
+      straightened: 2,
+      unmeasurable: 1,
+      pending: 0,
+      total: 3,
+      reasons: { measure: 1 },
+    });
+    expect(service.snapshot().straightenProgress).toEqual({ queued: 0, running: null });
+    const pdf = await saveSingle(service, root);
+    const streams = (await pdfImageStreams(await readFile(pdf))).map((stream) =>
+      Buffer.from(stream.getContents()),
+    );
+    // Лента: F1, B2 (оборот первого листа), F2; B1 скрыт.
+    expect(streams).toHaveLength(3);
+    expect(streams[0]?.equals(await readFile(join(straight, `${F(1)}.v1.jpg`)))).toBe(true);
+    expect(streams[1]?.equals(await readFile(join(straight, `${B(2)}.v1.jpg`)))).toBe(true);
+    expect(streams[2]?.equals(await readFile(join(layoutOf(root).pagesDir, `${F(2)}.jpg`)))).toBe(
+      true,
+    );
     const journalBefore = await journalOnDisk(root);
 
     // AE8: производное потеряно целиком — после перезапуска всё досчитано заново, журнал цел.
@@ -100,9 +139,11 @@ describe('выравнивание на эмуляторе: измерение �
       [F(2)]: 'unmeasurable',
       [B(2)]: 'willStraighten',
     });
+    await until(() => again.snapshot().assembly?.straighten.pending === 0);
+    expect(statusesOf(again)).toEqual(statuses);
     expect(await journalOnDisk(root)).toEqual(journalBefore);
     await again.settleDerived();
-  }, 40_000);
+  }, 60_000);
 
   it('AE16: «Новое сканирование» посреди измерений и коррекции — всё отменено, производное удалено и не пересоздано', async () => {
     const { root, service } = await connectService(

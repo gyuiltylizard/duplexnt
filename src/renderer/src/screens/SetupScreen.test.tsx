@@ -25,6 +25,7 @@ function makeSnapshot(scanner: ScannerState): Snapshot {
   return {
     blankMode: 'hide',
     straightenMode: 'auto',
+    straightenProgress: null,
     seenHints: [],
     seq: 1,
     scanner,

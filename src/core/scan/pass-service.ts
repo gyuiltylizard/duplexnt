@@ -3,7 +3,6 @@ import {
   fail,
   isBacksKind,
   ok,
-  type AssembledPage,
   type BlankMode,
   type HintId,
   type DomainError,
@@ -15,14 +14,15 @@ import {
   type ScanParams,
   type SaveDocumentsReport,
   type SaveDocumentsRequest,
-  type SavedFile,
-  type SaveMode,
+  type SessionAssembly,
   type SessionConflictReason,
   type SessionEdits,
+  type SessionSnapshot,
   type StartPassRequest,
   type SetEditsReport,
   type Snapshot,
   type StartupNotice,
+  type StraightenMode,
 } from '@shared';
 import type { ConnectedScanner, ConnectorOptions } from '../escl/connect';
 import { jobPathFromLocation } from '../escl/device-path';
@@ -40,8 +40,6 @@ import { findByUuid } from '../discovery/find-by-uuid';
 import { inlineImageWorker, type ImageWorker } from '../image/image-worker';
 import { parseStatus } from '../escl/status';
 import { createTransport, type ScannerTransport } from '../escl/transport';
-import { assemblePdf, type PdfPageInput } from '../pdf/assemble';
-import { writeBatch } from '../pdf/save-batch';
 import { createBlankScores, type BlankScores } from '../storage/blank-scores';
 import type { PassOrigin } from '../storage/journal';
 import { layoutOf } from '../storage/layout';
@@ -63,9 +61,16 @@ import { createStraightened, type Straightened } from '../storage/straightened';
 import { pagePixelLimit } from '../storage/thumbnails';
 import { openUnclosedJobs, type UnclosedJobs } from '../storage/unclosed-jobs';
 import { assembleSession } from './assembly';
-import { blankRefusal, pagesToScore, shownSpansOf } from './blank-flow';
+import { pagesToScore } from './blank-flow';
+import { createDocumentWriter } from './save-flow';
 import { createScannerSlot } from './scanner-slot';
-import { createStraightenQueue, pagesToMeasure, type StraightenQueue } from './straighten-flow';
+import {
+  createStraightenQueue,
+  pagesToMeasure,
+  straightenFactsOf,
+  straightenProgressOf,
+  type StraightenQueue,
+} from './straighten-flow';
 
 /** Задач над производным в main одновременно — на всё: миниатюры, пустота, измерение (KTD-4). */
 const DERIVED_CONCURRENCY = 2;
@@ -121,6 +126,8 @@ export interface PassService {
   setParams(params: ScanParams): Promise<Result<void>>;
   /** Режим пустых оборотов (M4, R1): настройка приложения; принимается и без сканера. */
   setBlankMode(mode: BlankMode): Promise<Result<void>>;
+  /** Режим выравнивания (M6, R13, R14): настройка приложения; открытую сессию не трогает. */
+  setStraightenMode(mode: StraightenMode): Promise<Result<void>>;
   /** Подсказка показана с привлечением внимания (B-4): в настройки, в снимок. */
   markHintSeen(hint: HintId): Promise<Result<void>>;
   /**
@@ -169,8 +176,9 @@ export interface PassService {
   rescanSetBacks(set: number): Promise<Result<void>>;
   /**
    * Пакетное сохранение в папку (M3, U4): документы ленты (или вся лента одним файлом) в PDF по
-   * одному, best-effort. «Сохранено» — только когда записаны все файлы пакета и журнал не
-   * менялся с первой попытки. `retry` пишет только неудавшиеся прошлого пакета — в его папку.
+   * одному, best-effort. «Сохранено» — только когда записаны все файлы пакета, журнал и
+   * выправленные страницы не менялись с первой попытки (KTD-8). `retry` пишет только
+   * неудавшиеся прошлого пакета — в его папку. Гарды ленты и пакет — `save-flow.ts`.
    */
   saveDocuments(
     folder: string,
@@ -202,21 +210,6 @@ export interface PassService {
   /** Страницы текущей сессии — для схемы изображений и миниатюр. */
   pageInfo(key: string): PageInfo | null;
   readPage(key: string): Promise<Result<Uint8Array>>;
-}
-
-/** Незавершённый пакет сохранения (M3, U4). */
-interface PendingBatch {
-  /** Пакет принадлежит сессии: после «Нового сканирования» повторять нечего. */
-  readonly sessionId: string;
-  readonly mode: SaveMode;
-  readonly folder: string;
-  readonly documents: number;
-  /** Ревизия журнала первой попытки. */
-  readonly revision: number;
-  /** Записанные — накопительно. */
-  readonly written: readonly SavedFile[];
-  /** Номера документов, которые ещё предстоит записать. */
-  readonly failed: readonly number[];
 }
 
 interface Dependencies {
@@ -287,13 +280,6 @@ export function createPassService(
   let run: Run | null = null;
   /** Сохранение PDF идёт: второй вызов — конфликт, а не два диалога и две записи в один путь. */
   let saving = false;
-  /**
-   * Незавершённый пакет (M3, U4): записанное накапливается, повтор пишет только неудавшиеся.
-   * Ревизия — первой попытки: правка между попытками делает уже записанные файлы устаревшими,
-   * и «сохранено» не ставится.
-   */
-  let pendingBatch: PendingBatch | null = null;
-  let lastBatchFolder: string | null = null;
   let seq = 0;
 
   const notify = (): void => {
@@ -301,6 +287,20 @@ export function createPassService(
     options.onChange?.(seq);
   };
   const straightenQueue = deps.straightenQueue(notify);
+  // Сборка ленты с оценками пустоты и фактами выравнивания (KTD-9) — одна на снимок и пакет.
+  const assembly = (session: SessionSnapshot): SessionAssembly =>
+    assembleSession(
+      session,
+      blank.verdicts(),
+      straightenFactsOf(session, skew.verdicts(), straightened, straightenQueue.state()),
+    );
+  const writer = createDocumentWriter({
+    store,
+    assemble: assembly,
+    straightened,
+    io: ioOf(options),
+    onSaved: notify,
+  });
   const scanner = createScannerSlot({
     settings,
     connector,
@@ -397,120 +397,6 @@ export function createPassService(
     return store.snapshot() === null ? conflict('noSession') : null;
   }
 
-  /** Страницы ленты → PDF; потерянная страница — отказ, а не молча короче (M2, R11). */
-  async function buildPdf(pages: readonly AssembledPage[]): Promise<Result<Uint8Array>> {
-    const inputs: PdfPageInput[] = [];
-    for (const page of pages) {
-      const info = store.pageInfo(page.key);
-      const bytes = await store.readPage(page.key);
-      if (!bytes.ok) {
-        return bytes;
-      }
-      inputs.push({
-        bytes: bytes.value,
-        angle: page.angle,
-        dpi: info?.dpi ?? null,
-        pixelLimit: info?.pixelLimit ?? null,
-      });
-    }
-    return assemblePdf(inputs);
-  }
-
-  async function writeDocuments(
-    folder: string,
-    request: SaveDocumentsRequest,
-  ): Promise<Result<SaveDocumentsReport>> {
-    const refused = refusedSave();
-    if (refused !== null) {
-      return refused;
-    }
-    const session = store.snapshot();
-    if (session === null) {
-      return conflict('noSession');
-    }
-    const { order, documents, report, blank: blanks } = assembleSession(session, blank.verdicts());
-    // Несобранный документ не сохраняется ни одним путём (M3.6, R16; KTD6): лента из двух
-    // наборов — ещё не документ.
-    if (report.mode === 'sets') {
-      return conflict('notAssembled');
-    }
-    if (order.length === 0) {
-      return conflict('nothingToSave');
-    }
-    // «Один файл» не смотрит на границы (R15): разрезы и имена в журнале остаются. Скрытые
-    // пустые обороты в файл не идут (M4, R10): документы режутся по полной ленте, пишутся без них.
-    const spans = shownSpansOf(
-      request.mode === 'single'
-        ? [order]
-        : documents.map((doc) => order.slice(doc.start, doc.start + doc.count)),
-    );
-    if (request.names.length !== spans.length) {
-      return fail('invalidInput', { field: 'names', problem: 'count' });
-    }
-    // Оценки ещё идут или документ из одних скрытых — отказ до записи (M4, KTD4).
-    const refusedByBlank = blankRefusal(blanks, spans);
-    if (refusedByBlank !== null) {
-      return refusedByBlank;
-    }
-
-    // Новый пакет забывает прежний незавершённый: повтор относится только к последнему.
-    const previous = request.retry ? pendingBatch : null;
-    pendingBatch = previous;
-    if (
-      request.retry &&
-      (previous?.sessionId !== session.id ||
-        previous.mode !== request.mode ||
-        previous.documents !== spans.length)
-    ) {
-      return conflict('noFailedFiles');
-    }
-    // Лента менялась после первой попытки: записанные файлы собраны со старой, и дописать к
-    // ним неудавшиеся по новой — значит молча получить пакет, где страница в двух файлах или
-    // ни в одном. Пакет пишется заново целиком.
-    if (previous !== null && previous.revision !== store.revision()) {
-      pendingBatch = null;
-      return conflict('batchStale');
-    }
-    const batch: PendingBatch = previous ?? {
-      sessionId: session.id,
-      mode: request.mode,
-      folder,
-      documents: spans.length,
-      revision: store.revision(),
-      written: [],
-      failed: spans.map((_pages, index) => index),
-    };
-
-    const outcome = await writeBatch(
-      batch.folder,
-      batch.failed.map((index) => ({
-        index,
-        name: request.names[index] ?? '',
-        build: () => buildPdf(spans[index] ?? []),
-      })),
-      ioOf(options),
-    );
-    if (!outcome.ok) {
-      return outcome;
-    }
-    const written = [...batch.written, ...outcome.value.written].sort(
-      (left, right) => left.index - right.index,
-    );
-    const { failed } = outcome.value;
-    if (written.length > 0) {
-      lastBatchFolder = batch.folder;
-    }
-    if (failed.length === 0) {
-      pendingBatch = null;
-      // Отметка — на набор первой попытки: правка между попытками её не получит (R13).
-      await store.markSaved(batch.revision);
-      notify();
-    } else {
-      pendingBatch = { ...batch, written, failed: failed.map((file) => file.index) };
-    }
-    return ok({ folder: batch.folder, written, failed });
-  }
-
   function snapshot(): Snapshot {
     const session = store.snapshot();
     const last = session?.passes.at(-1);
@@ -518,7 +404,7 @@ export function createPassService(
       seq,
       scanner: scanner.state(),
       session,
-      assembly: session === null ? null : assembleSession(session, blank.verdicts()),
+      assembly: session === null ? null : assembly(session),
       pass:
         run === null
           ? null
@@ -536,6 +422,7 @@ export function createPassService(
       notices,
       blankMode: settings.get().blankMode,
       straightenMode: settings.get().straightenMode,
+      straightenProgress: straightenProgressOf(session, straightenQueue.state()),
       seenHints: settings.get().seenHints,
     };
   }
@@ -814,6 +701,13 @@ export function createPassService(
       return saved;
     },
 
+    async setStraightenMode(mode) {
+      // Настройка приложения: сессия берёт её только при старте первого прохода (R14).
+      const saved = await settings.setStraightenMode(mode);
+      notify();
+      return saved;
+    },
+
     async markHintSeen(hint) {
       const saved = await settings.markHintSeen(hint);
       notify();
@@ -919,7 +813,7 @@ export function createPassService(
       }
       saving = true;
       try {
-        return await writeDocuments(folder, request);
+        return refusedSave() ?? (await writer.write(folder, request));
       } finally {
         saving = false;
       }
@@ -938,14 +832,14 @@ export function createPassService(
       const closed = await store.closeSession();
       if (closed.ok) {
         // Незавершённый пакет принадлежал закрытой сессии: повтор не допишет новую в её папку.
-        pendingBatch = null;
+        writer.forget();
         pruneScores();
       }
       notify();
       return closed;
     },
 
-    lastBatchFolder: () => lastBatchFolder,
+    lastBatchFolder: () => writer.lastFolder(),
     rememberedSaveFolder: () => settings.get().saveFolder,
     rememberSaveFolder: (folder) => settings.rememberSaveFolder(folder),
 

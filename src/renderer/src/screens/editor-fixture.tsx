@@ -78,6 +78,7 @@ export function makeSnapshot(
     notices: [],
     blankMode: 'hide',
     straightenMode: 'auto',
+    straightenProgress: null,
     seenHints: [],
     ...overrides,
     session,

@@ -1,4 +1,9 @@
-import { EMPTY_EDITS, type PassSnapshot, type SessionSnapshot } from '@shared';
+import {
+  EMPTY_EDITS,
+  type PassSnapshot,
+  type SessionSnapshot,
+  type StraightenFacts,
+} from '@shared';
 import { describe, expect, it } from 'vitest';
 import { assembleSession } from '../../src/core/scan/assembly';
 import { assemblyOf, assemblyWithEditsOf } from '../../src/renderer/src/state/assembly-fixture';
@@ -511,5 +516,91 @@ describe('зеркало с флагами пустых оборотов про�
     ],
   ])('%s', (_name, session) => {
     expect(assemblyWithEditsOf(session, verdicts)).toEqual(assembleSession(session, verdicts));
+  });
+});
+
+// Статусы выравнивания (M6, KTD-9): зеркало ставит их тем же `straightenMarkOf` — по режиму
+// сессии, флагу пустоты, фактам ядра и откату пользователя; сводка — тем же правилом.
+describe('зеркало со статусами выравнивания против ядра (M6, KTD-9)', () => {
+  const B1 = 'p02-s01-0001';
+  const B2 = 'p02-s01-0002';
+  const F1 = 'p01-s01-0001';
+  const F3 = 'p01-s01-0003';
+  const blank = new Map<string, boolean>([
+    [B1, true],
+    [B2, false],
+  ]);
+  const facts: StraightenFacts = new Map([
+    [F1, { outcome: 'willStraighten', corrected: true, deferred: null }],
+    [F2, { outcome: 'unmeasurable', corrected: false, deferred: null }],
+    [F3, { outcome: 'willStraighten', corrected: false, deferred: 'noSpace' }],
+    [B1, { outcome: 'willStraighten', corrected: true, deferred: null }],
+    [B2, { outcome: 'level', corrected: false, deferred: null }],
+    ['p03-s01-0001', { outcome: 'notImproved', corrected: false, deferred: null }],
+  ]);
+  const sets3x2 = [passOf(1, 'fronts', 3), passOf(2, 'backs', 2)];
+
+  it.each<[string, SessionSnapshot]>([
+    [
+      'пары, «Скрывать»: скрытый пустой — null, остальные по фактам',
+      sessionOf(pairs, { blankMode: 'hide', straighten: 'auto' }),
+    ],
+    [
+      'пары, «Оставлять»: пустой оборот тоже со статусом',
+      sessionOf(pairs, { blankMode: 'keep', straighten: 'auto' }),
+    ],
+    [
+      'режим сессии «не выравнивать»: всё null',
+      sessionOf(pairs, { blankMode: 'hide', straighten: 'off' }),
+    ],
+    [
+      'наборы: статусы по фактам, помеченный пустой — null',
+      sessionOf(sets3x2, { blankMode: 'hide', straighten: 'auto' }),
+    ],
+    [
+      'добавленный набор: «не помогла»',
+      sessionOf([...pairs, passOf(3, 'added', 1, { after: B1 })], {
+        blankMode: 'hide',
+        straighten: 'auto',
+      }),
+    ],
+    [
+      'потерянная — null',
+      sessionOf([passOf(1, 'fronts', 3, { pages: pagesOf(1, 3, [1]) }), passOf(2, 'backs', 3)], {
+        straighten: 'auto',
+      }),
+    ],
+    [
+      'откат «Оставить оригинал»: kept у выправленной, у остальных не действует',
+      sessionOf(pairs, {
+        blankMode: 'keep',
+        straighten: 'auto',
+        edits: { ...EMPTY_EDITS, keepOriginal: [F1, F2, B2] },
+      }),
+    ],
+    [
+      'откат и удаление поверх при «Скрывать»',
+      sessionOf(pairs, {
+        blankMode: 'hide',
+        straighten: 'auto',
+        edits: { ...EMPTY_EDITS, keepOriginal: [B1, F1], deleted: [F3] },
+      }),
+    ],
+    [
+      'собрано: статусы по ключу, не по позиции',
+      sessionOf(sets3x2, {
+        blankMode: 'hide',
+        straighten: 'auto',
+        assembled: [F1, B2, F2, B1, F3],
+        edits: { ...EMPTY_EDITS, order: [B1], keepOriginal: [F1] },
+      }),
+    ],
+  ])('%s', (_name, session) => {
+    expect(assemblyWithEditsOf(session, blank, facts)).toEqual(
+      assembleSession(session, blank, facts),
+    );
+    if (session.edits === EMPTY_EDITS) {
+      expect(assemblyOf(session, blank, facts)).toEqual(assembleSession(session, blank, facts));
+    }
   });
 });

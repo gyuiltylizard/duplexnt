@@ -29,6 +29,7 @@ import {
   setDecisionRequestSchema,
   setEditsRequestSchema,
   startPassRequestSchema,
+  straightenModeSchema,
 } from './schemas';
 
 // Обработчики команд моста (ADR 0005; план M1, U18, KTD-39): вход приходит непроверенным и
@@ -228,6 +229,11 @@ export function createCommands(context: CommandContext): Commands {
       setBlankMode: async (rawRequest) => {
         const request = parseInput(blankModeSchema, rawRequest);
         return request.ok ? done(() => service.setBlankMode(request.value)) : request;
+      },
+
+      setStraightenMode: async (rawRequest) => {
+        const request = parseInput(straightenModeSchema, rawRequest);
+        return request.ok ? done(() => service.setStraightenMode(request.value)) : request;
       },
 
       markHintSeen: async (rawRequest) => {

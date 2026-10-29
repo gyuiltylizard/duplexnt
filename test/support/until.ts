@@ -11,8 +11,12 @@ export async function until(condition: () => boolean): Promise<void> {
 }
 
 /**
- * Ждёт оценок пустых оборотов (M4, KTD4, KTD6): запись PDF при незавершённых оценках ядро
- * отклоняет (`blankPending`), renderer в это время держит экран `merge`.
+ * Ждёт оценок пустых оборотов (M4, KTD4, KTD6) и выравнивания (M6, KTD-8): запись PDF при
+ * незавершённых ядро отклоняет (`blankPending`, `straightenPending`), renderer в это время
+ * держит экран `merge`.
  */
 export const untilScored = (snapshot: () => Snapshot): Promise<void> =>
-  until(() => (snapshot().assembly?.blank.pending ?? 0) === 0);
+  until(() => {
+    const assembly = snapshot().assembly;
+    return (assembly?.blank.pending ?? 0) === 0 && (assembly?.straighten.pending ?? 0) === 0;
+  });

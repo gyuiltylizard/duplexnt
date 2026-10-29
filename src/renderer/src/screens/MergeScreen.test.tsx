@@ -1,9 +1,11 @@
-import type {
-  AddedSetReport,
-  AssembledPage,
-  AssemblyReport,
-  BlankSummary,
-  SessionAssembly,
+import {
+  NO_STRAIGHTEN,
+  NO_STRAIGHTEN_MARK,
+  type AddedSetReport,
+  type AssembledPage,
+  type AssemblyReport,
+  type BlankSummary,
+  type SessionAssembly,
 } from '@shared';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -56,6 +58,7 @@ function assemblyFor(
       lost: false,
       addedSet: null,
       blank: null,
+      straighten: NO_STRAIGHTEN_MARK,
     });
   };
   if (assemblyReport.mode === 'sets') {
@@ -82,6 +85,7 @@ function assemblyFor(
     deleted: 0,
     report: assemblyReport,
     blank,
+    straighten: NO_STRAIGHTEN,
   };
 }
 
@@ -232,7 +236,16 @@ describe('экран merge для набора (M4.5)', () => {
     const base = assemblyFor(report({ sets: [set] }), blank);
     const block: AssembledPage[] = [];
     const push = (side: AssembledPage['side'], sheet: number | null, key: string): void => {
-      block.push({ key, side, sheet, angle: 0, lost: false, addedSet: 1, blank: null });
+      block.push({
+        key,
+        side,
+        sheet,
+        angle: 0,
+        lost: false,
+        addedSet: 1,
+        blank: null,
+        straighten: NO_STRAIGHTEN_MARK,
+      });
     };
     if (set.mismatch) {
       for (let index = 1; index <= set.fronts; index += 1) {

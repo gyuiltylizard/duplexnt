@@ -1,27 +1,32 @@
-import { mkdir, readdir, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   EMPTY_EDITS,
+  fail,
   skewProfileOf,
   STRAIGHTEN_GEOMETRY_VERSION,
   type BlankMode,
   type SkewMeasure,
   type SkewOutcome,
   type StraightenMode,
+  type StraightenStatus,
 } from '@shared';
-import { pageFixture, pageFixtureNumberOf } from '../../../test/support/fixtures';
+import { pageFixture, pageFixtureNumberOf, pdfImageStreams } from '../../../test/support/fixtures';
 import { makeTempDataRoot } from '../../../test/support/temp-data-root';
 import { stubWorker } from '../../../test/support/image-worker';
+import { unwrap } from '../../../test/support/result';
 import { until } from '../../../test/support/until';
 import type { BlankDetector } from '../detect/blank';
 import { layoutOf } from '../storage/layout';
-import { openPassService } from './pass-service';
+import { realStorageFs } from '../storage/storage-fs';
+import { openPassService, type PassService } from './pass-service';
 
-// Измерение перекоса в службе прохода (план M6, U5; R6, KTD-4, KTD-12): исполнитель подставной —
-// решает по номеру страницы-фикстуры, детектор пустоты тоже; страницы настоящие JPEG
-// устройства. Настоящий детектор на сканах — `test/integration/skew-scores.test.ts`, проход с
-// измерением по ходу — `test/integration/straighten.emulator.test.ts`.
+// Измерение перекоса в службе прохода (план M6, U5; R6, KTD-4, KTD-12) и статусы, гарды и
+// снимок на сохранение (U12; KTD-8, KTD-9): исполнитель измерения подставной — решает по номеру
+// страницы-фикстуры, коррекция настоящая; детектор пустоты тоже подставной; страницы настоящие
+// JPEG устройства. Настоящий детектор на сканах — `test/integration/skew-scores.test.ts`,
+// проход с измерением по ходу — `test/integration/straighten.emulator.test.ts`.
 
 const SESSION = 'a1b2c3d4e5f60718';
 const F = (index: number): string => `p01-s01-${String(index).padStart(4, '0')}`;
@@ -133,6 +138,7 @@ const blankDetectorOf =
     Promise.resolve(blank.includes(pageFixtureNumberOf(bytes)) ? 0 : 0.03);
 
 const skewDir = (root: string): string => join(layoutOf(root).derivedDir, SESSION, 'skew');
+const straightDir = (root: string): string => join(layoutOf(root).derivedDir, SESSION, 'straight');
 const skewFiles = async (root: string): Promise<string[]> =>
   (await readdir(skewDir(root)).catch(() => [])).filter((name) => name.endsWith('.json')).sort();
 
@@ -226,5 +232,201 @@ describe('служба прохода: измерение перекоса (M6, 
 
     expect(await readdir(layoutOf(root).derivedDir).catch(() => [])).toEqual([]);
     expect(service.snapshot().session).toBeNull();
+  });
+});
+
+const SINGLE = { mode: 'single', names: ['Документ'], retry: false } as const;
+
+async function folderIn(root: string, name = 'выход'): Promise<string> {
+  const folder = join(root, name);
+  await mkdir(folder, { recursive: true });
+  return folder;
+}
+
+const statusesOf = (service: PassService): Record<string, StraightenStatus> =>
+  Object.fromEntries(
+    (service.snapshot().assembly?.order ?? []).map((page) => [page.key, page.straighten.status]),
+  );
+
+const untilStraightened = (service: PassService): Promise<void> =>
+  until(() => service.snapshot().assembly?.straighten.pending === 0);
+
+/** Потоки изображений PDF по пути. */
+const streamsOf = async (path: string): Promise<Buffer[]> =>
+  (await pdfImageStreams(await readFile(path))).map((stream) => Buffer.from(stream.getContents()));
+
+describe('служба прохода: статусы, гарды и снимок на сохранение (M6, U12)', () => {
+  /** Три лица: 1 — «выправлять» (исход — настоящая коррекция), 2 — «ровно», 3 — «не померить». */
+  const measureOfFixture = (bytes: Uint8Array): Promise<SkewMeasure> => {
+    const number = pageFixtureNumberOf(bytes);
+    return Promise.resolve(
+      measureOf(number === 1 ? 'willStraighten' : number === 2 ? 'level' : 'unmeasurable'),
+    );
+  };
+
+  it('статусы по исходам; пока измерение идёт — отказ straightenPending с числом; потом PDF: выправленная — другой поток, ровная — байт в байт; повтор — те же потоки', async () => {
+    const root = await makeTempDataRoot();
+    const folder = await folderIn(root);
+    await seedSession(root, { fronts: 3, blankMode: 'keep' });
+    const gated = stubWorker({ gated: true, measure: measureOfFixture });
+    const service = await openPassService(root, { imageWorker: gated.worker });
+
+    expect(service.snapshot().assembly?.straighten).toMatchObject({ pending: 3, total: 3 });
+    expect(statusesOf(service)).toEqual({
+      [F(1)]: 'pending',
+      [F(2)]: 'pending',
+      [F(3)]: 'pending',
+    });
+    expect(service.snapshot().straightenProgress).toEqual({ queued: 0, running: null });
+    expect(await service.saveDocuments(folder, SINGLE)).toEqual(
+      fail('sessionConflict', { pending: 3, reason: 'straightenPending' }),
+    );
+    expect(await readdir(folder)).toEqual([]);
+
+    gated.release();
+    await untilStraightened(service);
+    expect(statusesOf(service)).toEqual({
+      [F(1)]: 'straightened',
+      [F(2)]: 'level',
+      [F(3)]: 'unmeasurable',
+    });
+    const snapshot = service.snapshot();
+    expect(snapshot.assembly?.order.map((page) => page.straighten.reason)).toEqual([
+      null,
+      null,
+      'measure',
+    ]);
+    expect(snapshot.assembly?.straighten).toMatchObject({
+      straightened: 1,
+      level: 1,
+      unmeasurable: 1,
+      pending: 0,
+      total: 3,
+      reasons: { measure: 1 },
+    });
+    expect(snapshot.straightenProgress).toEqual({ queued: 0, running: null });
+
+    const saved = unwrap(await service.saveDocuments(folder, SINGLE));
+    expect(saved.failed).toEqual([]);
+    const streams = await streamsOf(join(folder, 'Документ.pdf'));
+    expect(streams).toHaveLength(3);
+    expect(streams[0]?.equals(pageFixture(1))).toBe(false);
+    expect(streams[0]?.equals(await readFile(join(straightDir(root), `${F(1)}.v1.jpg`)))).toBe(
+      true,
+    );
+    expect(streams[1]?.equals(pageFixture(2))).toBe(true);
+    expect(streams[2]?.equals(pageFixture(3))).toBe(true);
+    expect(service.snapshot().session?.saved).toBe(true);
+
+    // Повтор пакета даёт те же потоки: снимок берётся заново, файлы те же.
+    const again = unwrap(await service.saveDocuments(folder, SINGLE));
+    expect(again.written).toEqual([{ index: 0, fileName: 'Документ (2).pdf' }]);
+    expect(await streamsOf(join(folder, 'Документ (2).pdf'))).toEqual(streams);
+  });
+
+  it('«Оставить оригинал»: статус kept, в PDF — исходник байт в байт, правка; «Вернуть» снимает; откат на ровной не действует', async () => {
+    const root = await makeTempDataRoot();
+    const folder = await folderIn(root);
+    await seedSession(root, { fronts: 2, blankMode: 'keep' });
+    const service = await openPassService(root, {
+      imageWorker: stubWorker({ measure: measureOfFixture }).worker,
+    });
+    await untilStraightened(service);
+    expect(statusesOf(service)).toEqual({ [F(1)]: 'straightened', [F(2)]: 'level' });
+    expect(service.snapshot().assembly?.hasEdits).toBe(false);
+
+    expect(
+      await service.setEdits({ ...EMPTY_EDITS, keepOriginal: [F(1), F(2), 'p09-s01-0001'] }, {}),
+    ).toMatchObject({ ok: true });
+    const kept = service.snapshot();
+    expect(kept.session?.edits.keepOriginal).toEqual([F(1), F(2)]);
+    expect(kept.assembly?.hasEdits).toBe(true);
+    expect(statusesOf(service)).toEqual({ [F(1)]: 'kept', [F(2)]: 'level' });
+    expect(kept.assembly?.straighten).toMatchObject({ straightened: 0, kept: 1, level: 1 });
+
+    unwrap(await service.saveDocuments(folder, SINGLE));
+    const streams = await streamsOf(join(folder, 'Документ.pdf'));
+    expect(streams[0]?.equals(pageFixture(1))).toBe(true);
+    expect(streams[1]?.equals(pageFixture(2))).toBe(true);
+
+    // Откат переживает перезапуск; «Вернуть» (пустые правки) его снимает.
+    const again = await openPassService(root, {
+      imageWorker: stubWorker({ measure: measureOfFixture }).worker,
+    });
+    expect(statusesOf(again)).toEqual({ [F(1)]: 'kept', [F(2)]: 'level' });
+    expect(await again.setEdits(EMPTY_EDITS, {})).toMatchObject({ ok: true });
+    expect(statusesOf(again)).toEqual({ [F(1)]: 'straightened', [F(2)]: 'level' });
+  });
+
+  it('AE15: мало места — deferred «disk», сохранение не блокирует, страница уходит оригиналом', async () => {
+    const root = await makeTempDataRoot();
+    const folder = await folderIn(root);
+    await seedSession(root, { fronts: 2, blankMode: 'keep' });
+    const service = await openPassService(root, {
+      imageWorker: stubWorker({ measure: measureOfFixture }).worker,
+      fs: { ...realStorageFs, freeBytes: () => Promise.resolve(0) },
+    });
+    await untilStraightened(service);
+
+    expect(service.snapshot().assembly?.order.map((page) => page.straighten)).toEqual([
+      { status: 'deferred', reason: 'disk' },
+      { status: 'level', reason: null },
+    ]);
+    expect(service.snapshot().assembly?.straighten).toMatchObject({
+      deferred: 1,
+      pending: 0,
+      reasons: { disk: 1 },
+    });
+    expect(await readdir(straightDir(root)).catch(() => [])).toEqual([]);
+
+    const saved = unwrap(await service.saveDocuments(folder, SINGLE));
+    expect(saved.failed).toEqual([]);
+    const streams = await streamsOf(join(folder, 'Документ.pdf'));
+    expect(streams[0]?.equals(pageFixture(1))).toBe(true);
+  });
+
+  it('AE14: файл из снимка пропал между снимком и записью — сбой документа с причиной, не подмена оригиналом', async () => {
+    const root = await makeTempDataRoot();
+    const folder = await folderIn(root);
+    await seedSession(root, { fronts: 2, blankMode: 'keep' });
+    const service = await openPassService(root, {
+      imageWorker: stubWorker({ measure: measureOfFixture }).worker,
+    });
+    await untilStraightened(service);
+    expect(statusesOf(service)[F(1)]).toBe('straightened');
+
+    await rm(join(straightDir(root), `${F(1)}.v1.jpg`));
+
+    const saved = unwrap(await service.saveDocuments(folder, SINGLE));
+    expect(saved.written).toEqual([]);
+    expect(saved.failed).toEqual([
+      {
+        index: 0,
+        fileName: 'Документ.pdf',
+        error: { code: 'pageUnavailable', details: { reason: 'straightened' } },
+      },
+    ]);
+    expect(await readdir(folder)).toEqual([]);
+    expect(service.snapshot().session?.saved).toBe(false);
+  });
+
+  it('режим сессии «не выравнивать»: статусы null, сводка нулевая, прогресса нет; настройка меняется командой и помнится', async () => {
+    const root = await makeTempDataRoot();
+    await seedSession(root, { fronts: 1, straighten: 'off' });
+    const service = await openPassService(root, {
+      imageWorker: stubWorker({ measure: measureOfFixture }).worker,
+    });
+
+    expect(statusesOf(service)).toEqual({ [F(1)]: null });
+    expect(service.snapshot().assembly?.straighten).toMatchObject({ mode: 'off', total: 0 });
+    expect(service.snapshot().straightenProgress).toBeNull();
+
+    const seqBefore = service.snapshot().seq;
+    expect(await service.setStraightenMode('off')).toEqual({ ok: true, value: undefined });
+    expect(service.snapshot().straightenMode).toBe('off');
+    expect(service.snapshot().seq).toBeGreaterThan(seqBefore);
+    // Открытая сессия заморожена, настройка — помнится.
+    expect(service.snapshot().session?.straighten).toBe('off');
+    expect((await openPassService(root)).snapshot().straightenMode).toBe('off');
   });
 });

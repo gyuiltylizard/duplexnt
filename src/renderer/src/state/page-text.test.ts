@@ -1,4 +1,4 @@
-import type { AssembledPage } from '@shared';
+import { NO_STRAIGHTEN_MARK, type AssembledPage } from '@shared';
 import { describe, expect, it } from 'vitest';
 import { i18n } from '../i18n';
 import { noteOf, whatOf } from './page-text';
@@ -16,6 +16,7 @@ const page = (overrides: Partial<AssembledPage>): AssembledPage => ({
   lost: false,
   addedSet: null,
   blank: null,
+  straighten: NO_STRAIGHTEN_MARK,
   ...overrides,
 });
 

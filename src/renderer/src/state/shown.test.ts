@@ -1,4 +1,4 @@
-import type { AssembledPage, BlankFlag } from '@shared';
+import { NO_STRAIGHTEN_MARK, type AssembledPage, type BlankFlag } from '@shared';
 import { describe, expect, it } from 'vitest';
 import {
   gluedBacksOf,
@@ -22,6 +22,7 @@ const page = (key: string, blank: BlankFlag = null): AssembledPage => ({
   lost: false,
   addedSet: null,
   blank,
+  straighten: NO_STRAIGHTEN_MARK,
 });
 
 // Лист 1 с скрытым оборотом, лист 2 с двумя скрытыми подряд (перенос), лист 3 с помеченным,

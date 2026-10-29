@@ -150,4 +150,25 @@ export {
   type ErrorDetails,
   type Result,
 } from './errors';
-export { DEFAULT_STRAIGHTEN_MODE, STRAIGHTEN_MODES, type StraightenMode } from './straighten';
+export {
+  DEFAULT_STRAIGHTEN_MODE,
+  NO_STRAIGHTEN,
+  NO_STRAIGHTEN_FACTS,
+  NO_STRAIGHTEN_MARK,
+  STRAIGHTEN_DEFERRED_REASONS,
+  STRAIGHTEN_MODES,
+  STRAIGHTEN_REASONS,
+  STRAIGHTEN_STATUSES,
+  straightenMarkOf,
+  straightenSummaryOf,
+  type StraightenDeferredReason,
+  type StraightenFact,
+  type StraightenFacts,
+  type StraightenMark,
+  type StraightenMarkInput,
+  type StraightenMode,
+  type StraightenProgress,
+  type StraightenReason,
+  type StraightenStatus,
+  type StraightenSummary,
+} from './straighten';

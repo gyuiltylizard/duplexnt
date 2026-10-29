@@ -1,26 +1,39 @@
+import { createHash } from 'node:crypto';
 import {
   isBacksKind,
+  NO_STRAIGHTEN_FACTS,
+  sessionConflict,
   STRAIGHTEN_GEOMETRY_VERSION,
+  type AssembledPage,
   type BlankVerdicts,
   type PageSnapshot,
+  type Result,
   type SessionSnapshot,
   type SkewProfile,
+  type SkewVerdicts,
+  type StraightenDeferredReason,
+  type StraightenFact,
+  type StraightenFacts,
+  type StraightenProgress,
+  type StraightenSummary,
 } from '@shared';
 import type { ImageWorker } from '../image/image-worker';
 import { STRAIGHT_SIZE_RATIO } from '../image/straighten';
 import type { PageInfo } from '../storage/session-store';
 import type { SkewScores } from '../storage/skew-scores';
 import { storageFailure } from '../storage/storage-fs';
-import type { Straightened } from '../storage/straightened';
+import type { Straightened, StraightenedFile } from '../storage/straightened';
 import type { ThumbnailSource } from '../storage/thumbnails';
 
-// Выравнивание перекоса в службе проходов (план M6, U5, U11; R6, R27; KTD-4, KTD-12, KTD-13):
-// какие страницы получают измерение и очередь коррекции. `pagesToMeasure` — чистая функция;
-// очередь — одна задача за раз, принимает только страницы с исходом «выправлять», работает и во
-// время прохода (замер A/B U1: подача от нагрузки хоста не зависит — пауза KTD-4 снята),
-// проверяет место до коррекции, живость страницы до и после записи; любой сбой, кроме отмены,
-// — `deferred` с причиной, очередь идёт дальше. Отмена оставляет страницы без записи: они
-// ждут следующего `ensureAll` (открытие сессии), и сохранение честно отказывает.
+// Выравнивание перекоса в службе проходов (план M6, U5, U11, U12; R6, R27; KTD-4, KTD-8,
+// KTD-9, KTD-12, KTD-13): какие страницы получают измерение, очередь коррекции, факты для
+// статусов в снимке, гард записи и снимок выправленных на сохранение. `pagesToMeasure`,
+// `straightenFactsOf`, `straightenRefusal`, `straightSnapshotOf` — чистые функции; очередь —
+// одна задача за раз, принимает только страницы с исходом «выправлять», работает и во время
+// прохода (замер A/B U1: подача от нагрузки хоста не зависит — пауза KTD-4 снята), проверяет
+// место до коррекции, живость страницы до и после записи; любой сбой, кроме отмены, —
+// `deferred` с причиной, очередь идёт дальше. Отмена оставляет страницы без записи: они ждут
+// следующего `ensureAll` (открытие сессии), и сохранение честно отказывает.
 
 /**
  * Страницы, которые измеряются (R6): все проходы сессии в режиме «выравнивать», только не
@@ -50,8 +63,86 @@ export function pagesToMeasure(
   );
 }
 
-/** Почему страница отложена (R27): места нет — не навсегда; сбой коррекции — до конца сессии. */
-export type StraightenDeferredReason = 'noSpace' | 'failed';
+/**
+ * Факты ядра для статусов страниц (KTD-9): исход измерения, запись о коррекции любой известной
+ * версии (`resolve`), отсрочка из очереди. Только в режиме «выравнивать» и только у страниц, о
+ * которых хоть что-то известно: остальные ждут. Снимок строится на каждом `snapshot()`, поэтому
+ * без аллокаций сверх нужного.
+ */
+export function straightenFactsOf(
+  session: SessionSnapshot | null,
+  verdicts: SkewVerdicts,
+  straightened: Pick<Straightened, 'resolve'>,
+  queue: StraightenQueueState,
+): StraightenFacts {
+  if (session?.straighten !== 'auto') {
+    return NO_STRAIGHTEN_FACTS;
+  }
+  const facts = new Map<string, StraightenFact>();
+  for (const pass of session.passes) {
+    for (const page of pass.pages) {
+      const outcome = verdicts.get(page.key)?.outcome ?? null;
+      const corrected = straightened.resolve(page.key) !== null;
+      const deferred = queue.deferred.get(page.key) ?? null;
+      if (outcome !== null || corrected || deferred !== null) {
+        facts.set(page.key, { outcome, corrected, deferred });
+      }
+    }
+  }
+  return facts;
+}
+
+/** Ход коррекции для снимка: `null` вне режима «выравнивать». */
+export function straightenProgressOf(
+  session: SessionSnapshot | null,
+  queue: StraightenQueueState,
+): StraightenProgress | null {
+  return session?.straighten === 'auto'
+    ? { queued: queue.queued.length, running: queue.running }
+    : null;
+}
+
+/**
+ * Отказ записи по выравниванию (KTD-8, R19), после отказов по пустым оборотам: измерение или
+ * коррекция ещё идут — `straightenPending` с числом (файл без них молча унёс бы оригинал
+ * вместо выправленной). Отложенные страницы не блокируют (AE15): уходят оригиналом.
+ */
+export function straightenRefusal(summary: StraightenSummary): Result<never> | null {
+  return summary.pending > 0
+    ? { ok: false, error: sessionConflict('straightenPending', { pending: summary.pending }) }
+    : null;
+}
+
+/** Выправленный файл страницы на момент начала пакета (KTD-8). */
+export type StraightSnapshot = ReadonlyMap<string, StraightenedFile>;
+
+/**
+ * Снимок выправленных страниц пакета и его дайджест (KTD-8): по статусу `straightened` — у
+ * него запись о коррекции есть по построению; откаченные и невыправленные читаются из
+ * исходников. Дайджест — по ключам, версиям и размерам: поздняя коррекция другой страницы или
+ * смена файла между попытками меняет его, и повтор пакета отказывает «данные изменились» (AE14).
+ */
+export function straightSnapshotOf(
+  pages: readonly AssembledPage[],
+  straightened: Pick<Straightened, 'resolve'>,
+): { readonly snapshot: StraightSnapshot; readonly digest: string } {
+  const snapshot = new Map<string, StraightenedFile>();
+  for (const page of pages) {
+    if (page.straighten.status !== 'straightened') {
+      continue;
+    }
+    const file = straightened.resolve(page.key);
+    if (file !== null) {
+      snapshot.set(page.key, file);
+    }
+  }
+  const hash = createHash('sha256');
+  for (const key of [...snapshot.keys()].sort()) {
+    const file = snapshot.get(key);
+    hash.update(`${key}\n${String(file?.version)}\n${String(file?.bytes)}\n`);
+  }
+  return { snapshot, digest: hash.digest('hex') };
+}
 
 export interface StraightenQueueState {
   /** Ключи в очереди, включая исполняемую. */

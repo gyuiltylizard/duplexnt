@@ -7,6 +7,7 @@ import {
   ok,
   PROBE_TOKEN_MAX_LENGTH,
   SAVE_MODES,
+  STRAIGHTEN_MODES,
   type BlankMode,
   type HintId,
   type ConnectScannerRequest,
@@ -16,6 +17,7 @@ import {
   type SetDecisionRequest,
   type SetEditsRequest,
   type StartPassRequest,
+  type StraightenMode,
 } from '@shared';
 import { DEVICE_PATH_MAX_LENGTH } from '../escl/device-path';
 import { scanParamsSchema } from '../escl/scan-settings';
@@ -110,6 +112,9 @@ export { scanParamsSchema };
 
 /** Режим пустых оборотов (M4, R1): одно из трёх значений словаря, без приведения типов. */
 export const blankModeSchema = z.enum(BLANK_MODES) satisfies z.ZodType<BlankMode>;
+
+/** Режим выравнивания перекоса (M6, R13): одно из двух значений словаря, без приведения типов. */
+export const straightenModeSchema = z.enum(STRAIGHTEN_MODES) satisfies z.ZodType<StraightenMode>;
 
 export const hintIdSchema = z.enum(HINTS) satisfies z.ZodType<HintId>;
 

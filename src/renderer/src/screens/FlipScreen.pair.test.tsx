@@ -76,6 +76,7 @@ function makeSnapshot(setFronts: number): Snapshot {
     notices: [],
     blankMode: 'hide',
     straightenMode: 'auto',
+    straightenProgress: null,
     seenHints: [],
   };
 }
