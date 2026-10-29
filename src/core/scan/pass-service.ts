@@ -384,6 +384,17 @@ export function createPassService(
     straightened.prune();
     straightenQueue.prune();
   };
+  /**
+   * Возобновляет измерения и коррекцию после отмены (KTD-12), которую сделало закрытие каталога
+   * сессии: если закрытие не состоялось (`sessionCloseFailed`, KTD-33) или сессия осталась
+   * после «Остановить», отменённые страницы иначе ждали бы перезапуска, а сохранение отказывало
+   * бы `straightenPending` навечно (ревью сессий 3–4). Идемпотентно: измеренным и выправленным
+   * страницам `ensure` и `enqueue` ничего не делают.
+   */
+  const resumeDerived = (): void => {
+    measurePending();
+    straightenQueue.ensureAll();
+  };
 
   // Досканировать можно только тот же сканер, что вёл проход (KTD-27).
   function resumeTarget(): Result<PassOrigin> {
@@ -682,7 +693,9 @@ export function createPassService(
     current.done = runPass(current, connected, origin).finally(() => {
       run = null;
       // «Остановить» и «Новая пачка» по пустому остатку отбросили страницы: их вердикты — тоже.
+      // Закрытие каталога на этом пути могло отменить производное и не состояться — возобновить.
       pruneScores();
+      resumeDerived();
       notify();
     });
     notify();
@@ -851,6 +864,9 @@ export function createPassService(
         // Незавершённый пакет принадлежал закрытой сессии: повтор не допишет новую в её папку.
         writer.forget();
         pruneScores();
+      } else {
+        // Сессия осталась (KTD-33), а производное уже отменено — вернуть его в работу.
+        resumeDerived();
       }
       notify();
       return closed;

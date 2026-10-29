@@ -71,6 +71,12 @@ export interface Straightened {
    * удаляются после. Сбой записи — исключение вызывающему (очередь переводит в `deferred`).
    */
   store(key: string, result: StraightenResult): Promise<void>;
+  /**
+   * Держит файлы прежних версий, пока на них ссылается снимок пакета (KTD-8; AE13): пересчёт
+   * новой версией пишет новую, а прежнюю удаляет только после отпускания. Возвращает
+   * отпускание; вложенные удержания считаются.
+   */
+  hold(): () => void;
   /** Забывает записи страниц, которых у источника больше нет. */
   prune(): void;
 }
@@ -88,6 +94,9 @@ export function createStraightened(
   const io = ioOf(options);
   const { fs } = io;
   const entries = new Map<string, Entry>();
+  /** Снимков пакета, держащих прежние версии; отложенные удаления — по каталогу, ключу и версии. */
+  let held = 0;
+  const postponed: { readonly dir: string; readonly key: string; readonly version: number }[] = [];
 
   const dirOf = (info: PageInfo): string => straightDirIn(derivedDir, info.sessionId);
   const alive = (key: string, info: PageInfo): boolean => isAlive(source, key, info);
@@ -227,11 +236,18 @@ export function createStraightened(
         dpi: result.dpi,
         file: { name, bytes: result.jpeg.byteLength },
       };
-      await writeFileAtomic(
-        join(dir, straightRecordName(key, version)),
-        new TextEncoder().encode(JSON.stringify(record)),
-        io,
-      );
+      try {
+        await writeFileAtomic(
+          join(dir, straightRecordName(key, version)),
+          new TextEncoder().encode(JSON.stringify(record)),
+          io,
+        );
+      } catch (error) {
+        // Запись не состоялась (`ENOSPC`): готовый JPEG без записи — сирота на полном диске до
+        // следующего открытия; убирается сразу, отказ — вызывающему (ревью сессий 3–4).
+        await removeVersion(dir, key, version);
+        throw error;
+      }
       // Пока шла запись, страницу могли отбросить: такой исход не действует и файлов не оставляет.
       if (!alive(key, info)) {
         await removeVersion(dir, key, version);
@@ -249,9 +265,31 @@ export function createStraightened(
       });
       // Прежние версии — после записи новой (AE13): до неё показывалась старая. Версии известны
       // наперёд, листать каталог незачем; новее известной (от будущего приложения) — не наша.
+      // Пока снимок пакета держит прежние файлы, удаление откладывается до отпускания: иначе
+      // сборка PDF по снимку не нашла бы файл посреди записи (ревью сессий 3–4).
       for (let old = 1; old < version; old += 1) {
-        await removeVersion(dir, key, old);
+        if (held > 0) {
+          postponed.push({ dir, key, version: old });
+        } else {
+          await removeVersion(dir, key, old);
+        }
       }
+    },
+
+    hold() {
+      held += 1;
+      let released = false;
+      return () => {
+        if (released) {
+          return;
+        }
+        released = true;
+        held -= 1;
+        if (held === 0) {
+          const due = postponed.splice(0);
+          void Promise.all(due.map((item) => removeVersion(item.dir, item.key, item.version)));
+        }
+      };
     },
 
     prune() {

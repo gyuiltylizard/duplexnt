@@ -410,6 +410,41 @@ describe('служба прохода: статусы, гарды и снимо�
     expect(service.snapshot().session?.saved).toBe(false);
   });
 
+  it('закрытие сессии не состоялось: отменённые измерение и коррекция возобновляются, сохранение не залипает на straightenPending', async () => {
+    const root = await makeTempDataRoot();
+    const folder = await folderIn(root);
+    await seedSession(root, { fronts: 2, blankMode: 'keep' });
+    const gated = stubWorker({ gated: true, measure: measureOfFixture });
+    // Каталог сессии не переименовывается (EBUSY — как при открытом дескрипторе на Windows):
+    // закрытие отказывает `sessionCloseFailed`, сессия остаётся рабочей (KTD-33).
+    const sessionDir = layoutOf(root).sessionDir;
+    const service = await openPassService(root, {
+      imageWorker: gated.worker,
+      retry: { ceilingMs: 0 },
+      fs: {
+        ...realStorageFs,
+        rename: (from, to) =>
+          from === sessionDir
+            ? Promise.reject(Object.assign(new Error('EBUSY'), { code: 'EBUSY' }))
+            : realStorageFs.rename(from, to),
+      },
+    });
+    await until(() => gated.started() >= 1);
+
+    expect(await service.closeSession()).toMatchObject({
+      ok: false,
+      error: { code: 'sessionCloseFailed' },
+    });
+    expect(service.snapshot().session).not.toBeNull();
+    // Отменённые измерения перезапущены (новый сигнал), исполнитель всё ещё держит ответы.
+    expect(service.snapshot().assembly?.straighten.pending).toBe(2);
+
+    gated.release();
+    await untilStraightened(service);
+    expect(statusesOf(service)).toEqual({ [F(1)]: 'straightened', [F(2)]: 'level' });
+    expect(unwrap(await service.saveDocuments(folder, SINGLE)).failed).toEqual([]);
+  });
+
   it('режим сессии «не выравнивать»: статусы null, сводка нулевая, прогресса нет; настройка меняется командой и помнится', async () => {
     const root = await makeTempDataRoot();
     await seedSession(root, { fronts: 1, straighten: 'off' });

@@ -168,8 +168,10 @@ export function createSkewScores(
     const page = await source.readPage(key);
     if (!page.ok) {
       // Сбой чтения (не потеря — её отсеивает `alive`) может быть временным: «не измерена» до
-      // перезапуска, в кэш не пишется — следующее открытие измерит заново.
-      if (!alive(key, info)) {
+      // перезапуска, в кэш не пишется — следующее открытие измерит заново. Отказ по закрытию
+      // сессии — не сбой страницы: закрытие могло не состояться, и страница дождётся следующего
+      // `ensure` (ревью сессий 3–4).
+      if (!alive(key, info) || page.error.details?.reason === 'closing') {
         return false;
       }
       entries.set(key, { sessionId: info.sessionId, verdict: UNMEASURABLE });

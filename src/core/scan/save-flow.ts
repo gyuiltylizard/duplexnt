@@ -56,7 +56,7 @@ export interface DocumentWriterDeps {
   >;
   /** Сборка текущего снимка сессии — с оценками и фактами выравнивания службы. */
   readonly assemble: (session: SessionSnapshot) => SessionAssembly;
-  readonly straightened: Pick<Straightened, 'resolve' | 'read'>;
+  readonly straightened: Pick<Straightened, 'resolve' | 'read' | 'hold'>;
   readonly io: StorageIo;
   /** Отметка «сохранено» записана — новый снимок. */
   readonly onSaved: () => void;
@@ -182,15 +182,22 @@ export function createDocumentWriter(deps: DocumentWriterDeps): DocumentWriter {
       failed: spans.map((_pages, index) => index),
     };
 
-    const outcome = await writeBatch(
-      batch.folder,
-      batch.failed.map((index) => ({
-        index,
-        name: request.names[index] ?? '',
-        build: () => buildPdf(spans[index] ?? [], batch.straight),
-      })),
-      deps.io,
-    );
+    // Пока пакет пишется, пересчёт новой версией не удаляет файлы из снимка (AE13, KTD-8).
+    const release = straightened.hold();
+    let outcome;
+    try {
+      outcome = await writeBatch(
+        batch.folder,
+        batch.failed.map((index) => ({
+          index,
+          name: request.names[index] ?? '',
+          build: () => buildPdf(spans[index] ?? [], batch.straight),
+        })),
+        deps.io,
+      );
+    } finally {
+      release();
+    }
     if (!outcome.ok) {
       return outcome;
     }

@@ -238,7 +238,11 @@ export function createStraightenQueue(deps: StraightenQueueDeps): StraightenQueu
     const page = await source.readPage(key);
     if (!page.ok) {
       // Потерю отсеивает `needs`; сбой чтения — не навсегда, но и не повтор в этой сессии.
-      defer(key, info, 'failed');
+      // Отказ по закрытию сессии — не сбой страницы: закрытие могло не состояться, страница
+      // ждёт следующего `ensureAll` (ревью сессий 3–4).
+      if (page.error.details?.reason !== 'closing') {
+        defer(key, info, 'failed');
+      }
       return;
     }
     if (!(await hasSpaceFor(page.value.byteLength))) {

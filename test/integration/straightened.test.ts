@@ -178,6 +178,22 @@ describe('выправленные файлы: запись, запись о к�
     await expect(failing.store(F1, resultOf(1))).rejects.toMatchObject({ code: 'ENOSPC' });
     expect(failing.resolve(F1)).toBeNull();
     expect(await readdir(dir)).toEqual([]);
+
+    // Сбой на второй записи — записи о коррекции: готовый JPEG не остаётся сиротой на полном
+    // диске (ревью сессий 3–4).
+    const recordFailing = createStraightened(layout.derivedDir, store, {
+      retry: { ceilingMs: 0 },
+      fs: {
+        ...realStorageFs,
+        rename: (from, to) =>
+          to.endsWith('.json')
+            ? Promise.reject(Object.assign(new Error('ENOSPC'), { code: 'ENOSPC' }))
+            : realStorageFs.rename(from, to),
+      },
+    });
+    await expect(recordFailing.store(F1, resultOf(1))).rejects.toMatchObject({ code: 'ENOSPC' });
+    expect(recordFailing.resolve(F1)).toBeNull();
+    expect(await readdir(dir)).toEqual([]);
   });
 
   it('prune забывает записи закрытой сессии; тот же ключ новой сессии — без выправленного вида', async () => {

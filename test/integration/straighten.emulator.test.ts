@@ -19,12 +19,16 @@ import { until, untilScored } from '../support/until';
 // статусы в снимке → PDF из снимка. Измерение не задерживает приём страниц, «Остановить»
 // посреди измерения не пересоздаёт каталог производного.
 
+// Настоящий исполнитель измеряет и выправляет в потоке теста рядом с эмулятором: при полном
+// параллельном прогоне `test:integration` пауза подачи 300 мс изредка не укладывалась, и
+// проход падал «прерван» (ревью сессий 3–4) — здесь срок простоя страницы шире, чем в файлах
+// на `levelWorker`.
 const FAST: Partial<ScanJobLimits> = {
   retryDelayMs: 5,
   busyCeilingMs: 200,
   notReadyCeilingMs: 2000,
-  pageIdleTimeoutMs: 300,
-  pageDeadlineMs: 3000,
+  pageIdleTimeoutMs: 1500,
+  pageDeadlineMs: 6000,
   deleteDeadlineMs: 300,
 };
 

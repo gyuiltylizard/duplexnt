@@ -84,6 +84,7 @@ function setup(
     straightenedFiles: vi.fn(() => ({
       resolve: () => null,
       read: () => Promise.resolve(fail('pageUnavailable')),
+      hold: () => () => undefined,
     })),
     readStraightened: vi.fn(() => Promise.resolve(fail('pageUnavailable'))),
   } satisfies PassService;
