@@ -225,7 +225,6 @@ export const EditorThumb = memo(function EditorThumb({
   readonly drag: ThumbDrag;
 }): ReactNode {
   const { t } = useTranslation();
-  const image = useImageLoad();
   const straighten: StraightenMark = {
     status: straightStatus,
     reason: straightReason,
@@ -233,10 +232,9 @@ export const EditorThumb = memo(function EditorThumb({
   };
   // Вид по статусу (KTD-7); откат, «Выровнять» и поздняя коррекция меняют адрес — прежний кадр
   // остаётся до готовности нового (handoff M6, «Смена вида на месте»).
-  const swap = useImageSwap(
-    pageImageSrc(sessionId, { key: pageKey, straighten }, 'thumb'),
-    image.state === 'ok',
-  );
+  const src = pageImageSrc(sessionId, { key: pageKey, straighten }, 'thumb');
+  const image = useImageLoad(src);
+  const swap = useImageSwap(src, image.state === 'ok');
   // Поворот — анимация на дельту команды (B-4); конечный угол — классами.
   const imgRef = useRef<HTMLImageElement>(null);
   useTurnMotion(imgRef, pageKey, angle, 'thumb');

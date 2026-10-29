@@ -434,6 +434,21 @@ describe('выравнивание в редакторе (M6)', () => {
     );
   });
 
+  it('карточка не загрузилась, затем статус сменил вид на месте — новая попытка с новым адресом', () => {
+    stubApi();
+    const snapshot = straightSnapshot();
+    const { rerender } = renderEditor(snapshot);
+    const image = option(4).querySelector('img');
+    expect(image).not.toBeNull();
+    fireEvent.error(image as HTMLElement);
+    expect(option(4).querySelector('img')).toBeNull();
+    expect(option(4).textContent).toContain('НЕТ МИНИАТЮРЫ');
+
+    const session = sessionOf(snapshot);
+    rerender(nextSnapshot(snapshot, { assembly: () => assemblyOf(session, undefined, DONE) }));
+    expect(thumbSrc(4)).toBe(pageImageUrl(SESSION, 'straight-thumb', P(5), 1));
+  });
+
   it('модалка save из редактора: пока идёт обработка — статус с остатком и ряд «Выровнено», кнопка недоступна', () => {
     stubApi();
     renderEditor(straightSnapshot());

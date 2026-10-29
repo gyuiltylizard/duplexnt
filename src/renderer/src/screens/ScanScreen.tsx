@@ -93,7 +93,8 @@ function StripCard({
   readonly page: PageSnapshot;
 }): ReactNode {
   const { t } = useTranslation();
-  const image = useImageLoad();
+  const src = pageImageSrc(sessionId, page, 'thumb');
+  const image = useImageLoad(src);
   const cardRef = useRef<HTMLLIElement>(null);
   useLeavingCard(cardRef);
 
@@ -121,7 +122,7 @@ function StripCard({
       <img
         className="strip__img"
         alt={t('thumb.alt', { number: page.number })}
-        src={pageImageSrc(sessionId, page, 'thumb')}
+        src={src}
         onLoad={image.onLoad}
         onError={image.onError}
       />

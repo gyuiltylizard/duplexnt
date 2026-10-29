@@ -9,14 +9,6 @@ import { useImageSwap } from '../components/useImageSwap';
 import { straightTitle } from '../state/straighten-text';
 import { useTurnMotion } from './useTurnMotion';
 
-/**
- * Превью: сама страница под углом из ядра (S8 M3: 90°/270° — альбомная бумага), кромка и метка
- * начала документа; потерянная — пунктирный лист S18 M1; не открылась — текст S19 M1. Пустой
- * оборот (S8 M4) — скан как есть, пустоту проверяют глазами, пилюля «ПУСТАЯ СТОРОНА» в углу.
- * Выравнивание (M6; handoff M6): пилюля статуса на месте пилюли пустоты (у пустой статуса нет),
- * вид по статусу (KTD-7), смена вида на месте — прежний кадр до готовности нового.
- * Перемонтируется на каждую страницу (`key` по ключу) — так требует `useImageLoad`.
- */
 /** Пилюля статуса (handoff M6): «ВЫРОВНЕНО» с глифом, «НЕ ВЫРОВНЕНО» с глифом и причиной в подсказке, «ВЫРАВНИВАЕТСЯ» с точками. */
 function StraightPill({
   t,
@@ -52,6 +44,14 @@ function StraightPill({
   );
 }
 
+/**
+ * Превью: сама страница под углом из ядра (S8 M3: 90°/270° — альбомная бумага), кромка и метка
+ * начала документа; потерянная — пунктирный лист S18 M1; не открылась — текст S19 M1. Пустой
+ * оборот (S8 M4) — скан как есть, пустоту проверяют глазами, пилюля «ПУСТАЯ СТОРОНА» в углу.
+ * Выравнивание (M6; handoff M6): пилюля статуса на месте пилюли пустоты (у пустой статуса нет),
+ * вид по статусу (KTD-7), смена вида на месте — прежний кадр до готовности нового.
+ * Перемонтируется на каждую страницу (`key` по ключу) — так требует `useImageLoad`.
+ */
 export function EditorPreview({
   sessionId,
   entry,
@@ -71,8 +71,9 @@ export function EditorPreview({
   readonly blank: BlankFlag;
 }): ReactNode {
   const { t } = useTranslation();
-  const image = useImageLoad();
-  const swap = useImageSwap(pageImageSrc(sessionId, entry, 'page'), image.state === 'ok');
+  const src = pageImageSrc(sessionId, entry, 'page');
+  const image = useImageLoad(src);
+  const swap = useImageSwap(src, image.state === 'ok');
   // Поворот — лист целиком на дельту команды (B-4); конечный угол — классами.
   const paperRef = useRef<HTMLDivElement>(null);
   useTurnMotion(paperRef, entry.key, entry.angle, 'preview');

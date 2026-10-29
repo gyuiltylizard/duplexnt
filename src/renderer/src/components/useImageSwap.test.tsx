@@ -58,6 +58,7 @@ afterEach(() => {
   cleanup();
   vi.useRealTimers();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   Reflect.deleteProperty(HTMLImageElement.prototype, 'decode');
 });
 
@@ -117,6 +118,15 @@ describe('useImageSwap', () => {
   it('прежний кадр не загружен — адрес меняется сразу, вне DOM ничего не грузится', () => {
     const view = render(<Frame src="a" loaded={false} />);
     view.rerender(<Frame src="b" loaded={false} />);
+    expect(src('shown')).toBe('b');
+    expect(src('incoming')).toBeNull();
+    expect(decode).not.toHaveBeenCalled();
+  });
+
+  it('prefers-reduced-motion — адрес меняется сразу, без загрузки вне DOM и проявления', () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: true, media: query }));
+    const view = render(<Frame src="a" />);
+    view.rerender(<Frame src="b" />);
     expect(src('shown')).toBe('b');
     expect(src('incoming')).toBeNull();
     expect(decode).not.toHaveBeenCalled();

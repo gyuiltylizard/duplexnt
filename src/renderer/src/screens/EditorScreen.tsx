@@ -73,6 +73,7 @@ import { SAVE_TOAST_MS, useEditorSaving } from './useEditorSaving';
 import { useEditorStraighten } from './useEditorStraighten';
 import { useLateHidden } from './useLateHidden';
 import './editor-screen.css';
+import './editor-straighten.css';
 
 // Экран `editor` (план M1, U24; M2, U9; M3, U7–U8; UI_SPEC раздел 6; handoff M3, S1–S15):
 // тулбар с документом текущей страницы и правой зоной сохранения, лента группами по документам
