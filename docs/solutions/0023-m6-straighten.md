@@ -437,8 +437,8 @@ minFreeBytes` тем же резервом `MIN_FREE_BYTES`, что перед �
 коррекции, место, уборка, страж путей) зелёные, коммиты с U-ID. Ревью пары сессий 3–4 — после
 сессии 4. **U7 (мок и handoff) получен 2026-10-29:** handoff —
 `docs/design/handoffs/2026-10-m6-straighten.md`, мок — `docs/design/mock/straighten.html`
-(страница вариантов — `mock/straighten-variants.html`; прежний мок B-4/B-5 заменён). По тексту
-handoff'а форма утверждена автором в моке 2026-10-29 (глиф в подвале карточки 1b, глиф «не
+(страница вариантов — `mock/straighten-variants.html`; прежний мок B-4/B-5 заменён). **Утверждён автором 2026-10-29** (гейт U7 пройден: явное «утверждаю» в
+чате после прогона мока; форма — та, что выбрана в моке (глиф в подвале карточки 1b, глиф «не
 выровнено» 3d, точки обработки 2a). Реализация U8 — по нему; правки по факту U12 — минимальные. **Дальше — сессия 4, U12:** `src/shared/straighten.ts` (`straightenStatusOf`,
 сводка, `pageImageViewOf`), `assembly.ts` (`assembleSession(session, {blank, skew})`,
 `SkewVerdicts` в снимок), `pass-service.ts` (`straightenRefusal`, снимок и дайджест в
