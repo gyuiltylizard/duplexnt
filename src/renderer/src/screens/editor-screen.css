@@ -1261,3 +1261,133 @@
     animation: none;
   }
 }
+
+/* — M6 (handoff M6): выравнивание — */
+
+/* Глиф 10×9 штрихом currentColor: «выровнено» — три ровные строки, «не выровнено» — косые с волной. */
+.straight-glyph {
+  display: block;
+  width: 10px;
+  height: 9px;
+  overflow: visible;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Слот справа в подвале карточки: индикатор и пометка — одно место, вне потока; подвал не
+   сдвигается. 7px и 10px — геометрия подвала: центр глифа 9px и точек 3px по строке номера. */
+.thumb__straight,
+.thumb__pending {
+  position: absolute;
+  right: var(--space-4);
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+.thumb__straight {
+  bottom: 7px;
+  color: var(--color-text-subtle);
+}
+
+.thumb__pending {
+  bottom: 10px;
+  display: flex;
+  gap: var(--space-1);
+  pointer-events: none;
+}
+
+/* Точки — общая фаза для всех карточек: --straight-phase = −(now mod --duration-loop). */
+.thumb__pending i,
+.preview__straight-dots i {
+  width: 3px;
+  height: 3px;
+  border-radius: var(--radius-round);
+  background: var(--color-text-hint);
+  animation: pulse var(--duration-loop) var(--ease-loop) infinite;
+  animation-delay: var(--straight-phase, 0ms);
+}
+
+.thumb__pending i:nth-child(2),
+.preview__straight-dots i:nth-child(2) {
+  animation-delay: calc(var(--straight-phase, 0ms) + var(--delay-stagger));
+}
+
+.thumb__pending i:nth-child(3),
+.preview__straight-dots i:nth-child(3) {
+  animation-delay: calc(var(--straight-phase, 0ms) + var(--delay-stagger) * 2);
+}
+
+/* Появление глифа и точек — проявлением; класс снимается следующим кадром. */
+.thumb__straight--entering,
+.thumb__pending--entering {
+  opacity: 0;
+}
+
+/* Превью — форма .preview__blank, плюс глиф или точки. */
+.preview__straight {
+  position: absolute;
+  top: var(--space-4);
+  left: var(--space-4);
+  z-index: var(--z-raised);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-s);
+  background: var(--color-bg-paper);
+  color: var(--color-text-subtle);
+  font: var(--font-weight-medium) var(--font-size-xxs) / var(--leading-none) var(--font-family-mono);
+  letter-spacing: var(--tracking-caps);
+}
+
+.preview__straight-dots {
+  display: flex;
+  gap: var(--space-1);
+}
+
+/* Смена кадра на месте: новый слой поверх прежнего проявляется, прежний снимается после. */
+.thumb__img--incoming,
+.preview__img--incoming {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+.thumb__img--incoming.is-in,
+.preview__img--incoming.is-in {
+  opacity: 1;
+}
+
+/* Инспектор: кнопки секции и причина недоступности. */
+.inspector__straight-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.inspector__straight-reason {
+  margin: 0;
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-relaxed)
+    var(--font-family-sans);
+  color: var(--color-text-hint);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thumb__straight,
+  .thumb__pending,
+  .thumb__img--incoming,
+  .preview__img--incoming {
+    transition: none;
+  }
+
+  .thumb__pending i,
+  .preview__straight-dots i {
+    animation: none;
+    opacity: var(--opacity-disabled);
+  }
+}

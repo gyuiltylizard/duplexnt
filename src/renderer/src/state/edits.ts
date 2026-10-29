@@ -215,15 +215,31 @@ export function markedNotBlank(edits: SessionEdits, key: string): SessionEdits {
 }
 
 /**
- * «Вернуть оригинал» (M6, R14): ключ входит в `keepOriginal` — в ленте и в файле снова исходник,
- * выправленная копия остаётся в производном. Обычная правка: шаг undo, «Вернуть» снимает. Уже
- * откаченная — без изменений (шага нет).
+ * «Оставить оригинал» (M6, R14; handoff M6): ключи входят в `keepOriginal` — в ленте и в файле
+ * снова исходник, выправленная копия остаётся в производном. Обычная правка: шаг undo, «Вернуть»
+ * снимает. Какие страницы подходят (только `straightened`, AE17), решает экран; уже откаченные
+ * — без изменений, ничего нового — тот же объект (шага нет).
  */
-export function keptOriginal(edits: SessionEdits, key: string): SessionEdits {
-  if (edits.keepOriginal.includes(key)) {
+export function keptOriginal(edits: SessionEdits, keys: readonly string[]): SessionEdits {
+  const kept = new Set(edits.keepOriginal);
+  const added = keys.filter((key) => !kept.has(key));
+  if (added.length === 0) {
     return edits;
   }
-  return { ...edits, keepOriginal: [...edits.keepOriginal, key] };
+  return { ...edits, keepOriginal: [...edits.keepOriginal, ...added] };
+}
+
+/**
+ * «Выровнять» (M6; handoff M6): ключи уходят из `keepOriginal` — снова выправленный вид. Какие
+ * подходят (только `kept`), решает экран; ключей в правках нет — тот же объект (шага нет).
+ */
+export function restoredStraight(edits: SessionEdits, keys: readonly string[]): SessionEdits {
+  const removing = new Set(keys);
+  const keepOriginal = edits.keepOriginal.filter((key) => !removing.has(key));
+  if (keepOriginal.length === edits.keepOriginal.length) {
+    return edits;
+  }
+  return { ...edits, keepOriginal };
 }
 
 /** Имя документа `docIndex` (с нуля); пустая строка — имя по умолчанию. */

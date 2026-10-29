@@ -6,6 +6,7 @@ import {
   type AssemblyReport,
   type BlankSummary,
   type SessionAssembly,
+  type StraightenSummary,
 } from '@shared';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -93,6 +94,20 @@ const title = (): string | null => screen.getByRole('heading', { level: 1 }).tex
 
 function renderMerge(assemblyReport: AssemblyReport, blank?: BlankSummary) {
   return render(<MergeScreen assembly={assemblyFor(assemblyReport, blank)} />);
+}
+
+/** Сводка выравнивания (M6) поверх нулевой: режим `auto`, остальное — по переданному. */
+const straightenOf = (
+  overrides: Partial<StraightenSummary>,
+  mode: StraightenSummary['mode'] = 'auto',
+): StraightenSummary => ({ ...NO_STRAIGHTEN, mode, ...overrides });
+
+function renderMergeStraight(
+  assemblyReport: AssemblyReport,
+  straighten: StraightenSummary,
+  blank: BlankSummary = NO_BLANK,
+) {
+  return render(<MergeScreen assembly={{ ...assemblyFor(assemblyReport, blank), straighten }} />);
 }
 
 afterEach(cleanup);
@@ -187,6 +202,70 @@ describe('экран merge', () => {
       ' · ищем пустые обороты…',
     );
     expect(screen.getByRole('status').getAttribute('aria-live')).toBe('polite');
+  });
+
+  it('M6: хвост выравнивания — «ещё N стр.» пока идёт, затем «выровнено: N»; узел по виду, счёт без перемонтирования', () => {
+    const view = renderMergeStraight(
+      report({ fronts: 7, backs: 7 }),
+      straightenOf({ pending: 5, straightened: 2, total: 14 }),
+      { mode: 'hide', found: 2, hidden: 2, pending: 0 },
+    );
+    expect(screen.getByRole('status').textContent).toBe(
+      'совпало пар: 7 · пустых оборотов: 2 · выравнивание: ещё 5 стр.',
+    );
+    const tails = view.container.querySelectorAll('.merge-screen__tail');
+    expect(tails).toHaveLength(2);
+    const pendingNode = tails[1];
+
+    // Счёт меняется — тот же узел (без проявления); итог — новый узел.
+    view.rerender(
+      <MergeScreen
+        assembly={{
+          ...assemblyFor(report({ fronts: 7, backs: 7 }), {
+            mode: 'hide',
+            found: 2,
+            hidden: 2,
+            pending: 0,
+          }),
+          straighten: straightenOf({ pending: 1, straightened: 6, total: 14 }),
+        }}
+      />,
+    );
+    expect(view.container.querySelectorAll('.merge-screen__tail')[1]).toBe(pendingNode);
+    expect(pendingNode?.textContent).toBe(' · выравнивание: ещё 1 стр.');
+
+    view.rerender(
+      <MergeScreen
+        assembly={{
+          ...assemblyFor(report({ fronts: 7, backs: 7 }), {
+            mode: 'hide',
+            found: 2,
+            hidden: 2,
+            pending: 0,
+          }),
+          straighten: straightenOf({ straightened: 7, level: 7, total: 14 }),
+        }}
+      />,
+    );
+    const done = view.container.querySelectorAll('.merge-screen__tail')[1];
+    expect(done).not.toBe(pendingNode);
+    expect(done?.textContent).toBe(' · выровнено: 7 стр.');
+  });
+
+  it('M6: хвоста нет при «Не трогать», в режиме наборов и когда статусов нет', () => {
+    renderMergeStraight(report({ fronts: 7, backs: 7 }), straightenOf({ pending: 3 }, 'off'));
+    expect(screen.getByRole('status').textContent).toBe('совпало пар: 7');
+    cleanup();
+
+    renderMergeStraight(sets(12, 11), straightenOf({ pending: 3, total: 23 }));
+    expect(screen.getByRole('status').textContent).not.toContain('выравнивание');
+    cleanup();
+
+    renderMergeStraight(
+      report({ backs: 0, backsState: null, backsDeclined: true }),
+      straightenOf({ total: 0 }),
+    );
+    expect(screen.getByRole('status').textContent).not.toContain('выровнено');
   });
 
   it('M4: «Оставлять», «Обороты не нужны» и режим наборов — без пустых в статусе', () => {

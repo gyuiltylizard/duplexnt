@@ -13,6 +13,7 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  NO_STRAIGHTEN,
   type AddedPassIntent,
   type AssembledDocument,
   type AssembledPage,
@@ -69,6 +70,7 @@ import { railMovesOf, type RailMoves } from './railMoves';
 import { useEditorAssemble } from './useEditorAssemble';
 import { useEditorEdits } from './useEditorEdits';
 import { SAVE_TOAST_MS, useEditorSaving } from './useEditorSaving';
+import { useEditorStraighten } from './useEditorStraighten';
 import { useLateHidden } from './useLateHidden';
 import './editor-screen.css';
 
@@ -87,7 +89,9 @@ import './editor-screen.css';
 // Пустые обороты (M4; handoff M4, S1–S13): экран живёт по показанной ленте — без скрытых, пока
 // переключатель «Пустые» выключен (состояние экрана, не правка); правки считаются по
 // полной ленте, пустой оборот склеен со своим листом (KTD4, R11–R13; B-13); «Это не пустая страница» —
-// правка `notBlank` (KTD5); поздние оценки прячут страницу с тостом (KTD6).
+// правка `notBlank` (KTD5); поздние оценки прячут страницу с тостом (KTD6). Выравнивание (M6;
+// handoff M6): пометки и вид — в карточке и превью по статусу из снимка; «Оставить оригинал» /
+// «Выровнять», тосты и фокус — `useEditorStraighten`; секция и пункт ПРОВЕРКИ — в инспекторе.
 
 export interface EditorScreenProps {
   readonly snapshot: Snapshot;
@@ -229,6 +233,8 @@ export function EditorScreen({
     edits: next,
     rotate180: edits.current.rotate180,
   });
+  // Выравнивание (M6): действия на выделение, фокус на парную кнопку, тост поздних статусов.
+  const straighten = useEditorStraighten({ edits, withEdits, order, shown, selection, onToast });
 
   // Документ текущей страницы — по отрезкам сборки.
   const currentDocument =
@@ -284,6 +290,9 @@ export function EditorScreen({
       focusName.current = null;
       field?.focus();
       field?.select();
+      return;
+    }
+    if (straighten.refocus()) {
       return;
     }
     let key = focusKey.current;
@@ -910,8 +919,11 @@ export function EditorScreen({
             notBlank={currentEntry !== undefined && notBlank.includes(currentEntry.key)}
             locked={locked}
             hintSeen={snapshot.seenHints.includes('docsSplit')}
+            straight={straighten.selection}
             onPickDocument={pickDocument}
             onNotBlank={markNotBlank}
+            onKeepOriginal={straighten.keepOriginal}
+            onRestoreStraight={straighten.restoreStraight}
             onRevert={() => {
               setModal('revert');
             }}
@@ -927,6 +939,7 @@ export function EditorScreen({
           singleDefault={t('editor.doc.defaultSingleName', { date: today })}
           total={fileTotal}
           blank={blank}
+          straighten={snapshot.assembly?.straighten ?? NO_STRAIGHTEN}
           onRename={renameDocuments}
           editsBusy={edits.busy}
           onWriting={setSaving}

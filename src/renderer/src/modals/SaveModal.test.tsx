@@ -1,10 +1,12 @@
 import {
   fail,
+  NO_STRAIGHTEN,
   ok,
   type Api,
   type AssembledDocument,
   type CommandResult,
   type SaveDocumentsRequest,
+  type StraightenSummary,
 } from '@shared';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -62,6 +64,7 @@ function renderModal(props: Partial<SaveModalProps> = {}) {
       singleDefault="Скан 2026-10-06"
       total={24}
       blank={NO_BLANK}
+      straighten={NO_STRAIGHTEN}
       editsBusy={false}
       {...handlers}
       {...next}
@@ -504,6 +507,62 @@ describe('модалка save: ИТОГ', () => {
 
     expect(screen.getByText('имя изменено: недопустимые для Windows символы убраны')).toBeDefined();
     expect(button('Готово')).toBeDefined();
+  });
+});
+
+describe('модалка save: выравнивание (M6; handoff M6, `save`)', () => {
+  const straightenOf = (overrides: Partial<StraightenSummary>): StraightenSummary => ({
+    ...NO_STRAIGHTEN,
+    mode: 'auto',
+    ...overrides,
+  });
+
+  it('straightenPending: статус с остатком из порции, кнопка недоступна; снимок с нулём открывает её сам', () => {
+    const api = stubApi();
+    const { rerender } = renderModal({
+      straighten: straightenOf({ pending: 5, straightened: 7, total: 12 }),
+    });
+
+    expect(screen.getByRole('status').textContent).toBe(
+      'Выравнивание: ещё 5 стр. из 12 — кнопка станет доступна сама.',
+    );
+    expect(fact('Выровнено')).toBe('7 стр. · ещё 5 в обработке');
+    expect(button('Сохранить 3 файла').hasAttribute('disabled')).toBe(true);
+    fireEvent.click(button('Сохранить 3 файла'));
+    expect(api.saveDocuments).not.toHaveBeenCalled();
+
+    rerender({
+      straighten: straightenOf({ straightened: 7, unmeasurable: 4, deferred: 2, total: 13 }),
+    });
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(button('Сохранить 3 файла').hasAttribute('disabled')).toBe(false);
+    // Отложенные не блокируют: уйдут как есть.
+    expect(fact('Выровнено')).toBe('7 стр. · не выровнено 6 — уйдут как есть');
+  });
+
+  it('идут и оценка пустых, и выравнивание — один статус с суммой; documentBlank выше', () => {
+    stubApi();
+    const { rerender } = renderModal({
+      blank: { mode: 'hide', found: 0, hidden: 0, pending: 2 },
+      straighten: straightenOf({ pending: 3, total: 10 }),
+    });
+    expect(screen.getByRole('status').textContent).toBe(
+      'Оценка пустых оборотов и выравнивание: ещё 5 стр. — кнопка станет доступна сама.',
+    );
+
+    rerender({
+      documents: [doc(0, 9, 'Акт'), doc(9, 0, 'Приложение'), doc(9, 8)],
+    });
+    expect(screen.getByRole('alert').textContent).toContain('Документ «Приложение»');
+  });
+
+  it('ряд «Выровнено»: «нет» без выровненных; при «Не трогать» ряда нет', () => {
+    stubApi();
+    const { rerender } = renderModal({ straighten: straightenOf({ level: 12, total: 12 }) });
+    expect(fact('Выровнено')).toBe('нет');
+
+    rerender({ straighten: NO_STRAIGHTEN });
+    expect(screen.queryByText('Выровнено')).toBeNull();
   });
 });
 

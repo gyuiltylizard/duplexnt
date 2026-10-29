@@ -1,10 +1,12 @@
 import {
   EMPTY_EDITS,
+  NO_STRAIGHTEN_FACTS,
   NO_VERDICTS,
   ok,
   type Api,
   type BlankVerdicts,
   type CommandResult,
+  type StraightenFacts,
   type PassSnapshot,
   type SaveDocumentsRequest,
   type SessionAssembly,
@@ -50,12 +52,16 @@ export function makePass(overrides: Partial<PassSnapshot>): PassSnapshot {
   };
 }
 
-/** `blank` — вердикты детектора по ключам оборотов (M4): флаги ленты считает зеркало сборки. */
+/**
+ * `blank` — вердикты детектора по ключам оборотов (M4), `straighten` — факты выравнивания (M6):
+ * флаги и статусы ленты считает зеркало сборки.
+ */
 export function makeSnapshot(
   passes: PassSnapshot[],
   overrides: Partial<Snapshot> = {},
   sessionOverrides: Partial<SessionSnapshot> = {},
   blank: BlankVerdicts = NO_VERDICTS,
+  straighten: StraightenFacts = NO_STRAIGHTEN_FACTS,
 ): Snapshot {
   const session: SessionSnapshot = {
     id: 'session.x',
@@ -82,7 +88,10 @@ export function makeSnapshot(
     seenHints: [],
     ...overrides,
     session,
-    assembly: overrides.assembly === undefined ? assemblyOf(session, blank) : overrides.assembly,
+    assembly:
+      overrides.assembly === undefined
+        ? assemblyOf(session, blank, straighten)
+        : overrides.assembly,
   };
 }
 
@@ -218,6 +227,7 @@ export function applied(
    */
   state: EditState | Parameters<Api['setEdits']>[0] | FlagState,
   blank: BlankVerdicts = NO_VERDICTS,
+  straighten: StraightenFacts = NO_STRAIGHTEN_FACTS,
 ): Snapshot {
   const session = snapshot.session;
   if (session === null) {
@@ -246,7 +256,7 @@ export function applied(
     ...snapshot,
     seq: snapshot.seq + 1,
     session: next,
-    assembly: assemblyWithEditsOf(next, blank),
+    assembly: assemblyWithEditsOf(next, blank, straighten),
   };
 }
 

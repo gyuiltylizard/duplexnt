@@ -24,7 +24,7 @@ import { SetMismatchModal } from './modals/SetMismatchModal';
 import { EditorScreen } from './screens/EditorScreen';
 import { FlipScreen } from './screens/FlipScreen';
 import { IncompatibleScreen } from './screens/IncompatibleScreen';
-import { MergeScreen, MERGE_PAUSE_MS } from './screens/MergeScreen';
+import { MergeScreen, MERGE_PAUSE_MS, MERGE_RESULT_MS } from './screens/MergeScreen';
 import { ScanScreen } from './screens/ScanScreen';
 import { SetupScreen } from './screens/SetupScreen';
 import { assemblyLanded, mismatchDue, pairLanded, setMismatchDue } from './state/assembly-outcome';
@@ -152,6 +152,9 @@ export function App(): ReactNode {
   // по истечении паузы экран держится, пока `blank.pending` не станет 0, — без потолка. Флаг
   // ставится вместе с паузой и снимается корректировкой при рендере, как только ждать нечего.
   const [mergeBlankWait, setMergeBlankWait] = useState(false);
+  // Ожидание выравнивания (M6; handoff M6, `merge`): как с оценками пустых — без потолка; после
+  // итога экран держится ещё `MERGE_RESULT_MS`, чтобы «выровнено: N» успели прочесть.
+  const [mergeStraightWait, setMergeStraightWait] = useState(false);
   const [previousScreen, setPreviousScreen] = useState<Screen | null>(null);
   const screen = snapshot === null ? null : screenOf(snapshot);
   const session = snapshot?.session ?? null;
@@ -176,6 +179,7 @@ export function App(): ReactNode {
       // Ждать оценок есть смысл, когда они прячут страницы: в режиме наборов ничего не скрыто
       // (R15), статус про пустые там не рисуется — держать экран нечем объяснить (ревью).
       setMergeBlankWait(transitionReport.mode !== 'sets');
+      setMergeStraightWait(transitionReport.mode !== 'sets');
     }
   }
 
@@ -197,6 +201,7 @@ export function App(): ReactNode {
     setMergeHoldMs(declined ? null : MERGE_PAUSE_MS);
     setMergeSet(declined ? null : set.set);
     setMergeBlankWait(!declined && transitionReport?.mode !== 'sets');
+    setMergeStraightWait(!declined && transitionReport?.mode !== 'sets');
     if (key !== null) {
       setSeat({ epoch: snapshot.seq, key });
     }
@@ -208,6 +213,14 @@ export function App(): ReactNode {
   const blankPending = snapshot?.assembly?.blank.pending ?? 0;
   if (mergeBlankWait && blankPending === 0) {
     setMergeBlankWait(false);
+  }
+  const straightPending = snapshot?.assembly?.straighten.pending ?? 0;
+  if (mergeStraightWait && straightPending === 0) {
+    setMergeStraightWait(false);
+    // Пауза уже истекла, а ждали только итога — дать его прочесть; иначе пауза ещё идёт.
+    if (mergeHoldMs === null) {
+      setMergeHoldMs(MERGE_RESULT_MS);
+    }
   }
 
   // Посадка добавленного набора (KTD-7; handoff S9–S10): в `editor` той же сессии появились
@@ -392,7 +405,9 @@ export function App(): ReactNode {
   const merging =
     screen === 'editor' &&
     assembly !== null &&
-    (mergeHoldMs !== null || (mergeBlankWait && blankPending > 0));
+    (mergeHoldMs !== null ||
+      (mergeBlankWait && blankPending > 0) ||
+      (mergeStraightWait && straightPending > 0));
   // `mismatch` (KTD-8; M3.6, R20): первый вход в editor за процесс при неподтверждённом
   // режиме раздельных наборов — включая вход через «Оставить как есть» и после перезапуска;
   // условие уместности — общий предикат `mismatchDue` (добавленные наборы показ не отменяют,
