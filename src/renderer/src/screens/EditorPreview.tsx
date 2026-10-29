@@ -25,33 +25,31 @@ function StraightPill({
   readonly t: TFunction;
   readonly mark: StraightenMark;
 }): ReactNode {
-  const title = straightTitle(t, mark) ?? undefined;
+  let icon: ReactNode;
+  let label: string;
   switch (mark.status) {
     case 'straightened':
-      return (
-        <span className="preview__straight" title={title}>
-          <StraightGlyph kind="level" />
-          {t('preview.straight.straightened')}
-        </span>
-      );
+      icon = <StraightGlyph kind="level" />;
+      label = t('preview.straight.straightened');
+      break;
     case 'unmeasurable':
     case 'deferred':
-      return (
-        <span className="preview__straight" title={title}>
-          <StraightGlyph kind="undone" />
-          {t('preview.straight.unstraightened')}
-        </span>
-      );
+      icon = <StraightGlyph kind="undone" />;
+      label = t('preview.straight.unstraightened');
+      break;
     case 'pending':
-      return (
-        <span className="preview__straight" title={title}>
-          <StraightDots className="preview__straight-dots" />
-          {t('preview.straight.pending')}
-        </span>
-      );
+      icon = <StraightDots className="preview__straight-dots" />;
+      label = t('preview.straight.pending');
+      break;
     default:
       return null;
   }
+  return (
+    <span className="preview__straight" title={straightTitle(t, mark) ?? undefined}>
+      {icon}
+      {label}
+    </span>
+  );
 }
 
 export function EditorPreview({
@@ -74,7 +72,7 @@ export function EditorPreview({
 }): ReactNode {
   const { t } = useTranslation();
   const image = useImageLoad();
-  const swap = useImageSwap(pageImageSrc(sessionId, entry, 'page'));
+  const swap = useImageSwap(pageImageSrc(sessionId, entry, 'page'), image.state === 'ok');
   // Поворот — лист целиком на дельту команды (B-4); конечный угол — классами.
   const paperRef = useRef<HTMLDivElement>(null);
   useTurnMotion(paperRef, entry.key, entry.angle, 'preview');

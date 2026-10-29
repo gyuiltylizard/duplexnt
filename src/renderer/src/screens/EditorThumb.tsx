@@ -165,7 +165,9 @@ export const EditorThumb = memo(function EditorThumb({
   angle,
   lost,
   blank,
-  straighten,
+  straightStatus,
+  straightReason,
+  straightVersion,
   position,
   inSets,
   addedSet,
@@ -193,8 +195,10 @@ export const EditorThumb = memo(function EditorThumb({
   readonly lost: boolean;
   /** Пустой оборот из ядра (M4, R10): помечена или скрыта (показана переключателем). */
   readonly blank: BlankFlag;
-  /** Выравнивание из ядра (M6, KTD-7, KTD-9): по статусу выбирается вид миниатюры. */
-  readonly straighten: StraightenMark;
+  /** Выравнивание из ядра (M6, KTD-7, KTD-9) полями `StraightenMark`: по статусу — вид миниатюры. */
+  readonly straightStatus: StraightenMark['status'];
+  readonly straightReason: StraightenMark['reason'];
+  readonly straightVersion: StraightenMark['version'];
   /** Номер по порядку в показанной ленте, с единицы — сквозной через документы и группы. */
   readonly position: number;
   /** Режим наборов: подпись — «что это за страница» теми же словами, что ДЕТАЛИ (KTD9). */
@@ -222,9 +226,17 @@ export const EditorThumb = memo(function EditorThumb({
 }): ReactNode {
   const { t } = useTranslation();
   const image = useImageLoad();
+  const straighten: StraightenMark = {
+    status: straightStatus,
+    reason: straightReason,
+    version: straightVersion,
+  };
   // Вид по статусу (KTD-7); откат, «Выровнять» и поздняя коррекция меняют адрес — прежний кадр
   // остаётся до готовности нового (handoff M6, «Смена вида на месте»).
-  const swap = useImageSwap(pageImageSrc(sessionId, { key: pageKey, straighten }, 'thumb'));
+  const swap = useImageSwap(
+    pageImageSrc(sessionId, { key: pageKey, straighten }, 'thumb'),
+    image.state === 'ok',
+  );
   // Поворот — анимация на дельту команды (B-4); конечный угол — классами.
   const imgRef = useRef<HTMLImageElement>(null);
   useTurnMotion(imgRef, pageKey, angle, 'thumb');

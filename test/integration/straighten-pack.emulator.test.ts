@@ -1,16 +1,18 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { EMPTY_EDITS, type AssembledPage, type StraightenStatus } from '../../src/shared';
+import { EMPTY_EDITS, type AssembledPage } from '../../src/shared';
 import type { ScanJobLimits } from '../../src/core/escl/scan-job';
 import { inlineImageWorker } from '../../src/core/image/image-worker';
 import type { PassService, PassServiceOptions } from '../../src/core/scan/pass-service';
 import { layoutOf } from '../../src/core/storage/layout';
 import { SCENARIOS } from '../emulator/scenarios';
 import { pdfImageStreams } from '../support/fixtures';
+import { keyOf } from '../support/assembly';
 import { analyzeGrid } from '../support/grid-analysis';
 import { connectService, saveSingle, scanned } from '../support/pass-service';
 import { unwrap } from '../support/result';
+import { sessionIdOf, skewDirOf, statusesOf, straightDirOf } from '../support/straighten';
 import { untilStraightened } from '../support/until';
 
 // Пачка M6 на эмуляторе (план M6, U9; AE1, AE2, AE7, AE11, AE12, AE17): сценарии `fan-pack` и
@@ -37,22 +39,11 @@ const OPTIONS = {
 
 const REAL = { imageWorker: inlineImageWorker() };
 
-const F = (index: number): string => `p01-s01-${String(index).padStart(4, '0')}`;
-const B = (index: number): string => `p02-s01-${String(index).padStart(4, '0')}`;
-
-const sessionIdOf = (service: PassService): string => service.snapshot().session?.id ?? '';
-const straightDirOf = (root: string, sessionId: string): string =>
-  join(layoutOf(root).derivedDir, sessionId, 'straight');
-const skewDirOf = (root: string, sessionId: string): string =>
-  join(layoutOf(root).derivedDir, sessionId, 'skew');
+const F = (index: number): string => keyOf(1, index);
+const B = (index: number): string => keyOf(2, index);
 
 const shownOrder = (service: PassService): AssembledPage[] =>
   (service.snapshot().assembly?.order ?? []).filter((page) => page.blank !== 'hidden');
-
-const statusesOf = (service: PassService): Record<string, StraightenStatus> =>
-  Object.fromEntries(
-    (service.snapshot().assembly?.order ?? []).map((page) => [page.key, page.straighten.status]),
-  );
 
 /** Байты страницы, какими они уходят в файл: выправленной — производное, остальным — исходник. */
 async function fileBytesOf(root: string, sessionId: string, page: AssembledPage): Promise<Buffer> {

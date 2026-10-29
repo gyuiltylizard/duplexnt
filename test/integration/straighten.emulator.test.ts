@@ -1,16 +1,18 @@
 import { readdir, readFile, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { EMPTY_EDITS, pageImageViewOf, type StraightenStatus } from '../../src/shared';
+import { EMPTY_EDITS, pageImageViewOf } from '../../src/shared';
 import type { ScanJobLimits } from '../../src/core/escl/scan-job';
 import { inlineImageWorker } from '../../src/core/image/image-worker';
-import type { PassService, PassServiceOptions } from '../../src/core/scan/pass-service';
+import type { PassServiceOptions } from '../../src/core/scan/pass-service';
 import { layoutOf } from '../../src/core/storage/layout';
+import { keyOf } from '../support/assembly';
 import { pdfImageStreams } from '../support/fixtures';
 import { stubWorker } from '../support/image-worker';
 import { connectService, saveSingle, scanned } from '../support/pass-service';
 import { unwrap } from '../support/result';
 import { journalOnDisk } from '../support/session-store';
+import { skewDirOf, statusesOf } from '../support/straighten';
 import { until, untilScored } from '../support/until';
 
 // Выравнивание перекоса на настоящей цепочке (план M6, U5, U12; R6, R11, KTD-4, KTD-8, KTD-9,
@@ -38,11 +40,8 @@ const OPTIONS = {
   retry: { ceilingMs: 0 },
 } satisfies PassServiceOptions;
 
-const F = (index: number): string => `p01-s01-${String(index).padStart(4, '0')}`;
-const B = (index: number): string => `p02-s01-${String(index).padStart(4, '0')}`;
-
-const skewDirOf = (root: string, sessionId: string): string =>
-  join(layoutOf(root).derivedDir, sessionId, 'skew');
+const F = (index: number): string => keyOf(1, index);
+const B = (index: number): string => keyOf(2, index);
 
 async function outcomesIn(dir: string): Promise<Record<string, string>> {
   const names = (await readdir(dir).catch(() => [])).sort();
@@ -57,11 +56,6 @@ async function outcomesIn(dir: string): Promise<Record<string, string>> {
 
 const straightFiles = async (dir: string): Promise<string[]> =>
   (await readdir(dir).catch(() => [])).filter((name) => !name.endsWith('.tmp')).sort();
-
-const statusesOf = (service: PassService): Record<string, StraightenStatus> =>
-  Object.fromEntries(
-    (service.snapshot().assembly?.order ?? []).map((page) => [page.key, page.straighten.status]),
-  );
 
 describe('выравнивание на эмуляторе: измерение по ходу прохода (M6, U5)', () => {
   it('косые листы в лотке получают «выправлять», фото — «не померить», скрытый пустой оборот не измеряется', async () => {

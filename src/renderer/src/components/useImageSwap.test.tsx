@@ -5,14 +5,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // — хук подменяет адрес сразу (путь ленты в остальных тестах). Здесь `decode()` подставляется до
 // загрузки модуля: новый кадр грузится вне DOM, кладётся слоем поверх прежнего, проявляется
 // кадром позже и становится показанным по концу перехода (или по страховочному таймеру); сбой
-// загрузки и возврат адреса во время загрузки оставляют прежний кадр.
+// загрузки и возврат адреса во время загрузки оставляют прежний кадр; прежний кадр не загружен
+// (миниатюра вне экрана) — замена адреса сразу, без загрузки вне DOM.
 
 type Decode = () => Promise<void>;
 let decode: ReturnType<typeof vi.fn<Decode>>;
 let useImageSwap: typeof import('./useImageSwap').useImageSwap;
 
-function Frame({ src }: { readonly src: string }) {
-  const swap = useImageSwap(src);
+function Frame({ src, loaded = true }: { readonly src: string; readonly loaded?: boolean }) {
+  const swap = useImageSwap(src, loaded);
   return (
     <div>
       <img data-testid="shown" src={swap.shown} alt="" />
@@ -111,6 +112,14 @@ describe('useImageSwap', () => {
     expect(src('shown')).toBe('a');
     expect(src('incoming')).toBeNull();
     expect(error).toHaveBeenCalledTimes(1);
+  });
+
+  it('прежний кадр не загружен — адрес меняется сразу, вне DOM ничего не грузится', () => {
+    const view = render(<Frame src="a" loaded={false} />);
+    view.rerender(<Frame src="b" loaded={false} />);
+    expect(src('shown')).toBe('b');
+    expect(src('incoming')).toBeNull();
+    expect(decode).not.toHaveBeenCalled();
   });
 
   it('адрес вернулся к показанному, пока новый грузился (быстрый Ctrl+Z), — подмены нет', async () => {

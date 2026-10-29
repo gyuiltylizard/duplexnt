@@ -8,7 +8,9 @@ import { prefersReducedMotion } from '../state/motion';
 // снимается, когда переход кончился. Сбой загрузки — прежний остаётся, ошибка в лог. Без
 // `decode()` (jsdom) и под `prefers-reduced-motion` — простая замена адреса: кадр в каждом
 // случае такой же, как без движения (B-4, R3). Смена страницы — обычная замена: компонент
-// перемонтируется по ключу страницы, хук стартует с нового адреса.
+// перемонтируется по ключу страницы, хук стартует с нового адреса. Прежний кадр ещё не загружен
+// (миниатюра вне экрана с `loading="lazy"`, скелетон) — показывать до готовности нечего: адрес
+// меняется сразу, и лента не грузит вне DOM кадры, которых никто не видит.
 
 export interface ImageSwap {
   /** Адрес показанного кадра. */
@@ -34,22 +36,23 @@ const CAN_DECODE =
   typeof HTMLImageElement !== 'undefined' &&
   typeof HTMLImageElement.prototype.decode === 'function';
 
-export function useImageSwap(src: string): ImageSwap {
+export function useImageSwap(src: string, shownLoaded: boolean): ImageSwap {
   const [frames, setFrames] = useState<Frames>({ shown: src, incoming: null });
   const [incomingIn, setIncomingIn] = useState(false);
 
   // Корректировка при рендере (react.dev «You Might Not Need an Effect»): адрес вернулся к
-  // показанному, пока новый кадр грузился (быстрый Ctrl+Z), — подмены нет; без декодирования или
-  // под `prefers-reduced-motion` — замена сразу.
+  // показанному, пока новый кадр грузился (быстрый Ctrl+Z), — подмены нет; без декодирования,
+  // без загруженного прежнего кадра или под `prefers-reduced-motion` — замена сразу.
+  const direct = src !== frames.shown && (!CAN_DECODE || !shownLoaded || prefersReducedMotion());
   if (src === frames.shown) {
     if (frames.incoming !== null) {
       setFrames({ shown: src, incoming: null });
     }
-  } else if (!CAN_DECODE || prefersReducedMotion()) {
+  } else if (direct) {
     setFrames({ shown: src, incoming: null });
   }
 
-  const loading = CAN_DECODE && src !== frames.shown && !prefersReducedMotion();
+  const loading = src !== frames.shown && !direct;
   useEffect(() => {
     if (!loading) {
       return;
@@ -72,6 +75,8 @@ export function useImageSwap(src: string): ImageSwap {
     );
     return () => {
       cancelled = true;
+      // Загрузка больше не нужна — сеть и декодер её бросают.
+      image.src = '';
     };
   }, [src, loading]);
 

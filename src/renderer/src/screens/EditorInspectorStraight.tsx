@@ -8,6 +8,7 @@ import {
   straightSelectionText,
   type StraightSelection,
 } from '../state/straighten-text';
+import { Check } from './InspectorCheck';
 
 // Выравнивание в инспекторе (план M6, U8; handoff M6 «Anatomy», «States», «Behaviour»): секция
 // ВЫРАВНИВАНИЕ после ДЕТАЛЕЙ — по образцу ПУСТОГО ОБОРОТА (у страницы бывает только одна из
@@ -16,24 +17,6 @@ import {
 // слоте — после перерисовки кнопка становится парной, фокус остаётся на ней. Выделение из
 // нескольких: строка «Из N выделенных: …» и до двух кнопок с числом подходящих (AE17);
 // подходящих нет — одна недоступная кнопка и причина строкой ниже.
-
-/** Строка ПРОВЕРКИ — та же форма, что у остальных пунктов инспектора. */
-function Check({
-  warning,
-  children,
-}: {
-  readonly warning: boolean;
-  readonly children: ReactNode;
-}): ReactNode {
-  return (
-    <li className={warning ? 'check check--warning' : 'check'}>
-      <span className="check__icon" aria-hidden="true">
-        {warning ? '•' : '✓'}
-      </span>
-      <span className="check__text">{children}</span>
-    </li>
-  );
-}
 
 /**
  * Пункт ПРОВЕРКИ (handoff M6 «ПРОВЕРКА»): при «Не трогать» пункта нет; обработка идёт — точка с

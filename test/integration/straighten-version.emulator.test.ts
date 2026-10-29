@@ -1,17 +1,18 @@
-import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { EMPTY_EDITS } from '../../src/shared';
 import type { ScanJobLimits } from '../../src/core/escl/scan-job';
 import { inlineImageWorker } from '../../src/core/image/image-worker';
-import type { PassService, PassServiceOptions } from '../../src/core/scan/pass-service';
+import type { PassServiceOptions } from '../../src/core/scan/pass-service';
 import { layoutOf } from '../../src/core/storage/layout';
 import { realStorageFs } from '../../src/core/storage/storage-fs';
-import { pdfImageStreams } from '../support/fixtures';
+import { keyOf } from '../support/assembly';
 import { fsError, interceptFs } from '../support/intercept-fs';
 import { connectService, scanned } from '../support/pass-service';
 import { unwrap } from '../support/result';
 import { journalOnDisk } from '../support/session-store';
+import { jpegsIn, sessionIdOf, streamsOf } from '../support/straighten';
 import { untilStraightened } from '../support/until';
 
 // Смена версии геометрии на всей цепочке (план M6, U9; AE13, AE14; KTD-6, KTD-8, KTD-11):
@@ -42,15 +43,7 @@ const OPTIONS = {
   retry: { ceilingMs: 0 },
 } satisfies PassServiceOptions;
 
-const F = (index: number): string => `p01-s01-${String(index).padStart(4, '0')}`;
-
-const sessionIdOf = (service: PassService): string => service.snapshot().session?.id ?? '';
-
-const streamsOf = async (pdf: string): Promise<Buffer[]> =>
-  (await pdfImageStreams(await readFile(pdf))).map((stream) => Buffer.from(stream.getContents()));
-
-const jpegsIn = async (dir: string): Promise<string[]> =>
-  (await readdir(dir).catch(() => [])).filter((name) => name.endsWith('.jpg')).sort();
+const F = (index: number): string => keyOf(1, index);
 
 interface StraightRecord {
   readonly v: number;

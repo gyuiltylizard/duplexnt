@@ -14,6 +14,7 @@ import { noteOf, toneOf, whatOf } from '../state/page-text';
 import type { ShownDocument } from '../state/shown';
 import { straightFactText, type StraightSelection } from '../state/straighten-text';
 import { StraightCheck, StraightSection, straightSectionDue } from './EditorInspectorStraight';
+import { Check } from './InspectorCheck';
 import { useHintAttention } from './useHintAttention';
 
 // Инспектор редактора (handoff M3, S11–S13; M3.5, S6–S7; M3.6, S8–S9): ДЕТАЛИ текущей страницы,
@@ -27,24 +28,6 @@ import { useHintAttention } from './useHintAttention';
 // документов — в координатах показанной ленты. M6 (handoff M6): секция «ВЫРАВНИВАНИЕ» после
 // ДЕТАЛЕЙ с «Оставить оригинал» / «Выровнять», факт «Выравнивание», пункт ПРОВЕРКИ
 // (`EditorInspectorStraight.tsx`).
-
-/** Строка ПРОВЕРКИ: ✓ — всё хорошо, • — стоит взглянуть. */
-function Check({
-  warning,
-  children,
-}: {
-  readonly warning: boolean;
-  readonly children: ReactNode;
-}): ReactNode {
-  return (
-    <li className={warning ? 'check check--warning' : 'check'}>
-      <span className="check__icon" aria-hidden="true">
-        {warning ? '•' : '✓'}
-      </span>
-      <span className="check__text">{children}</span>
-    </li>
-  );
-}
 
 /**
  * Пункт ПРОВЕРКИ о лицах и оборотах (R22): наборы — точка со счётчиками, иначе галочка с числом

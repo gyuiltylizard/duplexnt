@@ -8,6 +8,7 @@ import {
   resolveScanParams,
   STRAIGHTEN_MODES,
   type BlankMode,
+  type CommandResult,
   type DomainError,
   type ScanOptions,
   type ScanParams,
@@ -98,30 +99,27 @@ export function SetupScreen({
     );
   };
 
-  const sendBlankMode = (mode: BlankMode): void => {
-    window.api.setBlankMode(mode).then(
+  /** Режим пустых оборотов или выравнивания; `what` — чей режим, для лога. */
+  const sendMode = (
+    sent: Promise<CommandResult<'setBlankMode' | 'setStraightenMode'>>,
+    what: string,
+  ): void => {
+    sent.then(
       (result) => {
         if (!result.ok) {
-          console.error('[renderer] режим пустых оборотов не принят', result.error);
+          console.error(`[renderer] режим ${what} не принят`, result.error);
         }
       },
       (error: unknown) => {
-        console.error('[renderer] режим пустых оборотов не отправлен', error);
+        console.error(`[renderer] режим ${what} не отправлен`, error);
       },
     );
   };
-
+  const sendBlankMode = (mode: BlankMode): void => {
+    sendMode(window.api.setBlankMode(mode), 'пустых оборотов');
+  };
   const sendStraightenMode = (mode: StraightenMode): void => {
-    window.api.setStraightenMode(mode).then(
-      (result) => {
-        if (!result.ok) {
-          console.error('[renderer] режим выравнивания не принят', result.error);
-        }
-      },
-      (error: unknown) => {
-        console.error('[renderer] режим выравнивания не отправлен', error);
-      },
-    );
+    sendMode(window.api.setStraightenMode(mode), 'выравнивания');
   };
 
   const recheck = (): void => {

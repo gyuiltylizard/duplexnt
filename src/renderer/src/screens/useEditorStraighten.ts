@@ -4,7 +4,11 @@ import type { AssembledPage, SessionEdits } from '@shared';
 import { keptOriginal, restoredStraight } from '../state/edits';
 import type { EditState } from '../state/history';
 import type { Selection } from '../state/selection';
-import { straightSelectionOf, type StraightSelection } from '../state/straighten-text';
+import {
+  straightSelectionOf,
+  type StraightAction,
+  type StraightSelection,
+} from '../state/straighten-text';
 import type { EditorEdits } from './useEditorEdits';
 import { useLateStraighten } from './useLateStraighten';
 
@@ -16,8 +20,6 @@ import { useLateStraighten } from './useLateStraighten';
 // Текущая, выделение и фокус после нажатия не меняются: после перерисовки фокус — на парной
 // кнопке. Поздние статусы (досканирование, пересчёт) — тост на порцию (`useLateStraighten`).
 // Вынесено из `EditorScreen` — экран у порога размера.
-
-export type StraightAction = 'keep' | 'restore';
 
 export interface EditorStraighten {
   /** Выделение по статусам — для секции инспектора и подписей кнопок. */

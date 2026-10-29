@@ -1,4 +1,4 @@
-import type { AssembledPage, StraightenMark, StraightenReason, StraightenStatus } from '@shared';
+import type { AssembledPage, StraightenMark, StraightenReason } from '@shared';
 import type { TFunction } from 'i18next';
 
 // Тексты и счёт по статусам выравнивания (план M6, U8; handoff M6 «States», «Copy»): причина
@@ -69,6 +69,9 @@ export function straightNoteText(t: TFunction, mark: StraightenMark): string | n
       return null;
   }
 }
+
+/** Действие секции: «Оставить оригинал» (`straightened`) или «Выровнять» (`kept`). */
+export type StraightAction = 'keep' | 'restore';
 
 /** Сводка выделения для секции ВЫРАВНИВАНИЕ и действий на несколько страниц. */
 export interface StraightSelection {
@@ -159,7 +162,7 @@ export function straightSelectionText(t: TFunction, selection: StraightSelection
 /** Подпись кнопки действия на выделение: «— 3 из 5 выделенных» или «— 5 стр.», если подходят все. */
 export function straightActionLabel(
   t: TFunction,
-  action: 'keep' | 'restore',
+  action: StraightAction,
   eligible: number,
   count: number,
 ): string {
@@ -168,10 +171,3 @@ export function straightActionLabel(
   }
   return t(`inspector.straight.${action}Some`, { k: eligible, n: count });
 }
-
-/** Статус, у которого слот карточки занят: глиф или точки; `kept`, `level` и `null` — пусто. */
-export const hasThumbMark = (status: StraightenStatus): boolean =>
-  status === 'straightened' ||
-  status === 'unmeasurable' ||
-  status === 'deferred' ||
-  status === 'pending';

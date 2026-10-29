@@ -1,19 +1,28 @@
 import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { EMPTY_EDITS, type StraightenStatus } from '../../src/shared';
+import { EMPTY_EDITS } from '../../src/shared';
 import type { ScanJobLimits } from '../../src/core/escl/scan-job';
 import { inlineImageWorker, type ImageWorker } from '../../src/core/image/image-worker';
 import type { PassService, PassServiceOptions } from '../../src/core/scan/pass-service';
 import { layoutOf } from '../../src/core/storage/layout';
 import { realStorageFs } from '../../src/core/storage/storage-fs';
-import { pageFixture, pdfImageStreams } from '../support/fixtures';
+import { keyOf } from '../support/assembly';
+import { pageFixture } from '../support/fixtures';
 import { stubWorker } from '../support/image-worker';
 import { fsError, interceptFs } from '../support/intercept-fs';
 import { connectService, saveSingle, scanned } from '../support/pass-service';
 import { journalV7Of, pass, segment } from '../support/reconcile';
 import { unwrap } from '../support/result';
 import { journalOnDisk } from '../support/session-store';
+import {
+  jpegsIn,
+  sessionIdOf,
+  skewDirOf,
+  statusesOf,
+  straightDirOf,
+  streamsOf,
+} from '../support/straighten';
 import { until, untilStraightened } from '../support/until';
 
 // Восстановление и сбои выравнивания на эмуляторе (план M6, U9; AE8, AE9, AE10, AE14, AE15):
@@ -41,29 +50,13 @@ const OPTIONS = {
 const REAL = { imageWorker: inlineImageWorker() };
 const SINGLE = { mode: 'single', names: ['Документ'], retry: false } as const;
 
-const F = (index: number): string => `p01-s01-${String(index).padStart(4, '0')}`;
+const F = (index: number): string => keyOf(1, index);
 
-const sessionIdOf = (service: PassService): string => service.snapshot().session?.id ?? '';
-const straightDirOf = (root: string, sessionId: string): string =>
-  join(layoutOf(root).derivedDir, sessionId, 'straight');
-const skewDirOf = (root: string, sessionId: string): string =>
-  join(layoutOf(root).derivedDir, sessionId, 'skew');
 const pageFileOf = (root: string, key: string): string =>
   join(layoutOf(root).pagesDir, `${key}.jpg`);
 
-const statusesOf = (service: PassService): Record<string, StraightenStatus> =>
-  Object.fromEntries(
-    (service.snapshot().assembly?.order ?? []).map((page) => [page.key, page.straighten.status]),
-  );
-
 const marksOf = (service: PassService) =>
   (service.snapshot().assembly?.order ?? []).map((page) => page.straighten);
-
-const streamsOf = async (pdf: string): Promise<Buffer[]> =>
-  (await pdfImageStreams(await readFile(pdf))).map((stream) => Buffer.from(stream.getContents()));
-
-const jpegsIn = async (dir: string): Promise<string[]> =>
-  (await readdir(dir).catch(() => [])).filter((name) => name.endsWith('.jpg')).sort();
 
 async function folderIn(root: string): Promise<string> {
   const folder = join(root, 'выход');
