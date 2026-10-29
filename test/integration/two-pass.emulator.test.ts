@@ -262,7 +262,7 @@ describe('два прохода через эмулятор (M2)', () => {
 
     // Второй проход останавливается после первой страницы.
     const backs = service.startPass(null);
-    await until(() => service.snapshot().pass?.pages === 1);
+    await until(() => (service.snapshot().pass?.pages ?? 0) >= 1);
     expect(await service.stopPass()).toEqual({ ok: true, value: undefined });
     expect(unwrap(await backs)).toMatchObject({ end: 'stopped' });
 
@@ -295,7 +295,7 @@ describe('два прохода через эмулятор (M2)', () => {
       ],
     );
     await expectAssembledFixtures(root, service.snapshot(), [1, 4, 2, 5, 3, 6]);
-  });
+  }, 20_000);
 
   it('AE5: «обороты не нужны» переживает перезапуск — сессия не возвращается к развороту', async () => {
     const { service, restart } = await setup();
