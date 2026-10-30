@@ -53,6 +53,7 @@ import { assembleBlockOf, assembleBlockText } from '../state/assemble-block';
 import {
   gluedBacksOf,
   movingOf,
+  nearestShownDocument,
   removingOf,
   sheetOf,
   shownDocumentsOf,
@@ -498,7 +499,15 @@ export function EditorScreen({
   // Снять границу: «✕» разделителя или split-бар (S2, S7); имя уходит вместе с ней (R12).
   // «✕» исчезает вместе с разделителем — фокус клавиатуры переходит на текущую страницу.
   const unsplit = (docIndex: number, fromDivider: boolean): void => {
-    const sent = edits.edit(withEdits(withoutCut(edits.current.edits, docIndex)), []);
+    // Цель слияния — ближайший слева документ с показанными страницами (B-17): документ из одних
+    // скрытых невидим, и слияние с ним оставило бы разрез, которого не видно. Разрезы между
+    // ними снимаются одной правкой по убыванию индекса — `withoutCut` сдвигает последующие.
+    const target = nearestShownDocument(shownDocuments, docIndex) ?? docIndex - 1;
+    let next = edits.current.edits;
+    for (let index = docIndex; index > target; index -= 1) {
+      next = withoutCut(next, index);
+    }
+    const sent = edits.edit(withEdits(next), []);
     if (sent && fromDivider) {
       focusAfterEdit.current = true;
     }
@@ -919,6 +928,7 @@ export function EditorScreen({
             frontsOnly={rolesOf(session.passes).backs === null}
             notBlank={currentEntry !== undefined && notBlank.includes(currentEntry.key)}
             locked={locked}
+            notBlankLocked={locked || edits.busy}
             hintSeen={snapshot.seenHints.includes('docsSplit')}
             straight={straighten.selection}
             onPickDocument={pickDocument}

@@ -19,7 +19,14 @@ import {
 import type { DropSide, SetSide } from '../state/edits';
 import { originKindOf } from '../state/origins';
 import { single, type Selection } from '../state/selection';
-import { movingOf, NO_GLUE, sheetDrop, type GluedBacks, type ShownDocument } from '../state/shown';
+import {
+  movingOf,
+  nearestShownDocument,
+  NO_GLUE,
+  sheetDrop,
+  type GluedBacks,
+  type ShownDocument,
+} from '../state/shown';
 import { toneOf } from '../state/page-text';
 import {
   EditorThumb,
@@ -551,7 +558,9 @@ export function EditorRail({
           className={`doc-group ${toneOf(index)}`}
           aria-labelledby={docNameId(index)}
         >
-          {index > 0 && (
+          {/* «✕» только при видимом документе слева (B-17): через документ из одних скрытых
+              слияние идёт к нему, а если его нет — разрез снимается при показанных «Пустых». */}
+          {index > 0 && nearestShownDocument(documents, index) !== null && (
             <div className="doc-group__divider">
               <span className="doc-group__pill">{t('editor.doc.newPill')}</span>
               <span className="doc-group__rule" aria-hidden="true" />

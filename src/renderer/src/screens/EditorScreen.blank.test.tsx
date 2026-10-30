@@ -19,6 +19,7 @@ import {
   B3,
   ctrlZ,
   dataTransfer,
+  deferredSetEdits,
   dragAndDrop,
   dragOver,
   edits,
@@ -785,5 +786,75 @@ describe('пустые обороты в редакторе (M4)', () => {
     expect(screen.getByText(/после стр\. 4 \(лицо листа 3\)/u)).toBeDefined();
     fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
     expect(onAdd).toHaveBeenCalledWith('addedFronts', B1);
+  });
+});
+
+describe('документ из одних скрытых и гард «не пустая» (B-17)', () => {
+  // Лента F1, B3, F2, B2, F3, B1; B3 и B1 скрыты. Разрезы перед B3 и перед F2: документ 2 — один
+  // скрытый оборот, в ленте его нет.
+  const hiddenOnly = (): Snapshot =>
+    applied(
+      blankSnapshot(),
+      { edits: edits({ cuts: [1, 2], names: ['А', 'Б', 'В'] }), rotate180: false },
+      VERDICTS,
+    );
+
+  it('тулбар считает документы по видимым: на третьем — «документ 2 из 2»', () => {
+    stubApi();
+    renderEditor(hiddenOnly());
+
+    fireEvent.click(option(1)); // F2 — первая страница третьего документа
+    expect(screen.getByText('документ 2 из 2 · стр. 1 из 3')).toBeDefined();
+  });
+
+  it('«✕» перед третьим документом сливает с первым: оба разреза сняты, имя первого; Ctrl+Z возвращает оба', async () => {
+    const api = stubApi();
+    const snapshot = hiddenOnly();
+    const { rerender } = renderEditor(snapshot);
+
+    expect(screen.queryByRole('button', { name: 'Убрать границу перед документом 2' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Убрать границу перед документом 3' }));
+    expect(lastSent(api).edits.cuts).toEqual([]);
+    expect(lastSent(api).edits.names).toEqual(['А']);
+
+    await settle();
+    rerender(applied(snapshot, lastSent(api), VERDICTS));
+    ctrlZ();
+    expect(lastSent(api).edits.cuts).toEqual([1, 2]);
+    expect(lastSent(api).edits.names).toEqual(['А', 'Б', 'В']);
+  });
+
+  it('первый документ из одних скрытых — «✕» у следующего разделителя нет, счётчик без «документ N из M»', () => {
+    stubApi();
+    renderEditor(
+      applied(
+        blankSnapshot(),
+        {
+          edits: edits({ order: [B3, F1, F2, B2, F3, B1], cuts: [1], names: ['А', 'Б'] }),
+          rotate180: false,
+        },
+        VERDICTS,
+      ),
+    );
+
+    expect(screen.queryByRole('button', { name: /Убрать границу перед документом/ })).toBeNull();
+    expect(screen.getByText('стр. 1 из 4')).toBeDefined();
+  });
+
+  it('«Это не пустая страница» недоступна, пока команда правки в полёте', () => {
+    const { setEdits } = deferredSetEdits();
+    stubApi({ setEdits });
+    renderEditor(blankSnapshot());
+    fireEvent.click(revealToggle());
+    fireEvent.click(option(1)); // B3
+
+    const button = screen.getByRole('button', { name: 'Это не пустая страница' });
+    expect(button.hasAttribute('disabled')).toBe(false);
+    fireEvent.click(button);
+    expect(setEdits).toHaveBeenCalledTimes(1);
+    expect(button.hasAttribute('disabled')).toBe(true);
+    // Повторный клик по выключенной кнопке команды не шлёт — отказ виден, а не нем.
+    fireEvent.click(button);
+    expect(setEdits).toHaveBeenCalledTimes(1);
   });
 });

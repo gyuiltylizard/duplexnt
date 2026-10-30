@@ -333,6 +333,7 @@ export function EditorInspector({
   frontsOnly,
   notBlank,
   locked,
+  notBlankLocked,
   hintSeen,
   straight,
   onPickDocument,
@@ -361,6 +362,8 @@ export function EditorInspector({
   readonly notBlank: boolean;
   /** Идёт запись или правка в полёте (KTD-9): «Вернуть» и «Это не пустая страница» недоступны. */
   readonly locked: boolean;
+  /** «Это не пустая страница» гасится и при команде правки в полёте (B-17), как действия выравнивания. */
+  readonly notBlankLocked: boolean;
   /** Подсказка про границы (Ctrl/Shift) уже показывалась с привлечением внимания (B-4). */
   readonly hintSeen: boolean;
   /** Выделение по статусам выравнивания (M6): секция ВЫРАВНИВАНИЕ и подписи её кнопок. */
@@ -422,7 +425,7 @@ export function EditorInspector({
             type="button"
             className="btn btn--tinted inspector__blank-action"
             title={t('inspector.blank.actionTitle')}
-            disabled={locked}
+            disabled={notBlankLocked}
             onClick={onNotBlank}
           >
             {t('inspector.blank.action')}
