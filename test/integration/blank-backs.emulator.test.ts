@@ -11,8 +11,10 @@ import {
   type PassServiceOptions,
 } from '../../src/core/scan/pass-service';
 import { layoutOf } from '../../src/core/storage/layout';
+import { realStorageFs, type StorageFs } from '../../src/core/storage/storage-fs';
 import { SCENARIOS, type Scenario } from '../emulator/scenarios';
 import { startTestEmulator } from '../support/emulator';
+import { fsError, interceptFs } from '../support/intercept-fs';
 import { pageFixtureOf, pdfImageStreams, scanFixture } from '../support/fixtures';
 import { makeTempDataRoot } from '../support/temp-data-root';
 import { unwrap } from '../support/result';
@@ -448,5 +450,61 @@ describe('пустые обороты — полный путь через эм�
     expect(snapshot.blankMode).toBe('keep');
     expect(snapshot.session?.blankMode).toBe('hide');
     expect(snapshot.assembly?.blank).toMatchObject({ mode: 'hide', hidden: 3 });
+  });
+
+  describe('B-18: оценки пустоты и закрытие каталога сессии', () => {
+    it('«Новое сканирование» во время оценок — каталога derived закрытой сессии нет и он не появляется позже', async () => {
+      const { service, root } = await connect(SCENARIOS['blank-backs'], {
+        blankDetector: counting(300).detector,
+      });
+      unwrap(await service.setBlankMode('hide'));
+      await scanned(service, 12, 12);
+      const snapshot = service.snapshot();
+      const derivedDir = join(layoutOf(root).derivedDir, snapshot.session?.id ?? '');
+      expect(snapshot.assembly?.blank.pending ?? 0).toBeGreaterThan(0);
+
+      unwrap(await service.closeSession());
+
+      expect(service.snapshot().session).toBeNull();
+      await expect(readdir(derivedDir)).rejects.toMatchObject({ code: 'ENOENT' });
+      // Оценка в полёте не догоняет закрытие: каталог не создаётся заново и спустя время.
+      await delay(700);
+      await expect(readdir(derivedDir)).rejects.toMatchObject({ code: 'ENOENT' });
+    });
+
+    it('закрытие не удалось (каталог занят) — отменённые оценки идут заново, pending возвращается к 0, запись не заблокирована', async () => {
+      const emulator = await startTestEmulator({ scenario: SCENARIOS['blank-backs'] });
+      const connected: ConnectedScanner = unwrap(
+        await probeScanner({ ...emulator, fingerprint: null }),
+      );
+      const root = await makeTempDataRoot();
+      const { sessionDir } = layoutOf(root);
+      let failRename = false;
+      const { fs } = interceptFs<StorageFs>(realStorageFs, (call) => {
+        if (failRename && call.op === 'rename' && call.path === sessionDir) {
+          throw fsError('EPERM');
+        }
+      });
+      const service = await openPassService(root, {
+        ...OPTIONS,
+        fs,
+        blankDetector: counting(300).detector,
+      });
+      await service.useScanner(connected);
+      unwrap(await service.setBlankMode('hide'));
+      await scanned(service, 12, 12);
+      expect(service.snapshot().assembly?.blank.pending ?? 0).toBeGreaterThan(0);
+
+      failRename = true;
+      expect(await service.closeSession()).toMatchObject({
+        ok: false,
+        error: { code: 'sessionCloseFailed' },
+      });
+      failRename = false;
+
+      await untilScored(() => service.snapshot());
+      expect(service.snapshot().assembly?.blank).toMatchObject({ pending: 0, found: 3 });
+      expect(await pdfFixtures(await saveSingle(service, root))).toEqual(PAIRS_21);
+    });
   });
 });

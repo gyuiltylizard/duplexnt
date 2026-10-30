@@ -391,7 +391,14 @@ export function createPassService(
    * бы `straightenPending` навечно (ревью сессий 3–4). Идемпотентно: измеренным и выправленным
    * страницам `ensure` и `enqueue` ничего не делают.
    */
+  // Возобновление после `settleDerived`, когда каталог сессии остался (`sessionCloseFailed`,
+  // «Остановить» с оставшимися страницами): отменённые оценки пустоты запускаются заново (B-18) —
+  // иначе страницы остались бы `pending` до перезапуска, `blankPending` блокировал бы запись, а
+  // измерение перекоса ждало бы вердиктов; затем перекос и очередь коррекции.
   const resumeDerived = (): void => {
+    for (const page of pagesToScore(store.snapshot())) {
+      detectBlank(page.key);
+    }
     measurePending();
     straightenQueue.ensureAll();
   };
@@ -889,9 +896,10 @@ export function createPassService(
     },
 
     async settleDerived() {
+      blank.abort();
       skew.abort();
       straightenQueue.abort();
-      await Promise.all([skew.settle(), straightenQueue.settle()]);
+      await Promise.all([blank.settle(), skew.settle(), straightenQueue.settle()]);
     },
 
     pageInfo: (key) => store.pageInfo(key),

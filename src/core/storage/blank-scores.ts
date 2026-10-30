@@ -58,6 +58,13 @@ export interface BlankScores {
   ensure(key: string): Promise<boolean>;
   /** Забывает вердикты страниц, которых у источника больше нет («Остановить», «Новая пачка»). */
   prune(): void;
+  /**
+   * Отменяет идущие и ждущие оценки (B-18): закрытие каталога сессии не должно догоняться оценкой
+   * в полёте, заново создающей `derived/<id>/blank`. Следующие `ensure` работают как обычно.
+   */
+  abort(): void;
+  /** Ждёт конца всех идущих оценок — отменённых или нет. */
+  settle(): Promise<void>;
 }
 
 interface Entry {
@@ -78,6 +85,7 @@ export function createBlankScores(
   // Одна страница оценивается один раз, сколько бы запросов ни пришло одновременно; ключ —
   // путь кэша, то есть вместе с сессией: тот же ключ новой сессии — другая страница.
   const building = new Map<string, Promise<boolean>>();
+  let controller = new AbortController();
 
   const fileOf = (key: string, info: PageInfo): string =>
     join(blankDirIn(derivedDir, info.sessionId), blankFileName(key));
@@ -107,9 +115,27 @@ export function createBlankScores(
     }
   }
 
-  async function detect(key: string, info: PageInfo, file: string): Promise<boolean> {
+  async function detect(
+    key: string,
+    info: PageInfo,
+    file: string,
+    signal: AbortSignal,
+  ): Promise<boolean> {
+    // Отмена проверяется до чтения, после чтения и после детектора — до `mkdir` и записи кэша:
+    // отменённая оценка не оставляет ни каталога, ни вердикта. Через функцию: сужение типа после
+    // `await` иначе считает флаг неизменным.
+    const aborted = (): boolean => signal.aborted;
+    if (aborted()) {
+      return false;
+    }
     const page = await source.readPage(key);
+    if (aborted()) {
+      return false;
+    }
     const ratio = page.ok ? await ratioOf(page.value, info) : null;
+    if (aborted()) {
+      return false;
+    }
     // Кэш — по возможности: вердикт действует и тогда, когда записать его не удалось. Сбой
     // чтения страницы (не потеря — её отсеивает `alive`) может быть временным: вердикт «не
     // пусто» действует до перезапуска, но в кэш не пишется — следующее открытие оценит заново.
@@ -164,6 +190,7 @@ export function createBlankScores(
         await inFlight;
         return false;
       }
+      const { signal } = controller;
       const run = (async (): Promise<boolean> => {
         const ratio = await readCached(file);
         if (ratio !== undefined) {
@@ -173,7 +200,7 @@ export function createBlankScores(
           entries.set(key, { sessionId: info.sessionId, blank: isBlank(ratio) });
           return true;
         }
-        return limited(() => detect(key, info, file));
+        return limited(() => detect(key, info, file, signal));
       })().finally(() => building.delete(file));
       building.set(file, run);
       return run;
@@ -181,6 +208,15 @@ export function createBlankScores(
 
     prune() {
       pruneStale(entries, source);
+    },
+
+    abort() {
+      controller.abort(new Error('оценка пустоты отменена'));
+      controller = new AbortController();
+    },
+
+    async settle() {
+      await Promise.allSettled([...building.values()]);
     },
   };
 }
