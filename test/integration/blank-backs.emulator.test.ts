@@ -313,7 +313,7 @@ describe('пустые обороты — полный путь через эм�
     // Повторных оценок нет.
     await delay(200);
     expect(calls.length).toBe(scoredBeforeStop + 12);
-  }, 20_000);
+  });
 
   it('AE8: документ из одних скрытых — отказ `documentBlank` с номерами до записи, файлов нет; оценки идут — `blankPending`', async () => {
     const { service, root } = await blankBacks('hide');

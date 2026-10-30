@@ -380,7 +380,7 @@ describe('двусторонний набор: обрывы, «Останови�
     // Повторных оценок нет.
     await delay(200);
     expect(calls).toHaveLength(8);
-  }, 20_000);
+  });
 
   it('R7: обрыв оборотов набора до первой страницы — проход снят, набор снова ждёт, основной документ не тронут; следующий запуск — новый проход оборотов набора', async () => {
     const { emulator, root, service, snapshots } = await connect({
@@ -465,7 +465,7 @@ describe('двусторонний набор: обрывы, «Останови�
       [2, 'backs'],
     ]);
     expect(await pageFilesOf(root, 'p03-')).toEqual([]);
-  }, 20_000);
+  });
 
   it('«Остановить» на лицах набора после первой страницы — по спеке отмена отбрасывает полученное: набор уходит целиком, ожидания пары нет (R5)', async () => {
     const { root, service } = await connect(
@@ -484,7 +484,7 @@ describe('двусторонний набор: обрывы, «Останови�
     expect(snapshot.assembly?.report).toMatchObject({ sets: [], pendingSet: null });
     expect(snapshot).toMatchObject({ canResume: false, canAccept: false });
     expect(await pageFilesOf(root, 'p03-')).toEqual([]);
-  }, 20_000);
+  });
 
   it('«Остановить» на первом сегменте оборотов набора со страницей — полученное остаётся прерванным проходом, плашка: «Оставить как есть» → kept (R7, решение автора на приёмке)', async () => {
     const { root, service } = await connect(
@@ -512,7 +512,7 @@ describe('двусторонний набор: обрывы, «Останови�
       backs: report.pages,
       decision: report.pages === 3 ? 'none' : 'kept',
     });
-  }, 20_000);
+  });
 
   it('«Остановить» при досканировании оборотов набора отбрасывает только досканированное — проход снова прерван с прежней страницей', async () => {
     const { emulator, root, service } = await connect(
@@ -533,7 +533,7 @@ describe('двусторонний набор: обрывы, «Останови�
     expect(passesOf(snapshot).at(-1)).toEqual([4, 'addedBacks', 'interrupted', 3, null]);
     expect(snapshot.assembly?.report.sets[0]).toMatchObject({ backs: 1, mismatch: true });
     expect(await pageFilesOf(root, 'p04-')).toEqual([`${keyOf(4, 1, 1)}.jpg`]);
-  }, 20_000);
+  });
 
   it('R5, R8: обрыв лиц набора после первой страницы → перезапуск → плашка, набор односторонним блоком; досканирование тем же проходом → набор ждёт обороты → чередование', async () => {
     const { emulator, root, service, snapshots, restart } = await connect({
@@ -643,7 +643,7 @@ describe('двусторонний набор: обрывы, «Останови�
     expect(passesOf(snapshot).at(-1)).toEqual([4, 'addedBacks', 'completed', 3, null]);
     expect(snapshot.assembly?.report.sets[0]).toMatchObject({ backs: 3, mismatch: false });
     expect(await shownFixturesOf(root, snapshot)).toEqual(withSet(SET_INTERLEAVED));
-  }, 20_000);
+  });
 
   it('AE14, R10: сканер сменился между лицами и оборотами набора — обороты новым проходом на сканере B с его параметрами, блок чередованием', async () => {
     const { emulator, root, service, snapshots } = await connect(SCENARIOS['added-pair-declined']);

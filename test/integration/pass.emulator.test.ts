@@ -926,8 +926,10 @@ describe('служба прохода: закрытие окна', () => {
     await service.interrupt(100);
 
     expect(Date.now() - started).toBeLessThan(800);
-    expect(service.snapshot().session?.passes[0]?.state).toBe('interrupted');
+    // Срок — про возврат interrupt, не про состояние: цикл прохода мог ещё не дойти до записи
+    // «прерван» (под нагрузкой ловилось 'running'). Состояние сверяется после конца прохода.
     await running;
+    expect(service.snapshot().session?.passes[0]?.state).toBe('interrupted');
   });
 
   it('без идущего прохода прерывание ничего не делает', async () => {

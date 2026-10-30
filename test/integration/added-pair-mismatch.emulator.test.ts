@@ -537,5 +537,5 @@ describe('несовпадение оборотов добавленного н�
     expect(calls.filter((it) => [1, 2, 3, 7, 8, 9].includes(it as number))).toEqual([]);
     await delay(200);
     expect(calls).toHaveLength(scoredBefore + 3);
-  }, 20_000);
+  });
 });
