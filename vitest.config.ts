@@ -18,6 +18,7 @@ export default defineConfig({
         environment: project.environment,
         include: [...project.include],
         ...(project.exclude === undefined ? {} : { exclude: [...project.exclude] }),
+        ...(project.testTimeout === undefined ? {} : { testTimeout: project.testTimeout }),
       },
     })),
   },

@@ -9,6 +9,8 @@ export interface TestProject {
   readonly environment: 'node' | 'jsdom';
   readonly include: readonly string[];
   readonly exclude?: readonly string[];
+  /** Срок одного теста, мс; без поля — дефолт vitest (5 с). */
+  readonly testTimeout?: number;
 }
 
 export const TEST_PROJECTS: readonly TestProject[] = [
@@ -23,11 +25,16 @@ export const TEST_PROJECTS: readonly TestProject[] = [
     environment: 'jsdom',
     include: ['src/renderer/**/*.test.{ts,tsx}'],
   },
+  // Эмуляторные тесты гонят подачу в реальном времени, а ожидание `until` рассчитано на 10 с:
+  // дефолтных 5 с под нагрузкой (рядом работает приложение) не хватало, и тесты падали по
+  // таймауту vitest раньше, чем `until` сказал бы, чего не дождался. Общий срок 20 с — тот, что
+  // раньше выставляли точечно; тесты дольше (коррекция, 60–120 с) держат свой.
   {
     name: 'integration',
     environment: 'node',
     include: ['test/integration/**/*.test.ts'],
     exclude: ['test/integration/**/*-worst-case.test.ts'],
+    testTimeout: 20_000,
   },
   // Замеры памяти и пауз цикла событий на худшем объёме (PDF — KTD-12 M2, коррекция — ADR 0008):
   // пороги — триггеры решений, поэтому файлы идут по одному, без соседей на тех же ядрах
