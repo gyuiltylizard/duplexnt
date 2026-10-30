@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { expect } from 'vitest';
 import type { Snapshot } from '../../src/shared';
 import { probeScanner } from '../../src/core/escl/connect';
+import type { ScanJobLimits } from '../../src/core/escl/scan-job';
 import {
   openPassService,
   type PassService,
@@ -19,6 +20,22 @@ import { noSearch } from './uuid-search';
 
 // Общая обвязка тестов службы проходов на эмуляторе (M4.5, U8): эмулятор, служба на временном
 // корне, перезапуск, вступительные проходы, запись одним файлом. Вызывать изнутри `it(...)`.
+
+/**
+ * Правила задания как в продукте, но время сжато. Ожидание страницы (`pageIdleTimeoutMs`,
+ * `pageDeadlineMs`) — с запасом: эмулятор в том же процессе под нагрузкой (параллельные файлы,
+ * рядом работающее приложение) отдаёт заголовки страницы дольше 300 мс, и проход обрывался сам
+ * «простоем» (журналы 0008, 0027). Сбои подачи в тестах — `gone` / `stall`; `stall` ждёт этот
+ * срок. Тесты самих сроков транспорта держат свои лимиты (`scan-job.emulator`).
+ */
+export const FAST_JOB_LIMITS: Partial<ScanJobLimits> = {
+  retryDelayMs: 5,
+  busyCeilingMs: 200,
+  notReadyCeilingMs: 2000,
+  pageIdleTimeoutMs: 1500,
+  pageDeadlineMs: 5000,
+  deleteDeadlineMs: 300,
+};
 
 /**
  * Эмулятор по сценарию и служба на временном корне с подключённым сканером. `snapshots` копит

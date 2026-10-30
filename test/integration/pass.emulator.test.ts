@@ -2,7 +2,6 @@ import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { probeScanner, type ConnectedScanner } from '../../src/core/escl/connect';
-import type { ScanJobLimits } from '../../src/core/escl/scan-job';
 import {
   openPassService,
   type PassService,
@@ -27,20 +26,11 @@ import { noSearch } from '../support/uuid-search';
 import { fsError, interceptFs } from '../support/intercept-fs';
 import { makeTempDataRoot } from '../support/temp-data-root';
 import { levelWorker } from '../support/image-worker';
+import { FAST_JOB_LIMITS } from '../support/pass-service';
 
 // Служба прохода на настоящей цепочке (план M1, U17): эмулятор сканера по HTTPS → клиент →
 // хранилище во временном корне данных. Каждый сценарий плана — своим тестом; «перезапуск» —
 // новая служба над тем же корнем.
-
-// Те же правила, что в продукте, но время сжато.
-const FAST: Partial<ScanJobLimits> = {
-  retryDelayMs: 5,
-  busyCeilingMs: 200,
-  notReadyCeilingMs: 2000,
-  pageIdleTimeoutMs: 300,
-  pageDeadlineMs: 3000,
-  deleteDeadlineMs: 300,
-};
 
 const FAST_RETRY = { ceilingMs: 50 };
 
@@ -73,7 +63,7 @@ async function open(
 ): Promise<Harness> {
   const snapshots: Snapshot[] = [];
   const service = await openPassService(root, {
-    jobLimits: FAST,
+    jobLimits: FAST_JOB_LIMITS,
     imageWorker: levelWorker,
     minFreeBytes: 1,
     retry: FAST_RETRY,
@@ -233,7 +223,10 @@ describe('служба прохода: лоток и отказы до зада�
   it('без подключённого сканера проход не начинается', async () => {
     const emulator = await startTestEmulator();
     const root = await makeTempDataRoot();
-    const service = await openPassService(root, { jobLimits: FAST, imageWorker: levelWorker });
+    const service = await openPassService(root, {
+      jobLimits: FAST_JOB_LIMITS,
+      imageWorker: levelWorker,
+    });
 
     expect(errorOf(await service.startPass(null))).toEqual({ code: 'scannerNotConnected' });
     expect(emulator.requests()).toEqual([]);
@@ -322,7 +315,7 @@ describe('служба прохода: «Остановить»', () => {
     const { emulator, root, service, snapshots } = await setup(
       { busyPosts: Infinity },
       {
-        jobLimits: { ...FAST, retryDelayMs: 20, busyCeilingMs: 10_000 },
+        jobLimits: { ...FAST_JOB_LIMITS, retryDelayMs: 20, busyCeilingMs: 10_000 },
       },
     );
 
@@ -772,7 +765,7 @@ describe('служба прохода: «Остановить» в погран�
   it('«Остановить», пока закрываются незакрытые задания молчащего сканера, — без ожидания каждого', async () => {
     const { emulator, service } = await setup(
       { sheets: 2, deleteHangs: true },
-      { jobLimits: { ...FAST, deleteDeadlineMs: 400 } },
+      { jobLimits: { ...FAST_JOB_LIMITS, deleteDeadlineMs: 400 } },
     );
     const deletes = (): number =>
       emulator.requests().filter((it) => it.startsWith('DELETE')).length;
@@ -817,7 +810,7 @@ describe('служба прохода: проверка запомненного
       (method, path) => method === 'GET' && path.endsWith('/ScannerCapabilities'),
     );
     const service = await openPassService(root, {
-      jobLimits: FAST,
+      jobLimits: FAST_JOB_LIMITS,
       imageWorker: levelWorker,
       connector: { createTransport: hold.create },
       findByUuid: noSearch,
@@ -915,7 +908,7 @@ describe('служба прохода: закрытие окна', () => {
   it('прерывание возвращается не позже срока, даже если DELETE молчит', async () => {
     const { emulator, service } = await setup(
       { sheets: 5, fault: { sheet: 3, kind: 'stall' }, deleteHangs: true },
-      { jobLimits: { ...FAST, deleteDeadlineMs: 1000 } },
+      { jobLimits: { ...FAST_JOB_LIMITS, deleteDeadlineMs: 1000 } },
     );
 
     const running = service.startPass(null);
