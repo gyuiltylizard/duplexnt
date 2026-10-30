@@ -685,3 +685,33 @@ describe('модалка save: пустые обороты (M4, S14)', () => {
     expect(fact('Пустых оборотов')).toBe('скрыт 1 — не попадёт в файл');
   });
 });
+
+describe('модалка save: папка не прочиталась (B-17)', () => {
+  it('отказ getSaveFolder — подсказка в строке статуса, поле пустое, запись не блокируется', async () => {
+    const api = stubApi({ getSaveFolder: vi.fn(() => Promise.reject(new Error('мост упал'))) });
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    renderModal();
+    await settle();
+
+    expect(screen.getByRole('status').textContent).toContain('Папка не прочиталась');
+    expect(error).toHaveBeenCalled();
+    fireEvent.click(button(/^Сохранить/));
+    await settle();
+    expect(api.saveDocuments).toHaveBeenCalledTimes(1);
+  });
+
+  it('«Выбрать…» снимает подсказку и показывает путь — и при отказе в диалоге: ядро возвращает свою папку', async () => {
+    stubApi({
+      getSaveFolder: vi.fn(() => Promise.resolve(fail('storageFailed'))),
+      chooseSaveFolder: vi.fn(() => Promise.resolve(ok({ canceled: true, folder: FOLDER }))),
+    });
+    renderModal();
+    await settle();
+    expect(screen.getByRole('status').textContent).toContain('Папка не прочиталась');
+
+    fireEvent.click(button('Выбрать…'));
+    await settle();
+    expect(screen.queryByText(/Папка не прочиталась/)).toBeNull();
+    expect(screen.getByTitle(FOLDER)).toBeDefined();
+  });
+});

@@ -136,6 +136,9 @@ export function SaveModal({
   const [edited, setEdited] = useState<ReadonlyMap<number, string>>(() => new Map());
   const [fileName, setFileName] = useState('');
   const [folder, setFolder] = useState<string | null>(null);
+  // Папка не прочиталась (B-17): ядро отвечает `ok` всегда, сюда ведёт только исключение IPC;
+  // запись не блокируется — папку знает ядро, подсказка объясняет пустое поле.
+  const [folderUnknown, setFolderUnknown] = useState(false);
   const [choosing, setChoosing] = useState(false);
   const [writing, setWriting] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
@@ -147,12 +150,20 @@ export function SaveModal({
   useEffect(() => {
     window.api.getSaveFolder().then(
       (result) => {
-        if (!unmounted.current && result.ok) {
+        if (unmounted.current) {
+          return;
+        }
+        if (result.ok) {
           setFolder(result.value);
+        } else {
+          setFolderUnknown(true);
         }
       },
       (error: unknown) => {
         console.error('[renderer] папка сохранения не ответила', error);
+        if (!unmounted.current) {
+          setFolderUnknown(true);
+        }
       },
     );
   }, [unmounted]);
@@ -275,6 +286,8 @@ export function SaveModal({
           // Отказ в диалоге оставляет прежнюю папку — она и приходит. Прежняя ошибка записи
           // (часто — недоступная папка) к новой папке не относится.
           setFolder(result.value.folder);
+          // И при отказе в диалоге ядро возвращает свою папку — поле заполнено, подсказка не нужна.
+          setFolderUnknown(false);
           setFailure(null);
         } else {
           setFailure(errorText(t, result.error));
@@ -342,6 +355,12 @@ export function SaveModal({
     status = (
       <p className="modal__status" role="status" aria-live="polite">
         {t('save.straightPending', { left: straighten.pending, total: straighten.total })}
+      </p>
+    );
+  } else if (folderUnknown) {
+    status = (
+      <p className="modal__status" role="status" aria-live="polite">
+        {t('save.folderUnknown')}
       </p>
     );
   } else {
