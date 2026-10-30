@@ -467,8 +467,8 @@ describe('пустые обороты — полный путь через эм�
 
       expect(service.snapshot().session).toBeNull();
       await expect(readdir(derivedDir)).rejects.toMatchObject({ code: 'ENOENT' });
-      // Оценка в полёте не догоняет закрытие: каталог не создаётся заново и спустя время.
-      await delay(700);
+      // Оценка в полёте не догоняет закрытие: когда всё производное улеглось, каталога всё ещё нет.
+      await service.settleDerived();
       await expect(readdir(derivedDir)).rejects.toMatchObject({ code: 'ENOENT' });
     });
 

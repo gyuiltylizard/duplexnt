@@ -55,6 +55,11 @@ export function pageImageUrl(
   return `${PAGE_IMAGE_SCHEME}://${sessionId}/${view}/${key}`;
 }
 
+/** Порт TCP: 1–65535 — одна проверка для схемы команд, разбора адреса, профиля и модалки (B-17). */
+export const PORT_MAX = 65535;
+export const isValidPort = (port: number): boolean =>
+  Number.isInteger(port) && port >= 1 && port <= PORT_MAX;
+
 /**
  * Подключение сканера (план M1, R1, KTD-39): адрес, введённый вручную, с полями «Дополнительно»,
  * либо непрозрачный идентификатор найденного устройства. `null` в поле — «не названо»: схема —

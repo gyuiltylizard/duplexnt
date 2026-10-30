@@ -156,6 +156,8 @@ export function SaveModal({
         if (result.ok) {
           setFolder(result.value);
         } else {
+          // Доменного отказа у папки не бывает: это ошибка программы — в лог, как и исключение.
+          console.error('[renderer] папка сохранения не прочитана', result.error);
           setFolderUnknown(true);
         }
       },

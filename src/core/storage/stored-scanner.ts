@@ -4,6 +4,7 @@ import type { ConnectedScanner } from '../escl/connect';
 import { normalizeBasePath } from '../escl/device-path';
 import type { ScannerProfile } from '../escl/transport';
 import { displayText } from '../escl/xml';
+import { PORT_MAX } from '@shared';
 
 // Сканер, как он записан на диск: в настройках (запомненный), в журнале (сканер прохода) и в
 // файле незакрытых заданий. Одна форма на все три места — и одно правило «то же ли это устройство».
@@ -11,7 +12,7 @@ import { displayText } from '../escl/xml';
 export const storedScannerSchema = z.strictObject({
   scheme: z.enum(['https', 'http']),
   host: z.string().min(1).max(253),
-  port: z.number().int().min(1).max(65535),
+  port: z.number().int().min(1).max(PORT_MAX),
   basePath: z
     .string()
     .max(512)

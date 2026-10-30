@@ -11,6 +11,7 @@ import { Modal } from '../components/Modal';
 import { Segments } from '../components/Segments';
 import { errorTextInline } from '../state/error-text';
 import './device-modal.css';
+import { isValidPort } from '@shared';
 
 // Модалка `device` (план M1, U21; UI_SPEC 7.1 с поправками техбазы; handoff U19, S7–S11).
 // Открытие запускает поиск, закрытие останавливает его и отменяет идущее подключение — обе
@@ -134,7 +135,7 @@ export function DeviceModal({ initialAddress, onClose, onConnected }: DeviceModa
       // Порт проверяется здесь (B-17): схема main отвергнет его как `invalidInput` без поля, а
       // пользователю нужен текст именно про порт. Фильтр ввода пропускает до пяти цифр.
       const portNumber = port.trim() === '' ? null : Number(port);
-      if (portNumber !== null && (portNumber < 1 || portNumber > 65535)) {
+      if (portNumber !== null && !isValidPort(portNumber)) {
         setFailure('invalidPort');
         return;
       }

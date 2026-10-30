@@ -64,7 +64,8 @@ export function createSnapshotStore(api: SnapshotApi): SnapshotStore {
       )
       .finally(() => {
         inFlight = false;
-        if (dirty) {
+        // Без подписчиков повтор некому показать; новая подписка перечитает сама.
+        if (dirty && unsubscribe !== null) {
           refresh();
         }
       });

@@ -40,6 +40,8 @@ export {
   type SetEditsRequest,
   type StartPassRequest,
   type Unsubscribe,
+  isValidPort,
+  PORT_MAX,
 } from './bridge';
 
 export {

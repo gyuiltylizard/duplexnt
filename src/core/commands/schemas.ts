@@ -18,6 +18,7 @@ import {
   type SetEditsRequest,
   type StartPassRequest,
   type StraightenMode,
+  PORT_MAX,
 } from '@shared';
 import { DEVICE_PATH_MAX_LENGTH } from '../escl/device-path';
 import { scanParamsSchema } from '../escl/scan-settings';
@@ -66,7 +67,7 @@ export const connectScannerRequestSchema = z.discriminatedUnion('kind', [
     kind: z.literal('address'),
     host: z.string().min(1).max(ADDRESS_MAX_LENGTH),
     scheme: z.enum(['https', 'http']).nullable(),
-    port: z.number().int().min(1).max(65535).nullable(),
+    port: z.number().int().min(1).max(PORT_MAX).nullable(),
     basePath: z.string().max(DEVICE_PATH_MAX_LENGTH).nullable(),
   }),
   z.strictObject({

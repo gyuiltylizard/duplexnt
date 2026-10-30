@@ -162,6 +162,19 @@ describe('snapshot-store', () => {
     expect(requests()).toBe(2);
   });
 
+  it('уход последнего подписчика во время запроса гасит повтор: показывать некому', async () => {
+    const { api, respond, fireEvent, requests } = makeApi();
+    const store = createSnapshotStore(api);
+    const unsubscribe = store.subscribe(vi.fn());
+
+    fireEvent(2);
+    unsubscribe();
+    respond(0, ok(makeSnapshot(1)));
+    await flush();
+
+    expect(requests()).toBe(1);
+  });
+
   it('уход последнего подписчика отписывается от моста', () => {
     const { api, unsubscribe } = makeApi();
     const store = createSnapshotStore(api);

@@ -502,7 +502,12 @@ export function EditorScreen({
     // Цель слияния — ближайший слева документ с показанными страницами (B-17): документ из одних
     // скрытых невидим, и слияние с ним оставило бы разрез, которого не видно. Разрезы между
     // ними снимаются одной правкой по убыванию индекса — `withoutCut` сдвигает последующие.
-    const target = nearestShownDocument(shownDocuments, docIndex) ?? docIndex - 1;
+    const target = nearestShownDocument(shownDocuments, docIndex);
+    if (target === null) {
+      // Видимого слева нет (первый документ ленты — из одних скрытых): «✕» не показан, а
+      // split-бар и клавиша ведут сюда же — слияние с невидимым документом лишь сменило бы имя.
+      return;
+    }
     let next = edits.current.edits;
     for (let index = docIndex; index > target; index -= 1) {
       next = withoutCut(next, index);
