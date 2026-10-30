@@ -4,7 +4,6 @@ import { PDFDocument } from '@cantoo/pdf-lib';
 import { describe, expect, it } from 'vitest';
 import { EMPTY_EDITS } from '@shared';
 import { probeScanner, type ConnectedScanner } from '../../src/core/escl/connect';
-import type { ScanJobLimits } from '../../src/core/escl/scan-job';
 import {
   openPassService,
   type PassService,
@@ -19,6 +18,7 @@ import { makeTempDataRoot } from '../support/temp-data-root';
 import { unwrap } from '../support/result';
 import { until, untilScored } from '../support/until';
 import { levelWorker } from '../support/image-worker';
+import { FAST_JOB_LIMITS } from '../support/pass-service';
 
 // Двухпроходный сценарий на настоящей цепочке (план M2, U3–U4): эмулятор с лотками по заданиям →
 // клиент → хранилище → сборка в снимке. Правило пар проверяется побайтово: какая фикстура легла
@@ -27,15 +27,6 @@ import { levelWorker } from '../support/image-worker';
 
 const FRONTS = [1, 2, 3];
 const BACKS = [6, 5, 4];
-
-const FAST: Partial<ScanJobLimits> = {
-  retryDelayMs: 5,
-  busyCeilingMs: 200,
-  notReadyCeilingMs: 2000,
-  pageIdleTimeoutMs: 300,
-  pageDeadlineMs: 3000,
-  deleteDeadlineMs: 300,
-};
 
 interface Harness {
   readonly root: string;
@@ -47,7 +38,7 @@ interface Harness {
 async function open(root: string, connected: ConnectedScanner): Promise<Harness> {
   const snapshots: Snapshot[] = [];
   const service: PassService = await openPassService(root, {
-    jobLimits: FAST,
+    jobLimits: FAST_JOB_LIMITS,
     imageWorker: levelWorker,
     minFreeBytes: 1,
     retry: { ceilingMs: 50 },

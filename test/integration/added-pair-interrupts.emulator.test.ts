@@ -5,13 +5,12 @@ import { describe, expect, it } from 'vitest';
 import type { Snapshot } from '@shared';
 import { blankRatio, type BlankDetector } from '../../src/core/detect/blank';
 import { probeScanner } from '../../src/core/escl/connect';
-import type { ScanJobLimits } from '../../src/core/escl/scan-job';
 import { type PassService, type PassServiceOptions } from '../../src/core/scan/pass-service';
 import { layoutOf } from '../../src/core/storage/layout';
 import { SCENARIOS, type Scenario } from '../emulator/scenarios';
 import type { Emulator } from '../emulator/server';
 import { startTestEmulator } from '../support/emulator';
-import { connectService, scanned, saveSingle } from '../support/pass-service';
+import { connectService, scanned, saveSingle, FAST_JOB_LIMITS } from '../support/pass-service';
 import { pageFixtureOf, pdfPageFixtures } from '../support/fixtures';
 import { journalOnDisk } from '../support/session-store';
 import { unwrap } from '../support/result';
@@ -38,17 +37,9 @@ import { levelWorker } from '../support/image-worker';
 
 // Сбои этого файла — `gone` (ответ `410` сразу), от тишины между страницами тесты не зависят:
 // ожидание страницы взято с запасом, чтобы под нагрузкой основная пара не обрывалась сама.
-const FAST: Partial<ScanJobLimits> = {
-  retryDelayMs: 5,
-  busyCeilingMs: 200,
-  notReadyCeilingMs: 2000,
-  pageIdleTimeoutMs: 1500,
-  pageDeadlineMs: 5000,
-  deleteDeadlineMs: 300,
-};
 
 const OPTIONS = {
-  jobLimits: FAST,
+  jobLimits: FAST_JOB_LIMITS,
   imageWorker: levelWorker,
   minFreeBytes: 1,
   retry: { ceilingMs: 0 },
@@ -427,7 +418,7 @@ describe('двусторонний набор: обрывы, «Останови�
         // заголовков первой страницы; ожидание заголовков у задания — с запасом над паузой.
         pageDelayMs: 400,
       },
-      { jobLimits: { ...FAST, pageIdleTimeoutMs: 3000 } },
+      { jobLimits: { ...FAST_JOB_LIMITS, pageIdleTimeoutMs: 3000 } },
     );
     await scanned(service, 3, 3);
     const before = keysOf(service.snapshot());
@@ -470,7 +461,7 @@ describe('двусторонний набор: обрывы, «Останови�
   it('«Остановить» на лицах набора после первой страницы — по спеке отмена отбрасывает полученное: набор уходит целиком, ожидания пары нет (R5)', async () => {
     const { root, service } = await connect(
       { ...SCENARIOS['added-pair-stop-fronts'], pageDelayMs: 150 },
-      { jobLimits: { ...FAST, pageIdleTimeoutMs: 3000 } },
+      { jobLimits: { ...FAST_JOB_LIMITS, pageIdleTimeoutMs: 3000 } },
     );
     await scanned(service, 3, 3);
 
@@ -489,7 +480,7 @@ describe('двусторонний набор: обрывы, «Останови�
   it('«Остановить» на первом сегменте оборотов набора со страницей — полученное остаётся прерванным проходом, плашка: «Оставить как есть» → kept (R7, решение автора на приёмке)', async () => {
     const { root, service } = await connect(
       { ...SCENARIOS['added-pair'], pageDelayMs: 150 },
-      { jobLimits: { ...FAST, pageIdleTimeoutMs: 3000 } },
+      { jobLimits: { ...FAST_JOB_LIMITS, pageIdleTimeoutMs: 3000 } },
     );
     await mainAndSetFronts(service);
 
@@ -517,7 +508,7 @@ describe('двусторонний набор: обрывы, «Останови�
   it('«Остановить» при досканировании оборотов набора отбрасывает только досканированное — проход снова прерван с прежней страницей', async () => {
     const { emulator, root, service } = await connect(
       { ...SCENARIOS['added-pair-jam'], pageDelayMs: 150 },
-      { jobLimits: { ...FAST, pageIdleTimeoutMs: 3000 } },
+      { jobLimits: { ...FAST_JOB_LIMITS, pageIdleTimeoutMs: 3000 } },
     );
     await mainAndSetFronts(service);
     await service.startPass(null);

@@ -4,11 +4,10 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { describe, expect, it } from 'vitest';
 import { EMPTY_EDITS, type Snapshot } from '@shared';
 import { blankRatio, type BlankDetector } from '../../src/core/detect/blank';
-import type { ScanJobLimits } from '../../src/core/escl/scan-job';
 import { type PassServiceOptions } from '../../src/core/scan/pass-service';
 import { layoutOf } from '../../src/core/storage/layout';
 import { SCENARIOS, type Scenario } from '../emulator/scenarios';
-import { connectService, scanned, saveSingle } from '../support/pass-service';
+import { connectService, scanned, saveSingle, FAST_JOB_LIMITS } from '../support/pass-service';
 import { pageFixtureOf, pdfPageFixtures } from '../support/fixtures';
 import { journalOnDisk, rolesOf } from '../support/session-store';
 import { unwrap } from '../support/result';
@@ -25,17 +24,8 @@ import { levelWorker } from '../support/image-worker';
 // повторное несовпадение, гарды команд решения набора и детектор пустых на оборотах набора. Модалка
 // и экраны — `App.pair`.
 
-const FAST: Partial<ScanJobLimits> = {
-  retryDelayMs: 5,
-  busyCeilingMs: 200,
-  notReadyCeilingMs: 2000,
-  pageIdleTimeoutMs: 300,
-  pageDeadlineMs: 3000,
-  deleteDeadlineMs: 300,
-};
-
 const OPTIONS = {
-  jobLimits: FAST,
+  jobLimits: FAST_JOB_LIMITS,
   imageWorker: levelWorker,
   minFreeBytes: 1,
   retry: { ceilingMs: 0 },

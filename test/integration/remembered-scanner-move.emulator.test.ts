@@ -2,7 +2,6 @@ import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import type { UuidSearchEnd, UuidSearchOptions } from '../../src/core/discovery/find-by-uuid';
 import { probeScanner, type ConnectedScanner } from '../../src/core/escl/connect';
-import type { ScanJobLimits } from '../../src/core/escl/scan-job';
 import { openPassService, type PassService } from '../../src/core/scan/pass-service';
 import { layoutOf } from '../../src/core/storage/layout';
 import type { StartUuidSearch } from '../../src/core/storage/remembered-search';
@@ -12,22 +11,13 @@ import { unwrap } from '../support/result';
 import { makeTempDataRoot } from '../support/temp-data-root';
 import { until } from '../support/until';
 import { levelWorker } from '../support/image-worker';
+import { FAST_JOB_LIMITS } from '../support/pass-service';
 
 // Переезд запомненного сканера сквозь настоящий транспорт (M5, U5): эмулятор на порту A
 // запомнен, затем закрыт и поднят на порту B — с тем же сертификатом (тот же сканер на новом
 // адресе) или с новым (чужой с тем же UUID: UUID эмулятора один — из фикстуры capabilities).
 // Поиск по UUID — подставной, без сокетов 5353 (KTD9): он объявляет порт B. Закрытый порт A
 // отказывает в соединении сразу, поэтому поиск стартует без порога 1,5 с и тесты идут быстро.
-
-// Те же правила, что в продукте, но время прохода сжато (как в pass.emulator).
-const FAST: Partial<ScanJobLimits> = {
-  retryDelayMs: 5,
-  busyCeilingMs: 200,
-  notReadyCeilingMs: 2000,
-  pageIdleTimeoutMs: 300,
-  pageDeadlineMs: 3000,
-  deleteDeadlineMs: 300,
-};
 
 async function connectTo(emulator: Emulator): Promise<ConnectedScanner> {
   return unwrap(await probeScanner({ ...emulator, fingerprint: null }));
@@ -76,7 +66,7 @@ function gate() {
 /** Служба на корне без подключения — «приложение запущено», проверку зовёт тест (как main). */
 function launch(root: string, findByUuid: StartUuidSearch): Promise<PassService> {
   return openPassService(root, {
-    jobLimits: FAST,
+    jobLimits: FAST_JOB_LIMITS,
     imageWorker: levelWorker,
     minFreeBytes: 1,
     retry: { ceilingMs: 50 },

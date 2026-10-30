@@ -3,7 +3,6 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { EMPTY_EDITS, type SessionEdits, type Snapshot } from '@shared';
 import { probeScanner, type ConnectedScanner } from '../../src/core/escl/connect';
-import type { ScanJobLimits } from '../../src/core/escl/scan-job';
 import {
   openPassService,
   type PassService,
@@ -17,23 +16,15 @@ import { makeTempDataRoot } from '../support/temp-data-root';
 import { unwrap } from '../support/result';
 import { untilScored } from '../support/until';
 import { levelWorker } from '../support/image-worker';
+import { FAST_JOB_LIMITS } from '../support/pass-service';
 
 // «Добавить» — полный путь на настоящей цепочке (план M3.5, U8): эмулятор с лотками по заданиям
 // → служба с намерением → журнал v4 с ролью и якорем → сборка по якорям → правки поверх →
 // перезапуск службы → PDF. Приёмочные примеры плана: AE1–AE3, AE5, AE7, AE8, AE11. Сценарии
 // эмулятора — те же, что у `npm run emulator` и CDP-смоука.
 
-const FAST: Partial<ScanJobLimits> = {
-  retryDelayMs: 5,
-  busyCeilingMs: 200,
-  notReadyCeilingMs: 2000,
-  pageIdleTimeoutMs: 300,
-  pageDeadlineMs: 3000,
-  deleteDeadlineMs: 300,
-};
-
 const OPTIONS = {
-  jobLimits: FAST,
+  jobLimits: FAST_JOB_LIMITS,
   imageWorker: levelWorker,
   minFreeBytes: 1,
   retry: { ceilingMs: 0 },

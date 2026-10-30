@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { ScanJobLimits } from '../../src/core/escl/scan-job';
 import type { PassServiceOptions } from '../../src/core/scan/pass-service';
 import { openSettingsStore } from '../../src/core/storage/settings-store';
-import { connectService, scanned } from '../support/pass-service';
+import { connectService, scanned, FAST_JOB_LIMITS } from '../support/pass-service';
 import { unwrap } from '../support/result';
 import { journalOnDisk } from '../support/session-store';
 
@@ -13,17 +12,8 @@ import { journalOnDisk } from '../support/session-store';
 // аргумент `beginPass` — единственная связь настройки с сессией, и обрыв его тихо выключил бы
 // выравнивание у всех сессий (дефолт хранилища — `off`).
 
-const FAST: Partial<ScanJobLimits> = {
-  retryDelayMs: 5,
-  busyCeilingMs: 200,
-  notReadyCeilingMs: 2000,
-  pageIdleTimeoutMs: 300,
-  pageDeadlineMs: 3000,
-  deleteDeadlineMs: 300,
-};
-
 const OPTIONS = {
-  jobLimits: FAST,
+  jobLimits: FAST_JOB_LIMITS,
   minFreeBytes: 1,
   retry: { ceilingMs: 0 },
 } satisfies PassServiceOptions;
