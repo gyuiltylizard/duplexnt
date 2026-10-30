@@ -365,13 +365,18 @@ export function App(): ReactNode {
   );
 
   const stopPass = useCallback(() => {
-    // Исход остановки виден по снимку; отдельного текста заслуживает только несмытый сегмент:
-    // страницы остались, проход прерван (S15 → тост).
+    // Исход остановки виден по снимку; свой текст — у несмытого сегмента (страницы остались,
+    // проход прерван, S15 → тост), остальные отказы — общим тостом с причиной (B-17).
     window.api.stopPass().then(
       (result) => {
-        if (!result.ok && result.error.code === 'sessionCloseFailed') {
-          showToast(t('toast.stopCloseFailed'));
+        if (result.ok) {
+          return;
         }
+        showToast(
+          result.error.code === 'sessionCloseFailed'
+            ? t('toast.stopCloseFailed')
+            : t('toast.stopFailed', { error: errorTextInline(t, result.error) }),
+        );
       },
       (error: unknown) => {
         console.error('[renderer] остановка прохода не ответила', error);

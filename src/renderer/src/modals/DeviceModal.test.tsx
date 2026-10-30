@@ -26,6 +26,13 @@ const NO_ADF: DiscoveredScanner = {
   hasAdf: false,
 };
 const FOUND: DiscoveryState = { scanners: [SCANNER, NO_ADF], failure: null };
+/** Ответ `connectScanner` — подключённый сканер; тост берёт имя из него (B-17). */
+const CONNECTED_INFO = {
+  name: 'ScanPro 200',
+  scheme: 'https',
+  host: '192.0.2.10',
+  port: 443,
+} as const;
 
 function stubApi(state: DiscoveryState = FOUND) {
   const connects: ((result: CommandResult<'connectScanner'>) => void)[] = [];
@@ -79,7 +86,7 @@ describe('DeviceModal', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Подключить' }));
     expect(connectScanner).toHaveBeenCalledExactlyOnceWith({ kind: 'discovered', id: SCANNER.id });
 
-    resolveConnect(0, ok(undefined));
+    resolveConnect(0, ok(CONNECTED_INFO));
     await flush();
     expect(onConnected).toHaveBeenCalledExactlyOnceWith('ScanPro 200');
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -240,7 +247,7 @@ describe('DeviceModal', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Подключить' }));
     view.unmount();
 
-    resolveConnect(0, ok(undefined));
+    resolveConnect(0, ok(CONNECTED_INFO));
     await flush();
     expect(onConnected).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
@@ -332,5 +339,72 @@ describe('DeviceModal', () => {
 
     expect(screen.getByText('Сканер без имени')).toBeDefined();
     expect(screen.getByText('192.0.2.12:8080')).toBeDefined();
+  });
+
+  it('B-17: после ручного ввода тост получает имя сканера из ответа ядра, не введённый адрес', async () => {
+    const { resolveConnect } = stubApi({ scanners: [], failure: null });
+    const onConnected = vi.fn();
+    render(<DeviceModal onClose={vi.fn()} onConnected={onConnected} />);
+    await flush();
+
+    fireEvent.change(screen.getByPlaceholderText('адрес сканера в сети'), {
+      target: { value: '192.0.2.10' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Подключить' }));
+    resolveConnect(0, ok(CONNECTED_INFO));
+    await flush();
+
+    expect(onConnected).toHaveBeenCalledExactlyOnceWith('ScanPro 200');
+  });
+
+  it('B-17: сканер без имени в ответе — тост с введённым адресом', async () => {
+    const { resolveConnect } = stubApi({ scanners: [], failure: null });
+    const onConnected = vi.fn();
+    render(<DeviceModal onClose={vi.fn()} onConnected={onConnected} />);
+    await flush();
+
+    fireEvent.change(screen.getByPlaceholderText('адрес сканера в сети'), {
+      target: { value: '192.0.2.10' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Подключить' }));
+    resolveConnect(0, ok({ ...CONNECTED_INFO, name: null }));
+    await flush();
+
+    expect(onConnected).toHaveBeenCalledExactlyOnceWith('192.0.2.10');
+  });
+
+  it.each(['70000', '0'])(
+    'B-17: порт %s вне 1–65535 — текст про порт в строке статуса, команда не уходит',
+    async (value) => {
+      const { connectScanner } = stubApi({ scanners: [], failure: null });
+      render(<DeviceModal onClose={vi.fn()} onConnected={vi.fn()} />);
+      await flush();
+
+      fireEvent.click(screen.getByRole('button', { name: /Дополнительно/ }));
+      fireEvent.change(screen.getByPlaceholderText('443'), { target: { value } });
+      fireEvent.change(screen.getByPlaceholderText('адрес сканера в сети'), {
+        target: { value: 'scanner.local' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Подключить' }));
+
+      expect(screen.getByRole('alert').textContent).toBe('Порт должен быть от 1 до 65535.');
+      expect(connectScanner).not.toHaveBeenCalled();
+    },
+  );
+
+  it('B-17: порт 65535 — крайнее допустимое, команда уходит', async () => {
+    const { connectScanner } = stubApi({ scanners: [], failure: null });
+    render(<DeviceModal onClose={vi.fn()} onConnected={vi.fn()} />);
+    await flush();
+
+    fireEvent.click(screen.getByRole('button', { name: /Дополнительно/ }));
+    fireEvent.change(screen.getByPlaceholderText('443'), { target: { value: '65535' } });
+    fireEvent.change(screen.getByPlaceholderText('адрес сканера в сети'), {
+      target: { value: 'scanner.local' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Подключить' }));
+
+    expect(connectScanner).toHaveBeenCalledOnce();
+    expect(connectScanner).toHaveBeenLastCalledWith(expect.objectContaining({ port: 65535 }));
   });
 });

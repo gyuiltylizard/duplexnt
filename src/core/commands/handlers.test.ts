@@ -14,6 +14,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ConnectedScanner, Connector, ScannerAddress } from '../escl/connect';
 import type { Discovery } from '../discovery/mdns';
 import type { PassService } from '../scan/pass-service';
+import { scannerInfoOf, storedScannerOf } from '../storage/stored-scanner';
 import { addressOf, createCommands } from './handlers';
 import { MAX_EDIT_ITEMS } from './schemas';
 
@@ -41,7 +42,10 @@ const PARAMS = { colorMode: 'Grayscale8', resolution: 300, paperSize: 'A4' } as 
 
 const CONNECTED = {
   profile: { scheme: 'https', host: '127.0.0.1', port: 9443, basePath: '/eSCL', fingerprint: null },
+  capabilities: { uuid: '11111111-2222-3333-4444-555555555555', makeAndModel: 'EPSON ET-3850' },
 } as unknown as ConnectedScanner;
+/** Ответ `connectScanner` — подключённый сканер как в снимке (B-17). */
+const CONNECTED_INFO = scannerInfoOf(storedScannerOf(CONNECTED));
 
 function setup(
   snapshot: Snapshot = EMPTY_SNAPSHOT,
@@ -631,7 +635,7 @@ describe('поиск устройств', () => {
     await handlers.stopDiscovery(undefined);
 
     expect(await handlers.connectScanner({ kind: 'discovered', id: 'abcdef01-1' })).toEqual(
-      ok(undefined),
+      ok(CONNECTED_INFO),
     );
     expect(connect).toHaveBeenCalledOnce();
   });
@@ -659,7 +663,7 @@ describe('подключение сканера', () => {
       basePath: 'eSCL/',
     });
 
-    expect(result).toEqual(ok(undefined));
+    expect(result).toEqual(ok(CONNECTED_INFO));
     expect(connect).toHaveBeenCalledExactlyOnceWith({
       scheme: 'https',
       host: '127.0.0.1',
@@ -693,7 +697,7 @@ describe('подключение сканера', () => {
     await handlers.startDiscovery(undefined);
 
     expect(await handlers.connectScanner({ kind: 'discovered', id: 'abcdef01-1' })).toEqual(
-      ok(undefined),
+      ok(CONNECTED_INFO),
     );
     expect(connect).toHaveBeenCalledExactlyOnceWith({
       scheme: null,

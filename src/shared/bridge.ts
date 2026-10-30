@@ -18,7 +18,7 @@ import type { DiscoveryState } from './discovery';
 import type { SessionEdits } from './edits';
 import type { DomainError, Result } from './errors';
 import type { ScanParams } from './scan-params';
-import type { PassReport, Snapshot } from './snapshot';
+import type { PassReport, ScannerInfo, Snapshot } from './snapshot';
 import type { StraightenMode } from './straighten';
 
 export const PROBE_TOKEN_MAX_LENGTH = 64;
@@ -191,8 +191,8 @@ export interface BridgeCommands {
   readonly startDiscovery: { readonly request: NoRequest; readonly value: DiscoveryState };
   readonly getDiscovery: { readonly request: NoRequest; readonly value: DiscoveryState };
   readonly stopDiscovery: { readonly request: NoRequest; readonly value: undefined };
-  /** Исход — в снимке: сканер подключён, запомнен, параметры сверены. */
-  readonly connectScanner: { readonly request: ConnectScannerRequest; readonly value: undefined };
+  /** Исход — в снимке: сканер подключён, запомнен, параметры сверены; ответ — он же, для тоста. */
+  readonly connectScanner: { readonly request: ConnectScannerRequest; readonly value: ScannerInfo };
   /** Отмена подключения — закрытие модалки `device`; если оно ещё идёт, вернёт `canceled`. */
   readonly cancelConnect: { readonly request: NoRequest; readonly value: undefined };
   /** Проверка запомненного сканера ещё раз — кнопка «Повторить» (U19, S3); исход — в снимке. */
