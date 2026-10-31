@@ -20,6 +20,7 @@ import {
   measureSkew,
   SKEW_DETECTOR_VERSION,
   verdictOf,
+  SHAPE_RESIDUAL_MAX_DEG,
 } from './skew';
 import { marginHistogramOf, paperWhiteOf } from './gray';
 
@@ -207,10 +208,21 @@ describe('детектор перекоса: гейты и исход', () => {
     ).toBeLessThanOrEqual(0.05);
   });
 
-  it('обе формы не описывают лестницу из двух ступеней: unmeasurable с bandMm = 50 и причинами обоих проходов', async () => {
-    const staircase: ThetaOf = (u) =>
-      stepTheta(0, -0.5, 0.35, 0.05)(u) + stepTheta(0, -0.5, 0.65, 0.05)(u);
-    const { result } = await measure(staircase);
+  it('лестница из двух ступеней: мелкая (по 0,5°) — в допуске плотной опоры, узлы идут по обеим ступеням; крупная (по 1°) — unmeasurable с bandMm = 50 и причинами обоих проходов', async () => {
+    const stairs =
+      (step: number): ThetaOf =>
+      (u) =>
+        stepTheta(0, -step, 0.35, 0.05)(u) + stepTheta(0, -step, 0.65, 0.05)(u);
+    // С детектора v5 (журнал 0030) у узлов по плотной опоре порог формы 0,2°: остаток ступени у
+    // мелкой лестницы 0,18°, профиль узлами проходит через обе ступени, контраст растёт.
+    const small = (await measure(stairs(0.5))).result;
+    expect(small.outcome).toBe('willStraighten');
+    expect(small.shapeResidual ?? 0).toBeGreaterThan(SHAPE_RESIDUAL_MAX_DEG);
+    expect(
+      knotError(small.profile ?? { kind: 'knots', us: [], thetas: [] }, stairs(0.5)),
+    ).toBeLessThan(0.05);
+
+    const { result } = await measure(stairs(1));
 
     expect(result.outcome).toBe('unmeasurable');
     expect(result.profile).toBeNull();

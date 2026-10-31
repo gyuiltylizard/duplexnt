@@ -92,9 +92,20 @@ export const MAX_SUPPORT_GAP = 0.4;
 
 /**
  * Гейт формы: полосы обязаны лечь хотя бы на одно гладкое семейство — дугу или ступень —
- * с таким остатком; прыгающие углы (две колонки, штриховка) не ложатся ни на одно.
+ * с таким остатком; прыгающие углы (две колонки, штриховка) не ложатся ни на одно. Строгий
+ * порог — для прямой при дыре покрытия: опора у неё — две кучки полос, и остаток 0,1° там уже
+ * значит «полосы спорят» (штриховка: верх 0,97°, низ −0,15°, середина пуста).
  */
 export const SHAPE_RESIDUAL_MAX_DEG = 0.1;
+
+/**
+ * Порог формы для профиля узлами по плотной опоре (журнал 0030): полосы идут по всей высоте, и
+ * шум соседних полос 0,1–0,2° на графичной странице (линии, рамки, крупные цифры) не значит, что
+ * форма не сошлась — лист с рабочей тетрадью: углы от +0,55° сверху до −0,57° снизу, половины
+ * согласны, остаток ступени 0,17° при 30 мм. Ловушки этим не проходят: у штриховки дыра опоры —
+ * прямая, строгий порог.
+ */
+export const SHAPE_RESIDUAL_DENSE_MAX_DEG = 0.2;
 
 /** Порог движения: |θ| ниже по всей высоте — страница ровная, оригинал байт в байт (R10). */
 export const LEVEL_DEG = 0.1;
@@ -641,7 +652,7 @@ async function measurePass(
     return { ok: true, profile: knotsOf(points), bands, coverage, shapeResidual, basis: 'whole' };
   }
   const whole = fitProfile(points);
-  if (whole.shapeResidual <= SHAPE_RESIDUAL_MAX_DEG) {
+  if (whole.shapeResidual <= whole.allowed) {
     return {
       ok: true,
       profile: whole.profile,
@@ -671,7 +682,7 @@ async function measurePass(
         w: Math.min(b.confidence, MAX_WEIGHT),
       })),
     );
-    if (halves.shapeResidual <= SHAPE_RESIDUAL_MAX_DEG) {
+    if (halves.shapeResidual <= halves.allowed) {
       return {
         ok: true,
         profile: halves.profile,
@@ -696,11 +707,14 @@ interface FittedProfile {
   readonly profile: SkewProfile;
   /** min(остаток дуги, остаток ступени); при дыре покрытия — остаток прямой. */
   readonly shapeResidual: number;
+  /** Допуск остатка для этого вида профиля: прямая — строгий, узлы по плотной опоре — мягче. */
+  readonly allowed: number;
 }
 
 /**
  * Профиль по точкам (u, θ, вес): дыра покрытия > `MAX_SUPPORT_GAP` → прямая по двум узлам
- * (u = 0 и 1), иначе узлы по точкам; остаток формы — к гейту `SHAPE_RESIDUAL_MAX_DEG`.
+ * (u = 0 и 1) с гейтом `SHAPE_RESIDUAL_MAX_DEG`, иначе узлы по точкам с гейтом
+ * `SHAPE_RESIDUAL_DENSE_MAX_DEG`.
  */
 function fitProfile(points: readonly Point[]): FittedProfile {
   const us = points.map((p) => p.u).sort((p, q) => p - q);
@@ -717,7 +731,11 @@ function fitProfile(points: readonly Point[]): FittedProfile {
         { u: 1, theta: (quad.coef[0] ?? 0) + 0.5 * (quad.coef[1] ?? 0) },
       ])
     : knotsOf(points);
-  return { profile, shapeResidual };
+  return {
+    profile,
+    shapeResidual,
+    allowed: linear ? SHAPE_RESIDUAL_MAX_DEG : SHAPE_RESIDUAL_DENSE_MAX_DEG,
+  };
 }
 
 /** Профиль ниже порога движения по всей высоте — страница ровная (R10). */

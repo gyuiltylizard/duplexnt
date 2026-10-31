@@ -8,6 +8,8 @@ import {
   MIN_BANDS,
   LEVEL_DEG,
   measureSkewJpeg,
+  SHAPE_RESIDUAL_DENSE_MAX_DEG,
+  SHAPE_RESIDUAL_MAX_DEG,
 } from '../../src/core/detect/skew';
 import { pageFixture, scanFixture, scanFixtureNames } from '../support/fixtures';
 import { analyzeGrid, dpiOfScanName } from '../support/grid-analysis';
@@ -26,8 +28,9 @@ const PIXEL_LIMIT = 5100 * 8400;
  * прямой по двум узлам); ловушки для проекционного детектора — две колонки и косая штриховка
  * — либо выправляются с ростом контраста, либо остаются как есть, но никогда не портятся
  * (R24); фото, чистые листы, бледный карандаш, одна строка и подпись — «не по чему мерить».
- * Печатная страница детектора пустых (M4) тоже несёт ступень и проходит только запасным
- * проходом 50 мм.
+ * Печатная страница детектора пустых (M4) тоже несёт ступень; с детектора v5 проходит основным
+ * проходом 30 мм. Рабочая тетрадь автора (`fan-worksheet-*`) — графичная страница с шумом
+ * соседних полос 0,1–0,2°: выправляется по мягкому порогу плотной опоры (журнал 0030).
  */
 const EXPECTED: Readonly<Record<string, readonly SkewOutcome[]>> = {
   'fan-text-gray-300': ['willStraighten'],
@@ -42,6 +45,7 @@ const EXPECTED: Readonly<Record<string, readonly SkewOutcome[]>> = {
   'fan-sparse-gray-300': ['willStraighten'],
   'fan-twocol-gray-300': ['willStraighten'],
   'fan-twocol-gray-200': ['willStraighten'],
+  'fan-worksheet-color-200': ['willStraighten'],
   'fan-graphic-gray-300': ['willStraighten', 'notImproved', 'unmeasurable'],
   'photo-gray-300': ['unmeasurable'],
   'photo-color-300': ['unmeasurable'],
@@ -66,8 +70,9 @@ const EXPECTED: Readonly<Record<string, readonly SkewOutcome[]>> = {
  * Измеренные сканы, которые проходят только запасным проходом 50 мм: обычный проход 30 мм
  * проваливает гейт формы. Закреплено, чтобы запасной проход нельзя было убрать, оставив таблицу
  * зелёной; неизмеримые листы не закрепляются — у них 50 означает лишь провал формы при 30.
+ * `text-gray-300` с детектора v5 проходит при 30 мм (мягкий порог плотной опоры, журнал 0030).
  */
-const EXPECTED_FALLBACK: readonly string[] = ['text-gray-300', 'rulers-gray-200'];
+const EXPECTED_FALLBACK: readonly string[] = ['rulers-gray-200'];
 
 const names = scanFixtureNames();
 const results = new Map<string, SkewMeasure | null>();
@@ -164,6 +169,21 @@ describe('детектор перекоса на сканах ET-3850 (M6, U2)',
       expect((await measured(name))?.basis, name).toBe('whole');
     }
     expect((await measured('fan-graphic-gray-300'))?.outcome).toBe('unmeasurable');
+  });
+
+  it('графичная страница с плотной опорой: шум соседних полос 0,1–0,2° не валит форму, штриховка с дырой опоры — валит', async () => {
+    // Скан автора 2026-10-31 (рабочая тетрадь: числовые прямые, рамки, крупные цифры): все полосы
+    // валидны, половины согласны, углы +0,55° → −0,57°, но остаток ступени 0,17° при 30 мм —
+    // при едином пороге 0,1° «наклон строк не сходится». Порог для узлов по плотной опоре —
+    // `SHAPE_RESIDUAL_DENSE_MAX_DEG` 0,2°; прямая при дыре опоры держит строгий 0,1°.
+    const worksheet = await measured('fan-worksheet-color-200');
+    expect(worksheet?.outcome).toBe('willStraighten');
+    expect(worksheet?.bandMm).toBe(BAND_MM);
+    expect(worksheet?.basis).toBe('whole');
+    expect(worksheet?.shapeResidual ?? 0).toBeGreaterThan(SHAPE_RESIDUAL_MAX_DEG);
+    expect(worksheet?.shapeResidual ?? 1).toBeLessThanOrEqual(SHAPE_RESIDUAL_DENSE_MAX_DEG);
+    expect(worksheet?.fanMm ?? 0).toBeGreaterThan(2);
+    expect((await measured('fan-graphic-gray-300'))?.cause).toBe('shape');
   });
 
   it('причина «не измерена»: строки не сходятся у ловушек, не по чему мерить у фото и чистых; у измеренных — нет', async () => {
