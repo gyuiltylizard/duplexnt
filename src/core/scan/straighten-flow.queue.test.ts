@@ -1,4 +1,4 @@
-import { readdir } from 'node:fs/promises';
+import { mkdir, readdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -14,7 +14,13 @@ import { makeTempDataRoot } from '../../../test/support/temp-data-root';
 import { until } from '../../../test/support/until';
 import type { ImageWorker } from '../image/image-worker';
 import { STRAIGHT_SIZE_RATIO, STRAIGHTEN_ENCODING } from '../image/straighten';
-import { layoutOf } from '../storage/layout';
+import { SKEW_DETECTOR_VERSION } from '../detect/skew';
+import {
+  layoutOf,
+  straightFileName,
+  straightRecordName,
+  UNKNOWN_DETECTOR,
+} from '../storage/layout';
 import { openSessionStore } from '../storage/reconcile';
 import { realStorageFs } from '../storage/storage-fs';
 import { createStraightened } from '../storage/straightened';
@@ -26,6 +32,27 @@ import { createStraightenQueue, type StraightenQueueDeps } from './straighten-fl
 
 const K = (index: number): string => `p01-s01-${String(index).padStart(4, '0')}`;
 const V = STRAIGHTEN_GEOMETRY_VERSION;
+const D = SKEW_DETECTOR_VERSION;
+/** Имена текущей пары страницы. */
+const pairOf = (key: string, version = V, detector = D): string[] =>
+  [straightFileName(key, version, detector), straightRecordName(key, version, detector)].sort();
+
+/** Пара прежних версий на диске — как от прошлого приложения; `load` читает её как годную. */
+async function stalePair(dir: string, key: string, detector: number): Promise<void> {
+  await mkdir(dir, { recursive: true });
+  const name = straightFileName(key, V, detector);
+  await writeFile(join(dir, name), new Uint8Array(30).fill(7));
+  await writeFile(
+    join(dir, straightRecordName(key, V, detector)),
+    JSON.stringify({
+      v: V,
+      ...(detector === UNKNOWN_DETECTOR ? {} : { detector }),
+      encoding: STRAIGHTEN_ENCODING,
+      dpi: 300,
+      file: { name, bytes: 30 },
+    }),
+  );
+}
 const PROFILE = skewProfileOf([
   { u: 0.2, theta: 0 },
   { u: 0.8, theta: 0.6 },
@@ -120,7 +147,7 @@ async function setup(
 const sizeOf = (index: number): number => pageFixture(index).byteLength;
 
 describe('очередь коррекции', () => {
-  it('принимает только «выправлять» без записи текущей версии; пишет JPEG и запись; снимок на каждый исход', async () => {
+  it('принимает только «выправлять» без пары текущих версий; пишет JPEG и запись; снимок на каждый исход', async () => {
     const verdicts = new Map([
       [K(1), verdictOf('willStraighten')],
       [K(2), verdictOf('level')],
@@ -133,8 +160,8 @@ describe('очередь коррекции', () => {
     expect(queue.state().queued).toEqual([K(1)]);
     await queue.settle();
 
-    expect(await files()).toEqual([`${K(1)}.v${V}.jpg`, `${K(1)}.v${V}.json`]);
-    expect(straightened.resolve(K(1))?.version).toBe(V);
+    expect(await files()).toEqual(pairOf(K(1)));
+    expect(straightened.resolve(K(1))).toMatchObject({ version: V, detector: D });
     expect(straightener.calls).toEqual([sizeOf(1)]);
     expect(changes).toHaveLength(1);
     // Повторный ensureAll: запись уже есть — ничего.
@@ -190,7 +217,7 @@ describe('очередь коррекции', () => {
     queue.ensureAll();
     await queue.settle();
 
-    expect(await files()).toEqual([`${K(2)}.v${V}.jpg`, `${K(2)}.v${V}.json`]);
+    expect(await files()).toEqual(pairOf(K(2)));
     expect([...queue.state().deferred]).toEqual([[K(1), 'failed']]);
     expect(changes).toHaveLength(2);
     queue.ensureAll();
@@ -246,7 +273,68 @@ describe('очередь коррекции', () => {
     await queue.settle();
 
     expect([...queue.state().deferred]).toEqual([[K(1), 'noSpace']]);
-    expect((await readdir(dir)).sort()).toEqual([`${K(2)}.v${V}.jpg`, `${K(2)}.v${V}.json`]);
+    expect((await readdir(dir)).sort()).toEqual(pairOf(K(2)));
+  });
+
+  it('пара той же геометрии с чужим детектором или прежнего формата — пересчёт: новая пара рядом, прежняя убрана (B-19)', async () => {
+    const verdicts = new Map([
+      [K(1), verdictOf('willStraighten')],
+      [K(2), verdictOf('willStraighten')],
+    ]);
+    const { queue, straightened, straightener, dir, files } = await setup(2, verdicts);
+    await stalePair(dir, K(1), D - 1);
+    await stalePair(dir, K(2), UNKNOWN_DETECTOR);
+    await straightened.load([K(1), K(2)]);
+    expect(straightened.resolve(K(2))).toMatchObject({ version: V, detector: UNKNOWN_DETECTOR });
+
+    queue.ensureAll();
+    expect(queue.state().queued).toEqual([K(1), K(2)]);
+    await queue.settle();
+
+    expect(straightener.calls).toHaveLength(2);
+    expect(await files()).toEqual([...pairOf(K(1)), ...pairOf(K(2))]);
+    expect(straightened.resolve(K(2))).toMatchObject({ version: V, detector: D });
+  });
+
+  it('вердикт не «выправлять» у страницы с парой прежних версий — пара убрана, снимок обновлён; под hold — после отпускания (B-19)', async () => {
+    const verdicts = new Map([
+      [K(1), verdictOf('level')],
+      [K(2), verdictOf('unmeasurable')],
+    ]);
+    const { queue, straightened, straightener, dir, files, changes } = await setup(2, verdicts);
+    await stalePair(dir, K(1), D - 1);
+    await stalePair(dir, K(2), UNKNOWN_DETECTOR);
+    await straightened.load([K(1), K(2)]);
+    const release = straightened.hold();
+
+    queue.ensureAll();
+    expect(queue.state().queued).toEqual([]);
+    await until(() => changes.length === 2);
+
+    // Записи сняты сразу, файлы — после отпускания пакета.
+    expect(straightened.resolve(K(1))).toBeNull();
+    expect(straightened.resolve(K(2))).toBeNull();
+    expect(await files()).toHaveLength(4);
+    release();
+    await expect.poll(files).toEqual([]);
+    expect(straightener.calls).toEqual([]);
+  });
+
+  it('abort посреди пересчёта — новой пары нет, прежняя на месте', async () => {
+    const verdicts = new Map([[K(1), verdictOf('willStraighten')]]);
+    const gated = straightenerOf({ gated: true });
+    const { queue, straightened, dir, files } = await setup(1, verdicts, { worker: gated.worker });
+    await stalePair(dir, K(1), UNKNOWN_DETECTOR);
+    await straightened.load([K(1)]);
+
+    queue.enqueue(K(1));
+    await until(() => gated.calls.length === 1);
+    queue.abort();
+    await queue.settle();
+    gated.release();
+
+    expect(await files()).toEqual(pairOf(K(1), V, UNKNOWN_DETECTOR));
+    expect(straightened.resolve(K(1))).toMatchObject({ version: V, detector: UNKNOWN_DETECTOR });
   });
 
   it('prune забывает отложенные и ждущие страницы закрытой сессии', async () => {

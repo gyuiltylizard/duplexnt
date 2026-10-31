@@ -47,6 +47,8 @@ const fact = (
 ): StraightenFact => ({
   outcome,
   version: null,
+  detector: extra.version === undefined || extra.version === null ? null : 1,
+  stale: false,
   deferred: null,
   cause: null,
   ...extra,
@@ -97,7 +99,7 @@ describe('выравнивание в редакторе (M6)', () => {
     expect(option(0).querySelector('.thumb__straight--done')?.getAttribute('title')).toBe(
       'Выровнено — исходный скан цел',
     );
-    expect(thumbSrc(0)).toBe(pageImageUrl(SESSION, 'straight-thumb', P(1), 1));
+    expect(thumbSrc(0)).toBe(pageImageUrl(SESSION, 'straight-thumb', P(1), 1, 1));
 
     expect(option(1).getAttribute('aria-label')).toBe('Страница 2');
     expect(option(1).querySelector('.thumb__straight, .thumb__pending')).toBeNull();
@@ -162,7 +164,7 @@ describe('выравнивание в редакторе (M6)', () => {
     const { rerender } = renderEditor(snapshot);
 
     expect(screen.getByText('ВЫРОВНЕНО')).toBeDefined();
-    expect(previewSrc()).toBe(pageImageUrl(SESSION, 'straight', P(1), 1));
+    expect(previewSrc()).toBe(pageImageUrl(SESSION, 'straight', P(1), 1, 1));
 
     fireEvent.click(option(2));
     expect(screen.getByText('НЕ ВЫРОВНЕНО').getAttribute('title')).toBe(
@@ -464,6 +466,61 @@ describe('выравнивание в редакторе (M6)', () => {
     );
   });
 
+  it('пересчёт отложен (B-19): инспектор — строка про прежний вид и причину, «Оставить оригинал» на месте; пересчёт в ходу — прежний текст', () => {
+    stubApi();
+    const deferredRecalc: StraightenFacts = new Map([
+      ...FACTS,
+      [P(1), fact('willStraighten', { version: 1, detector: 0, stale: true, deferred: 'noSpace' })],
+    ]);
+    const snapshot = straightSnapshot(deferredRecalc);
+    const { rerender } = renderEditor(snapshot);
+
+    expect(
+      within(inspector()).getByText(
+        'Показан выправленный вид прежней версии приложения. Пересчёт отложен: не хватило места на диске — освободите место, при следующем запуске приложение попробует снова.',
+      ),
+    ).toBeDefined();
+    expect(straightButton('Оставить оригинал')).toBeDefined();
+    expect(thumbSrc(0)).toBe(pageImageUrl(SESSION, 'straight-thumb', P(1), 1, 0));
+
+    const session = sessionOf(snapshot);
+    rerender(
+      nextSnapshot(snapshot, {
+        assembly: () =>
+          assemblyOf(
+            session,
+            undefined,
+            new Map([...FACTS, [P(1), fact(null, { version: 1, detector: 0, stale: true })]]),
+          ),
+      }),
+    );
+    expect(
+      within(inspector()).getByText(
+        'Строки на странице шли веером — приложение выровняло их. Исходный скан цел.',
+      ),
+    ).toBeDefined();
+  });
+
+  it('пересчёт при той же геометрии меняет адрес карточки версией детектора — новый кадр на месте (B-19)', () => {
+    stubApi();
+    const snapshot = straightSnapshot();
+    const { rerender } = renderEditor(snapshot);
+    expect(thumbSrc(0)).toBe(pageImageUrl(SESSION, 'straight-thumb', P(1), 1, 1));
+
+    const session = sessionOf(snapshot);
+    rerender(
+      nextSnapshot(snapshot, {
+        assembly: () =>
+          assemblyOf(
+            session,
+            undefined,
+            new Map([...FACTS, [P(1), fact('willStraighten', { version: 1, detector: 2 })]]),
+          ),
+      }),
+    );
+    expect(thumbSrc(0)).toBe(pageImageUrl(SESSION, 'straight-thumb', P(1), 1, 2));
+  });
+
   it('карточка не загрузилась, затем статус сменил вид на месте — новая попытка с новым адресом', () => {
     stubApi();
     const snapshot = straightSnapshot();
@@ -476,7 +533,7 @@ describe('выравнивание в редакторе (M6)', () => {
 
     const session = sessionOf(snapshot);
     rerender(nextSnapshot(snapshot, { assembly: () => assemblyOf(session, undefined, DONE) }));
-    expect(thumbSrc(4)).toBe(pageImageUrl(SESSION, 'straight-thumb', P(5), 1));
+    expect(thumbSrc(4)).toBe(pageImageUrl(SESSION, 'straight-thumb', P(5), 1, 1));
   });
 
   it('модалка save из редактора: пока идёт обработка — статус с остатком и ряд «Выровнено», кнопка недоступна', () => {

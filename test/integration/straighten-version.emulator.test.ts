@@ -12,7 +12,14 @@ import { fsError, interceptFs } from '../support/intercept-fs';
 import { connectService, scanned } from '../support/pass-service';
 import { unwrap } from '../support/result';
 import { journalOnDisk } from '../support/session-store';
-import { jpegsIn, sessionIdOf, streamsOf } from '../support/straighten';
+import {
+  jpegsIn,
+  sessionIdOf,
+  straightJpegOf,
+  straightRecordOf,
+  streamsOf,
+} from '../support/straighten';
+import { SKEW_DETECTOR_VERSION } from '../../src/core/detect/skew';
 import { untilStraightened } from '../support/until';
 
 // Смена версии геометрии на всей цепочке (план M6, U9; AE13, AE14; KTD-6, KTD-8, KTD-11):
@@ -47,22 +54,24 @@ const F = (index: number): string => keyOf(1, index);
 
 interface StraightRecord {
   readonly v: number;
+  readonly detector: number;
   readonly file: { readonly name: string; readonly bytes: number };
 }
+const D = SKEW_DETECTOR_VERSION;
 interface SkewRecord {
   readonly v: { readonly geometry: number; readonly detector: number };
 }
 
 /** Комплект страницы на диске — как от приложения с версией геометрии 1. */
 async function downgrade(straight: string, skew: string, key: string): Promise<void> {
-  await rename(join(straight, `${key}.v2.jpg`), join(straight, `${key}.v1.jpg`));
+  await rename(join(straight, straightJpegOf(key, 2)), join(straight, straightJpegOf(key, 1)));
   const record = JSON.parse(
-    await readFile(join(straight, `${key}.v2.json`), 'utf8'),
+    await readFile(join(straight, straightRecordOf(key, 2)), 'utf8'),
   ) as StraightRecord;
-  await rm(join(straight, `${key}.v2.json`));
+  await rm(join(straight, straightRecordOf(key, 2)));
   await writeFile(
-    join(straight, `${key}.v1.json`),
-    JSON.stringify({ ...record, v: 1, file: { ...record.file, name: `${key}.v1.jpg` } }),
+    join(straight, straightRecordOf(key, 1)),
+    JSON.stringify({ ...record, v: 1, file: { ...record.file, name: straightJpegOf(key, 1) } }),
   );
   const measure = JSON.parse(await readFile(join(skew, `${key}.json`), 'utf8')) as SkewRecord;
   await writeFile(
@@ -89,7 +98,7 @@ describe('смена версии геометрии на эмуляторе (U9
     const sessionId = sessionIdOf(service);
     const straight = join(layoutOf(root).derivedDir, sessionId, 'straight');
     const skew = join(layoutOf(root).derivedDir, sessionId, 'skew');
-    expect(await jpegsIn(straight)).toEqual([`${F(1)}.v2.jpg`, `${F(2)}.v2.jpg`]);
+    expect(await jpegsIn(straight)).toEqual([straightJpegOf(F(1), 2), straightJpegOf(F(2), 2)]);
     // Откат второй страницы и два документа — журнал «вчерашней» сессии.
     unwrap(
       await service.setEdits(
@@ -102,13 +111,13 @@ describe('смена версии геометрии на эмуляторе (U9
 
     await downgrade(straight, skew, F(1));
     await downgrade(straight, skew, F(2));
-    const firstV1 = await readFile(join(straight, `${F(1)}.v1.jpg`));
+    const firstV1 = await readFile(join(straight, straightJpegOf(F(1), 1)));
 
     const again = await restart();
     // Сразу после открытия: прежний вид без «ждёт», откат на месте.
     expect(again.snapshot().assembly?.order.map((page) => page.straighten)).toEqual([
-      { status: 'straightened', reason: null, version: 1 },
-      { status: 'kept', reason: null, version: 1 },
+      { status: 'straightened', reason: null, version: 1, detector: D, recalc: 'pending' },
+      { status: 'kept', reason: null, version: 1, detector: D, recalc: 'pending' },
     ]);
     expect(again.snapshot().assembly?.straighten.pending).toBe(0);
 
@@ -127,11 +136,11 @@ describe('смена версии геометрии на эмуляторе (U9
     // Пересчёт фоном: новая версия записана, прежняя убрана; статусы те же, версия — 2.
     await expect
       .poll(() => jpegsIn(straight), { timeout: 40_000, interval: 100 })
-      .toEqual([`${F(1)}.v2.jpg`, `${F(2)}.v2.jpg`]);
+      .toEqual([straightJpegOf(F(1), 2), straightJpegOf(F(2), 2)]);
     await untilStraightened(() => again.snapshot());
     expect(again.snapshot().assembly?.order.map((page) => page.straighten)).toEqual([
-      { status: 'straightened', reason: null, version: 2 },
-      { status: 'kept', reason: null, version: 2 },
+      { status: 'straightened', reason: null, version: 2, detector: D, recalc: null },
+      { status: 'kept', reason: null, version: 2, detector: D, recalc: null },
     ]);
     expect(await journalOnDisk(root)).toEqual(journalBefore);
 
@@ -146,7 +155,7 @@ describe('смена версии геометрии на эмуляторе (U9
     });
     expect(
       (await streamsOf(join(folder, 'А (2).pdf')))[0]?.equals(
-        await readFile(join(straight, `${F(1)}.v2.jpg`)),
+        await readFile(join(straight, straightJpegOf(F(1), 2))),
       ),
     ).toBe(true);
     expect(

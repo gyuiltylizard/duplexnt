@@ -9,6 +9,7 @@ import {
   setBacksOf,
 } from '../../../test/support/assembly';
 import type { StraightenedFile } from '../storage/straightened';
+import { SKEW_DETECTOR_VERSION } from '../detect/skew';
 import {
   pagesToMeasure,
   straightenFactsOf,
@@ -84,9 +85,15 @@ describe('выравнивание: страницы под измерение',
 
 const PROFILE = { kind: 'knots' as const, us: [0.5], thetas: [0.4] };
 
-const fileOf = (key: string, version = 1, bytes = 100): StraightenedFile => ({
-  path: `/derived/straight/${key}.v${String(version)}.jpg`,
+const fileOf = (
+  key: string,
+  version = 1,
+  bytes = 100,
+  detector = SKEW_DETECTOR_VERSION,
+): StraightenedFile => ({
+  path: `/derived/straight/${key}.v${String(version)}.d${String(detector)}.jpg`,
   version,
+  detector,
   bytes,
   encoding: 'jpeg-q92-444',
   dpi: 300,
@@ -112,9 +119,39 @@ describe('выравнивание: факты для статусов и ход
     const queue = queueOf({ deferred: new Map([[keyOf(1, 3), 'noSpace']]) });
     expect(straightenFactsOf(session, verdicts, straightened, queue)).toEqual(
       new Map([
-        [keyOf(1, 1), { outcome: 'willStraighten', version: 1, deferred: null, cause: null }],
-        [keyOf(1, 2), { outcome: 'level', version: null, deferred: null, cause: null }],
-        [keyOf(1, 3), { outcome: null, version: null, deferred: 'noSpace', cause: null }],
+        [
+          keyOf(1, 1),
+          {
+            outcome: 'willStraighten',
+            version: 1,
+            detector: SKEW_DETECTOR_VERSION,
+            stale: false,
+            deferred: null,
+            cause: null,
+          },
+        ],
+        [
+          keyOf(1, 2),
+          {
+            outcome: 'level',
+            version: null,
+            detector: null,
+            stale: false,
+            deferred: null,
+            cause: null,
+          },
+        ],
+        [
+          keyOf(1, 3),
+          {
+            outcome: null,
+            version: null,
+            detector: null,
+            stale: false,
+            deferred: 'noSpace',
+            cause: null,
+          },
+        ],
       ]),
     );
     expect(straightenFactsOf(session, new Map(), { resolve: () => null }, queueOf()).size).toBe(0);
@@ -122,6 +159,25 @@ describe('выравнивание: факты для статусов и ход
       straightenFactsOf({ ...session, straighten: 'off' }, verdicts, straightened, queue).size,
     ).toBe(0);
     expect(straightenFactsOf(null, verdicts, straightened, queue).size).toBe(0);
+  });
+
+  it('файл не текущих версий — stale: прежний детектор, прежний формат без детектора (0), прежняя геометрия (B-19)', () => {
+    const stale = new Map([
+      [keyOf(1, 1), fileOf(keyOf(1, 1), 1, 100, SKEW_DETECTOR_VERSION - 1)],
+      [keyOf(1, 2), fileOf(keyOf(1, 2), 1, 100, 0)],
+      [keyOf(1, 3), fileOf(keyOf(1, 3), 0, 100)],
+    ]);
+    const facts = straightenFactsOf(
+      session,
+      verdicts,
+      { resolve: (key: string) => stale.get(key) ?? null },
+      queueOf(),
+    );
+    expect([...facts.values()].map((fact) => [fact.detector, fact.stale])).toEqual([
+      [SKEW_DETECTOR_VERSION - 1, true],
+      [0, true],
+      [SKEW_DETECTOR_VERSION, true],
+    ]);
   });
 
   it('ход: очередь с исполняемой; вне режима «выравнивать» — null', () => {
@@ -150,7 +206,10 @@ describe('выравнивание: снимок выправленных на �
     lost: false,
     addedSet: null,
     blank: null,
-    straighten: status === null ? NO_STRAIGHTEN_MARK : { status, reason: null, version: 1 },
+    straighten:
+      status === null
+        ? NO_STRAIGHTEN_MARK
+        : { status, reason: null, version: 1, detector: SKEW_DETECTOR_VERSION, recalc: null },
   });
   const K1 = keyOf(1, 1);
   const K2 = keyOf(1, 2);
@@ -172,7 +231,7 @@ describe('выравнивание: снимок выправленных на �
     expect(digest).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  it('дайджест меняется от набора ключей, версии и размера файла; без выправленных — свой, постоянный', () => {
+  it('дайджест меняется от набора ключей, версий геометрии и детектора и размера файла; без выправленных — свой, постоянный', () => {
     const base = new Map([[K1, fileOf(K1)]]);
     const digestOf = (files: Map<string, StraightenedFile>, pages = [pageOf(K1, 'straightened')]) =>
       straightSnapshotOf(pages, { resolve: (key) => files.get(key) ?? null }).digest;
@@ -180,6 +239,10 @@ describe('выравнивание: снимок выправленных на �
 
     expect(digestOf(new Map([[K1, fileOf(K1, 2)]]))).not.toBe(reference);
     expect(digestOf(new Map([[K1, fileOf(K1, 1, 101)]]))).not.toBe(reference);
+    // Пересчёт другим детектором при той же геометрии и размере — тоже другой файл (B-19).
+    expect(digestOf(new Map([[K1, fileOf(K1, 1, 100, SKEW_DETECTOR_VERSION + 1)]]))).not.toBe(
+      reference,
+    );
     expect(
       digestOf(new Map([...base, [K2, fileOf(K2)]]), [
         pageOf(K1, 'straightened'),

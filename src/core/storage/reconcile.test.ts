@@ -734,7 +734,14 @@ describe('сверка при запуске: миниатюры отброше�
     // Производное выравнивания (M6, R26) — по тому же префиксу.
     const straight = join(layout.derivedDir, SESSION, 'straight');
     await mkdir(straight, { recursive: true });
-    for (const name of ['p01-s01-0001.v1.jpg', 'p01-s02-0001.v1.jpg', 'p01-s02-0001.v1.json']) {
+    // Оба формата имени — прежний без детектора и с детектором (B-19).
+    for (const name of [
+      'p01-s01-0001.v1.jpg',
+      'p01-s02-0001.v1.jpg',
+      'p01-s02-0001.v1.json',
+      'p01-s02-0001.v1.d4.jpg',
+      'p01-s02-0001.v1.d4.json',
+    ]) {
       await writeFile(join(straight, name), page(7));
     }
     const skew = join(layout.derivedDir, SESSION, 'skew');

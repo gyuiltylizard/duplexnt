@@ -4,6 +4,7 @@ import { i18n } from '../i18n';
 import {
   straightActionLabel,
   straightFactText,
+  straightNoteText,
   straightSelectionOf,
   straightSelectionText,
   thumbStraightLabel,
@@ -17,7 +18,14 @@ const t = i18n.t.bind(i18n);
 const mark = (
   status: StraightenMark['status'],
   reason: StraightenMark['reason'] = null,
-): StraightenMark => ({ status, reason, version: status === 'straightened' ? 1 : null });
+  recalc: StraightenMark['recalc'] = null,
+): StraightenMark => ({
+  status,
+  reason,
+  version: status === 'straightened' || status === 'kept' ? 1 : null,
+  detector: status === 'straightened' || status === 'kept' ? 1 : null,
+  recalc,
+});
 
 const page = (key: string, straighten: StraightenMark): AssembledPage => ({
   key,
@@ -80,5 +88,27 @@ describe('выделение по статусам выравнивания', ()
     expect(straightFactText(t, mark('deferred', 'fail'))).toBe('отложено — сбой');
     expect(straightFactText(t, mark('level'))).toBe('ровная');
     expect(straightFactText(t, mark(null))).toBeNull();
+  });
+
+  it('текст секции у выправленной с отложенным пересчётом — про прежний вид и причину; пересчёт в ходу — прежний текст (B-19)', () => {
+    expect(straightNoteText(t, mark('straightened', null, 'disk'))).toBe(
+      'Показан выправленный вид прежней версии приложения. Пересчёт отложен: не хватило места на диске — освободите место, при следующем запуске приложение попробует снова.',
+    );
+    expect(straightNoteText(t, mark('straightened', null, 'fail'))).toBe(
+      'Показан выправленный вид прежней версии приложения. Пересчёт не удался из-за сбоя — при следующем запуске приложение попробует снова.',
+    );
+    expect(straightNoteText(t, mark('straightened', null, 'pending'))).toBe(
+      straightNoteText(t, mark('straightened')),
+    );
+    // Сводка выделения и подписи пересчёт не учитывают: такая страница — выровненная.
+    expect(straightNoteText(t, mark('kept', null, 'disk'))).toBe(straightNoteText(t, mark('kept')));
+    expect(thumbStraightLabel(t, 'Страница 1', mark('straightened', null, 'disk'))).toBe(
+      'Страница 1, выровнена',
+    );
+    const selection = straightSelectionOf(
+      [page('a', mark('straightened', null, 'disk')), page('b', mark('straightened'))],
+      ['a', 'b'],
+    );
+    expect(selection).toMatchObject({ count: 2, straightened: 2, keep: ['a', 'b'] });
   });
 });

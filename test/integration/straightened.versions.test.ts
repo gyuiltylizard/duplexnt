@@ -1,20 +1,31 @@
-import { readdir } from 'node:fs/promises';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
+import { SKEW_DETECTOR_VERSION } from '../../src/core/detect/skew';
 import { STRAIGHTEN_ENCODING, type StraightenResult } from '../../src/core/image/straighten';
 import type { PassOrigin } from '../../src/core/storage/journal';
-import { layoutOf } from '../../src/core/storage/layout';
+import {
+  layoutOf,
+  straightFileName,
+  straightRecordName,
+  UNKNOWN_DETECTOR,
+} from '../../src/core/storage/layout';
 import { openSessionStore } from '../../src/core/storage/reconcile';
-import { createStraightened } from '../../src/core/storage/straightened';
+import {
+  createStraightened,
+  isCurrentStraightened,
+  type Straightened,
+} from '../../src/core/storage/straightened';
 import { pageFixture } from '../support/fixtures';
 import { unwrap } from '../support/result';
 import { makeTempDataRoot } from '../support/temp-data-root';
 
-// Смена версии геометрии (AE13; KTD-8, KTD-11) на выправленных файлах при текущей версии 2:
-// записи прежней версии действительны, пересчёт пишет новую и удаляет прежнюю, а пока снимок
-// пакета держит прежние файлы (`hold`), удаление откладывается до отпускания — сборка PDF по
-// снимку не теряет файл посреди записи (ревью сессий 3–4). Версия подменяется модулем:
-// продуктовая константа — 1, и прежних версий у неё нет.
+// Версии выправленных пар (AE13; KTD-8, KTD-11; B-19) при текущей геометрии 2: пары прежних
+// версий — геометрии, детектора или прежнего формата без детектора — действительны для показа,
+// но не текущие; пересчёт пишет текущую пару рядом и убирает прочие, а пока снимок пакета держит
+// прежние файлы (`hold`), удаление откладывается до отпускания — сборка PDF по снимку не теряет
+// файл посреди записи (ревью сессий 3–4). Геометрия подменяется модулем: продуктовая константа
+// — 1, и прежних версий у неё нет; детектор — настоящий.
 
 vi.mock('../../src/shared', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../src/shared')>()),
@@ -41,6 +52,13 @@ async function* body(bytes: Uint8Array): AsyncGenerator<Uint8Array> {
 }
 
 const F1 = 'p01-s01-0001';
+const D = SKEW_DETECTOR_VERSION;
+const CURRENT = { version: 2, detector: D };
+/** Детектор прежних сборок: пары с ним — наши, но не текущие. */
+const OLDER = D - 1;
+const OLDEST = D - 2;
+const current = (ext: 'jpg' | 'json'): string =>
+  ext === 'jpg' ? straightFileName(F1, 2, D) : straightRecordName(F1, 2, D);
 
 const resultOf = (fill: number, bytes = 64): StraightenResult => ({
   jpeg: new Uint8Array(bytes).fill(fill),
@@ -63,60 +81,152 @@ async function sessionWith() {
 
 const files = async (dir: string): Promise<string[]> => (await readdir(dir)).sort();
 
-describe('выправленные файлы: версия геометрии 2 (AE13)', () => {
-  it('store пишет текущую версию и удаляет прежнюю; без удержания — сразу', async () => {
+/**
+ * Пара прежних версий на диске — как от прошлого приложения: детектор «неизвестен» — прежний
+ * формат без поля и без `.d` в имени.
+ */
+async function pairOnDisk(
+  dir: string,
+  version: number,
+  detector: number,
+  fill = 1,
+  bytes = 20,
+): Promise<void> {
+  await mkdir(dir, { recursive: true });
+  const name = straightFileName(F1, version, detector);
+  await writeFile(join(dir, name), Buffer.alloc(bytes, fill));
+  await writeFile(
+    join(dir, straightRecordName(F1, version, detector)),
+    JSON.stringify({
+      v: version,
+      ...(detector === UNKNOWN_DETECTOR ? {} : { detector }),
+      encoding: STRAIGHTEN_ENCODING,
+      dpi: 300,
+      file: { name, bytes },
+    }),
+  );
+}
+
+async function loaded(straightened: Straightened, dir: string, version: number, detector: number) {
+  await pairOnDisk(dir, version, detector);
+  await straightened.load([F1]);
+  expect(straightened.resolve(F1)).toMatchObject({ version, detector });
+}
+
+describe('выправленные пары: версии геометрии и детектора (AE13, B-19)', () => {
+  it('store пишет текущую пару с детектором в записи и имени; прежняя геометрия убрана; без удержания — сразу', async () => {
     const { dir, straightened } = await sessionWith();
-    // Прежняя версия — как от прошлого приложения.
-    await straightenedV1(straightened, dir);
+    await loaded(straightened, dir, 1, UNKNOWN_DETECTOR);
     expect(await files(dir)).toEqual([`${F1}.v1.jpg`, `${F1}.v1.json`]);
+    expect(isCurrentStraightened(straightened.resolve(F1) ?? CURRENT)).toBe(false);
 
     await straightened.store(F1, resultOf(2));
 
-    expect(straightened.resolve(F1)?.version).toBe(2);
-    expect(await files(dir)).toEqual([`${F1}.v2.jpg`, `${F1}.v2.json`]);
+    const file = straightened.resolve(F1);
+    expect(file).toMatchObject(CURRENT);
+    expect(isCurrentStraightened(file ?? { version: 0, detector: 0 })).toBe(true);
+    expect(await files(dir)).toEqual([current('jpg'), current('json')]);
+    expect(JSON.parse(await readFile(join(dir, current('json')), 'utf8'))).toMatchObject({
+      v: 2,
+      detector: D,
+      file: { name: current('jpg'), bytes: 64 },
+    });
+  });
+
+  it('пара той же геометрии с чужим детектором — годна, не текущая; store пишет рядом и убирает её', async () => {
+    const { dir, straightened } = await sessionWith();
+    await loaded(straightened, dir, 2, OLDER);
+    expect(isCurrentStraightened(straightened.resolve(F1) ?? CURRENT)).toBe(false);
+
+    await straightened.store(F1, resultOf(2));
+
+    expect(straightened.resolve(F1)).toMatchObject(CURRENT);
+    expect(await files(dir)).toEqual([current('jpg'), current('json')]);
+  });
+
+  it('пара с детектором новее известного — не наша: не отдаётся, store пишет текущую рядом и её не трогает', async () => {
+    const { dir, straightened } = await sessionWith();
+    await pairOnDisk(dir, 2, D + 1);
+    await straightened.load([F1]);
+    expect(straightened.resolve(F1)).toBeNull();
+
+    await straightened.store(F1, resultOf(2));
+
+    expect(straightened.resolve(F1)).toMatchObject(CURRENT);
+    expect(await files(dir)).toEqual(
+      [
+        current('jpg'),
+        current('json'),
+        straightFileName(F1, 2, D + 1),
+        straightRecordName(F1, 2, D + 1),
+      ].sort(),
+    );
+  });
+
+  it('две пары ключа при открытии — отдаётся текущая, лишняя убирается; негодная запись — сирота', async () => {
+    const { dir, straightened } = await sessionWith();
+    await pairOnDisk(dir, 1, UNKNOWN_DETECTOR);
+    await pairOnDisk(dir, 2, D, 2, 64);
+    // Пары новее известных версий — геометрии или детектора — от будущего приложения: не
+    // трогаются и не отдаются.
+    await pairOnDisk(dir, 3, D);
+    await pairOnDisk(dir, 2, D + 1);
+    // Запись без файла нужного размера — негодна.
+    await pairOnDisk(dir, 2, OLDEST);
+    await writeFile(join(dir, straightFileName(F1, 2, OLDEST)), Buffer.alloc(5));
+
+    await straightened.load([F1]);
+
+    expect(straightened.resolve(F1)).toMatchObject({ ...CURRENT, bytes: 64 });
+    expect(await files(dir)).toEqual(
+      [
+        current('jpg'),
+        current('json'),
+        straightFileName(F1, 2, D + 1),
+        straightRecordName(F1, 2, D + 1),
+        straightFileName(F1, 3, D),
+        straightRecordName(F1, 3, D),
+      ].sort(),
+    );
+  });
+
+  it('discard убирает пару и запись из карты; под hold файлы живут до отпускания, resolve уже пуст', async () => {
+    const { dir, straightened } = await sessionWith();
+    await loaded(straightened, dir, 1, UNKNOWN_DETECTOR);
+
+    await straightened.discard(F1);
+    expect(straightened.resolve(F1)).toBeNull();
+    expect(await files(dir)).toEqual([]);
+
+    await loaded(straightened, dir, 2, OLDER);
+    const release = straightened.hold();
+    await straightened.discard(F1);
+    expect(straightened.resolve(F1)).toBeNull();
+    expect(await files(dir)).toHaveLength(2);
+    release();
+    await expect.poll(() => files(dir)).toEqual([]);
   });
 
   it('hold держит прежние файлы до отпускания; вложенные удержания считаются; повторное отпускание безвредно', async () => {
     const { dir, straightened } = await sessionWith();
-    await straightenedV1(straightened, dir);
+    await loaded(straightened, dir, 1, UNKNOWN_DETECTOR);
     const outer = straightened.hold();
     const inner = straightened.hold();
 
     await straightened.store(F1, resultOf(2));
-    expect(straightened.resolve(F1)?.version).toBe(2);
-    // Новая версия записана, прежняя — на месте: снимок пакета читает её по пути.
+    expect(straightened.resolve(F1)).toMatchObject(CURRENT);
+    // Новая пара записана, прежняя — на месте: снимок пакета читает её по пути.
     expect(await files(dir)).toEqual([
       `${F1}.v1.jpg`,
       `${F1}.v1.json`,
-      `${F1}.v2.jpg`,
-      `${F1}.v2.json`,
+      current('jpg'),
+      current('json'),
     ]);
 
     inner();
     inner();
     expect(await files(dir)).toHaveLength(4);
     outer();
-    await expect.poll(() => files(dir)).toEqual([`${F1}.v2.jpg`, `${F1}.v2.json`]);
+    await expect.poll(() => files(dir)).toEqual([current('jpg'), current('json')]);
   });
 });
-
-/** Комплект прежней версии 1 на диске: пишется тем же модулем с версией 1 и читается как действительный. */
-async function straightenedV1(
-  straightened: ReturnType<typeof createStraightened>,
-  dir: string,
-): Promise<void> {
-  const { mkdir, writeFile } = await import('node:fs/promises');
-  await mkdir(dir, { recursive: true });
-  await writeFile(join(dir, `${F1}.v1.jpg`), Buffer.alloc(20, 1));
-  await writeFile(
-    join(dir, `${F1}.v1.json`),
-    JSON.stringify({
-      v: 1,
-      encoding: STRAIGHTEN_ENCODING,
-      dpi: 300,
-      file: { name: `${F1}.v1.jpg`, bytes: 20 },
-    }),
-  );
-  await straightened.load([F1]);
-  expect(straightened.resolve(F1)?.version).toBe(1);
-}

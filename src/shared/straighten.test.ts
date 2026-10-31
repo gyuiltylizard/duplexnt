@@ -13,10 +13,12 @@ import {
 // Статус страницы и сводка (план M6, U12; KTD-9): одно правило на ядро и зеркало renderer'а.
 // Табличный тест режим × факты × откат; `null` в сводку не входит, отложенные — не «ждут».
 
-/** Факт; у «есть файл» версия — 1, если не задана иная. */
+/** Факт; у «есть файл» детектор — 1 и файл текущий, если не задано иное. */
 const fact = (overrides: Partial<StraightenFact> = {}): StraightenFact => ({
   outcome: null,
   version: null,
+  detector: overrides.version === undefined || overrides.version === null ? null : 1,
+  stale: false,
   deferred: null,
   cause: null,
   ...overrides,
@@ -35,7 +37,8 @@ const mark = (
   status: StraightenMark['status'],
   reason: StraightenMark['reason'] = null,
   version: number | null = null,
-): StraightenMark => ({ status, reason, version });
+  recalc: StraightenMark['recalc'] = null,
+): StraightenMark => ({ status, reason, version, detector: version === null ? null : 1, recalc });
 
 describe('статус страницы (KTD-9)', () => {
   it.each<[string, StraightenMarkInput, StraightenMark]>([
@@ -117,9 +120,43 @@ describe('статус страницы (KTD-9)', () => {
       mark('deferred', 'fail'),
     ],
     [
-      'отложена, но файл прежней версии есть — выправлена',
+      'отложена, но файл текущих версий есть — выправлена без пересчёта',
       input({ fact: fact({ outcome: 'willStraighten', version: 1, deferred: 'failed' }) }),
       mark('straightened', null, 1),
+    ],
+    [
+      'файл прежних версий без исхода — выправлена, пересчёт ждёт (AE13; B-19)',
+      input({ fact: fact({ version: 1, stale: true }) }),
+      mark('straightened', null, 1, 'pending'),
+    ],
+    [
+      'файл прежних версий, выправлять, в очереди — пересчёт ждёт',
+      input({ fact: fact({ outcome: 'willStraighten', version: 1, stale: true }) }),
+      mark('straightened', null, 1, 'pending'),
+    ],
+    [
+      'файл прежних версий, пересчёт отложен: мало места',
+      input({
+        fact: fact({ outcome: 'willStraighten', version: 1, stale: true, deferred: 'noSpace' }),
+      }),
+      mark('straightened', null, 1, 'disk'),
+    ],
+    [
+      'файл прежних версий, пересчёт отложен: сбой',
+      input({
+        fact: fact({ outcome: 'willStraighten', version: 1, stale: true, deferred: 'failed' }),
+      }),
+      mark('straightened', null, 1, 'fail'),
+    ],
+    [
+      'файл прежних версий, откат пользователя — оригинал оставлен, пересчёт ждёт',
+      input({ keepOriginal: true, fact: fact({ version: 1, stale: true }) }),
+      mark('kept', null, 1, 'pending'),
+    ],
+    [
+      'файл прежних версий, но новый вердикт «ровная» — ровная, файла в пометке нет',
+      input({ fact: fact({ outcome: 'level', version: 1, stale: true }) }),
+      mark('level'),
     ],
   ])('%s', (_name, given, expected) => {
     expect(straightenMarkOf(given)).toEqual(expected);
@@ -161,6 +198,7 @@ describe('сводка по ленте', () => {
       view: 'straight',
       key: 'p01-s01-0001',
       version: 2,
+      detector: 1,
     });
     expect(pageImageViewOf(page('straightened', 2), 'thumb').view).toBe('straight-thumb');
     expect(pageImageViewOf(page('straightened', null), 'thumb').view).toBe('thumb');
@@ -169,6 +207,7 @@ describe('сводка по ленте', () => {
         view: 'page',
         key: 'p01-s01-0001',
         version: null,
+        detector: null,
       });
     }
     expect(pageImageViewOf({ key: 'p01-s01-0001' }, 'thumb').view).toBe('thumb');

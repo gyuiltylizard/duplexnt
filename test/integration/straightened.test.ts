@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { STRAIGHTEN_GEOMETRY_VERSION } from '../../src/shared';
 import { STRAIGHTEN_ENCODING, type StraightenResult } from '../../src/core/image/straighten';
 import type { PassOrigin } from '../../src/core/storage/journal';
-import { layoutOf } from '../../src/core/storage/layout';
+import { SKEW_DETECTOR_VERSION } from '../../src/core/detect/skew';
+import { layoutOf, straightFileName, straightRecordName } from '../../src/core/storage/layout';
 import { openSessionStore } from '../../src/core/storage/reconcile';
 import { realStorageFs } from '../../src/core/storage/storage-fs';
 import { createStraightened, type StraightenedSource } from '../../src/core/storage/straightened';
@@ -48,12 +49,14 @@ const resultOf = (fill: number, bytes = 64): StraightenResult => ({
   dpi: 300,
 });
 
+const D = SKEW_DETECTOR_VERSION;
 const recordOf = (key: string, version: number, bytes: number): string =>
   JSON.stringify({
     v: version,
+    detector: D,
     encoding: STRAIGHTEN_ENCODING,
     dpi: 300,
-    file: { name: `${key}.v${version}.jpg`, bytes },
+    file: { name: straightFileName(key, version, D), bytes },
   });
 
 async function sessionWith(pages: number, root?: string) {
@@ -82,20 +85,25 @@ describe('выправленные файлы: запись, запись о к�
     await straightened.store(F1, resultOf(7));
 
     expect(straightened.resolve(F1)).toEqual({
-      path: join(dir, `${F1}.v${V}.jpg`),
+      path: join(dir, straightFileName(F1, V, D)),
       version: V,
+      detector: D,
       bytes: 64,
       encoding: STRAIGHTEN_ENCODING,
       dpi: 300,
     });
-    expect((await readdir(dir)).sort()).toEqual([`${F1}.v${V}.jpg`, `${F1}.v${V}.json`]);
-    expect(JSON.parse(await readFile(join(dir, `${F1}.v${V}.json`), 'utf8'))).toEqual({
+    expect((await readdir(dir)).sort()).toEqual([
+      straightFileName(F1, V, D),
+      straightRecordName(F1, V, D),
+    ]);
+    expect(JSON.parse(await readFile(join(dir, straightRecordName(F1, V, D)), 'utf8'))).toEqual({
       v: V,
+      detector: D,
       encoding: STRAIGHTEN_ENCODING,
       dpi: 300,
-      file: { name: `${F1}.v${V}.jpg`, bytes: 64 },
+      file: { name: straightFileName(F1, V, D), bytes: 64 },
     });
-    expect(await readFile(join(dir, `${F1}.v${V}.jpg`))).toEqual(Buffer.alloc(64, 7));
+    expect(await readFile(join(dir, straightFileName(F1, V, D)))).toEqual(Buffer.alloc(64, 7));
     expect(await dirSnapshot(layout.sessionDir)).toEqual(before);
   });
 
@@ -104,10 +112,10 @@ describe('выправленные файлы: запись, запись о к�
     const first = createStraightened(layout.derivedDir, (await openSessionStore(root)).store);
     await first.store(F1, resultOf(1));
     // Сирота: JPEG второй страницы без записи; у третьей — запись, но файл другого размера.
-    await writeFile(join(dir, `${F2}.v${V}.jpg`), Buffer.alloc(10, 2));
+    await writeFile(join(dir, straightFileName(F2, V, D)), Buffer.alloc(10, 2));
     const F3 = 'p01-s01-0003';
-    await writeFile(join(dir, `${F3}.v${V}.jpg`), Buffer.alloc(10, 3));
-    await writeFile(join(dir, `${F3}.v${V}.json`), recordOf(F3, V, 99));
+    await writeFile(join(dir, straightFileName(F3, V, D)), Buffer.alloc(10, 3));
+    await writeFile(join(dir, straightRecordName(F3, V, D)), recordOf(F3, V, 99));
 
     const { store } = await openSessionStore(root);
     const straightened = createStraightened(layout.derivedDir, store);
@@ -116,7 +124,10 @@ describe('выправленные файлы: запись, запись о к�
     expect(straightened.resolve(F1)?.bytes).toBe(64);
     expect(straightened.resolve(F2)).toBeNull();
     expect(straightened.resolve(F3)).toBeNull();
-    expect((await readdir(dir)).sort()).toEqual([`${F1}.v${V}.jpg`, `${F1}.v${V}.json`]);
+    expect((await readdir(dir)).sort()).toEqual([
+      straightFileName(F1, V, D),
+      straightRecordName(F1, V, D),
+    ]);
   });
 
   it('две записи разных версий — resolve отдаёт новейшую действительную; store новой версии удаляет старую после записи', async () => {
@@ -125,12 +136,12 @@ describe('выправленные файлы: запись, запись о к�
     const older = V - 1;
     // Прежняя версия действительна (известная), пока новой нет.
     if (older >= 1) {
-      await writeFile(join(dir, `${F1}.v${older}.jpg`), Buffer.alloc(20, 1));
-      await writeFile(join(dir, `${F1}.v${older}.json`), recordOf(F1, older, 20));
+      await writeFile(join(dir, straightFileName(F1, older, D)), Buffer.alloc(20, 1));
+      await writeFile(join(dir, straightRecordName(F1, older, D)), recordOf(F1, older, 20));
     }
     // Запись «из будущего» — новее известной версии: не отдаётся и не трогается.
-    await writeFile(join(dir, `${F1}.v${V + 5}.jpg`), Buffer.alloc(30, 9));
-    await writeFile(join(dir, `${F1}.v${V + 5}.json`), recordOf(F1, V + 5, 30));
+    await writeFile(join(dir, straightFileName(F1, V + 5, D)), Buffer.alloc(30, 9));
+    await writeFile(join(dir, straightRecordName(F1, V + 5, D)), recordOf(F1, V + 5, 30));
     const straightened = createStraightened(layout.derivedDir, store);
     await straightened.load([F1]);
     expect(straightened.resolve(F1)?.version).toBe(older >= 1 ? older : undefined);
@@ -140,14 +151,19 @@ describe('выправленные файлы: запись, запись о к�
     expect(straightened.resolve(F1)?.version).toBe(V);
     const names = (await readdir(dir)).sort();
     expect(names).toEqual(
-      [`${F1}.v${V}.jpg`, `${F1}.v${V}.json`, `${F1}.v${V + 5}.jpg`, `${F1}.v${V + 5}.json`].sort(),
+      [
+        straightFileName(F1, V, D),
+        straightRecordName(F1, V, D),
+        straightFileName(F1, V + 5, D),
+        straightRecordName(F1, V + 5, D),
+      ].sort(),
     );
   });
 
   it('временный файл незаконченной записи не принимается и убирается при открытии', async () => {
     const { store, layout, dir } = await sessionWith(1);
     await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, `${F1}.v${V}.jpg.0123456789ab.tmp`), Buffer.alloc(5));
+    await writeFile(join(dir, `${straightFileName(F1, V, D)}.0123456789ab.tmp`), Buffer.alloc(5));
     const straightened = createStraightened(layout.derivedDir, store);
 
     await straightened.load([F1]);

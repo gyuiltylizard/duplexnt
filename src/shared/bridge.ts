@@ -25,8 +25,9 @@ export const PROBE_TOKEN_MAX_LENGTH = 64;
 
 /**
  * Схема изображений страниц (ADR 0005; план M1, KTD-38): `<схема>://<сессия>/<вид>/<ключ>`;
- * выправленные виды (M6, KTD-7) несут версию геометрии: `<схема>://<сессия>/<вид>/<v>/<ключ>`
- * — откат, пересчёт и смена версии меняют адрес, и `<img>` перезагружается без хаков.
+ * выправленные виды (M6, KTD-7; B-19) несут версии геометрии и детектора:
+ * `<схема>://<сессия>/<вид>/<g>.<d>/<ключ>` — откат, пересчёт и смена любой версии меняют адрес, и
+ * `<img>` перезагружается без хаков.
  */
 export const PAGE_IMAGE_SCHEME = 'duplexnt-page';
 export const PAGE_IMAGE_VIEWS = ['page', 'thumb', 'straight', 'straight-thumb'] as const;
@@ -38,19 +39,20 @@ export const isStraightView = (view: PageImageView): boolean =>
 
 /**
  * Адрес изображения страницы текущей сессии — единственный способ его собрать в интерфейсе.
- * Выправленному виду нужна версия (`pageImageViewOf` её даёт); без неё — ошибка программы.
+ * Выправленному виду нужны обе версии (`pageImageViewOf` их даёт); без них — ошибка программы.
  */
 export function pageImageUrl(
   sessionId: string,
   view: PageImageView,
   key: string,
   version: number | null = null,
+  detector: number | null = null,
 ): string {
   if (isStraightView(view)) {
-    if (version === null) {
-      throw new Error(`вид ${view} требует версии геометрии`);
+    if (version === null || detector === null) {
+      throw new Error(`вид ${view} требует версий геометрии и детектора`);
     }
-    return `${PAGE_IMAGE_SCHEME}://${sessionId}/${view}/${String(version)}/${key}`;
+    return `${PAGE_IMAGE_SCHEME}://${sessionId}/${view}/${String(version)}.${String(detector)}/${key}`;
   }
   return `${PAGE_IMAGE_SCHEME}://${sessionId}/${view}/${key}`;
 }

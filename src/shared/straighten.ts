@@ -25,8 +25,9 @@ export type StraightenDeferredReason = (typeof STRAIGHTEN_DEFERRED_REASONS)[numb
 
 /**
  * Что ядро знает о странице помимо снимка сессии (KTD-9): исход измерения (`null` — ещё не
- * измерена), есть ли выправленный файл любой известной версии, отложена ли коррекция. Карта
- * по ключу — по образцу `BlankVerdicts`; ключа нет — ни одного факта: страница ждёт.
+ * измерена), есть ли выправленный файл любой известной версии и каких версий, отложена ли
+ * коррекция. Карта по ключу — по образцу `BlankVerdicts`; ключа нет — ни одного факта:
+ * страница ждёт.
  */
 export interface StraightenFact {
   readonly outcome: SkewOutcome | null;
@@ -34,6 +35,10 @@ export interface StraightenFact {
   readonly cause: SkewCause | null;
   /** Версия геометрии выправленного файла любой известной версии; `null` — файла нет. */
   readonly version: number | null;
+  /** Версия детектора файла (B-19); `0` — запись прежнего формата без поля; `null` — файла нет. */
+  readonly detector: number | null;
+  /** Файл не текущих версий (геометрии или детектора) — пересчёт идёт или ждёт; ядро сверяет. */
+  readonly stale: boolean;
   readonly deferred: StraightenDeferredReason | null;
 }
 
@@ -67,24 +72,45 @@ export const STRAIGHTEN_REASONS = ['measure', 'shape', 'nohelp', 'disk', 'fail']
 export type StraightenReason = (typeof STRAIGHTEN_REASONS)[number];
 
 /**
- * Пометка страницы в ленте: статус, причина (только у `unmeasurable` и `deferred`) и версия
- * геометрии выправленного файла (у `straightened` и `kept`) — она входит в адрес картинки
- * (KTD-7), чтобы откат, пересчёт и смена версии меняли адрес.
+ * Пересчёт выправленного файла прежних версий (B-19): `pending` — идёт или ждёт очереди, `disk` /
+ * `fail` — отложен (мало места / сбой), прежний вид показан. Признак ядра, не догадка renderer'а.
+ */
+export const STRAIGHTEN_RECALC = ['pending', 'disk', 'fail'] as const;
+export type StraightenRecalc = (typeof STRAIGHTEN_RECALC)[number];
+
+/**
+ * Пометка страницы в ленте: статус, причина (только у `unmeasurable` и `deferred`), версии
+ * геометрии и детектора выправленного файла (у `straightened` и `kept`) — они входят в адрес
+ * картинки (KTD-7), чтобы откат, пересчёт и смена любой версии меняли адрес, — и пересчёт файла
+ * прежних версий (`recalc`, только при файле).
  */
 export interface StraightenMark {
   readonly status: StraightenStatus;
   readonly reason: StraightenReason | null;
   readonly version: number | null;
+  readonly detector: number | null;
+  readonly recalc: StraightenRecalc | null;
 }
 
-export const NO_STRAIGHTEN_MARK: StraightenMark = { status: null, reason: null, version: null };
-const PENDING_MARK: StraightenMark = { status: 'pending', reason: null, version: null };
+const NO_FILE = { version: null, detector: null, recalc: null } as const;
 
-/** Выправленный файл есть: «выправлена», при откате пользователя — «оригинал оставлен». */
-const withFile = (input: StraightenMarkInput, version: number): StraightenMark => ({
+export const NO_STRAIGHTEN_MARK: StraightenMark = { status: null, reason: null, ...NO_FILE };
+const PENDING_MARK: StraightenMark = { status: 'pending', reason: null, ...NO_FILE };
+
+/** Причина отсрочки — одной картой для статуса «отложена» и для пересчёта файла прежних версий. */
+const deferredReasonOf = (deferred: StraightenDeferredReason): 'disk' | 'fail' =>
+  deferred === 'noSpace' ? 'disk' : 'fail';
+
+/**
+ * Выправленный файл есть: «выправлена», при откате пользователя — «оригинал оставлен»; у файла
+ * прежних версий — пересчёт идёт, ждёт или отложен (AE13; B-19).
+ */
+const withFile = (input: StraightenMarkInput, fact: StraightenFact): StraightenMark => ({
   status: input.keepOriginal ? 'kept' : 'straightened',
   reason: null,
-  version,
+  version: fact.version,
+  detector: fact.detector,
+  recalc: !fact.stale ? null : fact.deferred === null ? 'pending' : deferredReasonOf(fact.deferred),
 });
 
 /** Что нужно знать о странице, чтобы поставить статус (KTD-9). */
@@ -120,44 +146,45 @@ export function straightenMarkOf(input: StraightenMarkInput): StraightenMark {
     // Исхода текущих версий нет, а файл известной версии есть: кэш оценок потерян (AE8) или
     // версия геометрии сменилась (AE13) — прежний выправленный вид показывается и сохраняется,
     // измерение и пересчёт идут фоном: ни «ждёт», ни отказа сохранения (найдено U9).
-    return fact.version === null ? PENDING_MARK : withFile(input, fact.version);
+    return fact.version === null ? PENDING_MARK : withFile(input, fact);
   }
   switch (fact.outcome) {
     case 'unmeasurable':
       return {
         status: 'unmeasurable',
         reason: fact.cause === 'shape' ? 'shape' : 'measure',
-        version: null,
+        ...NO_FILE,
       };
     case 'notImproved':
-      return { status: 'unmeasurable', reason: 'nohelp', version: null };
+      return { status: 'unmeasurable', reason: 'nohelp', ...NO_FILE };
     case 'level':
-      return { status: 'level', reason: null, version: null };
+      return { status: 'level', reason: null, ...NO_FILE };
     case 'willStraighten':
       if (fact.version !== null) {
-        return withFile(input, fact.version);
+        return withFile(input, fact);
       }
       if (fact.deferred !== null) {
         return {
           status: 'deferred',
-          reason: fact.deferred === 'noSpace' ? 'disk' : 'fail',
-          version: null,
+          reason: deferredReasonOf(fact.deferred),
+          ...NO_FILE,
         };
       }
       return PENDING_MARK;
   }
 }
 
-/** Адрес картинки страницы: вид, ключ и версия (только у выправленных видов). */
+/** Адрес картинки страницы: вид, ключ и версии геометрии и детектора (только у выправленных видов). */
 export interface PageImageRef {
   readonly view: PageImageView;
   readonly key: string;
   readonly version: number | null;
+  readonly detector: number | null;
 }
 
 /**
  * Какой вид картинки показывать (KTD-7) — одно правило на ленту, превью и полосу прохода:
- * выправленный вид только при статусе «выправлена» и известной версии файла; откат, ожидание,
+ * выправленный вид только при статусе «выправлена» и известных версиях файла; откат, ожидание,
  * режим «не выравнивать» и страница прохода без статуса — оригинал. Истина для пометки —
  * статус в снимке; сервер при отсутствии файла отдаёт оригинал.
  */
@@ -166,14 +193,15 @@ export function pageImageViewOf(
   size: 'page' | 'thumb',
 ): PageImageRef {
   const mark = page.straighten;
-  if (mark?.status === 'straightened' && mark.version !== null) {
+  if (mark?.status === 'straightened' && mark.version !== null && mark.detector !== null) {
     return {
       view: size === 'page' ? 'straight' : 'straight-thumb',
       key: page.key,
       version: mark.version,
+      detector: mark.detector,
     };
   }
-  return { view: size, key: page.key, version: null };
+  return { view: size, key: page.key, version: null, detector: null };
 }
 
 /**
@@ -245,5 +273,5 @@ export function pageImageSrc(
   size: 'page' | 'thumb',
 ): string {
   const ref = pageImageViewOf(page, size);
-  return pageImageUrl(sessionId, ref.view, ref.key, ref.version);
+  return pageImageUrl(sessionId, ref.view, ref.key, ref.version, ref.detector);
 }

@@ -36,8 +36,8 @@ import {
 // поднимает `SKEW_DETECTOR_VERSION`; смена геометрии — `STRAIGHTEN_GEOMETRY_VERSION` в
 // `@shared`.
 
-/** Версия алгоритма и констант детектора; пишется в запись измерения вместе с геометрией. */
-export const SKEW_DETECTOR_VERSION = 4;
+// Версия детектора — в `skew-version.ts` (без импортов, B-19); отсюда — реэкспорт.
+export { SKEW_DETECTOR_VERSION } from './skew-version';
 
 /** Номинальная высота листа — для перевода миллиметров полосы в пиксели рабочей картинки. */
 const PAGE_HEIGHT_MM = 297;

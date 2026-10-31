@@ -18,7 +18,8 @@ import { stubWorker } from '../../../test/support/image-worker';
 import { unwrap } from '../../../test/support/result';
 import { until } from '../../../test/support/until';
 import type { BlankDetector } from '../detect/blank';
-import { layoutOf } from '../storage/layout';
+import { SKEW_DETECTOR_VERSION } from '../detect/skew';
+import { layoutOf, straightFileName } from '../storage/layout';
 import { realStorageFs } from '../storage/storage-fs';
 import { openPassService, type PassService } from './pass-service';
 
@@ -313,9 +314,11 @@ describe('служба прохода: статусы, гарды и снимо�
     const streams = await streamsOf(join(folder, 'Документ.pdf'));
     expect(streams).toHaveLength(3);
     expect(streams[0]?.equals(pageFixture(1))).toBe(false);
-    expect(streams[0]?.equals(await readFile(join(straightDir(root), `${F(1)}.v1.jpg`)))).toBe(
-      true,
-    );
+    expect(
+      streams[0]?.equals(
+        await readFile(join(straightDir(root), straightFileName(F(1), 1, SKEW_DETECTOR_VERSION))),
+      ),
+    ).toBe(true);
     expect(streams[1]?.equals(pageFixture(2))).toBe(true);
     expect(streams[2]?.equals(pageFixture(3))).toBe(true);
     expect(service.snapshot().session?.saved).toBe(true);
@@ -371,8 +374,8 @@ describe('служба прохода: статусы, гарды и снимо�
     await untilStraightened(service);
 
     expect(service.snapshot().assembly?.order.map((page) => page.straighten)).toEqual([
-      { status: 'deferred', reason: 'disk', version: null },
-      { status: 'level', reason: null, version: null },
+      { status: 'deferred', reason: 'disk', version: null, detector: null, recalc: null },
+      { status: 'level', reason: null, version: null, detector: null, recalc: null },
     ]);
     expect(service.snapshot().assembly?.straighten).toMatchObject({
       deferred: 1,
@@ -397,7 +400,7 @@ describe('служба прохода: статусы, гарды и снимо�
     await untilStraightened(service);
     expect(statusesOf(service)[F(1)]).toBe('straightened');
 
-    await rm(join(straightDir(root), `${F(1)}.v1.jpg`));
+    await rm(join(straightDir(root), straightFileName(F(1), 1, SKEW_DETECTOR_VERSION)));
 
     const saved = unwrap(await service.saveDocuments(folder, SINGLE));
     expect(saved.written).toEqual([]);

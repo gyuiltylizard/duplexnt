@@ -12,6 +12,7 @@ import { ioOf, realStorageFs } from '../storage/storage-fs';
 import type { StraightenedFile } from '../storage/straightened';
 import { assembleSession } from './assembly';
 import { createDocumentWriter } from './save-flow';
+import { SKEW_DETECTOR_VERSION } from '../detect/skew';
 
 // Пакет сохранения по снимку выправленных (план M6, U12; KTD-8; AE14) на настоящем хранилище
 // сессии и подставных выправленных файлах: повтор пакета при сменившемся дайджесте снимка —
@@ -34,7 +35,14 @@ async function setup() {
     const path = join(straightDir, `${F1}.f${String(fixture)}.jpg`);
     const bytes = pageFixture(fixture);
     await writeFile(path, bytes);
-    return { path, version: 1, bytes: bytes.byteLength, encoding: 'jpeg-q92-444', dpi: 300 };
+    return {
+      path,
+      version: 1,
+      detector: SKEW_DETECTOR_VERSION,
+      bytes: bytes.byteLength,
+      encoding: 'jpeg-q92-444',
+      dpi: 300,
+    };
   };
   let current = await fileOf(3);
   const holds: string[] = [];
@@ -62,8 +70,28 @@ async function setup() {
   };
   const facts = (): StraightenFacts =>
     new Map([
-      [F1, { outcome: 'willStraighten', version: current.version, deferred: null, cause: null }],
-      ['p01-s01-0002', { outcome: 'level', version: null, deferred: null, cause: null }],
+      [
+        F1,
+        {
+          outcome: 'willStraighten',
+          version: current.version,
+          detector: current.detector,
+          stale: false,
+          deferred: null,
+          cause: null,
+        },
+      ],
+      [
+        'p01-s01-0002',
+        {
+          outcome: 'level',
+          version: null,
+          detector: null,
+          stale: false,
+          deferred: null,
+          cause: null,
+        },
+      ],
     ]);
   const writer = createDocumentWriter({
     store,

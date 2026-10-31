@@ -18,6 +18,8 @@ import {
   type ThumbnailSource,
 } from '../../src/core/storage/thumbnails';
 import { STRAIGHTEN_ENCODING, type StraightenResult } from '../../src/core/image/straighten';
+import { SKEW_DETECTOR_VERSION } from '../../src/core/detect/skew';
+import { straightFileName } from '../../src/core/storage/layout';
 import { createStraightened } from '../../src/core/storage/straightened';
 import { dirSnapshot } from '../support/dir-snapshot';
 import { ET_3850, pageFixture, readFixture } from '../support/fixtures';
@@ -326,6 +328,8 @@ describe('миниатюры', () => {
 });
 
 describe('миниатюры выправленных страниц (M6, U6; KTD-7)', () => {
+  /** Имя текущей пары — и выправленного JPEG, и его миниатюры (B-19). */
+  const CURRENT_THUMB = straightFileName(KEY, 1, SKEW_DETECTOR_VERSION);
   /** Исход коррекции — другая страница-фикстура: миниатюра из неё отличима от оригинала. */
   const resultOf = (fixture: number): StraightenResult => ({
     jpeg: new Uint8Array(pageFixture(fixture)),
@@ -355,7 +359,7 @@ describe('миниатюры выправленных страниц (M6, U6; KT
     expect(metadata.height).toBe(THUMBNAIL_BOX.height);
     // Миниатюра выправленной — из другого файла: отличается от обычной той же страницы.
     expect(Buffer.from(straight).equals(Buffer.from(plain))).toBe(false);
-    expect(await readdir(straightThumbs)).toEqual([`${KEY}.v1.jpg`]);
+    expect(await readdir(straightThumbs)).toEqual([CURRENT_THUMB]);
     expect(await readdir(join(layout.derivedDir, sessionId, 'thumbs'))).toEqual([`${KEY}.jpg`]);
     // Повтор — из кэша, байт в байт.
     expect(valueOf(await thumbnails.getStraight(KEY))).toEqual(straight);
@@ -376,7 +380,7 @@ describe('миниатюры выправленных страниц (M6, U6; KT
     // Прежние версии (у версии 1 их нет) убираются; новее известной — от будущего приложения,
     // не наша; чужой ключ не трогается.
     expect((await readdir(straightThumbs)).sort()).toEqual([
-      `${KEY}.v1.jpg`,
+      CURRENT_THUMB,
       `${KEY}.v7.jpg`,
       `p01-s01-0002.v7.jpg`,
     ]);
@@ -384,10 +388,7 @@ describe('миниатюры выправленных страниц (M6, U6; KT
     // Файл выправленной подменён другим размером: запись негодна — миниатюра не строится и не
     // отдаётся из кэша другой записи (кэш той же версии стёрт вместе с производным).
     await rm(straightThumbs, { recursive: true });
-    await writeFile(
-      join(layout.derivedDir, sessionId, 'straight', `${KEY}.v1.jpg`),
-      Buffer.alloc(9),
-    );
+    await writeFile(join(layout.derivedDir, sessionId, 'straight', CURRENT_THUMB), Buffer.alloc(9));
     expect(await thumbnails.getStraight(KEY)).toMatchObject({
       ok: false,
       error: { code: 'pageUnavailable' },

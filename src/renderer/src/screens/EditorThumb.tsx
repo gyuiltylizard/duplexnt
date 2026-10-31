@@ -168,6 +168,8 @@ export const EditorThumb = memo(function EditorThumb({
   straightStatus,
   straightReason,
   straightVersion,
+  straightDetector,
+  straightRecalc,
   position,
   inSets,
   addedSet,
@@ -199,6 +201,8 @@ export const EditorThumb = memo(function EditorThumb({
   readonly straightStatus: StraightenMark['status'];
   readonly straightReason: StraightenMark['reason'];
   readonly straightVersion: StraightenMark['version'];
+  readonly straightDetector: StraightenMark['detector'];
+  readonly straightRecalc: StraightenMark['recalc'];
   /** Номер по порядку в показанной ленте, с единицы — сквозной через документы и группы. */
   readonly position: number;
   /** Режим наборов: подпись — «что это за страница» теми же словами, что ДЕТАЛИ (KTD9). */
@@ -229,6 +233,8 @@ export const EditorThumb = memo(function EditorThumb({
     status: straightStatus,
     reason: straightReason,
     version: straightVersion,
+    detector: straightDetector,
+    recalc: straightRecalc,
   };
   // Вид по статусу (KTD-7); откат, «Выровнять» и поздняя коррекция меняют адрес — прежний кадр
   // остаётся до готовности нового (handoff M6, «Смена вида на месте»).

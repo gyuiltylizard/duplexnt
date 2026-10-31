@@ -12,7 +12,13 @@ import { keyOf } from '../support/assembly';
 import { analyzeGrid } from '../support/grid-analysis';
 import { connectService, saveSingle, scanned } from '../support/pass-service';
 import { unwrap } from '../support/result';
-import { sessionIdOf, skewDirOf, statusesOf, straightDirOf } from '../support/straighten';
+import {
+  sessionIdOf,
+  skewDirOf,
+  statusesOf,
+  straightDirOf,
+  straightJpegOf,
+} from '../support/straighten';
 import { untilStraightened } from '../support/until';
 
 // Пачка M6 на эмуляторе (план M6, U9; AE1, AE2, AE7, AE11, AE12, AE17): сценарии `fan-pack` и
@@ -47,9 +53,9 @@ const shownOrder = (service: PassService): AssembledPage[] =>
 
 /** Байты страницы, какими они уходят в файл: выправленной — производное, остальным — исходник. */
 async function fileBytesOf(root: string, sessionId: string, page: AssembledPage): Promise<Buffer> {
-  const { status, version } = page.straighten;
-  return status === 'straightened'
-    ? readFile(join(straightDirOf(root, sessionId), `${page.key}.v${String(version)}.jpg`))
+  const { status, version, detector } = page.straighten;
+  return status === 'straightened' && version !== null && detector !== null
+    ? readFile(join(straightDirOf(root, sessionId), straightJpegOf(page.key, version, detector)))
     : readFile(join(layoutOf(root).pagesDir, `${page.key}.jpg`));
 }
 
@@ -110,11 +116,11 @@ describe('пачка M6 на эмуляторе (U9)', () => {
 
     // AE11: ровная — статус без версии, файла в straight/ нет.
     const straightFiles = await readdir(straightDirOf(root, sessionId));
-    expect(straightFiles).toContain(`${F(1)}.v1.jpg`);
-    expect(straightFiles).not.toContain(`${F(2)}.v1.jpg`);
+    expect(straightFiles).toContain(straightJpegOf(F(1)));
+    expect(straightFiles).not.toContain(straightJpegOf(F(2)));
     expect(
       service.snapshot().assembly?.order.find((page) => page.key === F(2))?.straighten,
-    ).toEqual({ status: 'level', reason: null, version: null });
+    ).toEqual({ status: 'level', reason: null, version: null, detector: null, recalc: null });
     // AE12: скрытый пустой оборот не измерен — записи оценки нет.
     const skewDir = skewDirOf(root, sessionId);
     expect(await readdir(skewDir)).not.toContain(`${B(2)}.json`);
