@@ -447,6 +447,8 @@ export function EditorRail({
       straightStatus={entry.straighten.status}
       straightReason={entry.straighten.reason}
       straightVersion={entry.straighten.version}
+      straightDetector={entry.straighten.detector}
+      straightRecalc={entry.straighten.recalc}
       position={position + 1}
       inSets={sets !== null}
       addedSet={entry.addedSet}

@@ -17,7 +17,13 @@ const t = i18n.t.bind(i18n);
 const mark = (
   status: StraightenMark['status'],
   reason: StraightenMark['reason'] = null,
-): StraightenMark => ({ status, reason, version: status === 'straightened' ? 1 : null });
+): StraightenMark => ({
+  status,
+  reason,
+  version: status === 'straightened' ? 1 : null,
+  detector: status === 'straightened' ? 1 : null,
+  recalc: null,
+});
 
 const page = (key: string, straighten: StraightenMark): AssembledPage => ({
   key,

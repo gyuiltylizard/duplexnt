@@ -14,6 +14,7 @@ import { unwrap } from '../support/result';
 import { journalOnDisk } from '../support/session-store';
 import { skewDirOf, statusesOf } from '../support/straighten';
 import { until, untilScored } from '../support/until';
+import { SKEW_DETECTOR_VERSION } from '../../src/core/detect/skew';
 
 // Выравнивание перекоса на настоящей цепочке (план M6, U5, U12; R6, R11, KTD-4, KTD-8, KTD-9,
 // KTD-12): эмулятор с настоящими косыми сканами в лотке → служба с прямым исполнителем → оценки
@@ -220,7 +221,13 @@ describe('выравнивание на эмуляторе: измерение �
 
     unwrap(await service.setEdits({ ...EMPTY_EDITS, keepOriginal: [F(1)] }, {}));
     const kept = service.snapshot().assembly?.order[0];
-    expect(kept?.straighten).toEqual({ status: 'kept', reason: null, version: 1 });
+    expect(kept?.straighten).toEqual({
+      status: 'kept',
+      reason: null,
+      version: 1,
+      detector: SKEW_DETECTOR_VERSION,
+      recalc: null,
+    });
     expect(pageImageViewOf(kept ?? { key: F(1) }, 'page').view).toBe('page');
     expect(service.snapshot().assembly?.hasEdits).toBe(true);
 

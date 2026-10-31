@@ -68,19 +68,23 @@ interface PageAddress {
   readonly sessionId: string;
   readonly view: PageImageView;
   readonly key: string;
-  /** Версия геометрии из адреса выправленного вида; у остальных `null`. */
+  /** Версии геометрии и детектора из адреса выправленного вида; у остальных `null`. */
   readonly version: number | null;
+  readonly detector: number | null;
 }
 
 const isView = (value: string): value is PageImageView =>
   (PAGE_IMAGE_VIEWS as readonly string[]).includes(value);
 
-/** Версия геометрии в адресе: целое от единицы, без ведущих нулей, не длиннее четырёх цифр. */
-const VERSION = /^[1-9]\d{0,3}$/;
+/**
+ * Версии в адресе: геометрия — целое от единицы, детектор — от нуля (запись прежнего формата);
+ * без ведущих нулей, не длиннее четырёх цифр каждая, через точку.
+ */
+const VERSIONS = /^([1-9]\d{0,3})\.(0|[1-9]\d{0,3})$/;
 
 /**
  * Разбор адреса; всё, что не ровно `схема://сессия/вид/ключ` (у выправленных видов —
- * `схема://сессия/вид/версия/ключ`), — `null`.
+ * `схема://сессия/вид/геометрия.детектор/ключ`), — `null`.
  */
 export function parsePageImageUrl(raw: string): PageAddress | null {
   let url: URL;
@@ -104,18 +108,20 @@ export function parsePageImageUrl(raw: string): PageAddress | null {
     return null;
   }
   let version: number | null = null;
+  let detector: number | null = null;
   if (isStraightView(view)) {
-    const raw = rest.shift();
-    if (raw === undefined || !VERSION.test(raw)) {
+    const match = VERSIONS.exec(rest.shift() ?? '');
+    if (match === null) {
       return null;
     }
-    version = Number(raw);
+    version = Number(match[1]);
+    detector = Number(match[2]);
   }
   const [key, ...extra] = rest;
   if (key === undefined || extra.length > 0 || !isPageKey(key)) {
     return null;
   }
-  return { sessionId: url.hostname, view, key, version };
+  return { sessionId: url.hostname, view, key, version, detector };
 }
 
 const NO_STORE = { 'Cache-Control': 'no-store' } as const;

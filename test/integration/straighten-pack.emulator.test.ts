@@ -114,7 +114,7 @@ describe('пачка M6 на эмуляторе (U9)', () => {
     expect(straightFiles).not.toContain(`${F(2)}.v1.jpg`);
     expect(
       service.snapshot().assembly?.order.find((page) => page.key === F(2))?.straighten,
-    ).toEqual({ status: 'level', reason: null, version: null });
+    ).toEqual({ status: 'level', reason: null, version: null, detector: null, recalc: null });
     // AE12: скрытый пустой оборот не измерен — записи оценки нет.
     const skewDir = skewDirOf(root, sessionId);
     expect(await readdir(skewDir)).not.toContain(`${B(2)}.json`);

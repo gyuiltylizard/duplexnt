@@ -243,8 +243,8 @@ describe('выравнивание на эмуляторе: восстановл
     await untilStraightened(() => service.snapshot());
 
     expect(marksOf(service)).toEqual([
-      { status: 'deferred', reason: 'disk', version: null },
-      { status: 'unmeasurable', reason: 'measure', version: null },
+      { status: 'deferred', reason: 'disk', version: null, detector: null, recalc: null },
+      { status: 'unmeasurable', reason: 'measure', version: null, detector: null, recalc: null },
     ]);
     expect(service.snapshot().assembly?.straighten).toMatchObject({
       deferred: 1,
@@ -276,7 +276,13 @@ describe('выравнивание на эмуляторе: восстановл
     await scanned(service, 2);
     await untilStraightened(() => service.snapshot());
 
-    expect(marksOf(service)[0]).toEqual({ status: 'deferred', reason: 'fail', version: null });
+    expect(marksOf(service)[0]).toEqual({
+      status: 'deferred',
+      reason: 'fail',
+      version: null,
+      detector: null,
+      recalc: null,
+    });
     expect(service.snapshot().assembly?.straighten).toMatchObject({
       deferred: 1,
       pending: 0,

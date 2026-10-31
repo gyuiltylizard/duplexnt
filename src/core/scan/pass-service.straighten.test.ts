@@ -371,8 +371,8 @@ describe('служба прохода: статусы, гарды и снимо�
     await untilStraightened(service);
 
     expect(service.snapshot().assembly?.order.map((page) => page.straighten)).toEqual([
-      { status: 'deferred', reason: 'disk', version: null },
-      { status: 'level', reason: null, version: null },
+      { status: 'deferred', reason: 'disk', version: null, detector: null, recalc: null },
+      { status: 'level', reason: null, version: null, detector: null, recalc: null },
     ]);
     expect(service.snapshot().assembly?.straighten).toMatchObject({
       deferred: 1,

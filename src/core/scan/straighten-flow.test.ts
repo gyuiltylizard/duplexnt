@@ -119,9 +119,39 @@ describe('выравнивание: факты для статусов и ход
     const queue = queueOf({ deferred: new Map([[keyOf(1, 3), 'noSpace']]) });
     expect(straightenFactsOf(session, verdicts, straightened, queue)).toEqual(
       new Map([
-        [keyOf(1, 1), { outcome: 'willStraighten', version: 1, deferred: null, cause: null }],
-        [keyOf(1, 2), { outcome: 'level', version: null, deferred: null, cause: null }],
-        [keyOf(1, 3), { outcome: null, version: null, deferred: 'noSpace', cause: null }],
+        [
+          keyOf(1, 1),
+          {
+            outcome: 'willStraighten',
+            version: 1,
+            detector: SKEW_DETECTOR_VERSION,
+            stale: false,
+            deferred: null,
+            cause: null,
+          },
+        ],
+        [
+          keyOf(1, 2),
+          {
+            outcome: 'level',
+            version: null,
+            detector: null,
+            stale: false,
+            deferred: null,
+            cause: null,
+          },
+        ],
+        [
+          keyOf(1, 3),
+          {
+            outcome: null,
+            version: null,
+            detector: null,
+            stale: false,
+            deferred: 'noSpace',
+            cause: null,
+          },
+        ],
       ]),
     );
     expect(straightenFactsOf(session, new Map(), { resolve: () => null }, queueOf()).size).toBe(0);
@@ -129,6 +159,25 @@ describe('выравнивание: факты для статусов и ход
       straightenFactsOf({ ...session, straighten: 'off' }, verdicts, straightened, queue).size,
     ).toBe(0);
     expect(straightenFactsOf(null, verdicts, straightened, queue).size).toBe(0);
+  });
+
+  it('файл не текущих версий — stale: чужой детектор, прежний формат без детектора (0), прежняя геометрия (B-19)', () => {
+    const stale = new Map([
+      [keyOf(1, 1), fileOf(keyOf(1, 1), 1, 100, SKEW_DETECTOR_VERSION + 1)],
+      [keyOf(1, 2), fileOf(keyOf(1, 2), 1, 100, 0)],
+      [keyOf(1, 3), fileOf(keyOf(1, 3), 0, 100)],
+    ]);
+    const facts = straightenFactsOf(
+      session,
+      verdicts,
+      { resolve: (key: string) => stale.get(key) ?? null },
+      queueOf(),
+    );
+    expect([...facts.values()].map((fact) => [fact.detector, fact.stale])).toEqual([
+      [SKEW_DETECTOR_VERSION + 1, true],
+      [0, true],
+      [SKEW_DETECTOR_VERSION, true],
+    ]);
   });
 
   it('ход: очередь с исполняемой; вне режима «выравнивать» — null', () => {
@@ -157,7 +206,10 @@ describe('выравнивание: снимок выправленных на �
     lost: false,
     addedSet: null,
     blank: null,
-    straighten: status === null ? NO_STRAIGHTEN_MARK : { status, reason: null, version: 1 },
+    straighten:
+      status === null
+        ? NO_STRAIGHTEN_MARK
+        : { status, reason: null, version: 1, detector: SKEW_DETECTOR_VERSION, recalc: null },
   });
   const K1 = keyOf(1, 1);
   const K2 = keyOf(1, 2);

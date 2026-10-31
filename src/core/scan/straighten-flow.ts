@@ -23,7 +23,11 @@ import { isAlive, pruneStale } from '../storage/liveness';
 import type { PageInfo } from '../storage/session-store';
 import type { SkewScores } from '../storage/skew-scores';
 import { storageFailure } from '../storage/storage-fs';
-import type { Straightened, StraightenedFile } from '../storage/straightened';
+import {
+  isCurrentStraightened,
+  type Straightened,
+  type StraightenedFile,
+} from '../storage/straightened';
 import type { ThumbnailSource } from '../storage/thumbnails';
 
 // Выравнивание перекоса в службе проходов (план M6, U5, U11, U12; R6, R27; KTD-4, KTD-8,
@@ -66,9 +70,9 @@ export function pagesToMeasure(
 
 /**
  * Факты ядра для статусов страниц (KTD-9): исход измерения, запись о коррекции любой известной
- * версии (`resolve`), отсрочка из очереди. Только в режиме «выравнивать» и только у страниц, о
- * которых хоть что-то известно: остальные ждут. Снимок строится на каждом `snapshot()`, поэтому
- * без аллокаций сверх нужного.
+ * версии (`resolve`) с её версиями и признаком «не текущая» (B-19), отсрочка из очереди. Только в
+ * режиме «выравнивать» и только у страниц, о которых хоть что-то известно: остальные ждут. Снимок
+ * строится на каждом `snapshot()`, поэтому без аллокаций сверх нужного.
  */
 export function straightenFactsOf(
   session: SessionSnapshot | null,
@@ -84,10 +88,17 @@ export function straightenFactsOf(
     for (const page of pass.pages) {
       const verdict = verdicts.get(page.key);
       const outcome = verdict?.outcome ?? null;
-      const version = straightened.resolve(page.key)?.version ?? null;
+      const file = straightened.resolve(page.key);
       const deferred = queue.deferred.get(page.key) ?? null;
-      if (outcome !== null || version !== null || deferred !== null) {
-        facts.set(page.key, { outcome, cause: verdict?.cause ?? null, version, deferred });
+      if (outcome !== null || file !== null || deferred !== null) {
+        facts.set(page.key, {
+          outcome,
+          cause: verdict?.cause ?? null,
+          version: file?.version ?? null,
+          detector: file?.detector ?? null,
+          stale: file !== null && !isCurrentStraightened(file),
+          deferred,
+        });
       }
     }
   }

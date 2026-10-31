@@ -52,9 +52,16 @@ function session(backsState: PassSnapshot['state']): SessionSnapshot {
   };
 }
 
-const LEVEL = { outcome: 'level', version: null, deferred: null, cause: null } as const;
-const STRAIGHT = { outcome: 'willStraighten', version: 1, deferred: null, cause: null } as const;
-const PENDING = { outcome: null, version: null, deferred: null, cause: null } as const;
+const NO_FILE = {
+  version: null,
+  detector: null,
+  stale: false,
+  deferred: null,
+  cause: null,
+} as const;
+const LEVEL = { outcome: 'level', ...NO_FILE } as const;
+const STRAIGHT = { ...NO_FILE, outcome: 'willStraighten', version: 1, detector: 1 } as const;
+const PENDING = { outcome: null, ...NO_FILE } as const;
 
 /** Все шесть страниц с фактами: лица по `fronts`, обороты ровные. */
 const factsOf = (fronts: readonly (typeof LEVEL | typeof STRAIGHT | typeof PENDING)[]) =>

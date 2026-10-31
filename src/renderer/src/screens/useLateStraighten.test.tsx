@@ -18,7 +18,14 @@ const fact = (
   version: number | null,
   outcome: StraightenFact['outcome'] = 'willStraighten',
   deferred: StraightenFact['deferred'] = null,
-): StraightenFact => ({ outcome, version, deferred, cause: null });
+): StraightenFact => ({
+  outcome,
+  version,
+  detector: version === null ? null : 1,
+  stale: false,
+  deferred,
+  cause: null,
+});
 
 const orderOf = (facts: readonly (readonly [string, StraightenFact])[]): readonly AssembledPage[] =>
   makeSnapshot(

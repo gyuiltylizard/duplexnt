@@ -47,6 +47,8 @@ const fact = (
 ): StraightenFact => ({
   outcome,
   version: null,
+  detector: extra.version === undefined || extra.version === null ? null : 1,
+  stale: false,
   deferred: null,
   cause: null,
   ...extra,
@@ -97,7 +99,7 @@ describe('выравнивание в редакторе (M6)', () => {
     expect(option(0).querySelector('.thumb__straight--done')?.getAttribute('title')).toBe(
       'Выровнено — исходный скан цел',
     );
-    expect(thumbSrc(0)).toBe(pageImageUrl(SESSION, 'straight-thumb', P(1), 1));
+    expect(thumbSrc(0)).toBe(pageImageUrl(SESSION, 'straight-thumb', P(1), 1, 1));
 
     expect(option(1).getAttribute('aria-label')).toBe('Страница 2');
     expect(option(1).querySelector('.thumb__straight, .thumb__pending')).toBeNull();
@@ -162,7 +164,7 @@ describe('выравнивание в редакторе (M6)', () => {
     const { rerender } = renderEditor(snapshot);
 
     expect(screen.getByText('ВЫРОВНЕНО')).toBeDefined();
-    expect(previewSrc()).toBe(pageImageUrl(SESSION, 'straight', P(1), 1));
+    expect(previewSrc()).toBe(pageImageUrl(SESSION, 'straight', P(1), 1, 1));
 
     fireEvent.click(option(2));
     expect(screen.getByText('НЕ ВЫРОВНЕНО').getAttribute('title')).toBe(
@@ -476,7 +478,7 @@ describe('выравнивание в редакторе (M6)', () => {
 
     const session = sessionOf(snapshot);
     rerender(nextSnapshot(snapshot, { assembly: () => assemblyOf(session, undefined, DONE) }));
-    expect(thumbSrc(4)).toBe(pageImageUrl(SESSION, 'straight-thumb', P(5), 1));
+    expect(thumbSrc(4)).toBe(pageImageUrl(SESSION, 'straight-thumb', P(5), 1, 1));
   });
 
   it('модалка save из редактора: пока идёт обработка — статус с остатком и ряд «Выровнено», кнопка недоступна', () => {
