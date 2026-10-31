@@ -55,10 +55,16 @@ export function straightFactText(t: TFunction, mark: StraightenMark): string | n
   }
 }
 
-/** Текст секции ВЫРАВНИВАНИЕ у одной страницы; `null` — секции нет (`level`, `null`). */
+/**
+ * Текст секции ВЫРАВНИВАНИЕ у одной страницы; `null` — секции нет (`level`, `null`). У выправленной
+ * с отложенным пересчётом (B-19) — про прежний вид и причину; пересчёт в ходу текста не меняет.
+ */
 export function straightNoteText(t: TFunction, mark: StraightenMark): string | null {
   switch (mark.status) {
     case 'straightened':
+      return mark.recalc === 'disk' || mark.recalc === 'fail'
+        ? t(`inspector.straight.note.recalc.${mark.recalc}`)
+        : t('inspector.straight.note.straightened');
     case 'kept':
     case 'pending':
       return t(`inspector.straight.note.${mark.status}`);

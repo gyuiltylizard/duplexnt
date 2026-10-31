@@ -466,6 +466,61 @@ describe('выравнивание в редакторе (M6)', () => {
     );
   });
 
+  it('пересчёт отложен (B-19): инспектор — строка про прежний вид и причину, «Оставить оригинал» на месте; пересчёт в ходу — прежний текст', () => {
+    stubApi();
+    const deferredRecalc: StraightenFacts = new Map([
+      ...FACTS,
+      [P(1), fact('willStraighten', { version: 1, detector: 0, stale: true, deferred: 'noSpace' })],
+    ]);
+    const snapshot = straightSnapshot(deferredRecalc);
+    const { rerender } = renderEditor(snapshot);
+
+    expect(
+      within(inspector()).getByText(
+        'Показан выправленный вид прежней версии приложения. Пересчёт отложен: не хватило места на диске — освободите место, при следующем запуске приложение попробует снова.',
+      ),
+    ).toBeDefined();
+    expect(straightButton('Оставить оригинал')).toBeDefined();
+    expect(thumbSrc(0)).toBe(pageImageUrl(SESSION, 'straight-thumb', P(1), 1, 0));
+
+    const session = sessionOf(snapshot);
+    rerender(
+      nextSnapshot(snapshot, {
+        assembly: () =>
+          assemblyOf(
+            session,
+            undefined,
+            new Map([...FACTS, [P(1), fact(null, { version: 1, detector: 0, stale: true })]]),
+          ),
+      }),
+    );
+    expect(
+      within(inspector()).getByText(
+        'Строки на странице шли веером — приложение выровняло их. Исходный скан цел.',
+      ),
+    ).toBeDefined();
+  });
+
+  it('пересчёт при той же геометрии меняет адрес карточки версией детектора — новый кадр на месте (B-19)', () => {
+    stubApi();
+    const snapshot = straightSnapshot();
+    const { rerender } = renderEditor(snapshot);
+    expect(thumbSrc(0)).toBe(pageImageUrl(SESSION, 'straight-thumb', P(1), 1, 1));
+
+    const session = sessionOf(snapshot);
+    rerender(
+      nextSnapshot(snapshot, {
+        assembly: () =>
+          assemblyOf(
+            session,
+            undefined,
+            new Map([...FACTS, [P(1), fact('willStraighten', { version: 1, detector: 2 })]]),
+          ),
+      }),
+    );
+    expect(thumbSrc(0)).toBe(pageImageUrl(SESSION, 'straight-thumb', P(1), 1, 2));
+  });
+
   it('карточка не загрузилась, затем статус сменил вид на месте — новая попытка с новым адресом', () => {
     stubApi();
     const snapshot = straightSnapshot();
