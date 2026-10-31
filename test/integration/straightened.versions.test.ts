@@ -54,6 +54,9 @@ async function* body(bytes: Uint8Array): AsyncGenerator<Uint8Array> {
 const F1 = 'p01-s01-0001';
 const D = SKEW_DETECTOR_VERSION;
 const CURRENT = { version: 2, detector: D };
+/** Детектор прежних сборок: пары с ним — наши, но не текущие. */
+const OLDER = D - 1;
+const OLDEST = D - 2;
 const current = (ext: 'jpg' | 'json'): string =>
   ext === 'jpg' ? straightFileName(F1, 2, D) : straightRecordName(F1, 2, D);
 
@@ -132,7 +135,7 @@ describe('выправленные пары: версии геометрии и 
 
   it('пара той же геометрии с чужим детектором — годна, не текущая; store пишет рядом и убирает её', async () => {
     const { dir, straightened } = await sessionWith();
-    await loaded(straightened, dir, 2, D + 1);
+    await loaded(straightened, dir, 2, OLDER);
     expect(isCurrentStraightened(straightened.resolve(F1) ?? CURRENT)).toBe(false);
 
     await straightened.store(F1, resultOf(2));
@@ -141,25 +144,50 @@ describe('выправленные пары: версии геометрии и 
     expect(await files(dir)).toEqual([current('jpg'), current('json')]);
   });
 
+  it('пара с детектором новее известного — не наша: не отдаётся, store пишет текущую рядом и её не трогает', async () => {
+    const { dir, straightened } = await sessionWith();
+    await pairOnDisk(dir, 2, D + 1);
+    await straightened.load([F1]);
+    expect(straightened.resolve(F1)).toBeNull();
+
+    await straightened.store(F1, resultOf(2));
+
+    expect(straightened.resolve(F1)).toMatchObject(CURRENT);
+    expect(await files(dir)).toEqual(
+      [
+        current('jpg'),
+        current('json'),
+        straightFileName(F1, 2, D + 1),
+        straightRecordName(F1, 2, D + 1),
+      ].sort(),
+    );
+  });
+
   it('две пары ключа при открытии — отдаётся текущая, лишняя убирается; негодная запись — сирота', async () => {
     const { dir, straightened } = await sessionWith();
     await pairOnDisk(dir, 1, UNKNOWN_DETECTOR);
     await pairOnDisk(dir, 2, D, 2, 64);
-    // Пара новее известной геометрии — от будущего приложения, не трогается и не отдаётся.
+    // Пары новее известных версий — геометрии или детектора — от будущего приложения: не
+    // трогаются и не отдаются.
     await pairOnDisk(dir, 3, D);
+    await pairOnDisk(dir, 2, D + 1);
     // Запись без файла нужного размера — негодна.
-    await pairOnDisk(dir, 2, D + 2);
-    await writeFile(join(dir, straightFileName(F1, 2, D + 2)), Buffer.alloc(5));
+    await pairOnDisk(dir, 2, OLDEST);
+    await writeFile(join(dir, straightFileName(F1, 2, OLDEST)), Buffer.alloc(5));
 
     await straightened.load([F1]);
 
     expect(straightened.resolve(F1)).toMatchObject({ ...CURRENT, bytes: 64 });
-    expect(await files(dir)).toEqual([
-      current('jpg'),
-      current('json'),
-      straightFileName(F1, 3, D),
-      straightRecordName(F1, 3, D),
-    ]);
+    expect(await files(dir)).toEqual(
+      [
+        current('jpg'),
+        current('json'),
+        straightFileName(F1, 2, D + 1),
+        straightRecordName(F1, 2, D + 1),
+        straightFileName(F1, 3, D),
+        straightRecordName(F1, 3, D),
+      ].sort(),
+    );
   });
 
   it('discard убирает пару и запись из карты; под hold файлы живут до отпускания, resolve уже пуст', async () => {
@@ -170,7 +198,7 @@ describe('выправленные пары: версии геометрии и 
     expect(straightened.resolve(F1)).toBeNull();
     expect(await files(dir)).toEqual([]);
 
-    await loaded(straightened, dir, 2, D + 1);
+    await loaded(straightened, dir, 2, OLDER);
     const release = straightened.hold();
     await straightened.discard(F1);
     expect(straightened.resolve(F1)).toBeNull();

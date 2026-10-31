@@ -34,10 +34,8 @@ import { untilStraightened } from '../support/until';
 const NEXT = 99;
 const PREVIOUS = NEXT - 1;
 
-vi.mock('../../src/core/detect/skew', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../src/core/detect/skew')>()),
-  SKEW_DETECTOR_VERSION: 99,
-}));
+// Подменяется модуль версии, не детектор: его читают и кэш оценок, и хранилище пар.
+vi.mock('../../src/core/detect/skew-version', () => ({ SKEW_DETECTOR_VERSION: 99 }));
 
 const FAST: Partial<ScanJobLimits> = {
   retryDelayMs: 5,

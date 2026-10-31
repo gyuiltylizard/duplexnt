@@ -282,7 +282,7 @@ describe('очередь коррекции', () => {
       [K(2), verdictOf('willStraighten')],
     ]);
     const { queue, straightened, straightener, dir, files } = await setup(2, verdicts);
-    await stalePair(dir, K(1), D + 1);
+    await stalePair(dir, K(1), D - 1);
     await stalePair(dir, K(2), UNKNOWN_DETECTOR);
     await straightened.load([K(1), K(2)]);
     expect(straightened.resolve(K(2))).toMatchObject({ version: V, detector: UNKNOWN_DETECTOR });
@@ -302,7 +302,7 @@ describe('очередь коррекции', () => {
       [K(2), verdictOf('unmeasurable')],
     ]);
     const { queue, straightened, straightener, dir, files, changes } = await setup(2, verdicts);
-    await stalePair(dir, K(1), D + 1);
+    await stalePair(dir, K(1), D - 1);
     await stalePair(dir, K(2), UNKNOWN_DETECTOR);
     await straightened.load([K(1), K(2)]);
     const release = straightened.hold();

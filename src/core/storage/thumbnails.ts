@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import sharp from 'sharp';
-import { fail, ok, STRAIGHTEN_GEOMETRY_VERSION, type Result } from '@shared';
+import { fail, ok, type Result } from '@shared';
 import type { InputCaps } from '../escl/capabilities';
 import { hasJpegMarkers } from '../escl/jpeg-markers';
 import { REGION_UNITS_PER_INCH } from '../escl/region';
@@ -17,7 +17,7 @@ import { limiterOf, type Limiter } from './limiter';
 import { isAlive } from './liveness';
 import type { PageInfo } from './session-store';
 import { ioOf, listDir, type StorageOptions } from './storage-fs';
-import type { Straightened } from './straightened';
+import { isKnownStraightened, samePair, type Straightened } from './straightened';
 
 // Миниатюры — производное (ADR 0004; план M1, U16, KTD-22, KTD-37). Строятся по требованию из
 // исходника и кэшируются вне каталога сессии, под её идентификатором: кэш прошлой сессии не
@@ -180,20 +180,18 @@ export function createThumbnails(
     return rendered;
   }
 
-  /** Миниатюры прочих пар страницы — после записи новой; новее известной геометрии — не наши. */
+  /** Миниатюры прочих пар страницы — после записи новой; новее известных версий — не наши. */
   async function dropOtherVersions(
     dir: string,
     key: string,
     keep: StraightVersions,
   ): Promise<void> {
     for (const name of await listDir(fs, dir)) {
-      const parsed = parseStraightFileName(name);
-      if (parsed === null) {
+      if (!name.startsWith(`${key}.v`)) {
         continue;
       }
-      const ours = parsed.key === key && parsed.version <= STRAIGHTEN_GEOMETRY_VERSION;
-      const kept = parsed.version === keep.version && parsed.detector === keep.detector;
-      if (ours && !kept) {
+      const parsed = parseStraightFileName(name);
+      if (parsed !== null && isKnownStraightened(parsed) && !samePair(parsed, keep)) {
         await fs.unlink(join(dir, name)).catch(() => undefined);
       }
     }
@@ -244,10 +242,7 @@ export function createThumbnails(
       const file = join(dir, straightFileName(key, straight.version, straight.detector));
       const stillWanted = (): boolean => {
         const now = straightened.resolve(key);
-        if (now === null) {
-          return false;
-        }
-        return now.version === straight.version && now.detector === straight.detector;
+        return now !== null && samePair(now, straight);
       };
       return cachedOrBuilt(file, async () => {
         const built = await build(

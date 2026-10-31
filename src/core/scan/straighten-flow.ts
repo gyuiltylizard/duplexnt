@@ -242,11 +242,14 @@ export function createStraightenQueue(deps: StraightenQueueDeps): StraightenQueu
   /**
    * Вердикт текущих версий не «выправлять», а пара есть (прежних версий — после смены детектора
    * или геометрии; текущих — только после сбоя перемера, AE8): пара убирается, страница следует
-   * вердикту (B-19). Удаление под `hold` откладывает само хранилище.
+   * вердикту (B-19). Удаление под `hold` откладывает само хранилище. Страницу, которую очередь
+   * сейчас пишет, не трогаем: её вердикт — «выправлять» по построению, а листинг посреди записи
+   * снял бы свежий JPEG (ревью ветки).
    */
   const retire = (key: string): void => {
     const outcome = skew.verdicts().get(key)?.outcome;
     if (
+      current === key ||
       outcome === undefined ||
       outcome === 'willStraighten' ||
       straightened.resolve(key) === null

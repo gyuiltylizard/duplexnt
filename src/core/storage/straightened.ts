@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { z } from 'zod';
 import { fail, ok, STRAIGHTEN_GEOMETRY_VERSION, type Result } from '@shared';
-import { SKEW_DETECTOR_VERSION } from '../detect/skew';
+import { SKEW_DETECTOR_VERSION } from '../detect/skew-version';
 import type { StraightenResult } from '../image/straighten';
 import { isTempName, writeFileAtomic } from './atomic-file';
 import { isAlive, pruneStale } from './liveness';
@@ -72,8 +72,8 @@ export interface Straightened {
   read(file: StraightenedFile): Promise<Result<Uint8Array>>;
   /**
    * Открытие сессии: читает записи указанных страниц и сверяет размер файла; временные файлы
-   * незаконченных записей, негодные пары и пары сверх выбранной убираются. Пары с геометрией
-   * новее известной не трогаются и не отдаются.
+   * незаконченных записей, негодные пары и пары сверх выбранной убираются. Пары с геометрией или
+   * детектором новее известных не трогаются и не отдаются.
    */
   load(keys: readonly string[]): Promise<void>;
   /**
@@ -102,10 +102,14 @@ interface Entry {
   readonly file: StraightenedFile;
 }
 
-/** Пара известной геометрии — наша; новее — от будущего приложения, не трогаем. */
-const isKnown = (pair: StraightVersions): boolean => pair.version <= STRAIGHTEN_GEOMETRY_VERSION;
+/**
+ * Пара известных версий — наша; геометрия или детектор новее текущих — от будущего приложения:
+ * не отдаётся и не трогается (ревью ветки B-19: прежде правило смотрело только на геометрию).
+ */
+export const isKnownStraightened = (pair: StraightVersions): boolean =>
+  pair.version <= STRAIGHTEN_GEOMETRY_VERSION && pair.detector <= SKEW_DETECTOR_VERSION;
 
-const samePair = (left: StraightVersions, right: StraightVersions): boolean =>
+export const samePair = (left: StraightVersions, right: StraightVersions): boolean =>
   left.version === right.version && left.detector === right.detector;
 
 /** Порядок предпочтения пар: текущая, затем по убыванию геометрии и детектора. */
@@ -174,12 +178,18 @@ export function createStraightened(
     }
   }
 
-  /** Пары каталога по ключу — из листинга; временные файлы убираются по пути. */
-  async function pairsIn(dir: string): Promise<Map<string, StraightVersions[]>> {
+  /**
+   * Пары каталога по ключу — из листинга; временные файлы убираются по пути. С `only` разбираются
+   * только имена этого ключа: `store` и `discard` зовут листинг на каждую страницу.
+   */
+  async function pairsIn(dir: string, only?: string): Promise<Map<string, StraightVersions[]>> {
     const byKey = new Map<string, StraightVersions[]>();
     for (const name of await listDir(fs, dir)) {
       if (isTempName(name)) {
         await fs.unlink(join(dir, name)).catch(() => undefined);
+        continue;
+      }
+      if (only !== undefined && !name.startsWith(`${only}.v`)) {
         continue;
       }
       const parsed = parseStraightFileName(name);
@@ -205,7 +215,7 @@ export function createStraightened(
   }
 
   /**
-   * Прочие пары ключа известной геометрии — в удаление, под `hold` — в отложенные (снимок пакета
+   * Прочие пары ключа известных версий — в удаление, под `hold` — в отложенные (снимок пакета
    * читает прежнюю пару по пути до отпускания; ревью сессий 3–4).
    */
   async function retireOthers(
@@ -213,8 +223,8 @@ export function createStraightened(
     key: string,
     keep: StraightVersions | null,
   ): Promise<void> {
-    for (const pair of (await pairsIn(dir)).get(key) ?? []) {
-      if (!isKnown(pair) || (keep !== null && samePair(pair, keep))) {
+    for (const pair of (await pairsIn(dir, key)).get(key) ?? []) {
+      if (!isKnownStraightened(pair) || (keep !== null && samePair(pair, keep))) {
         continue;
       }
       if (held > 0) {
@@ -251,19 +261,20 @@ export function createStraightened(
       // Страницы независимы: записи читаются параллельно, а не по одной.
       await Promise.all(
         [...wanted].map(async ([key, info]) => {
-          const known = (pairs.get(key) ?? []).filter(isKnown).sort(byPreference);
+          // Первая действительная пара в порядке предпочтения — выбранная; все остальные — сироты
+          // (JPEG без записи, запись без файла нужного размера) или лишние пары сверх выбранной
+          // (пересчёт прервался до чистки) — убираются, чтобы не копиться. Новее известных версий
+          // — не наши, не трогаем.
+          const known = (pairs.get(key) ?? []).filter(isKnownStraightened).sort(byPreference);
           let found: StraightenedFile | null = null;
           for (const pair of known) {
-            if (found === null) {
-              found = await readRecord(dir, key, pair);
-              if (found !== null) {
-                continue;
-              }
+            const file: StraightenedFile | null =
+              found === null ? await readRecord(dir, key, pair) : null;
+            if (file !== null) {
+              found = file;
+            } else {
+              await removePair(dir, key, pair);
             }
-            // Сирота (JPEG без записи, запись без файла нужного размера) или лишняя пара сверх
-            // выбранной (пересчёт прервался до чистки) — не отдаётся и убирается, чтобы не
-            // копиться. Новее известной геометрии — не наша, не трогаем.
-            await removePair(dir, key, pair);
           }
           if (found !== null && alive(key, info)) {
             entries.set(key, { sessionId: info.sessionId, file: found });

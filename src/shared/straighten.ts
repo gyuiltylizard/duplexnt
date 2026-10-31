@@ -97,6 +97,10 @@ const NO_FILE = { version: null, detector: null, recalc: null } as const;
 export const NO_STRAIGHTEN_MARK: StraightenMark = { status: null, reason: null, ...NO_FILE };
 const PENDING_MARK: StraightenMark = { status: 'pending', reason: null, ...NO_FILE };
 
+/** Причина отсрочки — одной картой для статуса «отложена» и для пересчёта файла прежних версий. */
+const deferredReasonOf = (deferred: StraightenDeferredReason): 'disk' | 'fail' =>
+  deferred === 'noSpace' ? 'disk' : 'fail';
+
 /**
  * Выправленный файл есть: «выправлена», при откате пользователя — «оригинал оставлен»; у файла
  * прежних версий — пересчёт идёт, ждёт или отложен (AE13; B-19).
@@ -106,13 +110,7 @@ const withFile = (input: StraightenMarkInput, fact: StraightenFact): StraightenM
   reason: null,
   version: fact.version,
   detector: fact.detector,
-  recalc: !fact.stale
-    ? null
-    : fact.deferred === null
-      ? 'pending'
-      : fact.deferred === 'noSpace'
-        ? 'disk'
-        : 'fail',
+  recalc: !fact.stale ? null : fact.deferred === null ? 'pending' : deferredReasonOf(fact.deferred),
 });
 
 /** Что нужно знать о странице, чтобы поставить статус (KTD-9). */
@@ -168,7 +166,7 @@ export function straightenMarkOf(input: StraightenMarkInput): StraightenMark {
       if (fact.deferred !== null) {
         return {
           status: 'deferred',
-          reason: fact.deferred === 'noSpace' ? 'disk' : 'fail',
+          reason: deferredReasonOf(fact.deferred),
           ...NO_FILE,
         };
       }
