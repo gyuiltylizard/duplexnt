@@ -22,6 +22,8 @@ import {
   statusesOf,
   straightDirOf,
   streamsOf,
+  straightJpegOf,
+  straightRecordOf,
 } from '../support/straighten';
 import { until, untilStraightened } from '../support/until';
 
@@ -85,12 +87,12 @@ describe('выравнивание на эмуляторе: восстановл
     const pdfBefore = await streamsOf(await saveSingle(service, root));
     const journalBefore = await journalOnDisk(root);
     const keptSkew = await stat(join(skew, `${F(1)}.json`));
-    const keptStraight = await stat(join(straight, `${F(1)}.v1.jpg`));
+    const keptStraight = await stat(join(straight, straightJpegOf(F(1))));
 
     // Теряются оценка фото и выправленный файл таблицы с записью; оценка и файл текста целы.
     await rm(join(skew, `${F(2)}.json`));
-    await rm(join(straight, `${F(3)}.v1.jpg`));
-    await rm(join(straight, `${F(3)}.v1.json`));
+    await rm(join(straight, straightJpegOf(F(3))));
+    await rm(join(straight, straightRecordOf(F(3))));
 
     const again = await restart();
     // Сразу после открытия: текст показан выправленным — файл есть; остальное досчитывается.
@@ -98,9 +100,9 @@ describe('выравнивание на эмуляторе: восстановл
     await untilStraightened(() => again.snapshot());
     expect(statusesOf(again)).toEqual(statuses);
     expect((await stat(join(skew, `${F(1)}.json`))).mtimeMs).toBe(keptSkew.mtimeMs);
-    expect((await stat(join(straight, `${F(1)}.v1.jpg`))).mtimeMs).toBe(keptStraight.mtimeMs);
+    expect((await stat(join(straight, straightJpegOf(F(1))))).mtimeMs).toBe(keptStraight.mtimeMs);
     expect(await readdir(skew)).toContain(`${F(2)}.json`);
-    expect(await jpegsIn(straight)).toEqual([`${F(1)}.v1.jpg`, `${F(3)}.v1.jpg`]);
+    expect(await jpegsIn(straight)).toEqual([straightJpegOf(F(1)), straightJpegOf(F(3))]);
     expect(await streamsOf(await saveSingle(again, root))).toEqual(pdfBefore);
     expect(await journalOnDisk(root)).toEqual(journalBefore);
     await again.settleDerived();
@@ -172,8 +174,8 @@ describe('выравнивание на эмуляторе: восстановл
     await untilStraightened(() => service.snapshot());
     const straight = straightDirOf(root, sessionIdOf(service));
     const streams = await streamsOf(await saveSingle(service, root));
-    expect(streams[0]?.equals(await readFile(join(straight, `${F(1)}.v1.jpg`)))).toBe(true);
-    expect(streams[1]?.equals(await readFile(join(straight, `${F(2)}.v1.jpg`)))).toBe(true);
+    expect(streams[0]?.equals(await readFile(join(straight, straightJpegOf(F(1)))))).toBe(true);
+    expect(streams[1]?.equals(await readFile(join(straight, straightJpegOf(F(2)))))).toBe(true);
     await service.settleDerived();
   }, 60_000);
 
@@ -220,7 +222,7 @@ describe('выравнивание на эмуляторе: восстановл
     });
     const first = await streamsOf(join(folder, 'А (2).pdf'));
     const second = await streamsOf(join(folder, 'Б.pdf'));
-    expect(first[0]?.equals(await readFile(join(straight, `${F(1)}.v1.jpg`)))).toBe(true);
+    expect(first[0]?.equals(await readFile(join(straight, straightJpegOf(F(1)))))).toBe(true);
     expect(second[0]?.equals(await readFile(pageFileOf(root, F(2))))).toBe(true);
     await service.settleDerived();
   }, 60_000);
@@ -259,7 +261,7 @@ describe('выравнивание на эмуляторе: восстановл
     const again = await restart(REAL);
     await untilStraightened(() => again.snapshot());
     expect(statusesOf(again)[F(1)]).toBe('straightened');
-    expect(await jpegsIn(straight)).toEqual([`${F(1)}.v1.jpg`]);
+    expect(await jpegsIn(straight)).toEqual([straightJpegOf(F(1))]);
     await again.settleDerived();
   }, 60_000);
 

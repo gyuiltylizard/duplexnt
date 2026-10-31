@@ -12,7 +12,7 @@ import { stubWorker } from '../support/image-worker';
 import { connectService, saveSingle, scanned } from '../support/pass-service';
 import { unwrap } from '../support/result';
 import { journalOnDisk } from '../support/session-store';
-import { skewDirOf, statusesOf } from '../support/straighten';
+import { skewDirOf, statusesOf, straightJpegOf, straightRecordOf } from '../support/straighten';
 import { until, untilScored } from '../support/until';
 import { SKEW_DETECTOR_VERSION } from '../../src/core/detect/skew';
 
@@ -89,11 +89,20 @@ describe('выравнивание на эмуляторе: измерение �
     const straight = join(layoutOf(root).derivedDir, sessionId, 'straight');
     await expect
       .poll(() => straightFiles(straight), { timeout: 20_000, interval: 50 })
-      .toEqual([`${F(1)}.v1.jpg`, `${F(1)}.v1.json`, `${B(2)}.v1.jpg`, `${B(2)}.v1.json`]);
-    const record = JSON.parse(await readFile(join(straight, `${F(1)}.v1.json`), 'utf8')) as {
+      .toEqual(
+        [
+          straightJpegOf(F(1)),
+          straightRecordOf(F(1)),
+          straightJpegOf(B(2)),
+          straightRecordOf(B(2)),
+        ].sort(),
+      );
+    const record = JSON.parse(await readFile(join(straight, straightRecordOf(F(1))), 'utf8')) as {
+      detector: number;
       file: { bytes: number };
     };
-    expect((await stat(join(straight, `${F(1)}.v1.jpg`))).size).toBe(record.file.bytes);
+    expect(record.detector).toBe(SKEW_DETECTOR_VERSION);
+    expect((await stat(join(straight, straightJpegOf(F(1))))).size).toBe(record.file.bytes);
 
     // U12: статусы в снимке — по исходам и файлам; скрытый пустой оборот без статуса; в PDF
     // выправленные страницы идут из производного, фото — байт в байт (KTD-8).
@@ -120,8 +129,8 @@ describe('выравнивание на эмуляторе: измерение �
     );
     // Лента: F1, B2 (оборот первого листа), F2; B1 скрыт.
     expect(streams).toHaveLength(3);
-    expect(streams[0]?.equals(await readFile(join(straight, `${F(1)}.v1.jpg`)))).toBe(true);
-    expect(streams[1]?.equals(await readFile(join(straight, `${B(2)}.v1.jpg`)))).toBe(true);
+    expect(streams[0]?.equals(await readFile(join(straight, straightJpegOf(F(1)))))).toBe(true);
+    expect(streams[1]?.equals(await readFile(join(straight, straightJpegOf(B(2)))))).toBe(true);
     expect(streams[2]?.equals(await readFile(join(layoutOf(root).pagesDir, `${F(2)}.jpg`)))).toBe(
       true,
     );
@@ -217,6 +226,7 @@ describe('выравнивание на эмуляторе: измерение �
       view: 'straight-thumb',
       key: F(1),
       version: 1,
+      detector: SKEW_DETECTOR_VERSION,
     });
 
     unwrap(await service.setEdits({ ...EMPTY_EDITS, keepOriginal: [F(1)] }, {}));
