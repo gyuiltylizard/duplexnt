@@ -231,7 +231,7 @@ describe('выравнивание: снимок выправленных на �
     expect(digest).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  it('дайджест меняется от набора ключей, версии и размера файла; без выправленных — свой, постоянный', () => {
+  it('дайджест меняется от набора ключей, версий геометрии и детектора и размера файла; без выправленных — свой, постоянный', () => {
     const base = new Map([[K1, fileOf(K1)]]);
     const digestOf = (files: Map<string, StraightenedFile>, pages = [pageOf(K1, 'straightened')]) =>
       straightSnapshotOf(pages, { resolve: (key) => files.get(key) ?? null }).digest;
@@ -239,6 +239,10 @@ describe('выравнивание: снимок выправленных на �
 
     expect(digestOf(new Map([[K1, fileOf(K1, 2)]]))).not.toBe(reference);
     expect(digestOf(new Map([[K1, fileOf(K1, 1, 101)]]))).not.toBe(reference);
+    // Пересчёт другим детектором при той же геометрии и размере — тоже другой файл (B-19).
+    expect(digestOf(new Map([[K1, fileOf(K1, 1, 100, SKEW_DETECTOR_VERSION + 1)]]))).not.toBe(
+      reference,
+    );
     expect(
       digestOf(new Map([...base, [K2, fileOf(K2)]]), [
         pageOf(K1, 'straightened'),

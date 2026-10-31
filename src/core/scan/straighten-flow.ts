@@ -3,7 +3,6 @@ import {
   isBacksKind,
   NO_STRAIGHTEN_FACTS,
   sessionConflict,
-  STRAIGHTEN_GEOMETRY_VERSION,
   type AssembledPage,
   type BlankVerdicts,
   type PageSnapshot,
@@ -34,11 +33,14 @@ import type { ThumbnailSource } from '../storage/thumbnails';
 // KTD-9, KTD-12, KTD-13): какие страницы получают измерение, очередь коррекции, факты для
 // статусов в снимке, гард записи и снимок выправленных на сохранение. `pagesToMeasure`,
 // `straightenFactsOf`, `straightenRefusal`, `straightSnapshotOf` — чистые функции; очередь —
-// одна задача за раз, принимает только страницы с исходом «выправлять», работает и во время
-// прохода (замер A/B U1: подача от нагрузки хоста не зависит — пауза KTD-4 снята), проверяет
-// место до коррекции, живость страницы до и после записи; любой сбой, кроме отмены, —
-// `deferred` с причиной, очередь идёт дальше. Отмена оставляет страницы без записи: они ждут
-// следующего `ensureAll` (открытие сессии), и сохранение честно отказывает.
+// одна задача за раз, принимает только страницы с исходом «выправлять» без пары текущих версий
+// (геометрии и детектора, B-19: пара прежних версий годна для показа, но пересчитывается),
+// работает и во время прохода (замер A/B U1: подача от нагрузки хоста не зависит — пауза KTD-4
+// снята), проверяет место до коррекции, живость страницы до и после записи; любой сбой, кроме
+// отмены, — `deferred` с причиной, очередь идёт дальше. Отмена оставляет страницы без записи:
+// они ждут следующего `ensureAll` (открытие сессии), и сохранение честно отказывает. Страница с
+// парой, которой вердикт текущих версий ставит не «выправлять», теряет пару (`discard`): после
+// смены детектора она следует новому вердикту, а не прежнему файлу.
 
 /**
  * Страницы, которые измеряются (R6): все проходы сессии в режиме «выравнивать», только не
@@ -132,8 +134,9 @@ export type StraightSnapshot = ReadonlyMap<string, StraightenedFile>;
 /**
  * Снимок выправленных страниц пакета и его дайджест (KTD-8): по статусу `straightened` — у
  * него запись о коррекции есть по построению; откаченные и невыправленные читаются из
- * исходников. Дайджест — по ключам, версиям и размерам: поздняя коррекция другой страницы или
- * смена файла между попытками меняет его, и повтор пакета отказывает «данные изменились» (AE14).
+ * исходников. Дайджест — по ключам, версиям геометрии и детектора и размерам: поздняя коррекция
+ * другой страницы, пересчёт или смена файла между попытками меняет его, и повтор пакета
+ * отказывает «данные изменились» (AE14).
  */
 export function straightSnapshotOf(
   pages: readonly AssembledPage[],
@@ -152,7 +155,9 @@ export function straightSnapshotOf(
   const hash = createHash('sha256');
   for (const key of [...snapshot.keys()].sort()) {
     const file = snapshot.get(key);
-    hash.update(`${key}\n${String(file?.version)}\n${String(file?.bytes)}\n`);
+    hash.update(
+      `${key}\n${String(file?.version)}\n${String(file?.detector)}\n${String(file?.bytes)}\n`,
+    );
   }
   return { snapshot, digest: hash.digest('hex') };
 }
@@ -179,11 +184,12 @@ export interface StraightenQueueDeps {
 
 export interface StraightenQueue {
   /**
-   * Ставит страницу в очередь, если ей это нужно: исход «выправлять» с профилем, записи
-   * текущей версии нет, не отложена, не в очереди. Остальное — молча ничего.
+   * Ставит страницу в очередь, если ей это нужно: исход «выправлять» с профилем, пары текущих
+   * версий нет, не отложена, не в очереди. Исход не «выправлять» при паре прежних версий — пара
+   * убирается (B-19). Остальное — молча ничего.
    */
   enqueue(key: string): void;
-  /** Все страницы с вердиктом — через `enqueue`: открытие сессии, смена версии геометрии. */
+  /** Все страницы с вердиктом — через `enqueue`: открытие сессии, смена версии геометрии или детектора. */
   ensureAll(): void;
   state(): StraightenQueueState;
   /** Отменяет текущую задачу и очищает очередь (KTD-12); следующие `enqueue` работают. */
@@ -209,6 +215,12 @@ export function createStraightenQueue(deps: StraightenQueueDeps): StraightenQueu
 
   const alive = (key: string, info: PageInfo): boolean => isAlive(source, key, info);
 
+  /** Пара текущих версий у страницы уже есть — коррекция не нужна. */
+  const hasCurrent = (key: string): boolean => {
+    const file = straightened.resolve(key);
+    return file !== null && isCurrentStraightened(file);
+  };
+
   /** Страница и её профиль, если коррекция ей нужна; иначе `null`. */
   const needs = (
     key: string,
@@ -219,12 +231,29 @@ export function createStraightenQueue(deps: StraightenQueueDeps): StraightenQueu
       info === null ||
       verdict?.outcome !== 'willStraighten' ||
       verdict.profile === null ||
-      straightened.resolve(key)?.version === STRAIGHTEN_GEOMETRY_VERSION ||
+      hasCurrent(key) ||
       deferred.get(key)?.sessionId === info.sessionId
     ) {
       return null;
     }
     return { info, profile: verdict.profile };
+  };
+
+  /**
+   * Вердикт текущих версий не «выправлять», а пара есть (прежних версий — после смены детектора
+   * или геометрии; текущих — только после сбоя перемера, AE8): пара убирается, страница следует
+   * вердикту (B-19). Удаление под `hold` откладывает само хранилище.
+   */
+  const retire = (key: string): void => {
+    const outcome = skew.verdicts().get(key)?.outcome;
+    if (
+      outcome === undefined ||
+      outcome === 'willStraighten' ||
+      straightened.resolve(key) === null
+    ) {
+      return;
+    }
+    void straightened.discard(key).then(deps.onChange, () => undefined);
   };
 
   const defer = (key: string, info: PageInfo, reason: StraightenDeferredReason): void => {
@@ -329,6 +358,7 @@ export function createStraightenQueue(deps: StraightenQueueDeps): StraightenQueu
   }
 
   const enqueue = (key: string): void => {
+    retire(key);
     if (needs(key) === null || queue.includes(key) || current === key) {
       return;
     }
