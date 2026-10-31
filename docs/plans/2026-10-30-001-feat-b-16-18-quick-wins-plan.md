@@ -2,7 +2,7 @@
 title: 'feat: quick wins B-16–B-18 — коалесинг снимка, мелкие UX-дыры, оценки пустоты в settleDerived'
 type: feat
 date: 2026-10-30
-status: в работе # в работе → done; заморожен — готов, не начат
+status: done
 ---
 
 # feat: quick wins B-16–B-18 (B-16, B-17, B-18)
