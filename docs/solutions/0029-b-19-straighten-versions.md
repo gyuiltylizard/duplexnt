@@ -3,7 +3,7 @@ title: 'B-19 — версии выравнивания: детектор в им
 type: solution
 date: 2026-10-31
 milestone: B-19
-status: в работе # → done на закрытии
+status: done
 plan: ../plans/2026-10-31-001-feat-b-19-straighten-versions-plan.md
 ---
 
@@ -149,4 +149,8 @@ format:check зелёные. Коммит `a2797de`.
 
 ## Закрытие вехи
 
-<!-- хэш merge и гейт на main — после ОК автора -->
+Merge `feat/b-19-straighten-versions` → `main` по явному ОК автора после смоука 2026-10-31 —
+`ca117de`. На `main` после merge typecheck, lint, format:check, `npm test` 143 / 2563 и
+`test:integration` 32 / 281 (+ worst-case 3 / 5) зелёные. Ветка оставлена. Push в приватный
+origin — по разрешению автора в том же ответе. Следующая смена `SKEW_DETECTOR_VERSION` (фикс гейта
+формы) пойдёт по новому пути без ручной чистки `derived/`.
