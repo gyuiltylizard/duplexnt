@@ -361,8 +361,10 @@ describe('хранилище сессии: миниатюры отброшенн
         'p01-s01-0001.v1.json',
         'p01-s02-0002.v1.jpg',
         'p01-s02-0002.v1.json',
+        'p01-s02-0002.v1.d4.jpg',
+        'p01-s02-0002.v1.d4.json',
       ],
-      'straight-thumbs': ['p01-s01-0001.v1.jpg', 'p01-s02-0001.v1.jpg'],
+      'straight-thumbs': ['p01-s01-0001.v1.jpg', 'p01-s02-0001.v1.jpg', 'p01-s02-0001.v1.d4.jpg'],
     };
     for (const [dir, names] of Object.entries(derived)) {
       await mkdir(join(layout.derivedDir, SESSION, dir), { recursive: true });

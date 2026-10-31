@@ -15,9 +15,11 @@ import { join } from 'node:path';
 //     derived/<id сессии>/thumbs/ производное: удаляется без потерь
 //     derived/<id сессии>/blank/  оценки детектора пустых страниц (M4): тоже производное
 //     derived/<id сессии>/skew/   оценки перекоса подачи (M6, KTD-11): `<ключ>.json`
-//     derived/<id сессии>/straight/        выправленные страницы: `<ключ>.v<N>.jpg` и запись
-//                                          о коррекции `<ключ>.v<N>.json`, N — версия геометрии
-//     derived/<id сессии>/straight-thumbs/ миниатюры выправленных: `<ключ>.v<N>.jpg`
+//     derived/<id сессии>/straight/        выправленные страницы: `<ключ>.v<G>.d<D>.jpg` и запись
+//                                          о коррекции `<ключ>.v<G>.d<D>.json`, G — версия
+//                                          геометрии, D — детектора (B-19); прежний формат
+//                                          `<ключ>.v<G>.*` без детектора читается и чистится
+//     derived/<id сессии>/straight-thumbs/ миниатюры выправленных: тем же именем, что JPEG
 //
 // Ключ стоит в имени файла: сессию можно пересобрать по именам, даже если журнал потерян. Номера
 // проходов и сегментов внутри сессии не переиспользуются — иначе файл отброшенного сегмента
@@ -37,12 +39,13 @@ export const BLANK_FILE = /^p(\d{2})-s(\d{2})-(\d{4})\.json$/;
 /** Имя файла оценки перекоса: ключ и `.json` (M6, KTD-11) — та же форма, другой каталог. */
 export const SKEW_FILE = /^p(\d{2})-s(\d{2})-(\d{4})\.json$/;
 /**
- * Файлы выправленной страницы (M6, KTD-11): JPEG и запись о коррекции с версией геометрии в
- * имени — файлы разных версий сосуществуют, пока пересчёт не запишет новую.
+ * Файлы выправленной страницы (M6, KTD-11; B-19): JPEG и запись о коррекции с версиями геометрии
+ * и детектора в имени — пары разных версий сосуществуют, пока пересчёт не запишет новую. Прежний
+ * формат без `.d<D>` (до B-19) принимается: такие пары читаются и чистятся по тем же правилам.
  */
-export const STRAIGHT_FILE = /^p(\d{2})-s(\d{2})-(\d{4})\.v(\d+)\.(?:jpg|json)$/;
-/** Миниатюра выправленной страницы: ключ, версия, `.jpg`. */
-export const STRAIGHT_THUMB_FILE = /^p(\d{2})-s(\d{2})-(\d{4})\.v(\d+)\.jpg$/;
+export const STRAIGHT_FILE = /^p(\d{2})-s(\d{2})-(\d{4})\.v(\d+)(?:\.d(\d+))?\.(?:jpg|json)$/;
+/** Миниатюра выправленной страницы: имя её JPEG — ключ, версии, `.jpg`. */
+export const STRAIGHT_THUMB_FILE = /^p(\d{2})-s(\d{2})-(\d{4})\.v(\d+)(?:\.d(\d+))?\.jpg$/;
 const PAGE_KEY = /^p(\d{2})-s(\d{2})-(\d{4})$/;
 
 export const SESSION_ID = /^[0-9a-f]{16}$/;
@@ -169,27 +172,49 @@ export function skewFileName(key: string): string {
   return `${key}.json`;
 }
 
-/** Имя выправленного JPEG: ключ и версия геометрии (M6, KTD-11). */
-export function straightFileName(key: string, version: number): string {
-  return `${key}.v${version}.jpg`;
+/**
+ * Детектор «неизвестен» (B-19): пара прежнего формата без `.d<D>` и запись без поля. Никогда не
+ * равен версии детектора — такая пара годна для показа, но не для пропуска очереди.
+ */
+export const UNKNOWN_DETECTOR = 0;
+
+/** Версии выправленной пары: геометрии и детектора (B-19). */
+export interface StraightVersions {
+  readonly version: number;
+  readonly detector: number;
 }
 
-/** Имя записи о коррекции рядом с JPEG той же версии. */
-export function straightRecordName(key: string, version: number): string {
-  return `${key}.v${version}.json`;
+/** Основа имени пары: у детектора «неизвестен» — прежний формат без `.d<D>`. */
+const straightStem = (key: string, version: number, detector: number): string =>
+  detector === UNKNOWN_DETECTOR ? `${key}.v${version}` : `${key}.v${version}.d${detector}`;
+
+/** Имя выправленного JPEG: ключ, версия геометрии и детектора (M6, KTD-11; B-19). */
+export function straightFileName(key: string, version: number, detector: number): string {
+  return `${straightStem(key, version, detector)}.jpg`;
 }
 
-/** Ключ и версия из имени файла выправленной страницы или её записи; иначе `null`. */
+/** Имя записи о коррекции рядом с JPEG тех же версий. */
+export function straightRecordName(key: string, version: number, detector: number): string {
+  return `${straightStem(key, version, detector)}.json`;
+}
+
+/**
+ * Ключ и версии из имени файла выправленной страницы или её записи; иначе `null`. Без `.d<D>` —
+ * детектор «неизвестен»; явный `.d0` — не имя пары.
+ */
 export function parseStraightFileName(
   name: string,
-): { readonly key: string; readonly version: number } | null {
+): ({ readonly key: string } & StraightVersions) | null {
   const match = STRAIGHT_FILE.exec(name);
   const address = addressOf(match);
   if (match === null || address === null) {
     return null;
   }
   const version = Number(match[4]);
-  return version >= 1 ? { key: pageKey(address), version } : null;
+  const detector = match[5] === undefined ? UNKNOWN_DETECTOR : Number(match[5]);
+  return version >= 1 && (match[5] === undefined || detector >= 1)
+    ? { key: pageKey(address), version, detector }
+    : null;
 }
 
 function addressOf(match: RegExpExecArray | null): PageAddress | null {

@@ -1,15 +1,22 @@
 import { join } from 'node:path';
 import sharp from 'sharp';
-import { fail, ok, type Result } from '@shared';
+import { fail, ok, STRAIGHTEN_GEOMETRY_VERSION, type Result } from '@shared';
 import type { InputCaps } from '../escl/capabilities';
 import { hasJpegMarkers } from '../escl/jpeg-markers';
 import { REGION_UNITS_PER_INCH } from '../escl/region';
 import { writeFileAtomic } from './atomic-file';
-import { pageFileName, straightFileName, straightThumbsDirIn, thumbsDirIn } from './layout';
+import {
+  pageFileName,
+  parseStraightFileName,
+  straightFileName,
+  straightThumbsDirIn,
+  thumbsDirIn,
+  type StraightVersions,
+} from './layout';
 import { limiterOf, type Limiter } from './limiter';
 import { isAlive } from './liveness';
 import type { PageInfo } from './session-store';
-import { ioOf, type StorageOptions } from './storage-fs';
+import { ioOf, listDir, type StorageOptions } from './storage-fs';
 import type { Straightened } from './straightened';
 
 // Миниатюры — производное (ADR 0004; план M1, U16, KTD-22, KTD-37). Строятся по требованию из
@@ -21,11 +28,12 @@ import type { Straightened } from './straightened';
 // под видом страницы в main попал бы любой его формат. Маркеры проверяются до декодирования,
 // формат и размер — по заголовку, предел пикселей — ещё раз самим декодером.
 //
-// Миниатюра выправленной страницы (M6, U6; KTD-7) — отдельный вариант в `straight-thumbs/` с
-// версией геометрии в имени: строится из файла, который отдаёт `straightened.resolve`
-// (единственный источник пути, KTD-11), тем же конвейером и с тем же пределом; миниатюры
-// прежних версий убираются после записи новой. Нет записи о коррекции — отказ `pageUnavailable`,
-// и протокол отдаёт обычную миниатюру.
+// Миниатюра выправленной страницы (M6, U6; KTD-7; B-19) — отдельный вариант в `straight-thumbs/`
+// под именем самого выправленного JPEG (версии геометрии и детектора): строится из файла, который
+// отдаёт `straightened.resolve` (единственный источник пути, KTD-11), тем же конвейером и с тем же
+// пределом; миниатюры прочих пар ключа убираются после записи новой — по листингу, детекторы
+// прежних пар наперёд не известны. Нет записи о коррекции — отказ `pageUnavailable`, и протокол
+// отдаёт обычную миниатюру.
 
 /** Миниатюра вписывается в эту рамку; пропорции — как у A4. Вдвое крупнее, чем показывает лента. */
 export const THUMBNAIL_BOX = { width: 320, height: 452 } as const;
@@ -172,10 +180,22 @@ export function createThumbnails(
     return rendered;
   }
 
-  /** Миниатюры прежних версий страницы — после записи новой; версии известны, листать незачем. */
-  async function dropOldVersions(dir: string, key: string, version: number): Promise<void> {
-    for (let old = 1; old < version; old += 1) {
-      await fs.unlink(join(dir, straightFileName(key, old))).catch(() => undefined);
+  /** Миниатюры прочих пар страницы — после записи новой; новее известной геометрии — не наши. */
+  async function dropOtherVersions(
+    dir: string,
+    key: string,
+    keep: StraightVersions,
+  ): Promise<void> {
+    for (const name of await listDir(fs, dir)) {
+      const parsed = parseStraightFileName(name);
+      if (parsed === null) {
+        continue;
+      }
+      const ours = parsed.key === key && parsed.version <= STRAIGHTEN_GEOMETRY_VERSION;
+      const kept = parsed.version === keep.version && parsed.detector === keep.detector;
+      if (ours && !kept) {
+        await fs.unlink(join(dir, name)).catch(() => undefined);
+      }
     }
   }
 
@@ -221,7 +241,14 @@ export function createThumbnails(
         return Promise.resolve(NOT_STRAIGHTENED);
       }
       const dir = straightThumbsDirIn(derivedDir, info.sessionId);
-      const file = join(dir, straightFileName(key, straight.version));
+      const file = join(dir, straightFileName(key, straight.version, straight.detector));
+      const stillWanted = (): boolean => {
+        const now = straightened.resolve(key);
+        if (now === null) {
+          return false;
+        }
+        return now.version === straight.version && now.detector === straight.detector;
+      };
       return cachedOrBuilt(file, async () => {
         const built = await build(
           key,
@@ -229,10 +256,10 @@ export function createThumbnails(
           dir,
           file,
           () => straightened.read(straight),
-          () => straightened.resolve(key)?.version === straight.version,
+          stillWanted,
         );
         if (built.ok) {
-          await dropOldVersions(dir, key, straight.version);
+          await dropOtherVersions(dir, key, straight);
         }
         return built;
       });

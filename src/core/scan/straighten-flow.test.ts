@@ -9,6 +9,7 @@ import {
   setBacksOf,
 } from '../../../test/support/assembly';
 import type { StraightenedFile } from '../storage/straightened';
+import { SKEW_DETECTOR_VERSION } from '../detect/skew';
 import {
   pagesToMeasure,
   straightenFactsOf,
@@ -84,9 +85,15 @@ describe('выравнивание: страницы под измерение',
 
 const PROFILE = { kind: 'knots' as const, us: [0.5], thetas: [0.4] };
 
-const fileOf = (key: string, version = 1, bytes = 100): StraightenedFile => ({
-  path: `/derived/straight/${key}.v${String(version)}.jpg`,
+const fileOf = (
+  key: string,
+  version = 1,
+  bytes = 100,
+  detector = SKEW_DETECTOR_VERSION,
+): StraightenedFile => ({
+  path: `/derived/straight/${key}.v${String(version)}.d${String(detector)}.jpg`,
   version,
+  detector,
   bytes,
   encoding: 'jpeg-q92-444',
   dpi: 300,
