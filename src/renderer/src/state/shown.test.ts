@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   gluedBacksOf,
   movingOf,
+  nearestShownDocument,
   relocate,
   removingOf,
   sheetDrop,
@@ -86,6 +87,20 @@ describe('показанная лента', () => {
       { index: 1, name: '', start: 1, count: 0 },
       { index: 2, name: '', start: 1, count: 4 },
     ]);
+  });
+
+  it('ближайший видимый слева: через документ из одних скрытых — к соседу, перед первым — нет (B-17)', () => {
+    const documents = [
+      { index: 0, name: '', start: 0, count: 1 },
+      { index: 1, name: '', start: 1, count: 0 },
+      { index: 2, name: '', start: 1, count: 4 },
+    ];
+    expect(nearestShownDocument(documents, 2)).toBe(0);
+    expect(nearestShownDocument(documents, 1)).toBe(0);
+    expect(nearestShownDocument(documents, 0)).toBeNull();
+    expect(
+      nearestShownDocument([{ index: 0, name: '', start: 0, count: 0 }, ...documents], 1),
+    ).toBeNull();
   });
 
   it('с переключателем документы совпадают с полной лентой', () => {

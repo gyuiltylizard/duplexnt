@@ -315,7 +315,7 @@ describe('каркас приложения', () => {
     );
   });
 
-  it('другой отказ «Остановить» тоста не даёт', async () => {
+  it('другой отказ «Остановить» — общий тост с причиной (B-17)', async () => {
     stubApi(
       makeSnapshot({
         pass: {
@@ -359,10 +359,9 @@ describe('каркас приложения', () => {
     render(<App />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Остановить' }));
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
-    expect(screen.queryByText(/Не удалось убрать страницы/)).toBeNull();
+    expect((await screen.findByText(/Не удалось остановить/)).textContent).not.toContain(
+      'Проход оставлен прерванным',
+    );
   });
 
   it('pagesLost с потерянной страницей в ленте — плашка видна', async () => {

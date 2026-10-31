@@ -173,6 +173,22 @@ export function relocate(
  * `index` — номер в полной ленте (имена, разрезы, тон не меняются). Документ из одних скрытых
  * получает `count: 0` и позицию, где стоял бы.
  */
+/**
+ * Ближайший слева документ с показанными страницами (B-17): документ из одних скрытых в ленте
+ * невидим, и слияние «✕» идёт через него к видимому соседу. `null` — такого нет.
+ */
+export function nearestShownDocument(
+  documents: readonly ShownDocument[],
+  before: number,
+): number | null {
+  for (let index = before - 1; index >= 0; index -= 1) {
+    if ((documents[index]?.count ?? 0) > 0) {
+      return index;
+    }
+  }
+  return null;
+}
+
 export function shownDocumentsOf(
   documents: readonly AssembledDocument[],
   order: readonly AssembledPage[],

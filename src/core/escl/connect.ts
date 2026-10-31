@@ -1,4 +1,4 @@
-import { fail, ok, type Result, type ScanOptions } from '@shared';
+import { fail, ok, type Result, type ScanOptions, isValidPort } from '@shared';
 import { parseCapabilities, type ScannerCapabilities } from './capabilities';
 import { DEFAULT_BASE_PATH, normalizeBasePath } from './device-path';
 import { realClock, type ScanJobClock } from './scan-job';
@@ -82,7 +82,7 @@ export function parseScannerAddress(input: string): Result<ScannerAddress> {
     return invalid('host');
   }
   const port = authority[2] === undefined ? null : Number(authority[2]);
-  if (port !== null && (port < 1 || port > 65535)) {
+  if (port !== null && !isValidPort(port)) {
     return invalid('port');
   }
 

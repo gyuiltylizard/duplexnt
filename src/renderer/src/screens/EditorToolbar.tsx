@@ -59,6 +59,13 @@ export function EditorToolbar({
 }: EditorToolbarProps): ReactNode {
   const { t } = useTranslation();
   const currentDoc = currentDocument === null ? undefined : documents[currentDocument];
+  // Документы из одних скрытых пустых в ленте не видны — «документ N из M» считает только
+  // видимые, и номер, и число (B-17).
+  const shownDocs = documents.filter((document) => document.count > 0).length;
+  const shownPosition =
+    currentDocument === null
+      ? 0
+      : documents.slice(0, currentDocument + 1).filter((document) => document.count > 0).length;
   // Наборы уравнены (S4): равные ненулевые счётчики — акцентная точка и приглашение собрать.
   const setsEqual = sets !== null && sets.fronts === sets.backs && sets.fronts > 0;
 
@@ -111,10 +118,10 @@ export function EditorToolbar({
               <span className="editor-screen__doc-mark" aria-hidden="true" />
               <span className="editor-screen__doc-title">{names[currentDocument]}</span>
               <span className="editor-screen__doc-pos">
-                {documents.length > 1
+                {shownDocs > 1
                   ? t('editor.docPosition', {
-                      doc: currentDocument + 1,
-                      docs: documents.length,
+                      doc: shownPosition,
+                      docs: shownDocs,
                       page: currentIndex - currentDoc.start + 1,
                       pages: currentDoc.count,
                     })

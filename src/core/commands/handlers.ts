@@ -7,6 +7,7 @@ import {
   type ConnectScannerRequest,
   type DiscoveryState,
   type Result,
+  type ScannerInfo,
 } from '@shared';
 import {
   createConnector,
@@ -18,6 +19,7 @@ import { normalizeBasePath } from '../escl/device-path';
 import { startDiscovery, type Discovery, type DiscoveryOptions } from '../discovery/mdns';
 import { handleProbe } from '../probe/handle-probe';
 import type { PassService } from '../scan/pass-service';
+import { scannerInfoOf, storedScannerOf } from '../storage/stored-scanner';
 import {
   blankModeSchema,
   hintIdSchema,
@@ -143,7 +145,9 @@ export function createCommands(context: CommandContext): Commands {
     discovery?.stop();
   };
 
-  async function connectScanner(request: ConnectScannerRequest): Promise<Result<void>> {
+  // Ответ — подключённый сканер (B-17): тост в renderer называет имя устройства, а снимок в
+  // момент ответа может быть ещё прежним.
+  async function connectScanner(request: ConnectScannerRequest): Promise<Result<ScannerInfo>> {
     if (service.snapshot().pass !== null) {
       return { ok: false, error: sessionConflict('passRunning') };
     }
@@ -165,7 +169,8 @@ export function createCommands(context: CommandContext): Commands {
     if (!connected.ok) {
       return connected;
     }
-    return service.useScanner(connected.value);
+    const used = await service.useScanner(connected.value);
+    return used.ok ? ok(scannerInfoOf(storedScannerOf(connected.value))) : used;
   }
 
   // Команда без входа: схема отклоняет всё, кроме `undefined`, — у `openDataFolder` аргументов
@@ -205,7 +210,7 @@ export function createCommands(context: CommandContext): Commands {
 
       connectScanner: async (rawRequest) => {
         const request = parseInput(connectScannerRequestSchema, rawRequest);
-        return request.ok ? done(() => connectScanner(request.value)) : request;
+        return request.ok ? connectScanner(request.value) : request;
       },
 
       // Закрытие модалки `device`: идущее подключение возвращает `canceled` и ничего не меняет.

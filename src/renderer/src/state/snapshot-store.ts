@@ -4,6 +4,11 @@ import type { Api, Snapshot } from '@shared';
 // Событие моста — подсказка перечитать, не данные: по нему снимок запрашивается командой.
 // Ответы применяются по номеру `seq` — устаревший, пришедший позже, отбрасывается.
 //
+// Запросы склеиваются (B-16): на страницу прохода ядро шлёт 3–5 событий (приём, вердикты,
+// коррекция), а каждый запрос — полная сборка ленты в main и structured clone по IPC. Пока
+// запрос в полёте, события лишь поднимают флаг `dirty`; по ответу делается ровно один повтор.
+// Последний снимок доезжает всегда, промежуточные — нет, они и не нужны.
+//
 // Подписка на мост живёт от первого подписчика до последнего: React в StrictMode монтирует
 // дважды (подписка → отписка → подписка), и хранилище обязано пережить этот цикл — повторная
 // подписка снова слушает мост и перечитывает снимок.
@@ -32,20 +37,38 @@ export function createSnapshotStore(api: SnapshotApi): SnapshotStore {
     }
   };
 
+  let inFlight = false;
+  let dirty = false;
+
   const refresh = (): void => {
-    api.getSnapshot().then(
-      (result) => {
-        if (result.ok) {
-          apply(result.value);
-        } else {
-          // Доменного отказа у снимка не бывает: это ошибка программы, экран остаётся на прежнем.
-          console.error('[renderer] снимок не прочитан', result.error);
+    if (inFlight) {
+      dirty = true;
+      return;
+    }
+    inFlight = true;
+    dirty = false;
+    api
+      .getSnapshot()
+      .then(
+        (result) => {
+          if (result.ok) {
+            apply(result.value);
+          } else {
+            // Доменного отказа у снимка не бывает: это ошибка программы, экран остаётся на прежнем.
+            console.error('[renderer] снимок не прочитан', result.error);
+          }
+        },
+        (error: unknown) => {
+          console.error('[renderer] снимок не прочитан', error);
+        },
+      )
+      .finally(() => {
+        inFlight = false;
+        // Без подписчиков повтор некому показать; новая подписка перечитает сама.
+        if (dirty && unsubscribe !== null) {
+          refresh();
         }
-      },
-      (error: unknown) => {
-        console.error('[renderer] снимок не прочитан', error);
-      },
-    );
+      });
   };
 
   return {

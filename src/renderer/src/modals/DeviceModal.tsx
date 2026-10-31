@@ -11,6 +11,7 @@ import { Modal } from '../components/Modal';
 import { Segments } from '../components/Segments';
 import { errorTextInline } from '../state/error-text';
 import './device-modal.css';
+import { isValidPort } from '@shared';
 
 // Модалка `device` (план M1, U21; UI_SPEC 7.1 с поправками техбазы; handoff U19, S7–S11).
 // Открытие запускает поиск, закрытие останавливает его и отменяет идущее подключение — обе
@@ -46,7 +47,7 @@ export function DeviceModal({ initialAddress, onClose, onConnected }: DeviceModa
   const [port, setPort] = useState('');
   const [path, setPath] = useState('');
   const [connecting, setConnecting] = useState<string | null>(null);
-  const [failure, setFailure] = useState<DomainError | 'emptyInput' | null>(null);
+  const [failure, setFailure] = useState<DomainError | 'emptyInput' | 'invalidPort' | null>(null);
   const closed = useRef(false);
   const cancelRef = useRef<HTMLButtonElement>(null);
 
@@ -131,11 +132,18 @@ export function DeviceModal({ initialAddress, onClose, onConnected }: DeviceModa
       request = { kind: 'discovered', id: selected.id };
       label = selected.name ?? `${selected.address}:${selected.port}`;
     } else if (trimmed !== '') {
+      // Порт проверяется здесь (B-17): схема main отвергнет его как `invalidInput` без поля, а
+      // пользователю нужен текст именно про порт. Фильтр ввода пропускает до пяти цифр.
+      const portNumber = port.trim() === '' ? null : Number(port);
+      if (portNumber !== null && !isValidPort(portNumber)) {
+        setFailure('invalidPort');
+        return;
+      }
       request = {
         kind: 'address',
         host: trimmed,
         scheme,
-        port: port.trim() === '' ? null : Number(port),
+        port: portNumber,
         basePath: path.trim() === '' ? null : path.trim(),
       };
       label = trimmed;
@@ -153,7 +161,8 @@ export function DeviceModal({ initialAddress, onClose, onConnected }: DeviceModa
           return;
         }
         if (result.ok) {
-          onConnected(label);
+          // Имя — из ответа ядра (B-17): снимок в этот момент может быть ещё прежним.
+          onConnected(result.value.name ?? label);
           onClose();
           return;
         }
@@ -188,6 +197,12 @@ export function DeviceModal({ initialAddress, onClose, onConnected }: DeviceModa
     status = (
       <p className="modal__status modal__status--danger" role="alert">
         {t('device.address.empty')}
+      </p>
+    );
+  } else if (failure === 'invalidPort') {
+    status = (
+      <p className="modal__status modal__status--danger" role="alert">
+        {t('device.address.invalidPort')}
       </p>
     );
   } else if (failure !== null) {

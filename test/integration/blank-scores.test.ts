@@ -256,6 +256,54 @@ describe('оценки пустых страниц: детектор, карта
     expect(await readdir(blankDir).catch(() => [])).toEqual([]);
   });
 
+  it('abort во время детектора — кэша нет, вердикта нет, settle разрешается; следующий ensure оценивает заново (B-18)', async () => {
+    const { store, layout, blankDir } = await sessionWith([BLANK()]);
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let calls = 0;
+    const slow: BlankDetector = async (bytes, limit) => {
+      calls += 1;
+      await gate;
+      return blankRatio(bytes, limit);
+    };
+    const scores = createBlankScores(layout.derivedDir, store, slow);
+
+    const first = scores.ensure(B1);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(calls).toBe(1);
+    scores.abort();
+    release();
+    await scores.settle();
+
+    expect(await first).toBe(false);
+    expect(verdictsOf(scores)).toEqual({});
+    expect(await readdir(blankDir).catch(() => [])).toEqual([]);
+
+    // После отмены — как обычно: страница оценивается заново и кэшируется.
+    expect(await scores.ensure(B1)).toBe(true);
+    expect(calls).toBe(2);
+    expect(verdictsOf(scores)).toEqual({ [B1]: true });
+    expect(await readdir(blankDir)).toEqual([`${B1}.json`]);
+  });
+
+  it('abort без идущих оценок — settle сразу; abort до старта задачи в лимитере — детектор не зовётся', async () => {
+    const { store, layout, blankDir } = await sessionWith([BLANK(), TEXT()]);
+    const { detector, calls } = counting();
+    const scores = createBlankScores(layout.derivedDir, store, detector, { concurrency: 1 });
+    scores.abort();
+    await scores.settle();
+
+    // Две оценки при одном слоте: вторая ждёт в лимитере, отмена снимает обе до записи.
+    const both = Promise.all([scores.ensure(B1), scores.ensure(B2)]);
+    scores.abort();
+    await scores.settle();
+    expect(await both).toEqual([false, false]);
+    expect(calls.length).toBeLessThanOrEqual(1);
+    expect(await readdir(blankDir).catch(() => [])).toEqual([]);
+  });
+
   it('кэш прошлой сессии с тем же ключом не читается; prune после «Новой пачки» чистит карту', async () => {
     const { store, layout } = await sessionWith([BLANK()]);
     const stale = join(layout.derivedDir, 'ffffffffffffffff', 'blank');
