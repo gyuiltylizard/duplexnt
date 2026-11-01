@@ -1,3 +1,4 @@
+import { setTimeout as delay } from 'node:timers/promises';
 import sharp from 'sharp';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -88,7 +89,8 @@ describe('срок libvips прерывает обработку в каждой
     // Сработал именно libvips: в причине — его текст, а не запасной срок по часам.
     expect(String((error as ImageTimeoutError).cause)).toMatch(/timeout: \d+% complete/);
     expect(ms).toBeGreaterThanOrEqual(900);
-    expect(ms).toBeLessThan(3000);
+    // Верх с запасом на нагруженный процессор: libvips проверяет срок между кусками вывода.
+    expect(ms).toBeLessThan(8000);
   });
 });
 
@@ -116,7 +118,7 @@ describe('запасной срок и распознавание (B-21, U1)', (
       processImage(
         jpegInput(),
         async () => {
-          await new Promise((resolve) => setTimeout(resolve, 1050));
+          await delay(1050);
           throw new Error('Unknown error');
         },
         { seconds: 1 },

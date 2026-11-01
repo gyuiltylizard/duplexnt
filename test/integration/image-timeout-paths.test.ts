@@ -1,6 +1,6 @@
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { blankRatio } from '../../src/core/detect/blank';
 import { measureSkewJpeg } from '../../src/core/detect/skew';
 import { isImageTimeout } from '../../src/core/image/sharp-image';
@@ -57,10 +57,15 @@ beforeEach(() => {
 
 const PIXEL_LIMIT = 5100 * 8400;
 
+/** Косая синтетическая страница — годна всем путям, у выпрямления есть профиль. */
+let bytes: Buffer;
+
+beforeAll(async () => {
+  bytes = await syntheticJpeg({ dpi: 100, theta: stepTheta(0.2, -0.7, 0.55, 0.14) });
+});
+
 describe('срок обработки по путям ядра (B-21)', () => {
   it('декод детекторов: срок — исключение у оценки пустоты и у измерения наклона; прочий сбой — null', async () => {
-    const bytes = await syntheticJpeg({ dpi: 100, theta: stepTheta(0.2, -0.4, 0.5, 0.1) });
-
     failFromNext(1);
     const blank = await blankRatio(bytes, PIXEL_LIMIT).catch((error: unknown) => error);
     expect(isImageTimeout(blank)).toBe(true);
@@ -73,7 +78,6 @@ describe('срок обработки по путям ядра (B-21)', () => {
   });
 
   it('выпрямление: срок при декоде и при кодировании — null (очередь отложит страницу со сбоем)', async () => {
-    const bytes = await syntheticJpeg({ dpi: 100, theta: stepTheta(0.2, -0.7, 0.55, 0.14) });
     const profile = (await measureSkewJpeg(bytes, PIXEL_LIMIT))?.profile;
     expect(profile).toBeTruthy();
     if (!profile) {
@@ -91,7 +95,6 @@ describe('срок обработки по путям ядра (B-21)', () => {
   });
 
   it('миниатюра: срок — thumbnailFailed / decode без кэша; следующий запрос строит заново', async () => {
-    const bytes = await syntheticJpeg({ dpi: 100, theta: stepTheta(0, 0, 0.5, 0.1) });
     const info: PageInfo = { sessionId: 's-timeout', pixelLimit: PIXEL_LIMIT, dpi: 100 };
     const source: ThumbnailSource = {
       pageInfo: (key) => (key === 'p01-s01-0001' ? info : null),

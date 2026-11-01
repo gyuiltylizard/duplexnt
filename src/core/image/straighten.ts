@@ -262,9 +262,9 @@ export async function straighten(
   options.signal?.throwIfAborted();
   const limit = decodePixelLimit(options.pixelLimit);
   // Срок обработки (B-21) — тоже сбой декода, `null`: очередь отложит страницу со сбоем в памяти.
-  let decoded: (RawImage & { readonly channels: 1 | 3 }) | null;
+  let raw: (RawImage & { readonly channels: 1 | 3 }) | null;
   try {
-    decoded = await processImage({ kind: 'jpeg', bytes, pixelLimit: limit }, async (image) => {
+    raw = await processImage({ kind: 'jpeg', bytes, pixelLimit: limit }, async (image) => {
       const meta = await image.metadata();
       if (meta.format !== 'jpeg' || meta.width * meta.height > limit) {
         return null;
@@ -286,10 +286,9 @@ export async function straighten(
   } catch {
     return null;
   }
-  if (decoded === null) {
+  if (raw === null) {
     return null;
   }
-  const raw = decoded;
   const { channels } = raw;
   const out = await straightenRaw(raw, profile, options);
   // Отмена на последней полосе: цикл полос её уже не увидит, кодировать незачем.
@@ -308,8 +307,8 @@ export async function straighten(
     const output = dpi === null ? { jpeg: bare, dpi: null } : withJfifDensity(bare, dpi);
     return { ...output, info: { width, height, channels }, encoding: STRAIGHTEN_ENCODING };
   } catch (error: unknown) {
-    // Отмена — исключение причиной сигнала; сбой libvips и срок (B-21) при кодировании — `null`, как
-    // и при декоде;
+    // Отмена — исключение причиной сигнала; сбой libvips и срок (B-21) при кодировании — `null`,
+    // как и при декоде;
     // ошибки самого ресэмплера и колбэков вызывающего (`onChunk`, `yieldBetween`) сюда не попадают —
     // они пробрасываются.
     if (options.signal?.aborted === true) {

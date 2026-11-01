@@ -96,9 +96,9 @@ export async function processImage<T>(
       reject(new ImageTimeoutError(`обработка картинки не ответила за ${String(deadlineMs)} мс`));
     }, deadlineMs);
   });
+  // Проигравшая гонку обработка может отказать позже: `Promise.race` уже подписан на неё, отказ не
+  // станет unhandled.
   const running = Promise.resolve().then(() => work(open(input, seconds)));
-  // Проигравшая гонку обработка может отказать позже — без обработчика это был бы unhandled.
-  void running.catch(() => undefined);
   try {
     return await Promise.race([running, backstop]);
   } catch (error: unknown) {
