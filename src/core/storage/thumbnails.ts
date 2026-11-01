@@ -1,9 +1,9 @@
 import { join } from 'node:path';
-import sharp from 'sharp';
 import { fail, ok, type Result } from '@shared';
 import type { InputCaps } from '../escl/capabilities';
 import { hasJpegMarkers } from '../escl/jpeg-markers';
 import { REGION_UNITS_PER_INCH } from '../escl/region';
+import { processImage } from '../image/sharp-image';
 import { writeFileAtomic } from './atomic-file';
 import {
   pageFileName,
@@ -112,20 +112,22 @@ async function render(source: Uint8Array, pixelLimit: number): Promise<Result<Ui
   if (!hasJpegMarkers(source)) {
     return failed('notJpeg');
   }
+  // Срок обработки (B-21) — сбой `decode`: миниатюра не кэшируется, следующий запрос строит заново.
   try {
-    const image = sharp(source, { limitInputPixels: pixelLimit });
-    const { format, width, height } = await image.metadata();
-    if (format !== 'jpeg') {
-      return failed('notJpeg');
-    }
-    if (width * height > pixelLimit) {
-      return failed('tooLarge');
-    }
-    const thumbnail = await image
-      .resize({ ...THUMBNAIL_BOX, fit: 'inside', withoutEnlargement: true })
-      .jpeg({ quality: THUMBNAIL_QUALITY })
-      .toBuffer();
-    return ok(new Uint8Array(thumbnail.buffer, thumbnail.byteOffset, thumbnail.byteLength));
+    return await processImage({ kind: 'jpeg', bytes: source, pixelLimit }, async (image) => {
+      const { format, width, height } = await image.metadata();
+      if (format !== 'jpeg') {
+        return failed('notJpeg');
+      }
+      if (width * height > pixelLimit) {
+        return failed('tooLarge');
+      }
+      const thumbnail = await image
+        .resize({ ...THUMBNAIL_BOX, fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: THUMBNAIL_QUALITY })
+        .toBuffer();
+      return ok(new Uint8Array(thumbnail.buffer, thumbnail.byteOffset, thumbnail.byteLength));
+    });
   } catch (error) {
     return failed(/pixel limit/i.test(String(error)) ? 'tooLarge' : 'decode');
   }
