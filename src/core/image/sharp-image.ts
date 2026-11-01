@@ -21,6 +21,23 @@ const MAX_TIMEOUT_SECONDS = 3600;
 /** Текст ошибки срока libvips (`VipsProgressCallBack` в `sharp/src/common.cc`). */
 const LIBVIPS_TIMEOUT = /timeout: \d+% complete/;
 
+/**
+ * Предохранитель (ревью кода B-21): сколько брошенных запасным сроком обработок может висеть
+ * разом. Каждая держит поток пула libuv — по умолчанию их 4, и пул общий с файловыми операциями,
+ * то есть с записью файлов пользователя. Страница, которая зависает всегда, на каждом повторе
+ * (миниатюра — на каждом запросе) заняла бы новый поток. Пока висят две, помощник сразу отвечает
+ * сроком, не трогая `sharp`: два потока остаются файлам.
+ */
+const MAX_ABANDONED = 2;
+
+/** Брошенные запасным сроком обработки, которые ещё не кончились. */
+let abandoned = 0;
+
+/** Для тестов: сколько брошенных обработок висит сейчас. */
+export function abandonedImageRuns(): number {
+  return abandoned;
+}
+
 /** Обработка не уложилась в срок — любым из двух слоёв. Исход «не успели», не порча файла. */
 export class ImageTimeoutError extends Error {
   constructor(message: string, options?: ErrorOptions) {
@@ -48,9 +65,16 @@ export interface ImageDeadlines {
   readonly deadlineMs?: number;
 }
 
-/** Срок ли это — ошибка помощника; вызывающие отличают по ней «не успели» от прочих сбоев. */
+/**
+ * Срок ли это — ошибка помощника; вызывающие отличают по ней «не успели» от прочих сбоев. Кроме
+ * класса — имя: при переносе обработки в поток или процесс (ADR 0008) прототип через
+ * `postMessage` не доходит.
+ */
 export function isImageTimeout(error: unknown): error is ImageTimeoutError {
-  return error instanceof ImageTimeoutError;
+  return (
+    error instanceof ImageTimeoutError ||
+    (error instanceof Error && error.name === 'ImageTimeoutError')
+  );
 }
 
 function open(input: ImageInput, seconds: number): Sharp {
@@ -74,6 +98,16 @@ function isLibvipsTimeout(error: unknown, elapsedMs: number, seconds: number): b
   );
 }
 
+/** Срок — в лог с контекстом входа (спека: ошибки не глотать); исход решает вызывающий. */
+function timedOut(input: ImageInput, error: ImageTimeoutError): ImageTimeoutError {
+  console.warn(
+    '[core] обработка картинки: срок',
+    { kind: input.kind, bytes: input.bytes.byteLength, abandoned },
+    error,
+  );
+  return error;
+}
+
 /**
  * Обработка картинки со сроками: `work` получает экземпляр `sharp` со сроком libvips и делает с
  * ним всё — от чтения заголовка до готового буфера. Срок любого слоя — `ImageTimeoutError`;
@@ -89,26 +123,40 @@ export async function processImage<T>(
   if (!Number.isInteger(seconds) || seconds < 1 || seconds > MAX_TIMEOUT_SECONDS) {
     throw new RangeError(`срок libvips — целые секунды 1…${String(MAX_TIMEOUT_SECONDS)}`);
   }
+  if (abandoned >= MAX_ABANDONED) {
+    throw timedOut(
+      input,
+      new ImageTimeoutError(`обработка картинки не начата: висят брошенные (${String(abandoned)})`),
+    );
+  }
   const started = performance.now();
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const backstop = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => {
-      reject(new ImageTimeoutError(`обработка картинки не ответила за ${String(deadlineMs)} мс`));
-    }, deadlineMs);
-  });
   // Проигравшая гонку обработка может отказать позже: `Promise.race` уже подписан на неё, отказ не
   // станет unhandled.
   const running = Promise.resolve().then(() => work(open(input, seconds)));
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const backstop = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      abandoned += 1;
+      const release = (): void => {
+        abandoned -= 1;
+      };
+      void running.then(release, release);
+      reject(new ImageTimeoutError(`обработка картинки не ответила за ${String(deadlineMs)} мс`));
+    }, deadlineMs);
+  });
   try {
     return await Promise.race([running, backstop]);
   } catch (error: unknown) {
     if (isImageTimeout(error)) {
-      throw error;
+      throw timedOut(input, error);
     }
     if (isLibvipsTimeout(error, performance.now() - started, seconds)) {
-      throw new ImageTimeoutError(`обработка картинки не уложилась в ${String(seconds)} с`, {
-        cause: error,
-      });
+      throw timedOut(
+        input,
+        new ImageTimeoutError(`обработка картинки не уложилась в ${String(seconds)} с`, {
+          cause: error,
+        }),
+      );
     }
     throw error;
   } finally {

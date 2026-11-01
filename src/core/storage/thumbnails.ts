@@ -129,7 +129,9 @@ async function render(source: Uint8Array, pixelLimit: number): Promise<Result<Ui
       return ok(new Uint8Array(thumbnail.buffer, thumbnail.byteOffset, thumbnail.byteLength));
     });
   } catch (error) {
-    return failed(/pixel limit/i.test(String(error)) ? 'tooLarge' : 'decode');
+    // Срок по часам может обернуть отказ предела пикселей — смотрим и на причину.
+    const reason = error instanceof Error && error.cause !== undefined ? error.cause : error;
+    return failed(/pixel limit/i.test(String(reason)) ? 'tooLarge' : 'decode');
   }
 }
 

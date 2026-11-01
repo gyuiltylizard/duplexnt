@@ -2,6 +2,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import sharp from 'sharp';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
+  abandonedImageRuns,
   ImageTimeoutError,
   isImageTimeout,
   processImage,
@@ -95,13 +96,65 @@ describe('срок libvips прерывает обработку в каждой
 });
 
 describe('запасной срок и распознавание (B-21, U1)', () => {
-  it('обработка, которая не завершается, — срок по запасным часам', async () => {
+  it('обработка, которая не успевает к запасному сроку, — срок по запасным часам; брошенная учтена до своего конца', async () => {
     const { error, ms } = await rejection(() =>
-      processImage(jpegInput(), () => new Promise<never>(() => undefined), { deadlineMs: 50 }),
+      processImage(jpegInput(), () => delay(300), { deadlineMs: 50 }),
     );
     expect(error).toBeInstanceOf(ImageTimeoutError);
     expect((error as ImageTimeoutError).cause).toBeUndefined();
-    expect(ms).toBeLessThan(1000);
+    expect(ms).toBeLessThan(250);
+    expect(abandonedImageRuns()).toBe(1);
+    await delay(400);
+    expect(abandonedImageRuns()).toBe(0);
+  });
+
+  it('поздний отказ брошенной обработки не становится unhandled rejection', async () => {
+    const { error } = await rejection(() =>
+      processImage(
+        jpegInput(),
+        async () => {
+          await delay(100);
+          throw new Error('поздний сбой libvips');
+        },
+        { deadlineMs: 20 },
+      ),
+    );
+    expect(isImageTimeout(error)).toBe(true);
+    // Отказ приходит после гонки: unhandled vitest засчитал бы ошибкой прогона.
+    await delay(200);
+    expect(abandonedImageRuns()).toBe(0);
+  });
+
+  it('предохранитель: пока висят две брошенные, помощник сразу отвечает сроком и sharp не трогает', async () => {
+    const hang = (): Promise<{ error: unknown; ms: number }> =>
+      rejection(() => processImage(jpegInput(), () => delay(400), { deadlineMs: 20 }));
+    const [first, second] = await Promise.all([hang(), hang()]);
+    expect(isImageTimeout(first.error)).toBe(true);
+    expect(isImageTimeout(second.error)).toBe(true);
+    expect(abandonedImageRuns()).toBe(2);
+
+    let touched = false;
+    const { error, ms } = await rejection(() =>
+      processImage(jpegInput(), (image) => {
+        touched = true;
+        return image.metadata();
+      }),
+    );
+    expect(isImageTimeout(error)).toBe(true);
+    expect(touched).toBe(false);
+    expect(ms).toBeLessThan(50);
+
+    // Брошенные кончились — помощник снова работает.
+    await delay(500);
+    expect(abandonedImageRuns()).toBe(0);
+    expect((await processImage(jpegInput(), (image) => image.metadata())).format).toBe('jpeg');
+  });
+
+  it('распознаватель узнаёт срок и по имени ошибки (перенос через postMessage теряет прототип)', () => {
+    const transferred = Object.assign(new Error('обработка не уложилась'), {
+      name: 'ImageTimeoutError',
+    });
+    expect(isImageTimeout(transferred)).toBe(true);
   });
 
   it('текст срока не первой строкой сообщения — срок', async () => {
