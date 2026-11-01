@@ -48,6 +48,8 @@ export interface CommandContext {
   readonly openDataFolder: () => Promise<Result<void>>;
   /** Открывает папку в проводнике — папку последнего пакета (M3.5, KTD-9); открывает main. */
   readonly openFolder: (path: string) => Promise<Result<void>>;
+  /** Открывает страницу проекта в браузере (B-42); адрес знает main. */
+  readonly openProjectPage: () => Promise<Result<void>>;
   /** Папка сохранения пакета по умолчанию (M3, KTD-5): «Документы» пользователя. */
   readonly defaultSaveFolder: string;
   /** Диалог выбора папки (M3, KTD-5), открытый на текущей; `null` — пользователь отказался. */
@@ -294,6 +296,7 @@ export function createCommands(context: CommandContext): Commands {
       closeSession: withoutRequest(() => done(() => service.closeSession())),
 
       openDataFolder: withoutRequest(() => done(() => context.openDataFolder())),
+      openProjectPage: withoutRequest(() => done(() => context.openProjectPage())),
       // «Открыть папку» (M3.5, KTD-9): папку последнего пакета помнит служба, путь от renderer
       // не принимается.
       openSaveFolder: withoutRequest(() => {

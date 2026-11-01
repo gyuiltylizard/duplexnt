@@ -1,4 +1,4 @@
-import { EMPTY_EDITS, fail } from '@shared';
+import { EMPTY_EDITS, fail, ok } from '@shared';
 import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../i18n';
@@ -33,6 +33,30 @@ afterEach(() => {
 });
 
 describe('экран editor', () => {
+  it('B-42: ссылка «о проекте» в подвале инспектора шлёт команду openProjectPage; отказ — тостом', async () => {
+    const api = stubApi({
+      openProjectPage: vi
+        .fn()
+        .mockResolvedValueOnce(ok(undefined))
+        .mockResolvedValueOnce(fail('storageFailed', { reason: 'openExternal' })),
+    });
+    const { onToast } = renderEditor(twoPass());
+    const link = screen.getByRole('button', { name: /о проекте/u });
+    expect(link.title).toBe('Открыть страницу проекта в браузере');
+
+    fireEvent.click(link);
+    await vi.waitFor(() => {
+      expect(api.openProjectPage).toHaveBeenCalledOnce();
+    });
+    expect(onToast).not.toHaveBeenCalled();
+
+    fireEvent.click(link);
+    await vi.waitFor(() => {
+      expect(onToast).toHaveBeenCalledOnce();
+    });
+    expect(String(onToast.mock.calls[0]?.[0])).toMatch(/^Не удалось открыть браузер/u);
+  });
+
   it('лента показывает все страницы, выбор миниатюры меняет превью и позицию', () => {
     stubApi();
     renderEditor(makeSnapshot([makePass({ pages: pages(4) })]));
@@ -356,7 +380,7 @@ describe('экран editor', () => {
       within(banner)
         .getAllByRole('button')
         .map((button) => button.textContent),
-    ).toEqual(['Досканировать остаток', 'Оставить как есть', 'Новое сканирование']);
+    ).toEqual(['Досканировать остаток', 'Оставить как есть', 'Новый скан']);
   });
 
   it('M3.5, KTD-4: тумблер 180° — по роли backs, не по позиции прохода', () => {
@@ -442,7 +466,7 @@ describe('экран editor', () => {
     const labels = within(banner)
       .getAllByRole('button')
       .map((button) => button.textContent);
-    expect(labels).toEqual(['Досканировать остаток', 'Оставить как есть', 'Новое сканирование']);
+    expect(labels).toEqual(['Досканировать остаток', 'Оставить как есть', 'Новый скан']);
   });
 
   it('«подключён не тот сканер»: ссылка ведёт в device с адресом сканера прохода', () => {

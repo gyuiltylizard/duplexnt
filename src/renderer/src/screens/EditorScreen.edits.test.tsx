@@ -498,7 +498,7 @@ describe('editor M3: правки', () => {
     fireEvent.keyDown(field, { key: 'Delete' });
     field.remove();
 
-    fireEvent.click(screen.getByRole('button', { name: /Новое сканирование/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Новый скан/ }));
     ctrlZ(screen.getByRole('dialog'));
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Delete' });
     expect(api.setEdits).toHaveBeenCalledTimes(1);

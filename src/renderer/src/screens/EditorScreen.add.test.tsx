@@ -28,7 +28,7 @@ const READY: ScannerState = {
   params: { colorMode: 'Grayscale8', resolution: 300, paperSize: 'A4' },
 };
 
-const addButton = (): HTMLElement => screen.getByRole('button', { name: 'Добавить' });
+const addButton = (): HTMLElement => screen.getByRole('button', { name: 'Добавить листы' });
 const summary = (): string => document.querySelector('.add-modal__summary')?.textContent ?? '';
 
 /** Пары 3+3 (AE1) — как `twoPass`, но списком проходов для снимка с другими полями. */

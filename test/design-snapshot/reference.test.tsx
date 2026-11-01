@@ -578,7 +578,7 @@ describe('референс интерфейса (B-6)', () => {
 
   it('editor — модалка newscan', async () => {
     const { container } = renderApp(editorSnapshot(), EDITOR_OVERRIDES);
-    fireEvent.click(await screen.findByRole('button', { name: /Новое сканирование/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Новый скан/ }));
     await screen.findByRole('dialog');
     await capture(
       container,

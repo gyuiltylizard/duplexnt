@@ -269,6 +269,11 @@ export interface BridgeCommands {
    * (M3.5, KTD-9). Папку помнит ядро до выхода; пакета не было — конфликт `noBatch`.
    */
   readonly openSaveFolder: { readonly request: NoRequest; readonly value: undefined };
+  /**
+   * Открывает страницу проекта в системном браузере — ссылка в подвале инспектора (B-42). Адрес
+   * знает main; из интерфейса он не передаётся.
+   */
+  readonly openProjectPage: { readonly request: NoRequest; readonly value: undefined };
 }
 
 export type BridgeCommand = keyof BridgeCommands;
@@ -300,6 +305,7 @@ export const BRIDGE_CHANNELS = {
   closeSession: 'duplexnt:close-session',
   openDataFolder: 'duplexnt:open-data-folder',
   openSaveFolder: 'duplexnt:open-save-folder',
+  openProjectPage: 'duplexnt:open-project-page',
 } as const satisfies Record<BridgeCommand, string>;
 
 export type CommandResult<K extends BridgeCommand> = Result<BridgeCommands[K]['value']>;

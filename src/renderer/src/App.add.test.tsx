@@ -162,7 +162,7 @@ describe('M3.5: посадка добавленного набора (KTD-7; han
     render(<App />);
 
     fireEvent.click(await screen.findByRole('option', { name: /Страница 3/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Добавить' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Добавить листы' }));
     fireEvent.click(oneSided());
     fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
     await act(async () => {
@@ -180,7 +180,7 @@ describe('M3.5: посадка добавленного набора (KTD-7; han
     render(<App />);
 
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      fireEvent.click(await screen.findByRole('button', { name: 'Добавить' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Добавить листы' }));
       fireEvent.click(oneSided());
       fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
     }
@@ -194,7 +194,7 @@ describe('M3.5: посадка добавленного набора (KTD-7; han
     const push = liveApi({ ...withAdded(1, 0), scanner: READY });
     vi.mocked(window.api.startPass).mockImplementation(startPass);
     render(<App />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Добавить' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Добавить листы' }));
     fireEvent.click(oneSided());
     fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
 
@@ -284,7 +284,7 @@ describe('M3.5: посадка добавленного набора (KTD-7; han
 
       // Текущая — третья: якорь и выделение после отказа должны остаться её.
       fireEvent.click(await screen.findByRole('option', { name: /Страница 3/ }));
-      fireEvent.click(screen.getByRole('button', { name: 'Добавить' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Добавить листы' }));
       fireEvent.click(oneSided());
       fireEvent.click(screen.getByRole('radio', { name: 'После текущей страницы' }));
       fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));

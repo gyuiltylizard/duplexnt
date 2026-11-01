@@ -41,6 +41,12 @@ import {
 } from './window-bounds';
 import { installWindowClose } from './window-close';
 
+/**
+ * Страница проекта — ссылка в подвале инспектора (B-42). Адрес живёт только здесь: renderer
+ * открыть произвольный URL не может. С открытием репозитория (B-40) сменится на страницу Pages.
+ */
+const PROJECT_PAGE_URL = 'https://github.com/gyuiltylizard/duplexnt';
+
 function createWindow({ bounds, maximized }: WindowPlacement): BrowserWindow {
   const window = new BrowserWindow({
     ...(bounds ?? DEFAULT_WINDOW_SIZE),
@@ -163,10 +169,21 @@ async function start(): Promise<void> {
     console.error('[main] папка не открылась', problem);
     return fail('storageFailed', { reason: 'openPath' });
   };
+  // `shell.openExternal` при отказе системы бросает — в конверт, причина в журнал main.
+  const openProjectPage = async (): Promise<Result<void>> => {
+    try {
+      await shell.openExternal(PROJECT_PAGE_URL);
+      return ok(undefined);
+    } catch (error) {
+      console.error('[main] страница проекта не открылась', error);
+      return fail('storageFailed', { reason: 'openExternal' });
+    }
+  };
   const commands = createCommands({
     service,
     openDataFolder: () => openFolder(dataRoot),
     openFolder,
+    openProjectPage,
     // Папка пакета (M3, KTD-5): файловые диалоги — обязанность main (ADR 0003); имена файлов
     // задаёт модалка, папку — системный диалог.
     defaultSaveFolder: app.getPath('documents'),

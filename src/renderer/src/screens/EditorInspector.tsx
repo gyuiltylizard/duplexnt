@@ -8,6 +8,7 @@ import {
   type PassKind,
   type SessionAssembly,
   type SetsLayout,
+  APP_NAME,
 } from '@shared';
 import type { TFunction } from 'i18next';
 import { noteOf, toneOf, whatOf } from '../state/page-text';
@@ -342,6 +343,7 @@ export function EditorInspector({
   onRestoreStraight,
   onMouseDown,
   onRevert,
+  onOpenProject,
 }: {
   readonly assembly: SessionAssembly;
   /** Документы в координатах показанной ленты (M4, R11): счётчики и диапазоны — по показанным. */
@@ -371,13 +373,15 @@ export function EditorInspector({
   readonly onPickDocument: (document: number) => void;
   /** «Это не пустая страница» (M4, S9) — пометка текущей одним шагом undo. */
   readonly onNotBlank: () => void;
-  /** «Оставить оригинал» / «Выровнять» (M6) — на текущую или выделение, один шаг undo. */
+  /** «Оригинал» / «Выровнять» (M6) — на текущую или выделение, один шаг undo. */
   readonly onKeepOriginal: () => void;
   readonly onRestoreStraight: () => void;
   /** Клик по поверхности инспектора — сжатие мультивыделения решает экран (M3.5, R21). */
   readonly onMouseDown?: (event: MouseEvent<HTMLElement>) => void;
   /** «Вернуть» — открыть подтверждение `revert`. */
   readonly onRevert: () => void;
+  /** Ссылка на страницу проекта в подвале (B-42) — команда моста без входа. */
+  readonly onOpenProject: () => void;
 }): ReactNode {
   const { t } = useTranslation();
   // ДЕТАЛИ свёрнуты по умолчанию; состояние живёт до размонтирования экрана (S11), в том числе
@@ -522,21 +526,32 @@ export function EditorInspector({
         </ul>
       </section>
 
-      {/* S14: при любой правке, включая тумблер 180° — флаг ядра учитывает и его. */}
-      {assembly.hasEdits && (
-        <div className="edits-bar" role="status">
-          <p className="edits-bar__text">{t('editor.edits.text')}</p>
-          <button
-            type="button"
-            className="btn btn--tinted"
-            title={t('editor.edits.revertTitle')}
-            disabled={locked}
-            onClick={onRevert}
-          >
-            {t('editor.edits.revert')}
-          </button>
-        </div>
-      )}
+      {/* Подвал (B-42): плашка правок и ссылка на проект прижаты к низу панели. */}
+      <div className="inspector__footer">
+        {/* S14: при любой правке, включая тумблер 180° — флаг ядра учитывает и его. */}
+        {assembly.hasEdits && (
+          <div className="edits-bar" role="status">
+            <p className="edits-bar__text">{t('editor.edits.text')}</p>
+            <button
+              type="button"
+              className="btn btn--tinted"
+              title={t('editor.edits.revertTitle')}
+              disabled={locked}
+              onClick={onRevert}
+            >
+              {t('editor.edits.revert')}
+            </button>
+          </div>
+        )}
+        <button
+          type="button"
+          className="inspector__about"
+          title={t('inspector.aboutTitle')}
+          onClick={onOpenProject}
+        >
+          {t('inspector.about', { app: APP_NAME })}
+        </button>
+      </div>
     </aside>
   );
 }

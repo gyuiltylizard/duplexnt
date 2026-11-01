@@ -122,6 +122,7 @@ function setup(
 
   const openDataFolder = vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined)));
   const openFolder = vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined)));
+  const openProjectPage = vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined)));
   const askSaveFolder = vi.fn((): Promise<string | null> => Promise.resolve('E:\\Архив'));
   const folderExists = vi.fn((): Promise<boolean> => Promise.resolve(exists));
   const discoveryEvents: number[] = [];
@@ -129,6 +130,7 @@ function setup(
     service,
     openDataFolder,
     openFolder,
+    openProjectPage,
     defaultSaveFolder: 'C:\\Users\\Документы',
     askSaveFolder,
     folderExists,
@@ -147,6 +149,7 @@ function setup(
     cancel,
     openDataFolder,
     openFolder,
+    openProjectPage,
     askSaveFolder,
     discoveryEvents,
   };
@@ -172,6 +175,7 @@ describe('команды без входа', () => {
     'closeSession',
     'openDataFolder',
     'openSaveFolder',
+    'openProjectPage',
   ];
 
   it('с `undefined` возвращают успех в конверте (openSaveFolder — когда служба помнит пакет)', async () => {
@@ -536,6 +540,17 @@ describe('снимок и проход', () => {
     );
   });
 
+  it('openProjectPage (B-42): открывает main, отказ доходит кодом', async () => {
+    const { handlers, openProjectPage } = setup();
+    expect(await handlers.openProjectPage(undefined)).toEqual(ok(undefined));
+    expect(openProjectPage).toHaveBeenCalledOnce();
+
+    openProjectPage.mockResolvedValueOnce(fail('storageFailed', { reason: 'openExternal' }));
+    expect(await handlers.openProjectPage(undefined)).toEqual(
+      fail('storageFailed', { reason: 'openExternal' }),
+    );
+  });
+
   it('openDataFolder: отказ main доходит кодом, а не успехом', async () => {
     const { handlers, openDataFolder } = setup();
     openDataFolder.mockResolvedValueOnce(fail('storageFailed', { reason: 'openPath' }));
@@ -587,6 +602,7 @@ describe('поиск устройств', () => {
       service,
       openDataFolder: () => Promise.resolve(ok(undefined)),
       openFolder: () => Promise.resolve(ok(undefined)),
+      openProjectPage: () => Promise.resolve(ok(undefined)),
       defaultSaveFolder: 'C:\\Users\\Документы',
       askSaveFolder: () => Promise.resolve(null),
       onDiscoveryChanged: () => {

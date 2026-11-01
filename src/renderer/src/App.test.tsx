@@ -447,7 +447,7 @@ describe('каркас приложения', () => {
     expect((await screen.findByRole('alert')).textContent).toContain('Досканировать не удалось');
 
     const banner = screen.getByRole('region', { name: /Проход прервался/ });
-    fireEvent.click(within(banner).getByRole('button', { name: 'Новое сканирование' }));
+    fireEvent.click(within(banner).getByRole('button', { name: 'Новый скан' }));
     fireEvent.click(
       await screen.findByRole('button', { name: /Закрыть текущий и начать новое сканирование/ }),
     );
