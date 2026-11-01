@@ -705,16 +705,23 @@ async function measurePass(
 
 interface FittedProfile {
   readonly profile: SkewProfile;
-  /** min(остаток дуги, остаток ступени); при дыре покрытия — остаток прямой. */
+  /** min(остаток дуги или прямой, остаток ступени). */
   readonly shapeResidual: number;
-  /** Допуск остатка для этого вида профиля: прямая — строгий, узлы по плотной опоре — мягче. */
+  /** Допуск остатка по опоре: две кучки полос с дырой — строгий, плотная опора — мягче. */
   readonly allowed: number;
 }
 
 /**
- * Профиль по точкам (u, θ, вес): дыра покрытия > `MAX_SUPPORT_GAP` → прямая по двум узлам
- * (u = 0 и 1) с гейтом `SHAPE_RESIDUAL_MAX_DEG`, иначе узлы по точкам с гейтом
- * `SHAPE_RESIDUAL_DENSE_MAX_DEG`.
+ * Профиль по точкам (u, θ, вес) — всегда узлами по полосам (за крайними — константа). Остаток
+ * формы — min(остаток гладкого семейства, остаток ступени). Дыра покрытия > `MAX_SUPPORT_GAP`
+ * (две кучки полос по краям, середина пуста): гладкое семейство — прямая, а не квадратика (ей
+ * не на что опереться), допуск — строгий `SHAPE_RESIDUAL_MAX_DEG`; плотная опора — квадратика
+ * и `SHAPE_RESIDUAL_DENSE_MAX_DEG`. Ступень считается и при дыре (B-39): веер с остановкой
+ * подачи — это две константы, и прямая через две кучки внутри каждой кучки наклонена на
+ * «наклон × полуширина кучки» — чем сильнее веер, тем больше остаток, и строгий порог резал
+ * именно листы с сильным веером (шапка сверху, блок текста снизу, пустая середина: прямая
+ * 0,16–0,20°, ступень 0,03–0,04°). Узлы вместо прямой: прямая экстраполировалась до краёв
+ * листа (+1,10° при измеренных +0,92°), где чернил нет.
  */
 function fitProfile(points: readonly Point[]): FittedProfile {
   const us = points.map((p) => p.u).sort((p, q) => p - q);
@@ -722,19 +729,12 @@ function fitProfile(points: readonly Point[]): FittedProfile {
   for (let i = 1; i < us.length; i += 1) {
     supportGap = Math.max(supportGap, (us[i] ?? 0) - (us[i - 1] ?? 0));
   }
-  const linear = supportGap > MAX_SUPPORT_GAP;
-  const quad = fitQuadratic(points, linear);
-  const shapeResidual = linear ? quad.maxResidual : Math.min(quad.maxResidual, fitStep(points));
-  const profile = linear
-    ? skewProfileOf([
-        { u: 0, theta: (quad.coef[0] ?? 0) - 0.5 * (quad.coef[1] ?? 0) },
-        { u: 1, theta: (quad.coef[0] ?? 0) + 0.5 * (quad.coef[1] ?? 0) },
-      ])
-    : knotsOf(points);
+  const sparse = supportGap > MAX_SUPPORT_GAP;
+  const smooth = fitQuadratic(points, sparse);
   return {
-    profile,
-    shapeResidual,
-    allowed: linear ? SHAPE_RESIDUAL_MAX_DEG : SHAPE_RESIDUAL_DENSE_MAX_DEG,
+    profile: knotsOf(points),
+    shapeResidual: Math.min(smooth.maxResidual, fitStep(points)),
+    allowed: sparse ? SHAPE_RESIDUAL_MAX_DEG : SHAPE_RESIDUAL_DENSE_MAX_DEG,
   };
 }
 
