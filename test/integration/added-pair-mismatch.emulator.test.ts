@@ -408,9 +408,12 @@ describe('несовпадение оборотов добавленного н�
     expect(await service.keepSetBacks(2)).toMatchObject(conflictOf('noPendingSet'));
     expect(await service.rescanSetBacks(2)).toMatchObject(conflictOf('noPendingSet'));
 
-    // Запись PDF идёт — решения ждут её конца (KTD-9).
+    // Запись PDF идёт — решения ждут её конца (KTD-9). Оценки дождаться до записи: иначе под
+    // нагрузкой «Сохранить» отказывает `blankPending`, флаг записи не встаёт и гард `saving` не
+    // проверяется (падение на гейте B-21, 2026-11-01).
     const folder = join(root, 'выход');
     await mkdir(folder, { recursive: true });
+    await untilScored(() => service.snapshot());
     const saving = service.saveDocuments(folder, {
       mode: 'single',
       names: ['Документ'],

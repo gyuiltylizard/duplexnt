@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { STRAIGHTEN_GEOMETRY_VERSION } from '../../src/shared';
 import { SKEW_DETECTOR_VERSION } from '../../src/core/detect/skew';
 import type { PassOrigin } from '../../src/core/storage/journal';
+import { ImageTimeoutError } from '../../src/core/image/sharp-image';
 import { layoutOf } from '../../src/core/storage/layout';
 import { limiterOf, type LimiterPriority } from '../../src/core/storage/limiter';
 import { openSessionStore } from '../../src/core/storage/reconcile';
@@ -222,6 +223,30 @@ describe('оценки перекоса: измерение, карта и кэ�
     const lost: SkewScoreSource = { pageInfo: () => null, readPage: (key) => store.readPage(key) };
     expect(await createSkewScores(layout.derivedDir, lost, measurer).ensure(F2)).toBe(false);
     expect(calls).toEqual([]);
+  });
+
+  it('срок обработки (B-21) — «не померить» только в памяти, кэша нет; следующее открытие измерит заново', async () => {
+    const { store, layout, skewDir } = await sessionWith([FAN()]);
+    const { measurer: timingOut, calls: timedCalls } = counting(() =>
+      Promise.reject(new ImageTimeoutError('тест: срок')),
+    );
+
+    const scores = createSkewScores(layout.derivedDir, store, timingOut);
+    expect(await scores.ensure(F1)).toBe(true);
+    await scores.settle();
+
+    expect(outcomesOf(scores)).toEqual({ [F1]: 'unmeasurable' });
+    expect(timedCalls).toHaveLength(1);
+    expect(await readdir(skewDir).catch(() => [])).toEqual([]);
+
+    // «Перезапуск»: кэша нет — страница измеряется по-настоящему и выправляется.
+    const { measurer, calls } = counting();
+    const again = createSkewScores(layout.derivedDir, store, measurer);
+    await again.load([F1]);
+    expect(outcomesOf(again)).toEqual({});
+    expect(await again.ensure(F1)).toBe(true);
+    expect(outcomesOf(again)).toEqual({ [F1]: 'willStraighten' });
+    expect(calls).toHaveLength(1);
   });
 
   it('страница, отброшенная пока шло измерение, вердикта не получает; каталог не создаётся (KTD-12)', async () => {

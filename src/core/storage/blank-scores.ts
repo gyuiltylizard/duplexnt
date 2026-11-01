@@ -2,6 +2,7 @@ import { join } from 'node:path';
 import { z } from 'zod';
 import type { BlankVerdicts } from '@shared';
 import { BLANK_DETECTOR_VERSION, isBlank, type BlankDetector } from '../detect/blank';
+import { isImageTimeout } from '../image/sharp-image';
 import { writeFileAtomic } from './atomic-file';
 import { blankDirIn, blankFileName } from './layout';
 import { isAlive, pruneStale } from './liveness';
@@ -14,7 +15,9 @@ import type { ThumbnailSource } from './thumbnails';
 // 2026-10-22): карта `ключ → вердикт` в памяти и кэш `derived/<id сессии>/blank/<ключ>.json` с
 // долей и версией детектора. В журнал оценка не пишется; кэш с другой версией пересчитывается;
 // в каталог сессии модуль не пишет. Сбой детектора (не JPEG, предел пикселей, ошибка чтения) —
-// тоже результат: `ratio: null`, страница не пуста и оценки больше не ждёт (R6).
+// тоже результат: `ratio: null`, страница не пуста и оценки больше не ждёт (R6). Срок обработки
+// (B-21) — «не пусто» только в памяти, как временный сбой чтения: кэш не пишется, следующее
+// открытие оценит страницу заново.
 //
 // Служба проходов зовёт `ensure` сразу после приёма страницы оборотов и при открытии — для
 // страниц без кэша; `load` читает кэш целиком до первого снимка, чтобы лента после перезапуска
@@ -106,12 +109,18 @@ export function createBlankScores(
     }
   }
 
-  /** Доля от детектора; его исключение — тоже сбой оценки, `null` (R6), а не зависший `pending`. */
-  async function ratioOf(bytes: Uint8Array, info: PageInfo): Promise<number | null> {
+  /**
+   * Доля от детектора; его исключение — тоже сбой оценки, `null` (R6), а не зависший `pending`.
+   * `cacheable: false` — срок обработки (B-21): исход «не успели» не свойство страницы.
+   */
+  async function ratioOf(
+    bytes: Uint8Array,
+    info: PageInfo,
+  ): Promise<{ readonly ratio: number | null; readonly cacheable: boolean }> {
     try {
-      return await detector(bytes, info.pixelLimit);
-    } catch {
-      return null;
+      return { ratio: await detector(bytes, info.pixelLimit), cacheable: true };
+    } catch (error: unknown) {
+      return { ratio: null, cacheable: !isImageTimeout(error) };
     }
   }
 
@@ -132,15 +141,18 @@ export function createBlankScores(
     if (aborted()) {
       return false;
     }
-    const ratio = page.ok ? await ratioOf(page.value, info) : null;
+    const { ratio, cacheable } = page.ok
+      ? await ratioOf(page.value, info)
+      : { ratio: null, cacheable: false };
     if (aborted()) {
       return false;
     }
     // Кэш — по возможности: вердикт действует и тогда, когда записать его не удалось. Сбой
     // чтения страницы (не потеря — её отсеивает `alive`) может быть временным: вердикт «не
     // пусто» действует до перезапуска, но в кэш не пишется — следующее открытие оценит заново.
+    // Так же — срок обработки (B-21).
     const encoded = new TextEncoder().encode(JSON.stringify({ v: BLANK_DETECTOR_VERSION, ratio }));
-    const cached = page.ok
+    const cached = cacheable
       ? await fs
           .mkdir(blankDirIn(derivedDir, info.sessionId))
           .then(() => writeFileAtomic(file, encoded, io))
