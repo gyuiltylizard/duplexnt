@@ -62,7 +62,8 @@ export function isBlank(ratio: number | null): boolean {
 /**
  * Доля чернильных пикселей страницы JPEG (`sharp` — `test:integration`). Сбой — не JPEG,
  * превышение предела пикселей, ошибка декодирования — `null`: такая страница считается не
- * пустой и ошибкой не является (R6).
+ * пустой и ошибкой не является (R6). Срок обработки (B-21) — исключение `ImageTimeoutError` из
+ * декода: оценки держат «не успели» в памяти, без кэша.
  */
 export async function blankRatio(
   bytes: Uint8Array,

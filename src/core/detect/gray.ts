@@ -1,5 +1,5 @@
-import sharp from 'sharp';
 import { hasJpegMarkers } from '../escl/jpeg-markers';
+import { isImageTimeout, processImage } from '../image/sharp-image';
 import { decodePixelLimit } from '../storage/thumbnails';
 
 // Серая рабочая картинка — общий вход детекторов пустых страниц (M4) и перекоса подачи (M6,
@@ -69,7 +69,8 @@ export function paperWhiteOf(histogram: Uint32Array, total: number): number {
 /**
  * Серая рабочая картинка страницы JPEG (`sharp` — `test:integration`). Сбой — не JPEG,
  * превышение предела пикселей, ошибка декодирования — `null`: детекторы считают такую
- * страницу не пустой и не измеримой, ошибкой это не является (M4 R6, M6 R3).
+ * страницу не пустой и не измеримой, ошибкой это не является (M4 R6, M6 R3). Срок обработки
+ * (B-21) — исключение `ImageTimeoutError`: исход «не успели» не кэшируется, его различают оценки.
  */
 export async function decodeWorkingGray(
   bytes: Uint8Array,
@@ -80,30 +81,34 @@ export async function decodeWorkingGray(
   }
   const limit = decodePixelLimit(pixelLimit);
   try {
-    const image = sharp(bytes, { limitInputPixels: limit });
-    const { format, width, height } = await image.metadata();
-    if (format !== 'jpeg' || width * height > limit) {
-      return null;
+    return await processImage({ kind: 'jpeg', bytes, pixelLimit: limit }, async (image) => {
+      const { format, width, height } = await image.metadata();
+      if (format !== 'jpeg' || width * height > limit) {
+        return null;
+      }
+      const { data, info } = await image
+        .greyscale()
+        .resize({
+          width: WORKING_LONG_SIDE,
+          height: WORKING_LONG_SIDE,
+          fit: 'inside',
+          withoutEnlargement: true,
+        })
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+      if (info.channels !== 1) {
+        return null;
+      }
+      return {
+        data: new Uint8Array(data.buffer, data.byteOffset, data.byteLength),
+        width: info.width,
+        height: info.height,
+      };
+    });
+  } catch (error: unknown) {
+    if (isImageTimeout(error)) {
+      throw error;
     }
-    const { data, info } = await image
-      .greyscale()
-      .resize({
-        width: WORKING_LONG_SIDE,
-        height: WORKING_LONG_SIDE,
-        fit: 'inside',
-        withoutEnlargement: true,
-      })
-      .raw()
-      .toBuffer({ resolveWithObject: true });
-    if (info.channels !== 1) {
-      return null;
-    }
-    return {
-      data: new Uint8Array(data.buffer, data.byteOffset, data.byteLength),
-      width: info.width,
-      height: info.height,
-    };
-  } catch {
     return null;
   }
 }

@@ -870,6 +870,8 @@ export async function measureSkew(
 /**
  * Измерение страницы JPEG (`sharp` — `test:integration`). Сбой — не JPEG, превышение предела
  * пикселей, ошибка декодирования — `null`: страница не измерена и ошибкой это не является (R3).
+ * Срок обработки (B-21) — исключение `ImageTimeoutError` из декода: оценки держат «не успели» в
+ * памяти, без кэша.
  */
 export async function measureSkewJpeg(
   bytes: Uint8Array,

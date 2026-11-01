@@ -1,10 +1,10 @@
 import { setImmediate as yieldNow } from 'node:timers/promises';
-import sharp from 'sharp';
 import { skewLateralRows, skewTanRows, type SkewProfile } from '@shared';
 import { MARGIN_RATIO, paperWhiteOf } from '../detect/gray';
 import { hasJpegMarkers, withJfifDensity } from '../escl/jpeg-markers';
 import { jfifDpi } from '../pdf/assemble';
 import { decodePixelLimit } from '../storage/thumbnails';
+import { processImage } from './sharp-image';
 
 // Ресэмплер выравнивания (план M6, U3; KTD-1, KTD-3; амендмент 2026-10-28; ADR 0008).
 // Геометрия линейного сенсора: лист, повёрнутый на θ(y) в момент строки y, смещает точку
@@ -261,50 +261,54 @@ export async function straighten(
   // Уже отменённая задача не декодирует страницу (до секунды и сотни мегабайт на 600 dpi цвет).
   options.signal?.throwIfAborted();
   const limit = decodePixelLimit(options.pixelLimit);
-  let raw: RawImage;
-  let channels: 1 | 3;
+  // Срок обработки (B-21) — тоже сбой декода, `null`: очередь отложит страницу со сбоем в памяти.
+  let raw: (RawImage & { readonly channels: 1 | 3 }) | null;
   try {
-    const image = sharp(bytes, { limitInputPixels: limit });
-    const meta = await image.metadata();
-    if (meta.format !== 'jpeg' || meta.width * meta.height > limit) {
-      return null;
-    }
-    // Серый JPEG `sharp` отдаёт сырым в sRGB тремя каналами, если не попросить одноканальный.
-    const { data, info } = await (meta.channels === 1 ? image.toColourspace('b-w') : image)
-      .raw()
-      .toBuffer({ resolveWithObject: true });
-    if (info.channels === 1 || info.channels === 3) {
-      channels = info.channels;
-    } else {
-      return null;
-    }
-    raw = {
-      data: new Uint8Array(data.buffer, data.byteOffset, data.byteLength),
-      width: info.width,
-      height: info.height,
-      channels,
-    };
+    raw = await processImage({ kind: 'jpeg', bytes, pixelLimit: limit }, async (image) => {
+      const meta = await image.metadata();
+      if (meta.format !== 'jpeg' || meta.width * meta.height > limit) {
+        return null;
+      }
+      // Серый JPEG `sharp` отдаёт сырым в sRGB тремя каналами, если не попросить одноканальный.
+      const { data, info } = await (meta.channels === 1 ? image.toColourspace('b-w') : image)
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+      if (info.channels !== 1 && info.channels !== 3) {
+        return null;
+      }
+      return {
+        data: new Uint8Array(data.buffer, data.byteOffset, data.byteLength),
+        width: info.width,
+        height: info.height,
+        channels: info.channels,
+      };
+    });
   } catch {
     return null;
   }
+  if (raw === null) {
+    return null;
+  }
+  const { channels } = raw;
   const out = await straightenRaw(raw, profile, options);
   // Отмена на последней полосе: цикл полос её уже не увидит, кодировать незачем.
   options.signal?.throwIfAborted();
   try {
     const { width, height } = raw;
     const dpi = options.dpi ?? jfifDpi(bytes);
-    let pipeline = sharp(out, { raw: { width, height, channels } });
-    if (channels === 1) {
-      pipeline = pipeline.toColourspace('b-w');
-    }
-    const encoded = await pipeline
-      .jpeg({ quality: JPEG_QUALITY, chromaSubsampling: CHROMA_SUBSAMPLING })
-      .toBuffer();
+    const encoded = await processImage(
+      { kind: 'raw', bytes: out, width, height, channels },
+      (image) =>
+        (channels === 1 ? image.toColourspace('b-w') : image)
+          .jpeg({ quality: JPEG_QUALITY, chromaSubsampling: CHROMA_SUBSAMPLING })
+          .toBuffer(),
+    );
     const bare = new Uint8Array(encoded.buffer, encoded.byteOffset, encoded.byteLength);
     const output = dpi === null ? { jpeg: bare, dpi: null } : withJfifDensity(bare, dpi);
     return { ...output, info: { width, height, channels }, encoding: STRAIGHTEN_ENCODING };
   } catch (error: unknown) {
-    // Отмена — исключение причиной сигнала; сбой libvips при кодировании — `null`, как и при декоде;
+    // Отмена — исключение причиной сигнала; сбой libvips и срок (B-21) при кодировании — `null`,
+    // как и при декоде;
     // ошибки самого ресэмплера и колбэков вызывающего (`onChunk`, `yieldBetween`) сюда не попадают —
     // они пробрасываются.
     if (options.signal?.aborted === true) {

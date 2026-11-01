@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { EMPTY_EDITS, type BlankMode, type Snapshot } from '@shared';
 import { blankRatio, type BlankDetector } from '../../src/core/detect/blank';
 import { probeScanner, type ConnectedScanner } from '../../src/core/escl/connect';
+import { ImageTimeoutError } from '../../src/core/image/sharp-image';
 import {
   openPassService,
   type PassService,
@@ -19,7 +20,7 @@ import { pageFixtureOf, pdfImageStreams, scanFixture } from '../support/fixtures
 import { makeTempDataRoot } from '../support/temp-data-root';
 import { unwrap } from '../support/result';
 import { until, untilScored } from '../support/until';
-import { levelWorker } from '../support/image-worker';
+import { levelWorker, stubWorker } from '../support/image-worker';
 import { FAST_JOB_LIMITS } from '../support/pass-service';
 
 // Пустые обороты — полный путь на настоящей цепочке (план M4, U8): эмулятор с настоящими
@@ -436,6 +437,28 @@ describe('пустые обороты — полный путь через эм�
       expect(hiddenOf(snapshot)).toEqual([back(9), back(4)]);
       expect(await pdfFixtures(await saveSingle(service, root))).toHaveLength(22);
     });
+  });
+
+  it('срок обработки (B-21): оценки пустоты и наклона «не успели» — ожиданий нет, ничего не скрыто, PDF из всех 24, кэша нет', async () => {
+    const timedOut = (): Promise<never> => Promise.reject(new ImageTimeoutError('тест: срок'));
+    const { service, root } = await connect(SCENARIOS['blank-backs'], {
+      blankDetector: timedOut,
+      imageWorker: stubWorker({ measure: timedOut }).worker,
+    });
+    unwrap(await service.setBlankMode('hide'));
+    unwrap(await service.setStraightenMode('auto'));
+    await scanned(service, 12, 12);
+    await untilScored(() => service.snapshot());
+
+    const snapshot = service.snapshot();
+    expect(snapshot.assembly?.blank).toEqual({ mode: 'hide', found: 0, hidden: 0, pending: 0 });
+    expect(snapshot.assembly?.straighten.pending).toBe(0);
+    expect(hiddenOf(snapshot)).toEqual([]);
+    const derived = join(layoutOf(root).derivedDir, snapshot.session?.id ?? '');
+    expect(await readdir(join(derived, 'blank')).catch(() => [])).toEqual([]);
+    expect(await readdir(join(derived, 'skew')).catch(() => [])).toEqual([]);
+    // «Сохранить» не отказывает по ожиданию: в файле все страницы, пустые обороты — тоже.
+    expect(await pdfFixtures(await saveSingle(service, root))).toHaveLength(24);
   });
 
   it('режим сессии заморожен: смена настройки после первого прохода не меняет сессию', async () => {

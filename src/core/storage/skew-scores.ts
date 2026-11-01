@@ -11,6 +11,7 @@ import {
 } from '@shared';
 import { SKEW_DETECTOR_VERSION } from '../detect/skew';
 import type { ImageWorker } from '../image/image-worker';
+import { isImageTimeout } from '../image/sharp-image';
 import { writeFileAtomic } from './atomic-file';
 import { skewDirIn, skewFileName } from './layout';
 import { isAlive, pruneStale } from './liveness';
@@ -189,6 +190,15 @@ export function createSkewScores(
     } catch (error) {
       if (signal.aborted) {
         throw error;
+      }
+      // Срок обработки (B-21) — «не померить» только в памяти, как сбой чтения: исход «не успели»
+      // не свойство страницы, следующее открытие измерит заново.
+      if (isImageTimeout(error)) {
+        if (!alive(key, info)) {
+          return false;
+        }
+        entries.set(key, { sessionId: info.sessionId, verdict: UNMEASURABLE });
+        return true;
       }
       // Исключение исполнителя — тоже сбой измерения, `unmeasurable` (R3), а не вечный `pending`.
       record = recordOf(null, page.value.byteLength, `сбой измерения: ${String(error)}`);

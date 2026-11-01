@@ -7,6 +7,7 @@ import {
   type BlankDetector,
 } from '../../src/core/detect/blank';
 import type { PassOrigin } from '../../src/core/storage/journal';
+import { ImageTimeoutError } from '../../src/core/image/sharp-image';
 import { layoutOf } from '../../src/core/storage/layout';
 import { openSessionStore } from '../../src/core/storage/reconcile';
 import {
@@ -238,6 +239,46 @@ describe('оценки пустых страниц: детектор, карта
     expect(await again.ensure(B1)).toBe(true);
     expect(verdictsOf(again)).toEqual({ [B1]: true });
     expect(calls).toHaveLength(1);
+  });
+
+  it('срок обработки (B-21) — «не пусто» только в памяти, кэша нет, settle разрешается; следующее открытие оценит заново', async () => {
+    const { store, layout, blankDir } = await sessionWith([BLANK()]);
+    const { detector: timingOut, calls: timedCalls } = counting(() =>
+      Promise.reject(new ImageTimeoutError('тест: срок')),
+    );
+
+    const scores = createBlankScores(layout.derivedDir, store, timingOut);
+    expect(await scores.ensure(B1)).toBe(true);
+    await scores.settle();
+
+    expect(verdictsOf(scores)).toEqual({ [B1]: false });
+    expect(timedCalls).toHaveLength(1);
+    expect(await readdir(blankDir).catch(() => [])).toEqual([]);
+    // Повторный ensure в том же открытии вердикт уже знает — детектор не зовётся.
+    expect(await scores.ensure(B1)).toBe(false);
+    expect(timedCalls).toHaveLength(1);
+
+    // «Перезапуск»: оценки над теми же каталогами — страница оценивается по-настоящему.
+    const { detector, calls } = counting();
+    const again = createBlankScores(layout.derivedDir, store, detector);
+    await again.load([B1]);
+    expect(verdictsOf(again)).toEqual({});
+    expect(await again.ensure(B1)).toBe(true);
+    expect(verdictsOf(again)).toEqual({ [B1]: true });
+    expect(calls).toHaveLength(1);
+  });
+
+  it('исключение детектора не-срок — по-прежнему null в кэше (R6)', async () => {
+    const { store, layout, blankDir } = await sessionWith([BLANK()]);
+    const scores = createBlankScores(layout.derivedDir, store, () =>
+      Promise.reject(new Error('libvips упал')),
+    );
+    expect(await scores.ensure(B1)).toBe(true);
+    expect(verdictsOf(scores)).toEqual({ [B1]: false });
+    expect(JSON.parse(await readFile(join(blankDir, `${B1}.json`), 'utf8'))).toEqual({
+      v: BLANK_DETECTOR_VERSION,
+      ratio: null,
+    });
   });
 
   it('страница, отброшенная пока шла оценка, вердикта не получает и в кэше не остаётся', async () => {
