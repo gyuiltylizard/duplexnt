@@ -3,7 +3,7 @@ title: 'B-39 — Дыра опоры детектора наклона: ступ
 type: solution
 date: 2026-11-01
 milestone: B-39
-status: в работе # → done на закрытии
+status: done
 ---
 
 # B-39 — Дыра опоры детектора наклона: ступень вместо прямой (журнал)
@@ -99,4 +99,7 @@ worst-case 3 / 5. Дальше — проверка автора живьём: �
 
 ## Закрытие
 
-<заполняется на merge>
+Merge `fix/b-39-skew-gap-step` → `main` по явному ОК автора после проверки живьём 2026-11-01 —
+`ae19df2`. На `main` после merge typecheck, lint, format:check, `npm test` 144 / 2568 и
+`test:integration` 34 / 303 (4 live пропущены, + worst-case 3 / 5) зелёные. Ветка оставлена.
+Push в приватный origin — по разрешению автора.
