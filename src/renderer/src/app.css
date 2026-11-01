@@ -190,7 +190,7 @@
 
 /* S5 M4.5: кикер набора на flip — цвет набора, как тег scan. */
 .kicker--added {
-  color: var(--color-pass-3);
+  color: var(--color-pass-added);
 }
 
 .dot {
