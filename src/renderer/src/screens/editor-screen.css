@@ -511,12 +511,12 @@
   font-size: var(--font-size-xxs);
   line-height: var(--leading-none);
   letter-spacing: var(--tracking-wide);
-  color: var(--color-pass-2);
+  color: var(--color-pass-backs);
 }
 
 /* S5 M3.5: тег набора «Д1» — форма тега «об», цвет набора. */
 .thumb__tag--added {
-  color: var(--color-pass-3);
+  color: var(--color-pass-added);
 }
 
 /* S4 M3: угол — только отображение, без анимации (KTD-4). Рамка карточки остаётся портретной,

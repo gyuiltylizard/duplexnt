@@ -60,9 +60,9 @@
   --color-doc-2: var(--color-amber-600);
   --color-doc-3: var(--color-blue-600);
   --color-doc-4: var(--color-violet-600);
-  --color-pass-1: var(--color-accent);
-  --color-pass-2: var(--color-amber-600);
-  --color-pass-3: var(--color-violet-600);
+  --color-pass-fronts: var(--color-accent);
+  --color-pass-backs: var(--color-amber-600);
+  --color-pass-added: var(--color-violet-600);
   --color-text-primary: var(--color-ink-900);
   --color-text-secondary: var(--color-ink-700);
   --color-text-muted: var(--color-ink-600);
@@ -443,7 +443,7 @@ samp {
 
 /* S5 M4.5: кикер набора на flip — цвет набора, как тег scan. */
 .kicker--added {
-  color: var(--color-pass-3);
+  color: var(--color-pass-added);
 }
 
 .dot {
@@ -1351,7 +1351,7 @@ samp {
 
 /* S3 M3.5: тег добавленного набора — цвет набора, чтобы он читался с первого кадра. */
 .scan-screen__tag--added {
-  background: var(--color-pass-3);
+  background: var(--color-pass-added);
 }
 
 .scan-screen__stage {
@@ -1927,7 +1927,7 @@ samp {
 .merge-screen__tag {
   padding: var(--space-2) var(--space-5);
   border-radius: var(--radius-m);
-  background: var(--color-pass-3);
+  background: var(--color-pass-added);
   font-family: var(--font-family-mono);
   font-weight: var(--font-weight-medium);
   font-size: var(--font-size-xs);
@@ -2021,11 +2021,11 @@ samp {
 }
 
 .sort__sheet--front {
-  --sort-tone: var(--color-pass-1);
+  --sort-tone: var(--color-pass-fronts);
 }
 
 .sort__sheet--back {
-  --sort-tone: var(--color-pass-2);
+  --sort-tone: var(--color-pass-backs);
 }
 
 .sort__line {
@@ -3063,12 +3063,12 @@ samp {
   font-size: var(--font-size-xxs);
   line-height: var(--leading-none);
   letter-spacing: var(--tracking-wide);
-  color: var(--color-pass-2);
+  color: var(--color-pass-backs);
 }
 
 /* S5 M3.5: тег набора «Д1» — форма тега «об», цвет набора. */
 .thumb__tag--added {
-  color: var(--color-pass-3);
+  color: var(--color-pass-added);
 }
 
 /* S4 M3: угол — только отображение, без анимации (KTD-4). Рамка карточки остаётся портретной,
@@ -3241,6 +3241,8 @@ samp {
 
 .preview__paper {
   position: relative;
+  /* Свой контекст наложения: пилюли и кромка листа (--z-raised) не всплывают над модалкой (U10). */
+  isolation: isolate;
   height: 100%;
   aspect-ratio: 1 / 1.414;
   background: var(--color-bg-paper);

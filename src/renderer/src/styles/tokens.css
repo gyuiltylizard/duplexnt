@@ -56,9 +56,9 @@
   --color-doc-2: var(--color-amber-600);
   --color-doc-3: var(--color-blue-600);
   --color-doc-4: var(--color-violet-600);
-  --color-pass-1: var(--color-accent);
-  --color-pass-2: var(--color-amber-600);
-  --color-pass-3: var(--color-violet-600);
+  --color-pass-fronts: var(--color-accent);
+  --color-pass-backs: var(--color-amber-600);
+  --color-pass-added: var(--color-violet-600);
   --color-text-primary: var(--color-ink-900);
   --color-text-secondary: var(--color-ink-700);
   --color-text-muted: var(--color-ink-600);

@@ -28,7 +28,7 @@
 
 /* S3 M3.5: тег добавленного набора — цвет набора, чтобы он читался с первого кадра. */
 .scan-screen__tag--added {
-  background: var(--color-pass-3);
+  background: var(--color-pass-added);
 }
 
 .scan-screen__stage {

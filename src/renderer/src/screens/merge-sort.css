@@ -31,11 +31,11 @@
 }
 
 .sort__sheet--front {
-  --sort-tone: var(--color-pass-1);
+  --sort-tone: var(--color-pass-fronts);
 }
 
 .sort__sheet--back {
-  --sort-tone: var(--color-pass-2);
+  --sort-tone: var(--color-pass-backs);
 }
 
 .sort__line {

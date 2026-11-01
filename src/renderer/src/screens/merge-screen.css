@@ -23,7 +23,7 @@
 .merge-screen__tag {
   padding: var(--space-2) var(--space-5);
   border-radius: var(--radius-m);
-  background: var(--color-pass-3);
+  background: var(--color-pass-added);
   font-family: var(--font-family-mono);
   font-weight: var(--font-weight-medium);
   font-size: var(--font-size-xs);
