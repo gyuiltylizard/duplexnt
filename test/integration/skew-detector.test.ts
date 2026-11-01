@@ -5,6 +5,7 @@ import {
   CONFIDENCE_MIN,
   FALLBACK_BAND_MM,
   IMPROVE_RATIO,
+  MAX_SUPPORT_GAP,
   MIN_BANDS,
   LEVEL_DEG,
   measureSkewJpeg,
@@ -24,13 +25,16 @@ import { stepTheta, syntheticJpeg } from '../support/synthetic-page';
 const PIXEL_LIMIT = 5100 * 8400;
 
 /**
- * Ожидаемые исходы. Косые листы с остановкой подачи (`fan-*`) выправляются (бедный лист —
- * прямой по двум узлам); ловушки для проекционного детектора — две колонки и косая штриховка
- * — либо выправляются с ростом контраста, либо остаются как есть, но никогда не портятся
- * (R24); фото, чистые листы, бледный карандаш, одна строка и подпись — «не по чему мерить».
- * Печатная страница детектора пустых (M4) тоже несёт ступень; с детектора v5 проходит основным
- * проходом 30 мм. Рабочая тетрадь автора (`fan-worksheet-*`) — графичная страница с шумом
- * соседних полос 0,1–0,2°: выправляется по мягкому порогу плотной опоры (журнал 0030).
+ * Ожидаемые исходы. Косые листы с остановкой подачи (`fan-*`) выправляются (бедный лист — узлами
+ * по двум кучкам полос); ловушка для проекционного детектора — две колонки — либо выправляется с
+ * ростом контраста, либо остаётся как есть, но никогда не портится (R24); фото, чистые листы,
+ * бледный карандаш, одна строка и подпись — «не по чему мерить». Косая штриховка (`fan-graphic`)
+ * — настоящий веер с текстом сверху и снизу: с детектора v6 выправляется (журнал 0033), сама
+ * штриховка в середине отбрасывается по уверенности. Печатная страница детектора пустых (M4,
+ * `sheet-*`) тоже несёт ступень при пустой середине; с детектора v5 проходит основным проходом
+ * 30 мм, лист с сильным веером (`sheet-digit`) — с детектора v6. Рабочая тетрадь автора
+ * (`fan-worksheet-*`) — графичная страница с шумом соседних полос 0,1–0,2°: выправляется по
+ * мягкому порогу плотной опоры (журнал 0030).
  */
 const EXPECTED: Readonly<Record<string, readonly SkewOutcome[]>> = {
   'fan-text-gray-300': ['willStraighten'],
@@ -46,7 +50,7 @@ const EXPECTED: Readonly<Record<string, readonly SkewOutcome[]>> = {
   'fan-twocol-gray-300': ['willStraighten'],
   'fan-twocol-gray-200': ['willStraighten'],
   'fan-worksheet-color-200': ['willStraighten'],
-  'fan-graphic-gray-300': ['willStraighten', 'notImproved', 'unmeasurable'],
+  'fan-graphic-gray-300': ['willStraighten'],
   'photo-gray-300': ['unmeasurable'],
   'photo-color-300': ['unmeasurable'],
   'blank-gray-200': ['unmeasurable'],
@@ -63,6 +67,7 @@ const EXPECTED: Readonly<Record<string, readonly SkewOutcome[]>> = {
   'text-line-gray-300': ['unmeasurable'],
   'sheet-front-gray-200': ['willStraighten'],
   'sheet-back-gray-200': ['willStraighten'],
+  'sheet-digit-color-200': ['willStraighten'],
   'rulers-gray-200': ['willStraighten'],
 };
 
@@ -73,6 +78,18 @@ const EXPECTED: Readonly<Record<string, readonly SkewOutcome[]>> = {
  * `text-gray-300` с детектора v5 проходит при 30 мм (мягкий порог плотной опоры, журнал 0030).
  */
 const EXPECTED_FALLBACK: readonly string[] = ['rulers-gray-200'];
+
+/**
+ * Сканы с дырой опоры (две кучки валидных полос по краям, середина пуста или отброшена по
+ * уверенности): бедный лист, печатные листы детектора пустых, штриховка с текстом по краям.
+ */
+const SPARSE: readonly string[] = [
+  'fan-sparse-gray-300',
+  'sheet-front-gray-200',
+  'sheet-back-gray-200',
+  'sheet-digit-color-200',
+  'fan-graphic-gray-300',
+];
 
 const names = scanFixtureNames();
 const results = new Map<string, SkewMeasure | null>();
@@ -155,7 +172,7 @@ describe('детектор перекоса на сканах ET-3850 (M6, U2)',
     expect(Math.min(...validInk)).toBeGreaterThanOrEqual(0.01);
   });
 
-  it('две колонки: форма по целым полосам шумит, профиль — по среднему половин; штриховка так не проходит', async () => {
+  it('две колонки: форма по целым полосам шумит, профиль — по среднему половин; одноколоночные — по целым', async () => {
     // Замечание автора на приёмке M6: веер — свойство подачи, а не колонки; первая колонка
     // даёт чистую ступень, целая полоса — шум 0,1–0,2° от наложения фаз. Без запасного
     // профиля по половинам обе двухколоночные страницы — «не измерить» (остаток 0,13–0,23°).
@@ -165,17 +182,21 @@ describe('детектор перекоса на сканах ET-3850 (M6, U2)',
       expect(result?.basis, name).toBe('halves');
       expect(result?.bandMm, name).toBe(BAND_MM);
     }
-    for (const name of ['fan-text-gray-300', 'fan-grid-1-gray-300', 'fan-table-gray-300']) {
+    for (const name of [
+      'fan-text-gray-300',
+      'fan-grid-1-gray-300',
+      'fan-table-gray-300',
+      'fan-graphic-gray-300',
+    ]) {
       expect((await measured(name))?.basis, name).toBe('whole');
     }
-    expect((await measured('fan-graphic-gray-300'))?.outcome).toBe('unmeasurable');
   });
 
-  it('графичная страница с плотной опорой: шум соседних полос 0,1–0,2° не валит форму, штриховка с дырой опоры — валит', async () => {
+  it('графичная страница с плотной опорой: шум соседних полос 0,1–0,2° не валит форму по мягкому порогу; дыра опоры держит строгий', async () => {
     // Скан автора 2026-10-31 (рабочая тетрадь: числовые прямые, рамки, крупные цифры): все полосы
     // валидны, половины согласны, углы +0,55° → −0,57°, но остаток ступени 0,17° при 30 мм —
     // при едином пороге 0,1° «наклон строк не сходится». Порог для узлов по плотной опоре —
-    // `SHAPE_RESIDUAL_DENSE_MAX_DEG` 0,2°; прямая при дыре опоры держит строгий 0,1°.
+    // `SHAPE_RESIDUAL_DENSE_MAX_DEG` 0,2°; две кучки полос с дырой опоры держат строгий 0,1°.
     const worksheet = await measured('fan-worksheet-color-200');
     expect(worksheet?.outcome).toBe('willStraighten');
     expect(worksheet?.bandMm).toBe(BAND_MM);
@@ -183,21 +204,48 @@ describe('детектор перекоса на сканах ET-3850 (M6, U2)',
     expect(worksheet?.shapeResidual ?? 0).toBeGreaterThan(SHAPE_RESIDUAL_MAX_DEG);
     expect(worksheet?.shapeResidual ?? 1).toBeLessThanOrEqual(SHAPE_RESIDUAL_DENSE_MAX_DEG);
     expect(worksheet?.fanMm ?? 0).toBeGreaterThan(2);
-    expect((await measured('fan-graphic-gray-300'))?.cause).toBe('shape');
+    for (const name of SPARSE) {
+      expect((await measured(name))?.shapeResidual ?? 1, name).toBeLessThanOrEqual(
+        SHAPE_RESIDUAL_MAX_DEG,
+      );
+    }
   });
 
-  it('причина «не измерена»: строки не сходятся у ловушек, не по чему мерить у фото и чистых; у измеренных — нет', async () => {
+  it('дыра опоры (B-39): остаток формы — по ступени, профиль — узлами внутри кучек полос, без экстраполяции к краям', async () => {
+    // Приёмка 2026-11-01: листы детектора пустых (шапка сверху, большая цифра в середине, блок
+    // текста снизу) одинаковой структуры — один выровнен, два «наклон строк не сходится». Веер
+    // с остановкой подачи — две константы; прямая через две кучки полос внутри каждой кучки
+    // наклонена на «наклон × полуширина кучки», остаток растёт с веером (0,16–0,20° при
+    // ступени 0,03–0,04°), и строгий порог резал именно сильный веер. Прямая к тому же
+    // экстраполировалась до краёв листа (+1,10° при измеренных +0,92°). С детектора v6 при дыре
+    // опоры — min(остаток прямой, остаток ступени) и узлы по полосам. Штриховка (`fan-graphic`)
+    // с текстом сверху и снизу — тот же случай: её середина отбрасывается по уверенности.
+    for (const name of SPARSE) {
+      const result = await measured(name);
+      expect(result?.outcome, name).toBe('willStraighten');
+      const valid = (result?.bands ?? []).filter((band) => band.reason === null);
+      const us = valid.map((band) => band.u).sort((p, q) => p - q);
+      let gap = 0;
+      for (let i = 1; i < us.length; i += 1) {
+        gap = Math.max(gap, (us[i] ?? 0) - (us[i - 1] ?? 0));
+      }
+      expect(gap, name).toBeGreaterThan(MAX_SUPPORT_GAP);
+      const profile = result?.profile ?? { kind: 'knots' as const, us: [], thetas: [] };
+      expect(profile.us, name).toEqual(us);
+      const angles = valid.map((band) => band.angle ?? 0);
+      expect(Math.max(...profile.thetas), name).toBeLessThanOrEqual(Math.max(...angles) + 1e-9);
+      expect(Math.min(...profile.thetas), name).toBeGreaterThanOrEqual(Math.min(...angles) - 1e-9);
+      expect(result?.fanMm ?? 0, name).toBeGreaterThan(2);
+    }
+  });
+
+  it('причина «не измерена»: не по чему мерить у фото, чистых и одной строки; у измеренных — нет', async () => {
     for (const name of names) {
       const result = await measured(name);
       if (result === null) {
         continue;
       }
-      const expected =
-        result.outcome !== 'unmeasurable'
-          ? null
-          : name === 'fan-graphic-gray-300'
-            ? 'shape'
-            : 'content';
+      const expected = result.outcome !== 'unmeasurable' ? null : 'content';
       expect(result.cause, `${name}: ${describeMeasure(result)}`).toBe(expected);
     }
   });

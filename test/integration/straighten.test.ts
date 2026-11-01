@@ -1,7 +1,18 @@
 import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
-import { skewFanMm, skewMaxAbsDeg, skewProfileOf, type SkewMeasure } from '@shared';
-import { measureSkewJpeg } from '../../src/core/detect/skew';
+import {
+  skewFanMm,
+  skewMaxAbsDeg,
+  skewProfileOf,
+  type SkewMeasure,
+  type SkewProfile,
+} from '@shared';
+import {
+  CONFIDENCE_MIN,
+  MAX_SUPPORT_GAP,
+  measureSkewJpeg,
+  MIN_BANDS,
+} from '../../src/core/detect/skew';
 import {
   rawPaperWhite,
   STRAIGHT_SIZE_RATIO,
@@ -34,6 +45,33 @@ const RESIDUAL_FAN_MM: Readonly<Record<number, number>> = { 30: 0.5, 50: 1 };
  * 0,13–0,68 мм по колонкам порознь (журнал 0026). Допуск — как у запасного прохода 50 мм.
  */
 const RESIDUAL_FAN_HALVES_MM = 1;
+/**
+ * Дыра опоры (B-39, журнал 0033): две кучки по 3–4 полосы по краям листа, узлы ложатся на шум
+ * каждой полосы (±0,08° у полос с уверенностью 6–8), сгладить соседями нечем; после коррекции
+ * лист `level`, но веер по повторному измерению 0,54 мм у `sheet-digit` — допуск как у половин.
+ */
+const RESIDUAL_FAN_SPARSE_MM = 1;
+
+/** Дыра опоры: наибольший разрыв между валидными полосами больше `MAX_SUPPORT_GAP`. */
+const isSparse = (measure: SkewMeasure): boolean => {
+  const us = measure.bands
+    .filter((band) => band.reason === null)
+    .map((band) => band.u)
+    .sort((p, q) => p - q);
+  let gap = 0;
+  for (let i = 1; i < us.length; i += 1) {
+    gap = Math.max(gap, (us[i] ?? 0) - (us[i - 1] ?? 0));
+  }
+  return gap > MAX_SUPPORT_GAP;
+};
+
+/** Допуск веера после коррекции по виду измерения. */
+const residualFanAllowed = (measure: SkewMeasure): number =>
+  measure.basis === 'halves'
+    ? RESIDUAL_FAN_HALVES_MM
+    : isSparse(measure)
+      ? RESIDUAL_FAN_SPARSE_MM
+      : (RESIDUAL_FAN_MM[measure.bandMm] ?? 0);
 
 const names = scanFixtureNames();
 const measures = new Map<string, SkewMeasure | null>();
@@ -97,10 +135,37 @@ function jpegSegments(bytes: Uint8Array): number[] {
 const hasIcc = (bytes: Uint8Array): boolean =>
   Buffer.from(bytes.subarray(0, Math.min(bytes.length, 1 << 16))).includes('ICC_PROFILE');
 
-const describeAgain = (m: SkewMeasure | null): string =>
-  m === null
-    ? 'null'
-    : `${m.outcome}${m.profile === null ? '' : ` max|θ| ${skewMaxAbsDeg(m.profile).toFixed(3)}° веер ${skewFanMm(m.profile).toFixed(2)} мм`}`;
+/**
+ * Профиль остатка после коррекции: повторное измерение целиком, а если оно «не измерить» —
+ * узлы по уверенным валидным полосам (≥ 2× `CONFIDENCE_MIN`, как в тесте запаса по
+ * уверенности), когда их не меньше `MIN_BANDS`. Лист со штриховкой (B-39, журнал 0033): текст
+ * сверху и снизу после коррекции ровно 0,00° с уверенностью 40–150, а сдвинутая штриховка в
+ * середине даёт ложные углы −0,6…−0,9° с уверенностью 3,8–4,5 — повторное измерение целиком
+ * проваливает форму, хотя страница выправлена. Лист без уверенных полос — `null`: провал стража.
+ */
+const residualProfileOf = (m: SkewMeasure | null): SkewProfile | null => {
+  if (m === null) {
+    return null;
+  }
+  if (m.profile !== null) {
+    return m.profile;
+  }
+  const sure = m.bands.filter(
+    (band) => band.reason === null && band.angle !== null && band.confidence >= 2 * CONFIDENCE_MIN,
+  );
+  return sure.length >= MIN_BANDS
+    ? skewProfileOf(sure.map((band) => ({ u: band.u, theta: band.angle ?? 0 })))
+    : null;
+};
+
+const describeAgain = (m: SkewMeasure | null): string => {
+  if (m === null) {
+    return 'null';
+  }
+  const profile = residualProfileOf(m);
+  const by = m.profile === null && profile !== null ? ' по уверенным полосам' : '';
+  return `${m.outcome}${profile === null ? '' : `${by} max|θ| ${skewMaxAbsDeg(profile).toFixed(3)}° веер ${skewFanMm(profile).toFixed(2)} мм`}`;
+};
 
 describe('ресэмплер на сканах ET-3850 (M6, U3)', () => {
   it(
@@ -132,17 +197,13 @@ describe('ресэмплер на сканах ET-3850 (M6, U3)', () => {
         checks.push(() => {
           // Лист, который после коррекции нечем измерить, — не «остаток в допуске», а провал
           // стража: коррекция, после которой профиль не читается, прошла бы молча (ревью сессий 1–2).
-          const profile = again?.profile ?? null;
+          const profile = residualProfileOf(again);
           expect(profile, `${name}: после коррекции ${describeAgain(again)}`).not.toBeNull();
           if (profile === null) {
             return;
           }
           expect(skewMaxAbsDeg(profile), name).toBeLessThanOrEqual(RESIDUAL_MAX_DEG);
-          expect(skewFanMm(profile), name).toBeLessThanOrEqual(
-            measure.basis === 'halves'
-              ? RESIDUAL_FAN_HALVES_MM
-              : (RESIDUAL_FAN_MM[measure.bandMm] ?? 0),
-          );
+          expect(skewFanMm(profile), name).toBeLessThanOrEqual(residualFanAllowed(measure));
         });
       }
       console.log(
@@ -198,7 +259,7 @@ describe('ресэмплер на сканах ET-3850 (M6, U3)', () => {
         }
         const fanBefore = result.measure.fanMm ?? 0;
         // Неизмеримый после коррекции лист — провал R24, а не «веер 0»: страж как раз об этом.
-        const profile = result.again?.profile ?? null;
+        const profile = residualProfileOf(result.again);
         expect(profile, `${name}: после коррекции ${describeAgain(result.again)}`).not.toBeNull();
         const fanAfter = profile === null ? Number.POSITIVE_INFINITY : skewFanMm(profile);
         console.log(`${name}: веер ${fanBefore.toFixed(2)} → ${fanAfter.toFixed(2)} мм`);
