@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildWebPreferences } from './web-preferences';
 
 describe('buildWebPreferences', () => {
-  const prefs = buildWebPreferences('/app/out/preload/index.js');
+  const prefs = buildWebPreferences('/app/out/preload/index.js', true);
 
   it('включает sandbox и изоляцию контекста, выключает nodeIntegration', () => {
     expect(prefs.sandbox).toBe(true);
@@ -23,11 +23,17 @@ describe('buildWebPreferences', () => {
     expect(prefs.preload).toBe('/app/out/preload/index.js');
   });
 
+  it('DevTools закрыты упакованному приложению и открыты из out/ (B-29, U3)', () => {
+    expect(prefs.devTools).toBe(false);
+    expect(buildWebPreferences('/app/out/preload/index.js', false).devTools).toBe(true);
+  });
+
   it('не содержит ничего сверх закрытого списка ключей', () => {
     expect(Object.keys(prefs).sort()).toEqual(
       [
         'allowRunningInsecureContent',
         'contextIsolation',
+        'devTools',
         'experimentalFeatures',
         'nodeIntegration',
         'nodeIntegrationInSubFrames',

@@ -36,6 +36,7 @@ import { registerBridge } from './bridge';
 import { resolveDataRoot } from './data-root';
 import { createEventSender } from './events';
 import { handlePageImageRequest, PAGE_SCHEME_REGISTRATION } from './page-protocol';
+import { installDebugGuard } from './shell/debug-guard';
 import { denyAllPermissions, installShellGuards } from './shell/guards';
 import { installShortcutGuard } from './shell/shortcuts';
 import { buildWebPreferences } from './shell/web-preferences';
@@ -60,7 +61,7 @@ function createWindow({ bounds, maximized }: WindowPlacement): BrowserWindow {
     show: false,
     title: APP_NAME,
     icon: appIcon,
-    webPreferences: buildWebPreferences(join(__dirname, '../preload/index.js')),
+    webPreferences: buildWebPreferences(join(__dirname, '../preload/index.js'), app.isPackaged),
   });
 
   // Разворот показывает окно сам; границы до разворота остаются его «обычными» (B-3).
@@ -94,6 +95,11 @@ function loadRenderer(window: BrowserWindow): void {
     void window.loadURL(APP_INDEX_URL);
   }
 }
+
+// Первое действие main (B-29, U3): установленное приложение с ключом отладки выходит, пока
+// ничего не открыто — ни каталог данных, ни блокировка экземпляра, ни порт. `process.exit` не
+// возвращается, поэтому дальше код идёт только без ключей (или из `out/` и под dev-сервером).
+installDebugGuard(app, (code) => process.exit(code));
 
 // Порядок запуска задан явно (план M1, KTD-21): каталог данных → блокировка экземпляра → всё
 // остальное. Блокировка лежит в `userData`, поэтому каталог `dev` выбирается до неё.
