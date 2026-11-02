@@ -288,9 +288,13 @@ export function App(): ReactNode {
   const closeDevice = useCallback(() => {
     setDeviceModal(null);
   }, []);
+  // Смена устройства подтверждена, но настройки не записались (B-29, решение автора): модалка
+  // закрывается как при успехе, а тост предупреждает вместо «Сканер подключён».
   const deviceConnected = useCallback(
-    (label: string) => {
-      showToast(t('toast.connected', { name: label }));
+    (label: string, settingsSaved = true) => {
+      showToast(
+        settingsSaved ? t('toast.connected', { name: label }) : t('device.confirm.failSettings'),
+      );
     },
     [showToast, t],
   );
