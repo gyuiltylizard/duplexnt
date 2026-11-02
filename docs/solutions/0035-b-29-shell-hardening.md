@@ -80,6 +80,40 @@ Electron 44.4.3, electron-vite 5.0.0, electron-builder 26.15.3, Node 22. Жив�
 `resolveAppFile` умеет отдать (новый тип ассета не станет молча 404 в упакованном приложении),
 а ссылки `index.html` относительные и указывают на существующие файлы.
 
+**Готово:** typecheck, lint, format:check, `npm test` 145 / 2615, интеграционный тест сборки
+зелёный; гейт живьём на `out/` — спайком (адрес на схеме, стартовый экран, шрифты, миниатюры и
+страницы, консоль без ошибок), dev-сервер — `http://localhost:5173/` как раньше. Коммит
+`fix(b-29): U1 …` (`142a01f`).
+
+### U2. Оставшиеся fuses — ✅ зелёный
+
+`electron-builder.yml`: `enableCookieEncryption: true`, `enableEmbeddedAsarIntegrityValidation:
+true`, `grantFileProtocolExtraPrivileges: false` к прежним четырём. Тест
+`test/tooling/electron-builder.test.ts` держит ровно полный набор (выпавший или изменённый fuse
+роняет тест), `asar: true`, отсутствие `disableAsarIntegrity` и распаковку `sharp`; YAML
+разбирается узко, без библиотеки — блок плоский и наш.
+
+Гейт на настоящем exe (`npm run dist`, `release/win-unpacked/duplexnt.exe`):
+
+- `npx @electron/fuses read` (1.8.0): все семь fuses в ожидаемых значениях; строка
+  `undefined is Enabled` — слот, которого версия 1.8.0 не знает, не ошибка (план это
+  предупреждал). electron-builder печатает «updating asar integrity executable resource» и
+  «signing with signtool.exe» — подписи нет, строка от сборщика без сертификата безвредна;
+- **`--user-data-dir=<временный каталог>` упакованное приложение честно принимает**: `data/`,
+  `session`, кэши Chromium легли во временный каталог; листинг настоящего `%APPDATA%\duplexnt`
+  (192 записей, размер и mtime) до и после — без изменений. Это и есть рецепт для U3 и U9;
+- CDP на упакованном: адрес на схеме, шрифты и ассеты из `app.asar` читаются `fs` при включённой
+  проверке целостности, два прохода на эмуляторе — миниатюры строит `sharp` из
+  `app.asar.unpacked`, ошибок CSP и консоли нет;
+- подменённый `app.asar`, два варианта: **пересобранный архив** с изменённым `index.html` —
+  `FATAL … Integrity check failed for asar archive entry '<header>'` до окна, процесс не
+  поднялся; **байты `index.html` внутри архива** при прежнем заголовке — `ASAR Integrity
+Violation: got a hash mismatch` при чтении файла, выход с кодом 1, окна нет. Попутно для U3:
+  в этом варианте `DevTools listening` печатается **раньше**, чем main дочитал файлы, — порт
+  Chromium открывает до окна, и замер в U3 нужен именно про «до первого JS».
+
+**Готово:** typecheck, lint, format:check, тесты зелёные. Коммит `fix(b-29): U2 …`.
+
 ### Сессия 1 — итог
 
 <не закрыта>
@@ -88,8 +122,8 @@ Electron 44.4.3, electron-vite 5.0.0, electron-builder 26.15.3, Node 22. Жив�
 
 ## На чём встали
 
-Сессия 1, U1 в работе: спайк и код схемы готовы, тесты зелёные, гейт на `out/` пройден
-спайком; осталось зафиксировать коммит `fix(b-29): U1 …` и идти в U2 (fuses).
+Сессия 1: U1 и U2 закрыты. Дальше U3 — закрытие отладки в упакованном приложении, с замером
+«успевает ли Chromium открыть порт до кода приложения» (факт из U2: до окна — успевает).
 
 ## Закрытие вехи
 
