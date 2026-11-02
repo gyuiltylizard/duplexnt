@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Duplexn't — B-29 подтверждение смены устройства (мок)</title>
+    <link rel="stylesheet" href="../reference/fonts/fonts.css" />
+    <link rel="stylesheet" href="../reference/app.css" />
+    <link rel="stylesheet" href="../reference/wrapper.css" />
+    <link rel="stylesheet" href="scanner-change.css" />
+  </head>
+  <body class="ref-page cs-page">
+    <p class="ref-note" id="cs-note"></p>
+    <div class="ref-frame" style="width:1280px;height:800px">
+      <div class="ref-root"><div class="app" id="cs-app"></div></div>
+    </div>
+
+    <aside class="cs-panel" aria-label="Панель сценариев">
+      <p class="cs-panel__title">СЦЕНАРИИ · B-29</p>
+      <div class="cs-panel__group">
+        <span class="cs-panel__label">Экран</span>
+        <div class="cs-panel__row" id="cs-screens">
+          <button type="button" class="cs-panel__btn" data-screen="setup">setup</button>
+          <button type="button" class="cs-panel__btn" data-screen="flip">flip</button>
+          <button type="button" class="cs-panel__btn" data-screen="editor">editor</button>
+        </div>
+      </div>
+      <div class="cs-panel__group">
+        <span class="cs-panel__label">Что ответило по адресу</span>
+        <div class="cs-panel__opts" id="cs-situation">
+          <label class="cs-panel__opt"><input type="radio" name="sit" value="cert" checked />новый сертификат на том же адресе</label>
+          <label class="cs-panel__opt"><input type="radio" name="sit" value="http" />HTTP на том же адресе</label>
+          <label class="cs-panel__opt"><input type="radio" name="sit" value="id" />другой идентификатор на том же адресе</label>
+          <label class="cs-panel__opt"><input type="radio" name="sit" value="first" />первое подключение (шага нет)</label>
+          <label class="cs-panel__opt"><input type="radio" name="sit" value="moved" />тот же сканер на новом адресе (шага нет)</label>
+        </div>
+      </div>
+      <div class="cs-panel__group">
+        <span class="cs-panel__label">Ответ на подтверждение</span>
+        <div class="cs-panel__opts" id="cs-outcome">
+          <label class="cs-panel__opt"><input type="radio" name="out" value="ok" checked />подключено</label>
+          <label class="cs-panel__opt"><input type="radio" name="out" value="stale" />проба устарела</label>
+          <label class="cs-panel__opt"><input type="radio" name="out" value="busy" />идёт сканирование</label>
+          <label class="cs-panel__opt"><input type="radio" name="out" value="settings" />настройки не записались</label>
+          <label class="cs-panel__opt"><input type="radio" name="out" value="superseded" />ответ уже не актуален</label>
+        </div>
+      </div>
+      <div class="cs-panel__group">
+        <span class="cs-panel__label">Фикстура</span>
+        <label class="cs-panel__opt"><input type="checkbox" id="cs-interrupted" checked />есть прерванное сканирование</label>
+        <label class="cs-panel__opt"><input type="checkbox" id="cs-unnamed" />устройство без имени</label>
+        <label class="cs-panel__opt"><input type="checkbox" id="cs-reduce" />prefers-reduced-motion</label>
+      </div>
+      <div class="cs-panel__row"><button type="button" class="cs-panel__btn" id="cs-reset">Сбросить всё</button></div>
+      <pre class="cs-panel__log" id="cs-log"></pre>
+    </aside>
+
+    <script src="scanner-change.js"></script>
+  </body>
+</html>
