@@ -65,7 +65,7 @@ Node, переменную надо снимать; второй экземпл�
 `errors.pdfPageTooLarge`, `setup.params.straightenModeHint.auto` и `.off`, `device.search.failure.socket`,
 `toast.stopCloseFailed`, `toast.saveNoResponse`. Домыслено при внесении, вынесено автору на проверку:
 `storageFailed` — в пометке «данные на.», убрано «на диск»; `pdfPageTooLarge` — падеж («слишком большой
-размер»); подсказка режима — запятая и «сохранён».
+размер»); подсказка режима — запятая и «сохранён». Автор подтвердил все три 2026-11-02.
 
 Попутно: `errorReasons.scannerUnreachable.timeout` — та же фраза, что `scannerUnreachable`, держится
 одинаковой; четыре текста про наборы называли кнопку «+ Добавить» — теперь «+ Добавить листы», хвост п. 1.
