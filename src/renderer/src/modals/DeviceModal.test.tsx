@@ -170,7 +170,7 @@ describe('DeviceModal', () => {
 
   it.each([
     [fail('scannerUnreachable', { reason: 'timeout' }), /сканер не отвечает/i],
-    [fail('notEsclScanner'), /не отвечает сканер/i],
+    [fail('notEsclScanner'), /не умеет сканировать по сети/i],
     [fail('scannerNoAdf'), /нет автоподатчика/i],
     [fail('scannerNoJpeg'), /формате JPEG/i],
     [fail('invalidInput', { field: 'host' }), /адрес не подходит/i],

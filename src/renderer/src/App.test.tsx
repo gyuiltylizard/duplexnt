@@ -311,7 +311,7 @@ describe('каркас приложения', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Остановить' }));
     expect((await screen.findByText(/Не удалось убрать страницы/)).textContent).toContain(
-      'Проход оставлен прерванным',
+      'Проход прерван',
     );
   });
 
@@ -360,7 +360,7 @@ describe('каркас приложения', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Остановить' }));
     expect((await screen.findByText(/Не удалось остановить/)).textContent).not.toContain(
-      'Проход оставлен прерванным',
+      'Проход прерван',
     );
   });
 
