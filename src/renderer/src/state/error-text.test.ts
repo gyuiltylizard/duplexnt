@@ -35,6 +35,15 @@ describe('errorText', () => {
     );
   });
 
+  it('слишком большая страница — с номером; без номера базовый текст', () => {
+    expect(errorText(t, { code: 'pdfPageTooLarge', details: { page: 3 } })).toBe(
+      'Ошибка: слишком большой размер страницы 3. Удалите или пересканируйте её.',
+    );
+    expect(errorText(t, { code: 'pdfPageTooLarge' })).toBe(
+      'Ошибка: слишком большой размер одной из страниц. Удалите или пересканируйте её.',
+    );
+  });
+
   it('причина без строки в локали получает базовый текст кода', () => {
     expect(errorText(t, { code: 'sessionConflict', details: { reason: 'stopping' } })).toBe(
       'Сейчас это действие недоступно.',

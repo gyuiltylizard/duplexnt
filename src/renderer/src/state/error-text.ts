@@ -43,6 +43,9 @@ export function errorText(t: TFunction, error: DomainError): string {
   if (code === 'pageUnavailable' && reason === 'lost') {
     return t('errorReasons.pageUnavailable.lost');
   }
+  if (code === 'pdfPageTooLarge' && typeof details?.page === 'number') {
+    return t('errorReasons.pdfPageTooLarge.page', { page: details.page });
+  }
   return t(`errors.${code}`);
 }
 
