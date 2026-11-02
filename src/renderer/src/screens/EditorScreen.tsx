@@ -238,6 +238,21 @@ export function EditorScreen({
   // Выравнивание (M6): действия на выделение, фокус на парную кнопку, тост поздних статусов.
   const straighten = useEditorStraighten({ edits, withEdits, order, shown, selection, onToast });
 
+  // Ссылка на страницу проекта в подвале инспектора (B-42): команда без входа, адрес знает main;
+  // отказ — тостом ошибки, как у «Открыть папку».
+  const openProjectPage = (): void => {
+    window.api.openProjectPage().then(
+      (result) => {
+        if (!result.ok) {
+          onToast(t('toast.openProjectFailed', { error: errorTextInline(t, result.error) }));
+        }
+      },
+      (error: unknown) => {
+        console.error('[renderer] открытие страницы проекта не ответило', error);
+      },
+    );
+  };
+
   // Документ текущей страницы — по отрезкам сборки.
   const currentDocument =
     currentFull < 0
@@ -943,6 +958,7 @@ export function EditorScreen({
             onRevert={() => {
               setModal('revert');
             }}
+            onOpenProject={openProjectPage}
             onMouseDown={collapseOnSurfaceClick}
           />
         )}

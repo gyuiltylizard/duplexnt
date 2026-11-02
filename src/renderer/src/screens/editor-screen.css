@@ -46,14 +46,16 @@
   border-right: var(--border-width) solid var(--color-border-subtle);
 }
 
-/* B-3: ширина по тексту, а не поровну — поровну «↺ Новое сканирование» не влезала в свою
-   половину и вылезала за рамку. Текст длиннее зоны обрезается рамкой, а не выходит за неё. */
+/* B-42: обе кнопки поровну — подписи короткие («↺ Новый скан», «+ Добавить листы»), в половину
+   зоны влезают; при B-3 «↺ Новое сканирование» поровну не влезала, и ширина шла по тексту.
+   Текст длиннее зоны обрезается рамкой, а не выходит за неё. */
 .editor-screen__toolbar-left .btn--secondary {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-width: 0;
   overflow: hidden;
   font-size: var(--font-size-base);
-  padding: var(--space-5) var(--space-4);
+  /* Поля уже базовых: «+ Добавить листы» в половине зоны (130 px) иначе не хватает 2 px. */
+  padding: var(--space-5) var(--space-3);
 }
 
 /* S1 M3.5: «+ Добавить» рядом с «Новое сканирование»; причина недоступности — в title. */
@@ -1075,12 +1077,42 @@
 }
 
 /* S14 M3: плашка правок — прижата к низу колонки. */
+/* B-42: подвал инспектора — плашка правок и ссылка на проект прижаты к низу панели, при
+   прокрутке уезжают вместе с содержимым. */
+.inspector__footer {
+  display: flex;
+  flex-direction: column;
+  margin-top: auto;
+}
+
+/* Ссылка на страницу проекта: мелкая строка в цвете подсказки, подчёркивание при наведении. */
+.inspector__about {
+  align-self: flex-end;
+  margin: 0 var(--space-8) var(--space-6);
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-snug) var(--font-family-sans);
+  color: var(--color-text-hint);
+}
+
+.inspector__about:hover {
+  color: var(--color-text-subtle);
+  text-decoration: underline;
+}
+
+.inspector__about:focus-visible {
+  outline: var(--space-1) solid var(--color-border-focus);
+  outline-offset: var(--space-1);
+}
+
 .edits-bar {
   flex: none;
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  margin: auto var(--space-8) var(--space-8);
+  margin: 0 var(--space-8) var(--space-8);
   padding: var(--space-4) var(--space-4) var(--space-4) var(--space-6);
   border: var(--border-width) solid var(--color-border-default);
   border-radius: var(--radius-l);
@@ -1220,6 +1252,12 @@
 /* S9: секция «ПУСТОЙ ОБОРОТ» — как прочие секции инспектора; кнопка по ширине контента. */
 .inspector__blank-action {
   align-self: flex-start;
+}
+
+/* B-42: кнопка состояния выравнивания в одном слоте меняет подпись («Оригинал» / «Выровнять») —
+   ширина фиксирована по длинной, чтобы кнопка не прыгала. Литерал макета, как геометрия листов. */
+.inspector__section--straight .inspector__blank-action {
+  min-width: 128px;
 }
 
 /* — B-4: подсказка «обратить внимание» (handoff «5. Подсказка про Ctrl/Shift») — */

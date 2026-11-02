@@ -442,13 +442,13 @@ describe('пустые обороты в редакторе (M4)', () => {
     renderEditor({ ...blankSnapshot(), scanner: READY }, { onAdd });
     fireEvent.click(revealToggle());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Добавить' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Добавить листы' }));
     fireEvent.click(screen.getByRole('radio', { name: /После текущей страницы/u }));
     fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
     expect(onAdd).toHaveBeenLastCalledWith('addedFronts', B3);
 
     fireEvent.click(option(1)); // B3
-    fireEvent.click(screen.getByRole('button', { name: 'Добавить' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Добавить листы' }));
     fireEvent.click(screen.getByRole('radio', { name: /После текущей страницы/u }));
     fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
     expect(onAdd).toHaveBeenLastCalledWith('addedFronts', B3);
@@ -758,7 +758,7 @@ describe('пустые обороты в редакторе (M4)', () => {
     stubApi();
     renderEditor(blankSnapshot());
 
-    fireEvent.click(screen.getByRole('button', { name: /Новое сканирование/u }));
+    fireEvent.click(screen.getByRole('button', { name: /Новый скан/u }));
     expect(document.getElementById('newscan-text')?.textContent).toBe(
       'Последние изменения не сохранены в файл. Если начать новое сканирование, 4 стр. будут удалены с диска. Скрытые пустые обороты (2 стр.) тоже будут стёрты.',
     );
@@ -768,7 +768,7 @@ describe('пустые обороты в редакторе (M4)', () => {
     stubApi();
     const onAdd = vi.fn();
     renderEditor({ ...blankSnapshot(), scanner: READY }, { onAdd });
-    fireEvent.click(screen.getByRole('button', { name: 'Добавить' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Добавить листы' }));
     fireEvent.click(screen.getByRole('radio', { name: /После текущей страницы/u }));
     expect(screen.getByText(/после стр\. 1 \(лицо листа 1\)/u)).toBeDefined();
     fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
@@ -781,7 +781,7 @@ describe('пустые обороты в редакторе (M4)', () => {
     renderEditor({ ...blankSnapshot(), scanner: READY }, { onAdd });
     // Показанная лента F1, F2, B2, F3: F3 — четвёртая (в полной — пятая).
     fireEvent.click(option(3));
-    fireEvent.click(screen.getByRole('button', { name: 'Добавить' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Добавить листы' }));
     fireEvent.click(screen.getByRole('radio', { name: /После текущей страницы/u }));
     expect(screen.getByText(/после стр\. 4 \(лицо листа 3\)/u)).toBeDefined();
     fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));

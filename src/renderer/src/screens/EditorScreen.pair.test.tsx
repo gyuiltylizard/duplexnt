@@ -144,7 +144,7 @@ describe('страницы пары в ленте (S8)', () => {
     });
 
     fireEvent.click(option(4));
-    fireEvent.click(screen.getByRole('button', { name: 'Добавить' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Добавить листы' }));
     fireEvent.click(screen.getByRole('radio', { name: 'После текущей страницы' }));
     expect(document.querySelector('.add-modal__summary')?.textContent).toBe(
       'Двустороннее · после стр. 5 (оборот листа 1 набора Д1)',
@@ -187,7 +187,9 @@ describe('плашка прерванного прохода набора (S10)'
     expect(
       screen.getByRole('heading', { name: 'Лица набора Д1 прервались после страницы 2' }),
     ).toBeDefined();
-    expect(screen.getByRole('button', { name: 'Добавить' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Добавить листы' }).hasAttribute('disabled')).toBe(
+      true,
+    );
     // До оборотов набор показан односторонним блоком: тег «Д1» без «об».
     expect(option(3).getAttribute('aria-label')).toBe('Страница 4, лицевая набора Д1');
   });
@@ -229,7 +231,7 @@ describe('«После текущей страницы» на лице набо�
     expect(front.getAttribute('aria-label')).toBe('Страница 3, лицо листа 1 набора Д1');
 
     fireEvent.click(front);
-    fireEvent.click(screen.getByRole('button', { name: 'Добавить' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Добавить листы' }));
     fireEvent.click(screen.getByRole('radio', { name: /После текущей страницы/u }));
     // Номер — по показанной ленте: 3-я (в полной — 4-я).
     expect(document.querySelector('.add-modal__summary')?.textContent).toBe(

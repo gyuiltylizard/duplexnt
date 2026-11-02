@@ -381,7 +381,7 @@ describe('тулбар режима и «Собрать документ» (S4�
     expect(screen.getByRole('separator')).toBeDefined();
     const reason = 'Сначала досканируйте прерванный проход или оставьте его как есть';
     expect(assembleButton().getAttribute('title')).toBe(reason);
-    expect(button('Добавить').getAttribute('title')).toBe(reason);
+    expect(button('Добавить листы').getAttribute('title')).toBe(reason);
   });
 
   it('все страницы удалены — «В наборах нет страниц», ПРОВЕРКА про пустые наборы', () => {
@@ -556,7 +556,7 @@ describe('инспектор до сборки (S8–S9, R22–R23)', () => {
     );
 
     fireEvent.click(option(3));
-    fireEvent.click(button('Добавить'));
+    fireEvent.click(button('Добавить листы'));
     expect(screen.getByRole('radio', { name: 'В конец набора' })).toBeDefined();
     fireEvent.click(screen.getByRole('radio', { name: 'В конец набора' }));
     expect(document.querySelector('.add-modal__summary')?.textContent).toBe(
@@ -568,7 +568,7 @@ describe('инспектор до сборки (S8–S9, R22–R23)', () => {
     stubApi();
     renderEditor(twoPass(2));
 
-    fireEvent.click(button('Новое сканирование'));
+    fireEvent.click(button('Новый скан'));
     expect(screen.getByText('ДОКУМЕНТ НЕ СОБРАН')).toBeDefined();
     expect(screen.queryByRole('button', { name: /Сначала сохранить/ })).toBeNull();
   });

@@ -240,7 +240,7 @@ describe('новое сканирование из редактора', () => {
     const api = stubApi();
     renderEditor(makeSnapshot([makePass({ pages: pages(24) })]));
 
-    fireEvent.click(button(/Новое сканирование/));
+    fireEvent.click(button(/Новый скан/));
     expect(screen.getByText(/24 стр. будут удалены с диска/)).toBeDefined();
     fireEvent.click(button('Остаться в документе'));
 
@@ -252,7 +252,7 @@ describe('новое сканирование из редактора', () => {
     const api = stubApi();
     const { onToast } = renderEditor(twoPass());
 
-    fireEvent.click(button(/Новое сканирование/));
+    fireEvent.click(button(/Новый скан/));
     expect(screen.getByText('ЕСТЬ НЕСОХРАНЁННЫЕ ИЗМЕНЕНИЯ')).toBeDefined();
     fireEvent.click(button(/Сначала сохранить текущий/));
     expect(screen.getByRole('dialog', { name: 'Сохранить документ' })).toBeDefined();
@@ -280,7 +280,7 @@ describe('новое сканирование из редактора', () => {
       vi.spyOn(console, 'error').mockImplementation(() => undefined);
       const { onToast } = renderEditor(twoPass());
 
-      fireEvent.click(button(/Новое сканирование/));
+      fireEvent.click(button(/Новый скан/));
       fireEvent.click(button(/Сначала сохранить текущий/));
       fireEvent.click(button('Сохранить файл'));
       await settle();
@@ -311,7 +311,7 @@ describe('новое сканирование из редактора', () => {
     });
     renderEditor(twoPass());
 
-    fireEvent.click(button(/Новое сканирование/));
+    fireEvent.click(button(/Новый скан/));
     fireEvent.click(button(/Сначала сохранить текущий/));
     fireEvent.click(button('Сохранить файл'));
     await settle();
@@ -327,7 +327,7 @@ describe('новое сканирование из редактора', () => {
     renderEditor(makeSnapshot([makePass({ state: 'interrupted', pages: [] })]));
 
     // Тулбар, а не плашка прерванного прохода — у обеих «Новое сканирование».
-    const [toolbar] = screen.getAllByRole('button', { name: /Новое сканирование/ });
+    const [toolbar] = screen.getAllByRole('button', { name: /Новый скан/ });
     if (toolbar === undefined) {
       throw new Error('нет кнопки тулбара');
     }
@@ -343,7 +343,7 @@ describe('новое сканирование из редактора', () => {
     const keys = snapshot.assembly?.order.map((entry) => entry.key) ?? [];
     renderEditor(applied(snapshot, { edits: edits({ deleted: keys }), rotate180: false }));
 
-    fireEvent.click(button(/Новое сканирование/));
+    fireEvent.click(button(/Новый скан/));
 
     expect(screen.getByText('ДОКУМЕНТ ПУСТ')).toBeDefined();
     expect(screen.getByText(/сотрёт их \(6 стр\.\)/)).toBeDefined();

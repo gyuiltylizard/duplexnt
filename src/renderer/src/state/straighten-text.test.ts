@@ -75,7 +75,7 @@ describe('выделение по статусам выравнивания', ()
   });
 
   it('подпись действия: «— k из n выделенных» или «— n стр.», если подходят все', () => {
-    expect(straightActionLabel(t, 'keep', 3, 5)).toBe('Оставить оригинал — 3 из 5 выделенных');
+    expect(straightActionLabel(t, 'keep', 3, 5)).toBe('Оригинал — 3 из 5 выделенных');
     expect(straightActionLabel(t, 'restore', 5, 5)).toBe('Выровнять — 5 стр.');
   });
 

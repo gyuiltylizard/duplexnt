@@ -76,7 +76,7 @@ export function straightNoteText(t: TFunction, mark: StraightenMark): string | n
   }
 }
 
-/** Действие секции: «Оставить оригинал» (`straightened`) или «Выровнять» (`kept`). */
+/** Действие секции: «Оригинал» (`straightened`) или «Выровнять» (`kept`). */
 export type StraightAction = 'keep' | 'restore';
 
 /** Сводка выделения для секции ВЫРАВНИВАНИЕ и действий на несколько страниц. */
@@ -89,7 +89,7 @@ export interface StraightSelection {
   readonly undone: number;
   readonly pending: number;
   readonly level: number;
-  /** Ключи, которым подходит «Оставить оригинал» (`straightened`). */
+  /** Ключи, которым подходит «Оригинал» (`straightened`). */
   readonly keep: readonly string[];
   /** Ключи, которым подходит «Выровнять» (`kept`). */
   readonly restore: readonly string[];

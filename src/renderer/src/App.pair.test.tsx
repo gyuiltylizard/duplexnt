@@ -221,7 +221,7 @@ describe('M4.5: посадка пары набора (KTD7; handoff S6, S10)', (
     const push = liveApi(base, { startPass });
     render(<App />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Добавить' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Добавить листы' }));
     expect(
       screen
         .getByRole('radio', { name: /Двустороннее сканирование/u })
