@@ -17,7 +17,7 @@
 
 import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // --- Плейсхолдеры: чем заменяются настоящие значения в фикстурах и журналах -----------------
@@ -247,6 +247,11 @@ export function hasRawCaptures(root: string): boolean {
 
 export interface GuardOptions {
   readonly root: string;
+  /**
+   * Где лежат список значений и сырые снимки; по умолчанию — `root`. В git worktree это
+   * главное рабочее дерево (B-29, KTD-13): `local-test-data/` не под git и в worktree его нет.
+   */
+  readonly valuesRoot?: string;
   /** Пути относительно корня, с прямыми слэшами. */
   readonly files: readonly string[];
   /** Откуда брать содержимое; по умолчанию — рабочее дерево. Hook читает застейдженное. */
@@ -265,14 +270,15 @@ export interface GuardReport {
 
 export function runGuard(options: GuardOptions): GuardReport {
   const { root, files } = options;
+  const valuesRoot = options.valuesRoot ?? root;
   const read = options.read ?? ((file: string) => readFileSync(join(root, file)));
 
   // Пустой список — то же, что отсутствующий: иначе файл из одних комментариев рапортовал бы
   // «список значений проверен», ничего не проверив.
-  const loaded = loadKnownValues(root);
+  const loaded = loadKnownValues(valuesRoot);
   const values = loaded !== null && loaded.length > 0 ? loaded : null;
   const fatal =
-    values === null && hasRawCaptures(root)
+    values === null && hasRawCaptures(valuesRoot)
       ? `В ${RAW_DIR}/ лежат сырые данные устройства, а списка значений ${VALUES_FILE} нет или он пуст. ` +
         'Заполни список (UUID, серийный номер, адреса, MAC, имя хоста, отпечаток и субъект ' +
         'сертификата) — по строке на значение.'
@@ -343,6 +349,25 @@ function gitLines(root: string, args: readonly string[]): string[] {
   return output.split('\0').filter((line) => line !== '');
 }
 
+/**
+ * Корень списка значений — главное рабочее дерево репозитория (B-29, KTD-13). В worktree
+ * `process.cwd()` — соседний каталог: `local-test-data/` там нет, и страж молча пропускал бы
+ * проверку списка. `--git-common-dir` в главном дереве — `.git`, в worktree — путь к `.git`
+ * главного дерева; родитель этого каталога и есть корень. Вне репозитория — сам `root`.
+ */
+export function resolveValuesRoot(root: string): string {
+  try {
+    const common = execFileSync('git', ['rev-parse', '--git-common-dir'], {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    return dirname(resolve(root, common));
+  } catch {
+    return root;
+  }
+}
+
 export function listTrackedFiles(root: string): string[] {
   return gitLines(root, ['ls-files']).filter((file) => existsSync(join(root, file)));
 }
@@ -361,9 +386,23 @@ export function readStaged(root: string): (file: string) => Buffer {
 function main(argv: readonly string[]): number {
   const root = process.cwd();
   const staged = argv.includes('--staged');
-  const report = staged
-    ? runGuard({ root, files: listStagedFiles(root), read: readStaged(root) })
-    : runGuard({ root, files: listTrackedFiles(root) });
+  const valuesRoot = resolveValuesRoot(root);
+  let report: GuardReport;
+  try {
+    report = staged
+      ? runGuard({ root, valuesRoot, files: listStagedFiles(root), read: readStaged(root) })
+      : runGuard({ root, valuesRoot, files: listTrackedFiles(root) });
+  } catch (error) {
+    // Вне репозитория `git ls-files` падает — причина нужна словами, а не стеком.
+    console.error(
+      `страж приватности: не удалось получить список файлов у git в ${root} — ` +
+        `это git-репозиторий? (${error instanceof Error ? error.message.split('\n')[0] : String(error)})`,
+    );
+    return 1;
+  }
+  if (valuesRoot !== root) {
+    console.log(`страж приватности: список значений — из главного дерева ${valuesRoot}`);
+  }
 
   for (const file of report.exempted) {
     console.log(`страж приватности: исключение — ${file} (см. EXEMPT_FILES)`);
