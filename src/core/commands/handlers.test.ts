@@ -13,8 +13,8 @@ import {
 import { describe, expect, it, vi } from 'vitest';
 import type { ConnectedScanner, Connector, ScannerAddress } from '../escl/connect';
 import type { Discovery } from '../discovery/mdns';
-import type { PassService } from '../scan/pass-service';
-import { scannerInfoOf, storedScannerOf } from '../storage/stored-scanner';
+import type { PassService, UseScannerReport } from '../scan/pass-service';
+import { scannerInfoOf, storedScannerOf, type StoredScanner } from '../storage/stored-scanner';
 import { addressOf, createCommands } from './handlers';
 import { MAX_EDIT_ITEMS } from './schemas';
 
@@ -55,7 +55,11 @@ function setup(
     snapshot: vi.fn(() => snapshot),
     sessionId: vi.fn(() => null),
     checkRememberedScanner: vi.fn(() => Promise.resolve()),
-    useScanner: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
+    useScanner: vi.fn((): Promise<Result<UseScannerReport>> =>
+      Promise.resolve(ok({ settingsSaved: true })),
+    ),
+    rememberedScanner: vi.fn((): StoredScanner | null => null),
+    changeConsequences: vi.fn(() => ({ interruptedPass: false, awaitingBacks: false })),
     setParams: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
     setBlankMode: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
     setStraightenMode: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
@@ -651,7 +655,7 @@ describe('поиск устройств', () => {
     await handlers.stopDiscovery(undefined);
 
     expect(await handlers.connectScanner({ kind: 'discovered', id: 'abcdef01-1' })).toEqual(
-      ok(CONNECTED_INFO),
+      ok({ kind: 'connected' as const, scanner: CONNECTED_INFO }),
     );
     expect(connect).toHaveBeenCalledOnce();
   });
@@ -679,7 +683,7 @@ describe('подключение сканера', () => {
       basePath: 'eSCL/',
     });
 
-    expect(result).toEqual(ok(CONNECTED_INFO));
+    expect(result).toEqual(ok({ kind: 'connected' as const, scanner: CONNECTED_INFO }));
     expect(connect).toHaveBeenCalledExactlyOnceWith({
       scheme: 'https',
       host: '127.0.0.1',
@@ -713,7 +717,7 @@ describe('подключение сканера', () => {
     await handlers.startDiscovery(undefined);
 
     expect(await handlers.connectScanner({ kind: 'discovered', id: 'abcdef01-1' })).toEqual(
-      ok(CONNECTED_INFO),
+      ok({ kind: 'connected' as const, scanner: CONNECTED_INFO }),
     );
     expect(connect).toHaveBeenCalledExactlyOnceWith({
       scheme: null,

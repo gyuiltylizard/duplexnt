@@ -1,17 +1,21 @@
+import { randomBytes } from 'node:crypto';
 import { stat } from 'node:fs/promises';
 import {
   fail,
   ok,
   sessionConflict,
   type BridgeHandlers,
+  type ConfirmScannerChangeReport,
+  type ConfirmScannerChangeRequest,
+  type ConnectScannerOutcome,
   type ConnectScannerRequest,
   type DiscoveryState,
   type Result,
-  type ScannerInfo,
 } from '@shared';
 import {
   createConnector,
   parseScannerAddress,
+  type ConnectedScanner,
   type Connector,
   type ScannerAddress,
 } from '../escl/connect';
@@ -19,10 +23,16 @@ import { normalizeBasePath } from '../escl/device-path';
 import { startDiscovery, type Discovery, type DiscoveryOptions } from '../discovery/mdns';
 import { handleProbe } from '../probe/handle-probe';
 import type { PassService } from '../scan/pass-service';
-import { scannerInfoOf, storedScannerOf } from '../storage/stored-scanner';
+import {
+  needsDeviceConfirmation,
+  scannerInfoOf,
+  storedScannerOf,
+  type StoredScanner,
+} from '../storage/stored-scanner';
 import {
   blankModeSchema,
   hintIdSchema,
+  confirmScannerChangeRequestSchema,
   connectScannerRequestSchema,
   noRequestSchema,
   parseInput,
@@ -70,6 +80,20 @@ export interface Commands {
 }
 
 const NO_DISCOVERY: DiscoveryState = { scanners: [], failure: null };
+
+/** Длина токена ожидающей пробы в байтах; в мост уходит hex (B-29, KTD-7). */
+const TOKEN_BYTES = 16;
+
+/** Та же запись настроек, что была при пробе: любое расхождение — настройки менялись. */
+const isSameStored = (a: StoredScanner | null, b: StoredScanner): boolean =>
+  a !== null &&
+  a.scheme === b.scheme &&
+  a.host === b.host &&
+  a.port === b.port &&
+  a.basePath === b.basePath &&
+  a.fingerprint === b.fingerprint &&
+  a.uuid === b.uuid &&
+  a.name === b.name;
 
 const isDirectory = async (path: string): Promise<boolean> => {
   try {
@@ -147,9 +171,23 @@ export function createCommands(context: CommandContext): Commands {
     discovery?.stop();
   };
 
+  // Одна ожидающая проба смены устройства (B-29, KTD-7): показанная пользователю, с одноразовым
+  // токеном. Новая проба, отмена подключения и выход её гасят. Удержанного соединения нет —
+  // подтверждение запишет ровно эту пробу, а подмену после неё отклонит сверка отпечатка
+  // транспортом перед заданием.
+  let pending: {
+    readonly token: string;
+    readonly connected: ConnectedScanner;
+    readonly remembered: StoredScanner;
+  } | null = null;
+
   // Ответ — подключённый сканер (B-17): тост в renderer называет имя устройства, а снимок в
-  // момент ответа может быть ещё прежним.
-  async function connectScanner(request: ConnectScannerRequest): Promise<Result<ScannerInfo>> {
+  // момент ответа может быть ещё прежним. Смена устройства решается до `useScanner` (KTD-6):
+  // слот становится готовым раньше записи, и гейт после него опоздал бы.
+  async function connectScanner(
+    request: ConnectScannerRequest,
+  ): Promise<Result<ConnectScannerOutcome>> {
+    pending = null;
     if (service.snapshot().pass !== null) {
       return { ok: false, error: sessionConflict('passRunning') };
     }
@@ -171,8 +209,47 @@ export function createCommands(context: CommandContext): Commands {
     if (!connected.ok) {
       return connected;
     }
+    const probe = storedScannerOf(connected.value);
+    const remembered = service.rememberedScanner();
+    if (needsDeviceConfirmation(remembered, probe) && remembered !== null) {
+      const token = randomBytes(TOKEN_BYTES).toString('hex');
+      pending = { token, connected: connected.value, remembered };
+      return ok({
+        kind: 'confirmation',
+        token,
+        scanner: scannerInfoOf(probe),
+        remembered: scannerInfoOf(remembered),
+        ...service.changeConsequences(),
+      });
+    }
     const used = await service.useScanner(connected.value);
-    return used.ok ? ok(scannerInfoOf(storedScannerOf(connected.value))) : used;
+    return used.ok ? ok({ kind: 'connected', scanner: scannerInfoOf(probe) }) : used;
+  }
+
+  // Подтверждение по токену (KTD-7): токен одноразовый, чужой и повторный — отказ. Настройки
+  // перечитываются перед записью: стартовая проверка могла за это время запомнить переезд
+  // сканера, и тогда это отказ, а не перезапись.
+  async function confirmScannerChange(
+    request: ConfirmScannerChangeRequest,
+  ): Promise<Result<ConfirmScannerChangeReport>> {
+    const current = pending;
+    if (current?.token !== request.token) {
+      return fail('scannerChangeStale', { reason: 'token' });
+    }
+    pending = null;
+    if (service.snapshot().pass !== null) {
+      return { ok: false, error: sessionConflict('passRunning') };
+    }
+    if (!isSameStored(service.rememberedScanner(), current.remembered)) {
+      return fail('scannerChangeStale', { reason: 'settings' });
+    }
+    const used = await service.useScanner(current.connected);
+    return used.ok
+      ? ok({
+          scanner: scannerInfoOf(storedScannerOf(current.connected)),
+          settingsSaved: used.value.settingsSaved,
+        })
+      : used;
   }
 
   // Команда без входа: схема отклоняет всё, кроме `undefined`, — у `openDataFolder` аргументов
@@ -215,8 +292,15 @@ export function createCommands(context: CommandContext): Commands {
         return request.ok ? connectScanner(request.value) : request;
       },
 
-      // Закрытие модалки `device`: идущее подключение возвращает `canceled` и ничего не меняет.
+      confirmScannerChange: async (rawRequest) => {
+        const request = parseInput(confirmScannerChangeRequestSchema, rawRequest);
+        return request.ok ? confirmScannerChange(request.value) : request;
+      },
+
+      // Закрытие модалки `device`: идущее подключение возвращает `canceled` и ничего не меняет;
+      // ожидающая проба смены устройства гаснет.
       cancelConnect: withoutRequest(() => {
+        pending = null;
         connector.cancel();
         return ok(undefined);
       }),
@@ -310,6 +394,7 @@ export function createCommands(context: CommandContext): Commands {
     dispose() {
       stopDiscovery();
       discovery = null;
+      pending = null;
       connector.cancel();
       rechecks.abort();
     },

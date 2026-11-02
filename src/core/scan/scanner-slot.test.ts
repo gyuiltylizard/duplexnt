@@ -321,7 +321,7 @@ describe('слот сканера: переезд запомненного (M5, 
 
   it('AE4: ручное подключение сразу после находки — в настройках итог ручного', async () => {
     const manual = connectedAt('192.0.2.20');
-    let manualDone = Promise.resolve();
+    let manualDone: Promise<unknown> = Promise.resolve();
     let found = false;
     // Подключение — прямо на уведомлении «готов»: раньше следующего тика не бывает.
     const { time, slot, settings } = moved((current) => {

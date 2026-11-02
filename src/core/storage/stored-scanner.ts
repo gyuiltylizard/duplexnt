@@ -72,3 +72,51 @@ export function sameScanner(a: StoredScanner, b: StoredScanner): boolean {
   }
   return known.every(([left, right]) => left === right);
 }
+
+/**
+ * Можно ли досканировать проход, начатый на `passScanner`, на `current` (B-29, KTD-6).
+ * `sameScanner` намеренно снисходителен: проход с отпечатком при текущем сканере без отпечатка
+ * (откат на HTTP) сравнил бы только UUID и сказал бы «то же», хотя доказательства уже нет.
+ * Такая пара отклоняется здесь: привязку снимает только подтверждённая смена.
+ */
+export function isResumableOn(passScanner: StoredScanner, current: StoredScanner): boolean {
+  if (passScanner.fingerprint !== null && current.fingerprint === null) {
+    return false;
+  }
+  return sameScanner(passScanner, current);
+}
+
+/**
+ * Нужно ли подтверждение пользователя, прежде чем проба заменит запомненный сканер (B-29, KTD-6;
+ * таблица решения плана). Значения сравниваются только когда известны обеим сторонам.
+ * «Совпал» — хост или UUID запомненного; порт и схема не сравниваются: иначе откат с 443 на 80
+ * при вводе хоста без порта обошёл бы подтверждение. UUID — подсказка, не доказательство:
+ * устройство объявляет его само; строки с UUID нужны потому, что у HTTP-устройства другого
+ * признака нет. Принятые риски: другой хост с другим UUID — выбор пользователя; без запомненного
+ * отпечатка — доверие при первой привязке, как и первое подключение.
+ */
+export function needsDeviceConfirmation(
+  remembered: StoredScanner | null,
+  probe: StoredScanner,
+): boolean {
+  if (remembered === null) {
+    return false;
+  }
+  const uuidDiffers =
+    remembered.uuid !== null && probe.uuid !== null && remembered.uuid !== probe.uuid;
+  // Тот же сертификат — то же устройство, где бы оно ни стояло; насторожить может только другой UUID.
+  if (remembered.fingerprint !== null && probe.fingerprint === remembered.fingerprint) {
+    return uuidDiffers;
+  }
+  const matched =
+    remembered.host === probe.host || (remembered.uuid !== null && remembered.uuid === probe.uuid);
+  if (!matched) {
+    return false;
+  }
+  // Запомнен отпечаток, а похожее устройство отвечает другим сертификатом или вовсе без него.
+  if (remembered.fingerprint !== null) {
+    return true;
+  }
+  // Запомнен HTTP-сканер: единственный признак подмены — другой объявленный UUID.
+  return uuidDiffers;
+}

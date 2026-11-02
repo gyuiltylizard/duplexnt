@@ -160,13 +160,17 @@ export function DeviceModal({ initialAddress, onClose, onConnected }: DeviceModa
         if (closed.current) {
           return;
         }
-        if (result.ok) {
+        if (result.ok && result.value.kind === 'connected') {
           // Имя — из ответа ядра (B-17): снимок в этот момент может быть ещё прежним.
-          onConnected(result.value.name ?? label);
+          onConnected(result.value.scanner.name ?? label);
           onClose();
           return;
         }
         setConnecting(null);
+        if (result.ok) {
+          // Устройство не доказано тем же (B-29): шаг подтверждения — U8.
+          return;
+        }
         // Отказ не сбрасывает ни выбор, ни поле (S11); `canceled` текста не даёт.
         if (result.error.code !== 'canceled') {
           setFailure(result.error);

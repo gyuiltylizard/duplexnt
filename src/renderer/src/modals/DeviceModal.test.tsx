@@ -86,7 +86,7 @@ describe('DeviceModal', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Подключить' }));
     expect(connectScanner).toHaveBeenCalledExactlyOnceWith({ kind: 'discovered', id: SCANNER.id });
 
-    resolveConnect(0, ok(CONNECTED_INFO));
+    resolveConnect(0, ok({ kind: 'connected' as const, scanner: CONNECTED_INFO }));
     await flush();
     expect(onConnected).toHaveBeenCalledExactlyOnceWith('ScanPro 200');
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -247,7 +247,7 @@ describe('DeviceModal', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Подключить' }));
     view.unmount();
 
-    resolveConnect(0, ok(CONNECTED_INFO));
+    resolveConnect(0, ok({ kind: 'connected' as const, scanner: CONNECTED_INFO }));
     await flush();
     expect(onConnected).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
@@ -351,7 +351,7 @@ describe('DeviceModal', () => {
       target: { value: '192.0.2.10' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Подключить' }));
-    resolveConnect(0, ok(CONNECTED_INFO));
+    resolveConnect(0, ok({ kind: 'connected' as const, scanner: CONNECTED_INFO }));
     await flush();
 
     expect(onConnected).toHaveBeenCalledExactlyOnceWith('ScanPro 200');
@@ -367,7 +367,10 @@ describe('DeviceModal', () => {
       target: { value: '192.0.2.10' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Подключить' }));
-    resolveConnect(0, ok({ ...CONNECTED_INFO, name: null }));
+    resolveConnect(
+      0,
+      ok({ kind: 'connected' as const, scanner: { ...CONNECTED_INFO, name: null } }),
+    );
     await flush();
 
     expect(onConnected).toHaveBeenCalledExactlyOnceWith('192.0.2.10');

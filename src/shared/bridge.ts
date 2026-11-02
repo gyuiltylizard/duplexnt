@@ -83,6 +83,42 @@ export interface ProbeRequest {
 }
 
 /**
+ * Исход `connectScanner` (B-29, KTD-6, KTD-7). `connected` — сканер подключён, запомнен, параметры
+ * сверены; снимок уже несёт его. `confirmation` — по адресу или имени запомненного сканера
+ * ответило устройство, которое не доказано тем же (другой сертификат, HTTP вместо него, другой
+ * идентификатор): слот и настройки не тронуты, проба ждёт `confirmScannerChange` с токеном.
+ * Отпечаток через мост не ходит — только одноразовый токен показанной пробы.
+ */
+export type ConnectScannerOutcome =
+  | { readonly kind: 'connected'; readonly scanner: ScannerInfo }
+  | {
+      readonly kind: 'confirmation';
+      /** Одноразовый токен ожидающей пробы; новая проба, отмена и закрытие модалки его гасят. */
+      readonly token: string;
+      /** Что ответило: имя и адрес для карточки шага. */
+      readonly scanner: ScannerInfo;
+      /** Кого заменит подтверждение. */
+      readonly remembered: ScannerInfo;
+      /** Есть прерванный проход, который после замены досканировать будет нельзя (KTD-10). */
+      readonly interruptedPass: boolean;
+      /** Лица отсканированы, обороты ещё нет: документ соберётся с двух устройств (KTD-11). */
+      readonly awaitingBacks: boolean;
+    };
+
+export interface ConfirmScannerChangeRequest {
+  readonly token: string;
+}
+
+/**
+ * Итог подтверждения: сканер подключён и в слоте. `settingsSaved: false` — файл настроек не
+ * записался: до перезапуска сканер в памяти, при следующем запуске вопрос повторится.
+ */
+export interface ConfirmScannerChangeReport {
+  readonly scanner: ScannerInfo;
+  readonly settingsSaved: boolean;
+}
+
+/**
  * Правки редактора (M3, KTD-3): итоговое состояние целиком и флаги поворота на 180° по проходам
  * оборотов (M4.5, KTD4: номер прохода → флаг; не названные — `false`) — одной командой, чтобы
  * «Вернуть» и его отмена были одним шагом. Нормализует ядро; номер не прохода оборотов —
@@ -198,9 +234,27 @@ export interface BridgeCommands {
   readonly startDiscovery: { readonly request: NoRequest; readonly value: DiscoveryState };
   readonly getDiscovery: { readonly request: NoRequest; readonly value: DiscoveryState };
   readonly stopDiscovery: { readonly request: NoRequest; readonly value: undefined };
-  /** Исход — в снимке: сканер подключён, запомнен, параметры сверены; ответ — он же, для тоста. */
-  readonly connectScanner: { readonly request: ConnectScannerRequest; readonly value: ScannerInfo };
-  /** Отмена подключения — закрытие модалки `device`; если оно ещё идёт, вернёт `canceled`. */
+  /**
+   * Подключение: `connected` — исход в снимке, ответ для тоста; `confirmation` — устройство не
+   * доказано тем же, слот и настройки не тронуты до `confirmScannerChange` (B-29).
+   */
+  readonly connectScanner: {
+    readonly request: ConnectScannerRequest;
+    readonly value: ConnectScannerOutcome;
+  };
+  /**
+   * Подтверждение смены устройства по токену показанной пробы (B-29, KTD-7). Отказы: токен
+   * погашен или настройки изменились за время раздумий — `scannerChangeStale`; идёт проход —
+   * `sessionConflict` / `passRunning`. Отказ записи настроек — не отказ: `settingsSaved: false`.
+   */
+  readonly confirmScannerChange: {
+    readonly request: ConfirmScannerChangeRequest;
+    readonly value: ConfirmScannerChangeReport;
+  };
+  /**
+   * Отмена подключения — закрытие модалки `device`; если оно ещё идёт, вернёт `canceled`.
+   * Ожидающая проба смены устройства при этом гасится.
+   */
   readonly cancelConnect: { readonly request: NoRequest; readonly value: undefined };
   /** Проверка запомненного сканера ещё раз — кнопка «Повторить» (U19, S3); исход — в снимке. */
   readonly recheckScanner: { readonly request: NoRequest; readonly value: undefined };
@@ -285,6 +339,7 @@ export const BRIDGE_CHANNELS = {
   getDiscovery: 'duplexnt:get-discovery',
   stopDiscovery: 'duplexnt:stop-discovery',
   connectScanner: 'duplexnt:connect-scanner',
+  confirmScannerChange: 'duplexnt:confirm-scanner-change',
   cancelConnect: 'duplexnt:cancel-connect',
   recheckScanner: 'duplexnt:recheck-scanner',
   setScanParams: 'duplexnt:set-scan-params',

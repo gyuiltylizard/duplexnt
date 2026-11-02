@@ -55,7 +55,7 @@ import {
 } from '../storage/session-store';
 import { openSettingsStore, type SettingsStore } from '../storage/settings-store';
 import { createSkewScores, type SkewScores } from '../storage/skew-scores';
-import { sameScanner, storedScannerOf, type StoredScanner } from '../storage/stored-scanner';
+import { isResumableOn, storedScannerOf, type StoredScanner } from '../storage/stored-scanner';
 import { ioOf, storageFailure } from '../storage/storage-fs';
 import { createStraightened, type Straightened } from '../storage/straightened';
 import { pagePixelLimit } from '../storage/thumbnails';
@@ -116,14 +116,29 @@ export interface PassServiceOptions extends SessionStoreOptions {
   readonly imageWorker?: ImageWorker;
 }
 
+/** Итог `useScanner`: сканер в слоте; записались ли настройки (B-29, отказ записи не отменяет). */
+export interface UseScannerReport {
+  readonly settingsSaved: boolean;
+}
+
 export interface PassService {
   snapshot(): Snapshot;
   /** Id текущей сессии без сборки снимка: его спрашивает каждый запрос изображения. */
   sessionId(): string | null;
   /** Проверка запомненного сканера при запуске; исход — в снимке. */
   checkRememberedScanner(signal?: AbortSignal): Promise<void>;
-  /** Сканер подключён явным действием пользователя: запоминается, параметры сверяются (KTD-13). */
-  useScanner(connected: ConnectedScanner): Promise<Result<void>>;
+  /**
+   * Сканер подключён явным действием пользователя: запоминается, параметры сверяются (KTD-13).
+   * Отказ записи настроек подключение не отменяет — он виден как `settingsSaved: false` (B-29).
+   */
+  useScanner(connected: ConnectedScanner): Promise<Result<UseScannerReport>>;
+  /** Запомненный сканер из настроек — для решения о смене устройства (B-29, KTD-6, KTD-7). */
+  rememberedScanner(): StoredScanner | null;
+  /**
+   * Цена смены устройства (B-29, KTD-10, KTD-11): есть прерванный проход, который можно было бы
+   * досканировать на его сканере; лица отсканированы, обороты ещё нет.
+   */
+  changeConsequences(): { readonly interruptedPass: boolean; readonly awaitingBacks: boolean };
   setParams(params: ScanParams): Promise<Result<void>>;
   /** Режим пустых оборотов (M4, R1): настройка приложения; принимается и без сканера. */
   setBlankMode(mode: BlankMode): Promise<Result<void>>;
@@ -403,14 +418,16 @@ export function createPassService(
     straightenQueue.ensureAll();
   };
 
-  // Досканировать можно только тот же сканер, что вёл проход (KTD-27).
+  // Досканировать можно только тот же сканер, что вёл проход (KTD-27). Проход с отпечатком при
+  // текущем сканере без отпечатка — не тот же: привязку снимает только подтверждённая смена
+  // устройства (B-29, KTD-6), и после неё досканирование честно недоступно.
   function resumeTarget(): Result<PassOrigin> {
     const target = store.resumeTarget();
     const current = scanner.current();
     if (!target.ok || current.kind !== 'ready') {
       return target;
     }
-    return sameScanner(target.value.scanner, storedScannerOf(current.connected))
+    return isResumableOn(target.value.scanner, storedScannerOf(current.connected))
       ? target
       : conflict('otherScanner');
   }
@@ -725,8 +742,23 @@ export function createPassService(
       if (run !== null) {
         return conflict('passRunning');
       }
-      await scanner.use(connected);
-      return ok(undefined);
+      const saved = await scanner.use(connected);
+      return ok({ settingsSaved: saved.ok });
+    },
+
+    rememberedScanner: () => settings.get().scanner,
+
+    changeConsequences() {
+      // Прерванный проход считается только тот, который досканировать в принципе можно: журнал,
+      // восстановленный по файлам, и так не даёт досканирования. Сканер при этом не сверяется —
+      // цену платит именно замена того, на ком проход начат.
+      const interruptedPass = run === null && store.resumeTarget().ok;
+      const plan = store.planPass(null);
+      const awaitingBacks =
+        plan.ok &&
+        !plan.value.resumed &&
+        (plan.value.kind === 'backs' || plan.value.kind === 'addedBacks');
+      return { interruptedPass, awaitingBacks };
     },
 
     setParams: (params) => scanner.setParams(params),
