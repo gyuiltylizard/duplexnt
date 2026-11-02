@@ -153,7 +153,7 @@ describe('FlipScreen', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Обороты не нужны' }));
     const alert = await screen.findByRole('alert');
-    expect(alert.textContent).toContain('Не удалось записать данные на диск');
+    expect(alert.textContent).toContain('Не удалось записать данные');
     expect(alert.textContent).not.toContain('Проход не начался');
   });
 

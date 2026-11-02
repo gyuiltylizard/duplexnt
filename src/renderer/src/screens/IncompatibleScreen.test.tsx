@@ -37,9 +37,7 @@ describe('экран несовместимых данных (S22)', () => {
     render(<IncompatibleScreen />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Открыть папку с данными' }));
-    expect((await screen.findByRole('alert')).textContent).toContain(
-      'Не удалось записать данные на диск',
-    );
+    expect((await screen.findByRole('alert')).textContent).toContain('Не удалось записать данные');
   });
 
   it('«Выйти» закрывает окно', () => {

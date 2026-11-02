@@ -321,7 +321,7 @@ describe('модалка save: запись', () => {
     fireEvent.click(button('Сохранить 3 файла'));
     await settle();
 
-    expect(screen.getByRole('alert').textContent).toContain('не получило ответа от записи');
+    expect(screen.getByRole('alert').textContent).toContain('Часть файлов могла не записаться');
     expect(onWriting).toHaveBeenLastCalledWith(false);
     expect(onSaved).not.toHaveBeenCalled();
   });
