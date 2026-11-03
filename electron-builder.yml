@@ -39,13 +39,26 @@ win:
   artifactName: duplexnt-${version}-setup.${ext}
 
 # Assisted, per-user: без подписи это даёт меньше трения с UAC. Данные пользователя
-# деинсталлятор не трогает.
+# деинсталлятор сам не трогает: встроенное удаление выключено, вместо него — своя страница с
+# вопросом (B-26, решение автора 2026-11-03) в build/installer.nsh; галочка по умолчанию снята,
+# тихое удаление данные оставляет.
 nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
   deleteAppDataOnUninstall: false
+  include: build/installer.nsh
+  # Два языка, как у приложения: свои строки включения переведены ровно на них, а makensis идёт
+  # с -WX — строка без перевода уронила бы сборку. Язык выбирается по языку Windows, окна
+  # выбора нет; прочие языки Windows получают первый в списке — английский.
+  installerLanguages: [en_US, ru_RU]
   artifactName: duplexnt-${version}-setup.${ext}
+  # Графика мастера (B-26, handoff installer-art): боковая 164 × 314 на «Добро пожаловать» /
+  # «Готово» установщика и деинсталлятора, шапка 150 × 57 на остальных страницах. BMP 24 бит
+  # генерируются `npm run installer-art` из SVG-мастеров рядом и коммитятся, как значки.
+  installerSidebar: build/installer-sidebar.bmp
+  uninstallerSidebar: build/installer-sidebar.bmp
+  installerHeader: build/installer-header.bmp
 
 # Полный набор держит тест test/tooling/electron-builder.test.ts: выпавший fuse роняет его.
 electronFuses:

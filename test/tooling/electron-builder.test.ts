@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 // Конфиг установщика (B-29, U2): полный набор fuses и целостность asar. Fuse, выпавший из
@@ -32,6 +32,55 @@ function block(name: string): Map<string, string> {
 const CODE = CONFIG.split(/\r?\n/)
   .filter((line) => !line.trimStart().startsWith('#'))
   .join('\n');
+
+describe('electron-builder.yml — графика мастера (B-26)', () => {
+  it('три картинки nsis указывают на собранные BMP в build/', () => {
+    const nsis = block('nsis');
+    expect(nsis.get('installerSidebar')).toBe('build/installer-sidebar.bmp');
+    expect(nsis.get('uninstallerSidebar')).toBe('build/installer-sidebar.bmp');
+    expect(nsis.get('installerHeader')).toBe('build/installer-header.bmp');
+    for (const file of new Set(
+      ['installerSidebar', 'uninstallerSidebar', 'installerHeader'].map(
+        (key) => nsis.get(key) ?? '',
+      ),
+    )) {
+      expect(existsSync(file), `файл ${file}`).toBe(true);
+    }
+  });
+});
+
+describe('electron-builder.yml — вопрос о данных при удалении (B-26)', () => {
+  const NSH = readFileSync('build/installer.nsh', 'utf8');
+
+  it('включение подключено, встроенное удаление данных выключено, языки — en_US и ru_RU', () => {
+    const nsis = block('nsis');
+    expect(nsis.get('include')).toBe('build/installer.nsh');
+    expect(nsis.get('deleteAppDataOnUninstall')).toBe('false');
+    expect(nsis.get('installerLanguages')).toBe('[en_US, ru_RU]');
+  });
+
+  it('каждая строка включения переведена на оба языка установщика (makensis идёт с -WX)', () => {
+    const ids = new Map<string, Set<number>>();
+    for (const match of NSH.matchAll(/^LangString (\w+) (\d+) /gmu)) {
+      const [, id, lcid] = match;
+      ids.set(id ?? '', (ids.get(id ?? '') ?? new Set<number>()).add(Number(lcid)));
+    }
+    expect(ids.size).toBeGreaterThan(0);
+    for (const [id, lcids] of ids) {
+      expect([...lcids].sort(), `строка ${id}`).toEqual([1033, 1049]);
+    }
+  });
+
+  it('удаление данных — только по галочке, своей секцией; страница после «Добро пожаловать»', () => {
+    expect(NSH).toMatch(
+      /!macro customUnInstall[\s\S]*\$deleteUserData == \$\{BST_CHECKED\}[\s\S]*RMDir \/r "\$APPDATA\\\$\{APP_FILENAME\}"/u,
+    );
+    expect(NSH).toMatch(
+      /!macro customUnWelcomePage\n {2}!insertmacro MUI_UNPAGE_WELCOME\n {2}UninstPage custom/u,
+    );
+    expect(NSH).toMatch(/NSD_SetState\} \$deleteUserDataCheckbox \$\{BST_UNCHECKED\}/u);
+  });
+});
 
 describe('electron-builder.yml — fuses', () => {
   it('задаёт ровно ожидаемый набор fuses с нужными значениями', () => {
