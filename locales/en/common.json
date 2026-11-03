@@ -82,7 +82,7 @@
   "setup": {
     "kicker": "SCAN SETUP",
     "title": "Scanning both sides in two passes",
-    "lead": "First the front sides of the sheets. Then the backs — all at once, just as they came out of the tray. The app matches the backs to the fronts on its own.",
+    "lead": "First the fronts, then the backs (all at once). The app matches the backs to the fronts on its own.",
     "start": "Scan the front sides",
     "hint": "Load the sheets into the tray face up, first page on top",
     "language": {
