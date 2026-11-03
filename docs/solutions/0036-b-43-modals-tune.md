@@ -3,7 +3,7 @@ title: 'B-43 — Модалки device и save: вёрстка списка ск
 type: solution
 date: 2026-11-03
 milestone: B-43
-status: в работе
+status: done
 ---
 
 # B-43 — Модалки device и save: вёрстка списка сканеров и таблица фактов (журнал)
@@ -41,4 +41,9 @@ var(--space-9) }` в `device-modal.css` — зазор вернулся, шаг 
 
 ## Закрытие
 
-<заполняется на merge>
+Гейт на ветке (`0a297d9`): typecheck, lint, format:check, `npm test` 151 / 2671,
+`test:integration` 36 / 315 (4 live пропущены), worst-case 3 / 5. Автор прошёл чеклист
+`docs/output/2026-11-03-smoke-checklist-b-43-acceptance.md` живьём 2026-11-03 — «всё ок».
+Merge `fix/b-43-modals-tune` → `main` по явному ОК автора («мерж, пуш») — хэш в строке B-43
+бэклога; гейт на `main` после merge — там же. Ветка удалена после влития, push в origin — по
+тому же ОК.
