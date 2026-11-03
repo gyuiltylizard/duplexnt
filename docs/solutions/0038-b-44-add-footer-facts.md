@@ -41,3 +41,7 @@ UI_SPEC обновлён (§ 7.2, § 7.3). ADR нет. Ветка `fix/b-44-add-
 Гейт на ветке: typecheck, lint, format:check, `npm test` 155 / 2715 (три теста про сводку
 удалены), `design:snapshot` 11 / 11. Merge `fix/b-44-add-footer-facts` → `main` — по явному
 ОК автора, отдельным вопросом; хеш и гейт на `main` — строкой ниже.
+
+Merge `0c80c92` в `main` 2026-11-03 по явному ОК автора (живая проверка на установщике 19:08 —
+«проверил»). Гейт на `main` после merge: typecheck, lint, format:check зелёные; `npm test` 155 / 2715,
+`test:integration` 36 / 315 (4 live пропущены), worst-case 3 / 5. Пункт B-44 закрыт.
