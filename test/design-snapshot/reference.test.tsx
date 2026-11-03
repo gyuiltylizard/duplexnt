@@ -17,15 +17,17 @@ import sharp from 'sharp';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   EMPTY_EDITS,
+  LOCALES,
   PAGE_IMAGE_SCHEME,
   ok,
   type BlankVerdicts,
+  type Locale,
   type PassSnapshot,
   type SessionEdits,
   type SessionSnapshot,
   type Snapshot,
 } from '@shared';
-import '../../src/renderer/src/i18n';
+import { i18n } from '../../src/renderer/src/i18n';
 import { App } from '../../src/renderer/src/App';
 import { FOUND, makeSnapshot, PARAMS, READY, stubApi } from '../../src/renderer/src/app-fixture';
 import { MergeScreen } from '../../src/renderer/src/screens/MergeScreen';
@@ -112,7 +114,14 @@ interface Scene {
   readonly id: string;
   readonly title: string;
   readonly note: string;
+  /** Язык интерфейса сцены (B-41, U5): каждая сцена снимается на обоих языках. */
+  readonly locale: Locale;
   readonly html: string;
+}
+
+interface CaptureOptions {
+  readonly backsCount?: number;
+  readonly blank?: boolean;
 }
 
 const scenes: Scene[] = [];
@@ -122,7 +131,7 @@ const usedPages = new Set<string>();
 async function capture(
   container: HTMLElement,
   scene: Omit<Scene, 'html'>,
-  { backsCount = SHEETS, blank = false }: { backsCount?: number; blank?: boolean } = {},
+  { backsCount = SHEETS, blank = false }: CaptureOptions = {},
 ): Promise<void> {
   const images = [...container.querySelectorAll('img')];
   await act(async () => {
@@ -148,9 +157,54 @@ async function capture(
   scenes.push({ ...scene, html: container.innerHTML });
 }
 
+/** Язык текущего прогона сцены: `App` применяет язык из снимка, поэтому снимок несёт его сам. */
+let currentLocale: Locale = 'ru';
+
 function renderApp(snapshot: Snapshot, overrides: Parameters<typeof stubApi>[1] = {}) {
-  stubApi(snapshot, overrides);
+  stubApi({ ...snapshot, language: currentLocale }, overrides);
   return render(<App />);
+}
+
+/** `t` сцены — строкой по ключу: типизированный `t` с подстановками здесь слишком глубок для tsc. */
+type SceneT = (key: string, options?: Record<string, unknown>) => string;
+
+/** Экран на языке сцены; ожидания — по ключам локали, не по литералам (B-41, U5). */
+type SceneBody = (t: SceneT) => Promise<HTMLElement>;
+
+const sceneT = (locale: Locale): SceneT => {
+  const plain = i18n.t as unknown as SceneT;
+  return (key, options) => plain(key, { ...options, lng: locale });
+};
+
+/** Точное имя элемента по строке локали, когда рядом стоит глиф или число. */
+const named = (text: string): RegExp =>
+  new RegExp(text.replace(/[.*+?^${}()|[\]\\]/gu, String.raw`\$&`), 'u');
+
+/**
+ * Одна сцена — два снимка: на русском и на английском, по одному прогону тела на язык.
+ * Между прогонами — размонтирование и сброс заглушек; после сцены язык возвращается на русский.
+ */
+async function scene(
+  meta: Omit<Scene, 'html' | 'locale'>,
+  body: SceneBody,
+  options: CaptureOptions = {},
+): Promise<void> {
+  try {
+    for (const locale of LOCALES) {
+      currentLocale = locale;
+      await i18n.changeLanguage(locale);
+      try {
+        const container = await body(sceneT(locale));
+        await capture(container, { ...meta, locale }, options);
+      } finally {
+        cleanup();
+        vi.unstubAllGlobals();
+      }
+    }
+  } finally {
+    currentLocale = 'ru';
+    await i18n.changeLanguage('ru');
+  }
 }
 
 // ── Сборка папки референса ──────────────────────────────────────────────────────────────────
@@ -242,18 +296,24 @@ const escapeHtml = (text: string): string =>
   text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 
 function indexHtml(): string {
-  const tabs = scenes
-    .map(
-      (scene, index) =>
-        `      <button type="button" class="ref-tab" data-scene="${scene.id}"${index === 0 ? ' aria-selected="true"' : ''}>${escapeHtml(scene.title)}</button>`,
-    )
+  // Вкладки — по сценам (без повторов на язык), языки — отдельным переключателем (B-41, U5).
+  const ids = [...new Set(scenes.map((scene) => scene.id))];
+  const tabs = ids
+    .map((id, index) => {
+      const title = scenes.find((scene) => scene.id === id)?.title ?? id;
+      return `      <button type="button" class="ref-tab" data-scene="${id}"${index === 0 ? ' aria-selected="true"' : ''}>${escapeHtml(title)}</button>`;
+    })
     .join('\n');
+  const langs = LOCALES.map(
+    (locale, index) =>
+      `      <button type="button" class="ref-tab" data-lang="${locale}"${index === 0 ? ' aria-selected="true"' : ''}>${locale.toUpperCase()}</button>`,
+  ).join('\n');
   const frames = scenes
     .map(
-      (scene, index) =>
-        `    <section class="ref-scene" id="scene-${scene.id}"${index === 0 ? '' : ' hidden'}>\n` +
+      (scene) =>
+        `    <section class="ref-scene" id="scene-${scene.id}-${scene.locale}" data-scene="${scene.id}" data-lang="${scene.locale}"${scene.id === ids[0] && scene.locale === LOCALES[0] ? '' : ' hidden'}>\n` +
         `      <p class="ref-note">${escapeHtml(scene.note)}</p>\n` +
-        `      <div class="ref-frame" style="width:${String(FRAME.width)}px;height:${String(FRAME.height)}px">\n` +
+        `      <div class="ref-frame" lang="${scene.locale}" style="width:${String(FRAME.width)}px;height:${String(FRAME.height)}px">\n` +
         `        <div class="ref-root">${scene.html}</div>\n      </div>\n    </section>`,
     )
     .join('\n');
@@ -272,25 +332,37 @@ function indexHtml(): string {
     <nav class="ref-tabs" aria-label="Сцены">
 ${tabs}
     </nav>
+    <nav class="ref-tabs" aria-label="Язык интерфейса">
+${langs}
+    </nav>
 ${frames}
     <script>
-      // Вкладка — по клику; сцена открывается и по адресу: index.html#editor.
-      const show = (id) => {
-        const tab = document.querySelector('.ref-tab[data-scene="' + id + '"]');
-        if (!tab) return;
-        for (const other of document.querySelectorAll('.ref-tab')) other.removeAttribute('aria-selected');
-        tab.setAttribute('aria-selected', 'true');
-        for (const scene of document.querySelectorAll('.ref-scene')) {
-          scene.hidden = scene.id !== 'scene-' + id;
+      // Вкладка и язык — по клику; сцена открывается и по адресу: index.html#editor или
+      // index.html#editor:en. Каждая сцена снята на обоих языках (B-41).
+      const state = { scene: ${JSON.stringify(ids[0] ?? '')}, lang: ${JSON.stringify(LOCALES[0])} };
+      const select = (selector, value) => {
+        for (const tab of document.querySelectorAll(selector)) {
+          tab.toggleAttribute('aria-selected', tab.dataset.scene === value || tab.dataset.lang === value);
         }
       };
-      for (const tab of document.querySelectorAll('.ref-tab')) {
-        tab.addEventListener('click', () => {
-          history.replaceState(null, '', '#' + tab.dataset.scene);
-          show(tab.dataset.scene);
-        });
+      const show = () => {
+        select('.ref-tab[data-scene]', state.scene);
+        select('.ref-tab[data-lang]', state.lang);
+        for (const scene of document.querySelectorAll('.ref-scene')) {
+          scene.hidden = scene.dataset.scene !== state.scene || scene.dataset.lang !== state.lang;
+        }
+        history.replaceState(null, '', '#' + state.scene + (state.lang === ${JSON.stringify(LOCALES[0])} ? '' : ':' + state.lang));
+      };
+      for (const tab of document.querySelectorAll('.ref-tab[data-scene]')) {
+        tab.addEventListener('click', () => { state.scene = tab.dataset.scene; show(); });
       }
-      show(location.hash.slice(1));
+      for (const tab of document.querySelectorAll('.ref-tab[data-lang]')) {
+        tab.addEventListener('click', () => { state.lang = tab.dataset.lang; show(); });
+      }
+      const [scene, lang] = location.hash.slice(1).split(':');
+      if (scene && document.querySelector('.ref-tab[data-scene="' + scene + '"]')) state.scene = scene;
+      if (lang && document.querySelector('.ref-tab[data-lang="' + lang + '"]')) state.lang = lang;
+      show();
     </script>
   </body>
 </html>
@@ -383,8 +455,9 @@ function editorSnapshot(): Snapshot {
   });
 }
 
-/** Сколько сцен в референсе: столько `it` ниже. */
+/** Сколько сцен в референсе: столько `it` ниже; каждая снимается на всех языках. */
 const SCENE_COUNT = 11;
+const EXPECTED_CAPTURES = SCENE_COUNT * LOCALES.length;
 
 const EDITOR_OVERRIDES = {
   getSaveFolder: vi.fn(() => Promise.resolve(ok('C:\\Users\\Анна\\Documents\\Сканы'))),
@@ -404,9 +477,9 @@ describe('референс интерфейса (B-6)', () => {
   afterAll(async () => {
     vi.useRealTimers();
     // Упавшая сцена — референс не переписывается: неполная страница хуже прежней.
-    if (scenes.length !== SCENE_COUNT) {
+    if (scenes.length !== EXPECTED_CAPTURES) {
       throw new Error(
-        `сцен ${String(scenes.length)} из ${String(SCENE_COUNT)} — референс не записан`,
+        `снимков сцен ${String(scenes.length)} из ${String(EXPECTED_CAPTURES)} — референс не записан`,
       );
     }
     rmSync(OUT_DIR, { recursive: true, force: true });
@@ -423,188 +496,222 @@ describe('референс интерфейса (B-6)', () => {
     );
   });
 
-  it('setup — сканер готов', async () => {
-    const { container } = renderApp(makeSnapshot({ scanner: READY }));
-    await screen.findByRole('button', { name: 'Сканировать лицевые стороны' });
-    await capture(container, {
-      id: 'setup',
-      title: 'setup',
-      note: 'Стартовый экран: запомненный сканер готов, параметры сканирования, запуск первого прохода.',
-    });
-  });
+  it('setup — сканер готов', () =>
+    scene(
+      {
+        id: 'setup',
+        title: 'setup',
+        note: 'Стартовый экран: запомненный сканер готов, параметры сканирования, запуск первого прохода.',
+      },
+      async (t) => {
+        const { container } = renderApp(makeSnapshot({ scanner: READY }));
+        await screen.findByRole('button', { name: t('setup.start') });
+        return container;
+      },
+    ));
 
-  it('device — выбор сканера', async () => {
-    const discovery = ok({
-      scanners: [
-        FOUND,
-        { ...FOUND, id: 'abcdef02-1', name: 'EPSON ET-3850', address: '192.0.2.24' },
-      ],
-      failure: null,
-    });
-    const { container } = renderApp(makeSnapshot({ scanner: READY }), {
-      startDiscovery: vi.fn(() => Promise.resolve(discovery)),
-      getDiscovery: vi.fn(() => Promise.resolve(discovery)),
-    });
-    fireEvent.click(await screen.findByRole('button', { name: 'Сменить' }));
-    await screen.findByRole('dialog');
-    await screen.findByText('EPSON ET-3850');
-    await capture(container, {
-      id: 'device',
-      title: 'модалка device',
-      note: 'Модалка выбора сканера: найденные в сети устройства и ручной ввод адреса.',
-    });
-  });
+  it('device — выбор сканера', () =>
+    scene(
+      {
+        id: 'device',
+        title: 'модалка device',
+        note: 'Модалка выбора сканера: найденные в сети устройства и ручной ввод адреса.',
+      },
+      async (t) => {
+        const discovery = ok({
+          scanners: [
+            FOUND,
+            { ...FOUND, id: 'abcdef02-1', name: 'EPSON ET-3850', address: '192.0.2.24' },
+          ],
+          failure: null,
+        });
+        const { container } = renderApp(makeSnapshot({ scanner: READY }), {
+          startDiscovery: vi.fn(() => Promise.resolve(discovery)),
+          getDiscovery: vi.fn(() => Promise.resolve(discovery)),
+        });
+        fireEvent.click(await screen.findByRole('button', { name: t('setup.device.change') }));
+        await screen.findByRole('dialog');
+        await screen.findByText('EPSON ET-3850');
+        return container;
+      },
+    ));
 
-  it('scan — лицевые стороны', async () => {
-    const running = passOf(1, 'fronts', 4, 'running');
-    const { container } = renderApp(
-      makeSnapshot({
-        scanner: READY,
-        session: sessionOf([running]),
-        pass: {
-          phase: 'scanning',
-          resumed: false,
-          kind: 'fronts',
-          expected: null,
-          params: PARAMS,
-          pages: 4,
-        },
-      }),
-    );
-    await screen.findByText('СКАНИРУЕМ ЛИЦЕВЫЕ СТОРОНЫ');
-    await capture(container, {
-      id: 'scan-fronts',
-      title: 'scan · лица',
-      note: 'Идёт первый проход: подача (анимация), счётчик, параметры, лента последних пяти страниц.',
-    });
-  });
+  it('scan — лицевые стороны', () =>
+    scene(
+      {
+        id: 'scan-fronts',
+        title: 'scan · лица',
+        note: 'Идёт первый проход: подача (анимация), счётчик, параметры, лента последних пяти страниц.',
+      },
+      async (t) => {
+        const running = passOf(1, 'fronts', 4, 'running');
+        const { container } = renderApp(
+          makeSnapshot({
+            scanner: READY,
+            session: sessionOf([running]),
+            pass: {
+              phase: 'scanning',
+              resumed: false,
+              kind: 'fronts',
+              expected: null,
+              params: PARAMS,
+              pages: 4,
+            },
+          }),
+        );
+        await screen.findByText(t('scan.tag'));
+        return container;
+      },
+    ));
 
-  it('scan — обороты', async () => {
-    const running = passOf(2, 'backs', 3, 'running');
-    const { container } = renderApp(
-      makeSnapshot({
-        scanner: READY,
-        session: sessionOf([passOf(1, 'fronts', SHEETS), running]),
-        pass: {
-          phase: 'scanning',
-          resumed: false,
-          kind: 'backs',
-          expected: SHEETS,
-          params: PARAMS,
-          pages: 3,
-        },
-      }),
-    );
-    await screen.findByText('СКАНИРУЕМ ОБОРОТЫ');
-    await capture(container, {
-      id: 'scan-backs',
-      title: 'scan · обороты',
-      note: 'Второй проход: счётчик «N из M» — число листов известно по первому проходу.',
-    });
-  });
+  it('scan — обороты', () =>
+    scene(
+      {
+        id: 'scan-backs',
+        title: 'scan · обороты',
+        note: 'Второй проход: счётчик «N из M» — число листов известно по первому проходу.',
+      },
+      async (t) => {
+        const running = passOf(2, 'backs', 3, 'running');
+        const { container } = renderApp(
+          makeSnapshot({
+            scanner: READY,
+            session: sessionOf([passOf(1, 'fronts', SHEETS), running]),
+            pass: {
+              phase: 'scanning',
+              resumed: false,
+              kind: 'backs',
+              expected: SHEETS,
+              params: PARAMS,
+              pages: 3,
+            },
+          }),
+        );
+        await screen.findByText(t('scan.tagBacks'));
+        return container;
+      },
+    ));
 
-  it('flip — разворот пачки', async () => {
-    const session = sessionOf([passOf(1, 'fronts', SHEETS)]);
-    const { container } = renderApp(makeSnapshot({ scanner: READY, session }));
-    await screen.findByRole('heading', { level: 1, name: 'Разверните листы на 180° — все разом' });
-    await capture(container, {
-      id: 'flip',
-      title: 'flip',
-      note: 'Пауза между проходами: развернуть пачку и вставить в лоток (анимация разворота).',
-    });
-  });
+  it('flip — разворот пачки', () =>
+    scene(
+      {
+        id: 'flip',
+        title: 'flip',
+        note: 'Пауза между проходами: развернуть пачку и вставить в лоток (анимация разворота).',
+      },
+      async (t) => {
+        const session = sessionOf([passOf(1, 'fronts', SHEETS)]);
+        const { container } = renderApp(makeSnapshot({ scanner: READY, session }));
+        await screen.findByRole('heading', { level: 1, name: t('flip.title') });
+        return container;
+      },
+    ));
 
-  it('merge — сопоставление проходов', async () => {
-    const session = sessionOf([passOf(1, 'fronts', SHEETS), passOf(2, 'backs', SHEETS)]);
-    const { container } = render(
-      // В приложении экран живёт внутри `.app` (колонка на всю высоту) — без неё он прижат к верху.
-      <div className="app">
-        <MergeScreen assembly={assemblyOf(session)} />
-      </div>,
-    );
-    await screen.findByText(/^Сопоставляем лица и обороты/);
-    await capture(container, {
-      id: 'merge',
-      title: 'merge',
-      note: 'Пауза ~1,6 с после второго прохода: иллюстрация «пары» (B-5), строка состояния, затем editor.',
-    });
-  });
+  it('merge — сопоставление проходов', () =>
+    scene(
+      {
+        id: 'merge',
+        title: 'merge',
+        note: 'Пауза ~1,6 с после второго прохода: иллюстрация «пары» (B-5), строка состояния, затем editor.',
+      },
+      async (t) => {
+        const session = sessionOf([passOf(1, 'fronts', SHEETS), passOf(2, 'backs', SHEETS)]);
+        const { container } = render(
+          // В приложении экран живёт внутри `.app` (колонка на всю высоту) — без неё он прижат к верху.
+          <div className="app">
+            <MergeScreen assembly={assemblyOf(session)} />
+          </div>,
+        );
+        await screen.findByText(named(t('merge.title')));
+        return container;
+      },
+    ));
 
-  it('editor — собранный документ', async () => {
-    const { container } = renderApp(editorSnapshot(), EDITOR_OVERRIDES);
-    await screen.findByText(/документ 1 из 2/);
-    expect(container.querySelectorAll('.thumb__blank')).toHaveLength(1);
-    await capture(
-      container,
+  it('editor — собранный документ', () =>
+    scene(
       {
         id: 'editor',
         title: 'editor',
         note: 'Редактор: лента по документам (граница после 6-й страницы), превью, инспектор; один оборот помечен «ПУСТО».',
       },
+      async (t) => {
+        const { container } = renderApp(editorSnapshot(), EDITOR_OVERRIDES);
+        await screen.findByText(t('editor.docPosition', { doc: 1, docs: 2, page: 1, pages: 6 }));
+        expect(container.querySelectorAll('.thumb__blank')).toHaveLength(1);
+        return container;
+      },
       { blank: true },
-    );
-  });
+    ));
 
-  it('editor — модалка save', async () => {
-    const { container } = renderApp(editorSnapshot(), EDITOR_OVERRIDES);
-    fireEvent.click(await screen.findByRole('button', { name: 'Сохранить 2 файла' }));
-    await screen.findByRole('dialog');
-    await screen.findByText(/Сканы/);
-    await capture(
-      container,
+  it('editor — модалка save', () =>
+    scene(
       {
         id: 'save',
         title: 'модалка save',
         note: 'Сохранение: имена файлов документов и папка. После записи модалка сменяется ИТОГом (высота — B-4).',
       },
+      async (t) => {
+        const { container } = renderApp(editorSnapshot(), EDITOR_OVERRIDES);
+        fireEvent.click(
+          await screen.findByRole('button', { name: t('editor.saveFiles', { count: 2 }) }),
+        );
+        await screen.findByRole('dialog');
+        await screen.findByText(/Сканы/);
+        return container;
+      },
       { blank: true },
-    );
-  });
+    ));
 
-  it('editor — модалка add', async () => {
-    const { container } = renderApp(editorSnapshot(), EDITOR_OVERRIDES);
-    fireEvent.click(await screen.findByRole('button', { name: /Добавить/ }));
-    await screen.findByRole('dialog');
-    await capture(
-      container,
+  it('editor — модалка add', () =>
+    scene(
       {
         id: 'add',
         title: 'модалка add',
         note: 'Досканирование к документу: двустороннее или одностороннее, место вставки.',
       },
+      async (t) => {
+        const { container } = renderApp(editorSnapshot(), EDITOR_OVERRIDES);
+        fireEvent.click(await screen.findByRole('button', { name: named(t('editor.add')) }));
+        await screen.findByRole('dialog');
+        return container;
+      },
       { blank: true },
-    );
-  });
+    ));
 
-  it('editor — модалка newscan', async () => {
-    const { container } = renderApp(editorSnapshot(), EDITOR_OVERRIDES);
-    fireEvent.click(await screen.findByRole('button', { name: /Новый скан/ }));
-    await screen.findByRole('dialog');
-    await capture(
-      container,
+  it('editor — модалка newscan', () =>
+    scene(
       {
         id: 'newscan',
         title: 'модалка newscan',
         note: 'Новое сканирование закрывает сессию: страницы стираются с диска — только через эту модалку.',
       },
+      async (t) => {
+        const { container } = renderApp(editorSnapshot(), EDITOR_OVERRIDES);
+        fireEvent.click(await screen.findByRole('button', { name: named(t('editor.newScan')) }));
+        await screen.findByRole('dialog');
+        return container;
+      },
       { blank: true },
-    );
-  });
+    ));
 
-  it('editor — наборы не сошлись, модалка mismatch', async () => {
-    const backs = SHEETS - 1;
-    const session = sessionOf([passOf(1, 'fronts', SHEETS), passOf(2, 'backs', backs)]);
-    const { container } = renderApp(makeSnapshot({ scanner: READY, session }), EDITOR_OVERRIDES);
-    const dialog = await screen.findByRole('dialog');
-    within(dialog).getByText('Лицевых сторон 6, оборотов — 5');
-    await capture(
-      container,
+  it('editor — наборы не сошлись, модалка mismatch', () =>
+    scene(
       {
         id: 'mismatch',
         title: 'mismatch · наборы',
         note: 'Проходы не сошлись: лица и обороты лежат раздельными наборами, модалка объясняет, что делать.',
       },
-      { backsCount: backs },
-    );
-  });
+      async (t) => {
+        const backs = SHEETS - 1;
+        const session = sessionOf([passOf(1, 'fronts', SHEETS), passOf(2, 'backs', backs)]);
+        const { container } = renderApp(
+          makeSnapshot({ scanner: READY, session }),
+          EDITOR_OVERRIDES,
+        );
+        const dialog = await screen.findByRole('dialog');
+        within(dialog).getByText(t('mismatch.fewer.title', { count: SHEETS, backs }));
+        return container;
+      },
+      { backsCount: SHEETS - 1 },
+    ));
 });
