@@ -102,10 +102,14 @@ IBM Plex Mono; оба файла — в сборку через `extraResources`
 деинсталляции (NSIS include) или оставить как есть и написать об этом в README установщика.
 **Попутно (2026-11-03):** графика мастера — боковая картинка 164 × 314 (`installerSidebar`,
 страницы «Добро пожаловать» / «Готово» установщика и деинсталлятора) и шапка 150 × 57
-(`installerHeader`); бриф `docs/design/briefs/installer-art.md` отдан Claude Design, SVG из
-handoff'а конвертируются в BMP 24 бит скриптом рядом с `npm run icons` (`sharp` BMP не
-пишет — заголовок BMP собирается руками, как ICO в `scripts/ico.ts`). Умолчание «для всех
-пользователей» (`selectPerMachineByDefault`) — решено не трогать (B-29, U9).
+(`installerHeader`). **Картинки готовы и утверждены** (вариант A «монограмма на чернильной
+плитке»): handoff `docs/design/handoffs/installer-art.md`, мастера `build/installer-sidebar.svg`
+и `build/installer-header.svg`. Осталось в B-26: скрипт SVG → BMP 24 бит рядом с `npm run
+icons` (`sharp` BMP не пишет — `flatten` на белый и заголовок BITMAPINFOHEADER руками, как ICO в
+`scripts/ico.ts`; без ресэмплинга, 1 ед. = 1 px), три строки `nsis` в `electron-builder.yml`
+(`installerSidebar`, `uninstallerSidebar`, `installerHeader`), проверка на машине при 125 %
+(открытый вопрос handoff'а). Умолчание «для всех пользователей» (`selectPerMachineByDefault`)
+— решено не трогать (B-29, U9).
 **Когда:** к первому публичному релизу.
 
 ### B-28. Тест-пробелы из ревью

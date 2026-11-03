@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Duplexn't — графика установщика в мастере</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 26px;
+        background: #e4e0d7;
+        font:
+          13px/1.45 'Segoe UI',
+          system-ui,
+          sans-serif;
+        color: #1c1a16;
+      }
+      h1 {
+        margin: 0 0 4px;
+        font-size: 21px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+      .lead {
+        margin: 0 0 16px;
+        max-width: 760px;
+        color: #6f6a60;
+      }
+      .bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        align-items: center;
+        margin-bottom: 22px;
+      }
+      .seg {
+        display: flex;
+        gap: 4px;
+      }
+      .seg button {
+        font: 500 12.5px/1 inherit;
+        font-family: inherit;
+        padding: 8px 12px;
+        border-radius: 8px;
+        border: 1px solid rgba(28, 26, 22, 0.14);
+        background: #fbfaf7;
+        color: #4a463f;
+        cursor: pointer;
+      }
+      .seg button[aria-pressed='true'] {
+        border-color: #4a463f;
+        background: #ebe8e1;
+        color: #1c1a16;
+      }
+      .lbl {
+        font:
+          500 10.5px/1 ui-monospace,
+          monospace;
+        letter-spacing: 0.12em;
+        color: #8b857a;
+      }
+      .pages {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 26px;
+        align-items: flex-start;
+      }
+      .cap {
+        font:
+          500 10.5px/1 ui-monospace,
+          monospace;
+        letter-spacing: 0.12em;
+        color: #8b857a;
+        margin-bottom: 8px;
+      }
+      /* Окно мастера NSIS: клиент 497 × 360 (страница 314 + низ с кнопками 46). zoom растягивает всё, включая картинку, билинейно. */
+      .win {
+        width: 499px;
+        background: #f0f0f0;
+        border: 1px solid #8a8a8a;
+        box-shadow: 0 12px 34px rgba(28, 26, 22, 0.25);
+        font:
+          12px/1.4 'Segoe UI',
+          Tahoma,
+          sans-serif;
+        color: #000;
+      }
+      .scaled .win {
+        zoom: 1.5;
+      }
+      .title {
+        height: 30px;
+        display: flex;
+        align-items: center;
+        padding: 0 10px;
+        background: #fff;
+        border-bottom: 1px solid #ddd;
+        font-size: 12px;
+      }
+      .title span:last-child {
+        margin-left: auto;
+        letter-spacing: 14px;
+        color: #555;
+      }
+      .body {
+        height: 314px;
+        position: relative;
+      }
+      .welcome {
+        display: flex;
+        background: #fff;
+        height: 100%;
+      }
+      .welcome img {
+        width: 164px;
+        height: 314px;
+        display: block;
+        flex: none;
+      }
+      .welcome .txt {
+        padding: 14px 16px 0;
+      }
+      .welcome h2 {
+        margin: 0 0 14px;
+        font-size: 16px;
+        font-weight: 700;
+        line-height: 1.25;
+      }
+      .welcome p {
+        margin: 0 0 10px;
+      }
+      .check {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        margin-top: 18px;
+      }
+      .check i {
+        width: 13px;
+        height: 13px;
+        border: 1px solid #333;
+        background: #fff;
+        display: grid;
+        place-items: center;
+        font-style: normal;
+        font-size: 11px;
+        line-height: 1;
+      }
+      .head {
+        height: 57px;
+        display: flex;
+        background: #fff;
+        border-bottom: 1px solid #a0a0a0;
+      }
+      .head .t {
+        flex: 1;
+        padding: 8px 0 0 10px;
+      }
+      .head b {
+        display: block;
+      }
+      .head span {
+        display: block;
+        padding-left: 14px;
+      }
+      .head img {
+        width: 150px;
+        height: 57px;
+        display: block;
+      }
+      .inner {
+        padding: 14px 24px;
+      }
+      .path {
+        display: flex;
+        gap: 8px;
+        margin-top: 14px;
+      }
+      .path div {
+        flex: 1;
+        background: #fff;
+        border: 1px solid #7a7a7a;
+        padding: 3px 5px;
+      }
+      .foot {
+        height: 46px;
+        border-top: 1px solid #d0d0d0;
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 8px;
+        padding: 0 10px;
+      }
+      .foot button {
+        font: inherit;
+        width: 75px;
+        height: 23px;
+        border: 1px solid #adadad;
+        background: #e1e1e1;
+      }
+      .foot button.def {
+        border-color: #0078d7;
+      }
+      .foot .gap {
+        width: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Графика установщика — вариант A в мастере</h1>
+    <p class="lead">
+      Три страницы мастера NSIS в реальных пропорциях. При 150 % картинки растягиваются браузером
+      билинейно — так же поступит Windows с BMP; системный текст и кнопки условные.
+    </p>
+    <div class="bar">
+      <span class="lbl">МАСШТАБ</span>
+      <div class="seg" id="scale">
+        <button type="button" aria-pressed="true" data-v="1">100 %</button>
+        <button type="button" aria-pressed="false" data-v="1.5">150 %</button>
+      </div>
+      <span class="lbl">МАСТЕР</span>
+      <div class="seg" id="mode">
+        <button type="button" aria-pressed="true" data-v="i">Установщик</button>
+        <button type="button" aria-pressed="false" data-v="u">Деинсталлятор</button>
+      </div>
+    </div>
+
+    <div class="pages" id="pages">
+      <div>
+        <div class="cap">ДОБРО ПОЖАЛОВАТЬ</div>
+        <div class="win">
+          <div class="title">
+            <span data-i="Установка Duplexn't" data-u="Удаление Duplexn't">Установка Duplexn't</span
+            ><span>–✕</span>
+          </div>
+          <div class="body">
+            <div class="welcome">
+              <img src="installer-sidebar.svg" alt="" />
+              <div class="txt">
+                <h2
+                  data-i="Вас приветствует мастер установки Duplexn't"
+                  data-u="Вас приветствует мастер удаления Duplexn't"
+                >
+                  Вас приветствует мастер установки Duplexn't
+                </h2>
+                <p
+                  data-i="Эта программа установит Duplexn't на ваш компьютер."
+                  data-u="Эта программа удалит Duplexn't с вашего компьютера."
+                >
+                  Эта программа установит Duplexn't на ваш компьютер.
+                </p>
+                <p>Перед началом рекомендуется закрыть все прочие приложения.</p>
+                <p>Нажмите кнопку «Далее» для продолжения.</p>
+              </div>
+            </div>
+          </div>
+          <div class="foot">
+            <button type="button" class="def">Далее &gt;</button><span class="gap"></span
+            ><button type="button">Отмена</button>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="cap">ПАПКА УСТАНОВКИ</div>
+        <div class="win">
+          <div class="title"><span>Установка Duplexn't</span><span>–✕</span></div>
+          <div class="body" style="background: #f0f0f0">
+            <div class="head">
+              <div class="t">
+                <b>Выбор папки установки</b><span>Выберите папку для установки Duplexn't.</span>
+              </div>
+              <img src="installer-header.svg" alt="" />
+            </div>
+            <div class="inner">
+              <p style="margin: 0">
+                Программа установит Duplexn't в указанную папку. Чтобы выбрать другую, нажмите
+                «Обзор…».
+              </p>
+              <div style="margin-top: 26px">Папка установки</div>
+              <div class="path">
+                <div>C:\Users\anna\AppData\Local\Programs\Duplexnt</div>
+                <button
+                  type="button"
+                  style="
+                    font: inherit;
+                    width: 75px;
+                    height: 23px;
+                    border: 1px solid #adadad;
+                    background: #e1e1e1;
+                  "
+                >
+                  Обзор…
+                </button>
+              </div>
+              <p style="margin: 22px 0 0">Требуется на диске: 312.4 Мбайт</p>
+            </div>
+          </div>
+          <div class="foot">
+            <button type="button">&lt; Назад</button
+            ><button type="button" class="def">Установить</button><span class="gap"></span
+            ><button type="button">Отмена</button>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="cap">ГОТОВО</div>
+        <div class="win">
+          <div class="title">
+            <span data-i="Установка Duplexn't" data-u="Удаление Duplexn't">Установка Duplexn't</span
+            ><span>–✕</span>
+          </div>
+          <div class="body">
+            <div class="welcome">
+              <img src="installer-sidebar.svg" alt="" />
+              <div class="txt">
+                <h2
+                  data-i="Завершение работы мастера установки Duplexn't"
+                  data-u="Завершение работы мастера удаления Duplexn't"
+                >
+                  Завершение работы мастера установки Duplexn't
+                </h2>
+                <p
+                  data-i="Установка Duplexn't выполнена."
+                  data-u="Программа Duplexn't удалена с вашего компьютера."
+                >
+                  Установка Duplexn't выполнена.
+                </p>
+                <p>Нажмите кнопку «Готово» для выхода из программы установки.</p>
+                <div class="check" data-only="i"><i>✓</i><span>Запустить Duplexn't</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="foot">
+            <button type="button" class="def">Готово</button><span class="gap"></span
+            ><button type="button" disabled>Отмена</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const KEY = 'duplexnt-installer-art';
+      const st = Object.assign(
+        { scale: '1', mode: 'i' },
+        JSON.parse(localStorage.getItem(KEY) || '{}'),
+      );
+      function apply() {
+        document.getElementById('pages').classList.toggle('scaled', st.scale === '1.5');
+        document.querySelectorAll('[data-i]').forEach((el) => {
+          el.textContent = el.dataset[st.mode];
+        });
+        document.querySelectorAll('[data-only]').forEach((el) => {
+          el.style.visibility = el.dataset.only === st.mode ? '' : 'hidden';
+        });
+        document
+          .querySelectorAll('#scale button')
+          .forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === st.scale));
+        document
+          .querySelectorAll('#mode button')
+          .forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === st.mode));
+        localStorage.setItem(KEY, JSON.stringify(st));
+      }
+      document.getElementById('scale').onclick = (e) => {
+        const v = e.target.dataset.v;
+        if (v) {
+          st.scale = v;
+          apply();
+        }
+      };
+      document.getElementById('mode').onclick = (e) => {
+        const v = e.target.dataset.v;
+        if (v) {
+          st.mode = v;
+          apply();
+        }
+      };
+      apply();
+    </script>
+  </body>
+</html>
