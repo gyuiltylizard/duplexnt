@@ -1,6 +1,81 @@
-import { ERROR_CODES } from '@shared';
+import { ERROR_CODES, LOCALES } from '@shared';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_LOCALE, i18n, resources } from './i18n';
+
+/** Листовые ключи бандла с путями через точку: `{ a: { b_one: 'x' } }` → `['a.b_one']`. */
+function leafKeys(bundle: object, prefix = ''): string[] {
+  return Object.entries(bundle).flatMap(([key, value]) =>
+    typeof value === 'string' ? [`${prefix}${key}`] : leafKeys(value as object, `${prefix}${key}.`),
+  );
+}
+
+const PLURAL_SUFFIX = /_(?:zero|one|two|few|many|other)$/u;
+
+/** Базовое имя ключа — без суффикса формы плюрали. */
+const baseOf = (key: string): string => key.replace(PLURAL_SUFFIX, '');
+
+function leafValue(bundle: object, key: string): string {
+  return key
+    .split('.')
+    .reduce<unknown>((node, part) => (node as Record<string, unknown>)[part], bundle) as string;
+}
+
+const placeholdersOf = (text: string): string[] =>
+  [...text.matchAll(/\{\{(\w+)\}\}/gu)].map((match) => match[1] ?? '').sort();
+
+describe('паритет локалей (B-41, U2)', () => {
+  const ruKeys = leafKeys(resources.ru.common);
+  const enKeys = leafKeys(resources.en.common);
+
+  it('набор локалей — словарь shared', () => {
+    expect(Object.keys(resources)).toEqual([...LOCALES]);
+  });
+
+  it('базовые ключи совпадают в обе стороны', () => {
+    const ruBase = new Set(ruKeys.map(baseOf));
+    const enBase = new Set(enKeys.map(baseOf));
+    expect([...enBase].filter((key) => !ruBase.has(key))).toEqual([]);
+    expect([...ruBase].filter((key) => !enBase.has(key))).toEqual([]);
+  });
+
+  it('английские плюрали — только формы one и other, русские — one, few, many, other', () => {
+    const forms = (keys: string[]): string[] =>
+      [...new Set(keys.map((key) => PLURAL_SUFFIX.exec(key)?.[0] ?? ''))].filter(Boolean).sort();
+    expect(forms(enKeys)).toEqual(['_one', '_other']);
+    expect(forms(ruKeys)).toEqual(['_few', '_many', '_one', '_other']);
+  });
+
+  it('у каждой пары строк одинаковые подстановки, пустых строк нет', () => {
+    const ruByBase = new Map<string, string[]>();
+    for (const key of ruKeys) {
+      ruByBase.set(baseOf(key), [...(ruByBase.get(baseOf(key)) ?? []), key]);
+    }
+    for (const enKey of enKeys) {
+      const enText = leafValue(resources.en.common, enKey);
+      expect(enText.trim(), enKey).not.toBe('');
+      const ruKey = ruByBase.get(baseOf(enKey))?.[0];
+      expect(ruKey, enKey).toBeDefined();
+      const ruPlaceholders = placeholdersOf(leafValue(resources.ru.common, ruKey ?? ''));
+      expect(placeholdersOf(enText), enKey).toEqual(ruPlaceholders);
+    }
+  });
+
+  it.each([
+    [1, '1 document'],
+    [2, '2 documents'],
+    [0, '0 documents'],
+    [21, '21 documents'],
+    [1.5, '1.5 documents'],
+  ])('английские плюрали: %s → %s', (count, expected) => {
+    expect(i18n.getFixedT('en')('inspector.docsCount', { count })).toBe(expected);
+  });
+
+  it('английский суффикс там, где русская строка без форм, не ломает русскую', () => {
+    expect(i18n.getFixedT('en')('editor.doc.count', { count: 1 })).toBe('1 page');
+    expect(i18n.getFixedT('en')('editor.doc.count', { count: 3 })).toBe('3 pages');
+    expect(i18n.getFixedT('ru')('editor.doc.count', { count: 3 })).toBe('3 стр.');
+  });
+});
 
 describe('i18n', () => {
   it('у каждого кода доменной ошибки есть строка в локали, и лишних строк нет', () => {
@@ -29,10 +104,10 @@ describe('i18n', () => {
     }
   });
 
-  it('инициализирован синхронно русской локалью', () => {
+  it('инициализирован синхронно русской локалью — jsdom-тесты идут на русском (B-41)', () => {
     expect(i18n.isInitialized).toBe(true);
+    expect(DEFAULT_LOCALE).toBe('ru');
     expect(i18n.language).toBe(DEFAULT_LOCALE);
-    expect(Object.keys(resources)).toEqual(['ru']);
   });
 
   it.each([

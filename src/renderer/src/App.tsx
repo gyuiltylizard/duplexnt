@@ -31,6 +31,7 @@ import { assemblyLanded, mismatchDue, pairLanded, setMismatchDue } from './state
 import { errorTextInline } from './state/error-text';
 import { createSnapshotStore } from './state/snapshot-store';
 import { screenOf, type Screen } from './state/screen';
+import { useLanguage } from './state/use-language';
 import { landingOf, useSetLanding } from './state/useSetLanding';
 import './app.css';
 
@@ -111,6 +112,8 @@ export function App(): ReactNode {
   // размонтирование и повторное монтирование StrictMode оно переживает само.
   const [store] = useState(() => createSnapshotStore(window.api));
   const snapshot = useSyncExternalStore(store.subscribe, store.get);
+  // Язык интерфейса — из снимка, до первого кадра (B-41, U3).
+  useLanguage(snapshot?.language ?? null);
 
   const [dismissed, setDismissed] = useState<ReadonlySet<StartupNotice>>(new Set());
   const dismissNotice = useCallback((notice: StartupNotice) => {
@@ -474,6 +477,7 @@ export function App(): ReactNode {
             launchFailure={launchFailure?.target === 'setup' ? launchFailure.error : null}
             onStart={startNext}
             onOpenDevice={openDevice}
+            onNotify={showToast}
           />
         </ScreenFrame>
       )}

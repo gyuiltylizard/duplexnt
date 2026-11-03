@@ -60,6 +60,7 @@ export function buildApi(ipcRenderer: PreloadIpcRenderer): Api {
     setScanParams: command(ipcRenderer, 'setScanParams'),
     setBlankMode: command(ipcRenderer, 'setBlankMode'),
     setStraightenMode: command(ipcRenderer, 'setStraightenMode'),
+    setLanguage: command(ipcRenderer, 'setLanguage'),
     markHintSeen: command(ipcRenderer, 'markHintSeen'),
     startPass: command(ipcRenderer, 'startPass'),
     stopPass: command(ipcRenderer, 'stopPass'),

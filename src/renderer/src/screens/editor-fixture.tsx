@@ -84,6 +84,7 @@ export function makeSnapshot(
     notices: [],
     blankMode: 'hide',
     straightenMode: 'auto',
+    language: 'ru',
     straightenProgress: null,
     seenHints: [],
     ...overrides,

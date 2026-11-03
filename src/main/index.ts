@@ -19,13 +19,12 @@ import {
   openPassService,
   openWindowStateStore,
 } from '@core';
-import ru from '@locales/ru/common.json';
 // Значок окна (B-7): заголовок, панель задач, Alt+Tab. Свой .ico, не значок exe: Electron берёт
 // из него кадры системных размеров (на 100 % — 16 и 32), а панель ужимает 32 до 24 px. Поэтому все
 // кадры — из оптически упрощённого мастера почти без полей (`WINDOW_ICON_SIZES`). `?asset` копирует
 // файл в сборку и даёт путь — нужно для `dev`; упакованное окно иначе взяло бы значок exe.
 import appIcon from '../../build/window-icon.ico?asset';
-import { APP_NAME, fail, ok, PAGE_IMAGE_SCHEME, type Result } from '@shared';
+import { APP_NAME, fail, ok, PAGE_IMAGE_SCHEME, type Locale, type Result } from '@shared';
 import {
   APP_INDEX_URL,
   APP_SCHEME,
@@ -39,6 +38,7 @@ import { handlePageImageRequest, PAGE_SCHEME_REGISTRATION } from './page-protoco
 import { installDebugGuard } from './shell/debug-guard';
 import { denyAllPermissions, installShellGuards } from './shell/guards';
 import { installShortcutGuard } from './shell/shortcuts';
+import { startupStringsOf, systemLocaleOf } from './shell/system-locale';
 import { buildWebPreferences } from './shell/web-preferences';
 import { acquireSingleInstance } from './single-instance';
 import {
@@ -119,10 +119,12 @@ function startupFailed(error: unknown): void {
 
 // Сверка при запуске бросает только на неожиданной ошибке чтения каталога данных: файл занят
 // другим процессом, на месте каталога — файл. Открывать хранилище без сверки нельзя — пользователь
-// видит причину и запускает приложение снова.
-function storageUnreadable(error: unknown): void {
+// видит причину и запускает приложение снова. Настройки ещё не прочитаны, поэтому язык диалога —
+// системный (B-41, U3).
+function storageUnreadable(error: unknown, locale: Locale): void {
   console.error('[main] каталог данных не прочитан', error);
-  dialog.showErrorBox(ru.startup.storageUnreadableTitle, ru.startup.storageUnreadable);
+  const strings = startupStringsOf(locale);
+  dialog.showErrorBox(strings.title, strings.text);
   app.exit(1);
 }
 
@@ -154,16 +156,20 @@ async function start(): Promise<void> {
   // Один лимитер на всё производное в main (M6, KTD-4): миниатюры, оценки пустоты, измерение
   // перекоса — не больше двух декодов разом рядом с `fsync` приёма страницы.
   const derivedLimiter = limiterOf(DERIVED_CONCURRENCY);
+  // Системный язык (B-41, U3): после `ready` метка Electron известна; действует, пока
+  // пользователь не выбрал язык сам — явный выбор лежит в настройках у службы.
+  const systemLocale = systemLocaleOf(app);
   let service;
   try {
     service = await openPassService(dataRoot, {
       derivedLimiter,
+      systemLocale,
       onChange: (seq) => {
         send('snapshotChanged', { seq });
       },
     });
   } catch (error) {
-    storageUnreadable(error);
+    storageUnreadable(error, systemLocale);
     return;
   }
 

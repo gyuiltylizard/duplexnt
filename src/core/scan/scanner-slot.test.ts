@@ -48,6 +48,7 @@ function settingsWith(scanner: StoredScanner | null, params: ScanParams | null =
     blankMode: 'hide',
     seenHints: [],
     straightenMode: 'auto',
+    language: null,
   };
   const remembered: StoredScanner[] = [];
   const store: SettingsStore = {
@@ -64,6 +65,7 @@ function settingsWith(scanner: StoredScanner | null, params: ScanParams | null =
     },
     setBlankMode: () => Promise.resolve(ok(undefined)),
     setStraightenMode: () => Promise.resolve(ok(undefined)),
+    setLanguage: () => Promise.resolve(ok(undefined)),
     rememberSaveFolder: () => Promise.resolve(ok(undefined)),
     markHintSeen: () => Promise.resolve(ok(undefined)),
   };
