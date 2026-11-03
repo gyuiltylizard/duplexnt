@@ -67,6 +67,28 @@ function tempPathFor(path: string): string {
   return join(dirname(path), `${basename(path)}.${randomBytes(6).toString('hex')}.tmp`);
 }
 
+/**
+ * Убирает временные файлы прошлых записей `path` — хвосты записи, оборванной выходом процесса
+ * (bugs: `window.json.*.tmp` в корне данных). Только имена вида `<файл>.<hex>.tmp`; соседние
+ * файлы не трогаются, неудалённый хвост — не ошибка, его уберёт следующий запуск.
+ */
+export async function removeStaleTemps(path: string, options: AtomicOptions = {}): Promise<void> {
+  const fs = options.fs ?? realFs;
+  const directory = dirname(path);
+  const prefix = `${basename(path)}.`;
+  let names: string[];
+  try {
+    names = await fs.readdir(directory);
+  } catch {
+    return;
+  }
+  for (const name of names) {
+    if (name.startsWith(prefix) && isTempName(name) && name.length === prefix.length + 16) {
+      await fs.unlink(join(directory, name)).catch(() => undefined);
+    }
+  }
+}
+
 function errorCode(error: unknown): string {
   const code = (error as { code?: unknown } | null)?.code;
   return typeof code === 'string' ? code : 'UNKNOWN';

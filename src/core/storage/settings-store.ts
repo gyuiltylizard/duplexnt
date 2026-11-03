@@ -19,6 +19,7 @@ import {
 } from '@shared';
 import type { ConnectedScanner, ConnectorOptions } from '../escl/connect';
 import { resolveScanParams, scanParamsSchema } from '../escl/scan-settings';
+import { removeStaleTemps } from './atomic-file';
 import { layoutOf } from './layout';
 import { locateRemembered, type StartUuidSearch } from './remembered-search';
 import { ioOf, isMissing, serialQueue, storageFailure, type StorageOptions } from './storage-fs';
@@ -236,6 +237,7 @@ export async function openSettingsStore(
   };
   // Файл, который не переписывается до конца работы: более новой версии или не прочитанный вовсе.
   let frozen = false;
+  await removeStaleTemps(settingsFile, io);
   try {
     const read = await readSettings();
     if (read.kind === 'ok') {
