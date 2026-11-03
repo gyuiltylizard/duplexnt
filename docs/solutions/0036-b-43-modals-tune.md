@@ -44,6 +44,9 @@ var(--space-9) }` в `device-modal.css` — зазор вернулся, шаг 
 Гейт на ветке (`0a297d9`): typecheck, lint, format:check, `npm test` 151 / 2671,
 `test:integration` 36 / 315 (4 live пропущены), worst-case 3 / 5. Автор прошёл чеклист
 `docs/output/2026-11-03-smoke-checklist-b-43-acceptance.md` живьём 2026-11-03 — «всё ок».
-Merge `fix/b-43-modals-tune` → `main` по явному ОК автора («мерж, пуш») — хэш в строке B-43
-бэклога; гейт на `main` после merge — там же. Ветка удалена после влития, push в origin — по
+Merge `fix/b-43-modals-tune` → `main` по явному ОК автора («мерж, пуш») — `91f798b`;
+гейт на `main` после merge — строкой ниже. Ветка удалена после влития, push в origin — по
 тому же ОК.
+
+Гейт на `main` после merge (`91f798b`): typecheck, lint, format:check зелёные; `npm test` 151 / 2671,
+`test:integration` 36 / 315 (4 live пропущены), worst-case 3 / 5. Пункт B-43 закрыт.
