@@ -1,0 +1,860 @@
+{
+  "startup": {
+    "storageUnreadableTitle": "Could not read the app data",
+    "storageUnreadable": "The data folder is in use by another program or damaged. Close any programs that might be using it and start the app again."
+  },
+  "errors": {
+    "invalidInput": "Something went wrong inside the app. Try again; if it happens again, it is a bug.",
+    "scannerBadResponse": "The scanner gave an unclear reply. Try again or reconnect it.",
+    "notEsclScanner": "The scanner is not responding, check the address. Or this device cannot scan over the network.",
+    "scannerNoAdf": "This scanner has no document feeder, and the app works only with one.",
+    "scannerNoJpeg": "This scanner does not deliver pages as JPEG, so it cannot be connected.",
+    "scanParamsUnsupported": "The scanner does not support the selected scan settings.",
+    "scannerUnreachable": "The scanner is not responding. Check that it is on and on the same network as the computer.",
+    "scannerCertificateChanged": "A different device now answers at the scanner's address. If it is your scanner, reconnect it.",
+    "scannerChangeStale": "Could not connect: while you were deciding, the app rechecked the address. Connect again.",
+    "scannerNotConnected": "No scanner connected. Add one or reconnect.",
+    "scanNoPaper": "The tray is empty. Load sheets into the document feeder and start again.",
+    "scannerBusy": "The scanner is busy and has not freed up yet. Wait for it to finish and try again.",
+    "scanParamsRejected": "The scanner rejected the scan settings. Try another resolution or color mode.",
+    "scanFeedFailed": "The scanner stopped feeding paper. Check the tray: a sheet may have jammed or been pulled out.",
+    "canceled": "Action canceled.",
+    "storageFull": "Not enough disk space. Free some space and try again.",
+    "storageFailed": "Could not write data. Check whether an antivirus or another program is blocking the app folder.",
+    "storageIncompatible": "The data in the app folder was saved by a newer version — this version leaves it untouched.",
+    "sessionConflict": "This action is not available right now.",
+    "sessionCloseFailed": "Could not delete the pages: the files are in use by another program. Close any programs that might have opened the app folder and try again.",
+    "pageUnavailable": "There is no such page among the scanned ones.",
+    "pdfPageTooLarge": "Error: one of the pages is too large. Delete or rescan it.",
+    "pdfPageUnreadable": "Could not build the PDF: one of the pages cannot be read as an image.",
+    "saveWriteFailed": "Could not write the file. Check that the folder is writable and there is enough disk space.",
+    "thumbnailFailed": "Could not build the thumbnail — the page itself is intact."
+  },
+  "errorReasons": {
+    "scanParamsUnsupported": {
+      "colorMode": "The scanner does not support the selected color mode.",
+      "resolution": "The scanner does not support the selected resolution.",
+      "paperSize": "None of the known paper sizes fits this scanner's document feeder."
+    },
+    "scannerUnreachable": {
+      "refused": "The scanner refuses the connection. Check the address and port.",
+      "timeout": "The scanner is not responding. Check that it is on and on the same network as the computer.",
+      "dns": "No such name on the network. Check the address.",
+      "reset": "The connection to the scanner dropped. Try again.",
+      "tls": "Could not establish a secure connection to the scanner. Try the HTTP scheme under “Advanced”.",
+      "network": "The scanner is unreachable: no network route to it. Check the computer's connection.",
+      "other": "The scanner is unreachable. Check the network and try again."
+    },
+    "sessionConflict": {
+      "passRunning": "A pass is in progress — wait for it to finish or stop it.",
+      "noRunningPass": "The pass has already finished.",
+      "notInterrupted": "This pass was not interrupted — nothing to finish scanning.",
+      "paramsUnknown": "This pass's settings are unknown: the journal was rebuilt from files. It cannot be finished.",
+      "noSession": "No scanned pages — start with the setup.",
+      "otherScanner": "You can finish scanning only on the scanner the pass was started on.",
+      "saving": "The document is being saved — wait for the write to finish.",
+      "noBacksPass": "This set has no backs pass — nothing to rotate.",
+      "backsPresent": "The backs are already scanned. More pages — with the “Add” button.",
+      "backsDeclined": "These pages were closed without backs. More pages — with the “Add” button.",
+      "passInterrupted": "The last pass was interrupted — finish scanning it first or keep it as is.",
+      "nothingToSave": "The document has no pages — nothing to save.",
+      "noFailedFiles": "Nothing to retry: all files are already written.",
+      "batchStale": "The documents changed after the first attempt — save them again in full.",
+      "noBatch": "No folder yet: the document has not been saved.",
+      "notSeparate": "Nothing to assemble: the passes matched or the document is already assembled.",
+      "setsUnequal": "The sets are not balanced: the number of fronts and backs must match.",
+      "notAssembled": "The document is not assembled yet — assemble it from the sets first.",
+      "blankPending": "Blank backs are still being evaluated — wait a second and try again.",
+      "straightenPending": "Straightening is still running — the button will become available on its own.",
+      "documentBlank": "One of the documents has only blank backs left — show them with the toggle or remove the split.",
+      "noPendingSet": "No such set, or it has no backs to decide about.",
+      "setNotMismatched": "The fronts and backs of this set matched — nothing to decide.",
+      "pairInSets": "Until the document is assembled, only one-sided scanning can be added — assemble the document first.",
+      "pairPending": "The set is waiting for backs — scan them or press “No backs needed”."
+    },
+    "pageUnavailable": {
+      "lost": "The file of this page is lost."
+    },
+    "pdfPageTooLarge": {
+      "page": "Error: page {{page}} is too large. Delete or rescan it."
+    }
+  },
+  "setup": {
+    "kicker": "NEW SCAN",
+    "title": "Scanning both sides in two passes",
+    "lead": "First the front sides of all sheets. Then you turn them 180° — all at once, without flipping — and the app matches the backs to the fronts itself.",
+    "start": "Scan the front sides",
+    "hint": "Load the sheets into the tray face up, first page on top",
+    "how": {
+      "kicker": "HOW IT WORKS",
+      "step1": {
+        "title": "Front sides",
+        "text": "Sheets face up, first page on top"
+      },
+      "step2": {
+        "title": "Turn 180°",
+        "text": "All sheets at once, without flipping"
+      },
+      "step3": {
+        "title": "Back sides",
+        "text": "The app knows the backs come in reverse order"
+      },
+      "step4": {
+        "title": "Check and save",
+        "text": "The order comes together on its own — check it and save the document"
+      }
+    },
+    "device": {
+      "none": "No scanner connected",
+      "add": "Add scanner",
+      "change": "Change",
+      "retry": "Retry",
+      "reconnect": "Reconnect",
+      "status": {
+        "ready": "ready",
+        "checking": "checking…",
+        "unreachable": "not responding",
+        "changed": "another device at this address",
+        "changedTitle": "A different scanner answers at this address, not the one that was remembered"
+      },
+      "scheme": {
+        "http": "HTTP",
+        "httpTitle": "The connection to the scanner is not encrypted"
+      }
+    },
+    "params": {
+      "color": "Color",
+      "resolution": "Resolution",
+      "paperSize": "Paper size",
+      "reset": "Reset settings",
+      "colorMode": {
+        "BlackAndWhite1": "B/W",
+        "Grayscale8": "Grayscale",
+        "RGB24": "Color"
+      },
+      "resolutionValue": "{{count}} dpi",
+      "resolutionHint": {
+        "200": "faster, smaller file",
+        "300": "regular text",
+        "600": "fine print and stamps"
+      },
+      "paperSizeHint": {
+        "A4": "210×297 mm",
+        "Letter": "216×279 mm"
+      },
+      "blank": "Blank backs",
+      "blankMode": {
+        "hide": "Hide",
+        "mark": "Mark",
+        "keep": "Keep"
+      },
+      "blankModeHint": {
+        "hide": "left out of the file",
+        "mark": "kept, but marked",
+        "keep": "save everything as is"
+      },
+      "straighten": "Straightening",
+      "straightenMode": {
+        "auto": "Straighten",
+        "off": "Leave as is"
+      },
+      "straightenModeHint": {
+        "auto": "pages scanned with distortion will be straightened. The mode is remembered: a new choice applies from the next scan",
+        "off": "pages stay as they came from the scanner. The mode is remembered: a new choice applies from the next scan"
+      }
+    }
+  },
+  "device": {
+    "title": "Add scanner",
+    "sectionScanners": "NETWORK SCANNERS",
+    "sectionAddress": "ENTER ADDRESS",
+    "listLabel": "Network scanners",
+    "search": {
+      "searching": "Searching for scanners on the network…",
+      "found_one": "{{count}} device found · search continues",
+      "found_other": "{{count}} devices found · search continues",
+      "empty": "Nothing found yet — search continues. Check that the scanner is on and on the same network as the computer, and that Windows Firewall is not blocking the app: it asks for permission on the first search. Or enter the address manually.",
+      "failure": {
+        "noNetwork": "No network connection: no network adapter found. Connect the computer to the network and open this window again, or enter the address manually.",
+        "socket": "Could not start the network search. Most likely a firewall or another program is not letting the app listen on the network. Allow the app in Windows Firewall or enter the address manually."
+      }
+    },
+    "item": {
+      "unnamed": "Unnamed scanner",
+      "status": {
+        "ready": "ready",
+        "noAdf": "no feeder"
+      }
+    },
+    "address": {
+      "placeholder": "scanner address on the network",
+      "empty": "Pick a scanner from the list or enter an address",
+      "invalid": "This address will not work: a host, IP address or full scanner URL is needed.",
+      "invalidPort": "The port must be from 1 to 65535."
+    },
+    "advanced": {
+      "toggle": "Advanced",
+      "scheme": "Scheme",
+      "port": "Port",
+      "path": "Path"
+    },
+    "connect": "Connect",
+    "connecting": "Connecting…",
+    "connectingTo": "Connecting to {{target}}…",
+    "connectFailed": "Could not connect: {{error}}",
+    "cancel": "Cancel",
+    "confirm": {
+      "title": "A different device answers at this address",
+      "text": "This is not the scanner used before. If you connect it, the app will forget the previous one and use this device.",
+      "replaceKey": "REPLACES",
+      "replace": "scanner {{name}}",
+      "unnamed": "Unnamed scanner",
+      "costInterrupted": "The scan started on the previous scanner cannot be continued. The pages received so far stay in place.",
+      "costFlip": "The front sides were scanned on the previous scanner and the backs will come from this one — the document will be assembled from two devices. Nothing is lost, but the sides may differ in quality.",
+      "action": "Connect this device",
+      "failStale": "Could not connect: while you were deciding, the app rechecked the address. Connect again.",
+      "failBusy": "The scanner cannot be changed now: a scan is in progress. Connect this scanner when it finishes.",
+      "failSettings": "The scanner is connected, but the settings were not saved. After a restart the app will ask about it again."
+    }
+  },
+  "toast": {
+    "connected": "Scanner connected: {{name}}",
+    "stopCloseFailed": "Could not remove the pages — the files are in use by another program. The pass was interrupted.",
+    "stopFailed": "Could not stop: {{error}}",
+    "saved": "Saved: {{file}} → {{folder}}",
+    "savedMany_one": "Saved {{count}} file → {{folder}}",
+    "savedMany_other": "Saved {{count}} files → {{folder}}",
+    "savedThenNew": "{{saved}} — you can load new sheets",
+    "openFolder": "Open folder",
+    "openFolderFailed": "Could not open the folder: {{error}}",
+    "needCuts": "Mark the splits between documents first",
+    "closeFailed": "Could not start a new scan: {{error}}",
+    "savedCloseFailed": "{{saved}}, but a new scan could not be started: {{error}}",
+    "closeNoResponse": "the app got no reply — the pages are in place, try again",
+    "saveNoResponse": "Some files may not have been written. Check the folder and save again if needed.",
+    "deletedOne": "Page deleted — Ctrl+Z brings it back",
+    "deletedMany": "{{count}} pages deleted — Ctrl+Z brings them back",
+    "docCreated": "Separate document of {{count}} pages created",
+    "reverted": "Everything is back as it was after scanning",
+    "editFailed": "Could not save the edit: {{error}}",
+    "editNoResponse": "Could not save the edit: the app got no reply. Check the strip and try again.",
+    "added_one": "{{count}} page added",
+    "added_other": "{{count}} pages added",
+    "addedHidden_one": "{{shown}} pages added — {{count}} blank back hidden",
+    "addedHidden_other": "{{shown}} pages added — {{count}} blank backs hidden",
+    "addFailed": "Could not start: {{error}}",
+    "assembleFailed": "Could not assemble the document: {{error}}",
+    "assembleNoResponse": "Could not assemble the document: the app got no reply. Check the strip and try again.",
+    "assembled_one": "Document assembled: {{count}} sheet",
+    "assembled_other": "Document assembled: {{count}} sheets",
+    "blankHidden_one": "{{count}} blank back hidden — the “Blanks” toggle shows it",
+    "blankHidden_other": "{{count}} blank backs hidden — the “Blanks” toggle shows them",
+    "sheets_one": "{{count}} sheet",
+    "sheets_other": "{{count}} sheets",
+    "assembledBlank_one": "Document assembled: {{sheets}} — {{count}} blank back hidden",
+    "assembledBlank_other": "Document assembled: {{sheets}} — {{count}} blank backs hidden",
+    "notBlank": "Page returned to the document — Ctrl+Z undoes",
+    "straightKept_one": "Original kept: {{count}} page — Ctrl+Z undoes",
+    "straightKept_other": "Originals kept: {{count}} pages — Ctrl+Z undoes",
+    "straightRestored_one": "{{count}} page straightened — Ctrl+Z undoes",
+    "straightRestored_other": "{{count}} pages straightened — Ctrl+Z undoes",
+    "straightLate_one": "{{count}} more page straightened",
+    "straightLate_other": "{{count}} more pages straightened",
+    "straightRecalc": "Straightening recalculated",
+    "straightRecalcCount_one": "Straightening recalculated — {{count}} more page straightened",
+    "straightRecalcCount_other": "Straightening recalculated — {{count}} more pages straightened",
+    "openProjectFailed": "Could not open the browser: {{error}}"
+  },
+  "scan": {
+    "tag": "SCANNING FRONT SIDES",
+    "tagBacks": "SCANNING BACKS",
+    "tagAdded": "ADDING PAGES",
+    "tagSetFronts": "ADDING · FRONTS",
+    "tagSetBacks": "ADDING · BACKS",
+    "starting": "Starting the pass…",
+    "counter": "Scanned {{count}}",
+    "counterOf": "Scanned {{count}} of {{expected}}",
+    "params": "{{resolution}} dpi · {{color}} · {{size}}",
+    "resumeMeta": "finishing the front sides · {{count}} before the interruption",
+    "resumeMetaBacks": "finishing the backs · {{count}} before the interruption",
+    "resumeMetaAdded": "finishing the added set · {{count}} before the interruption",
+    "resumeMetaSet": "finishing set A{{set}} · {{count}} before the interruption",
+    "busy": {
+      "title": "The scanner is busy — waiting for it to free up",
+      "meta": "usually another job on the scanner · waiting up to a minute"
+    },
+    "stop": "Stop",
+    "stopping": "Stopping…",
+    "strip": {
+      "label": "Latest pages",
+      "waiting": "Waiting for the first page"
+    }
+  },
+  "flip": {
+    "kicker_one": "STEP 2 OF 3 · FRONTS DONE: {{count}} SHEET",
+    "kicker_other": "STEP 2 OF 3 · FRONTS DONE: {{count}} SHEETS",
+    "setKicker_one": "ADDING · FRONTS DONE: {{count}} SHEET",
+    "setKicker_other": "ADDING · FRONTS DONE: {{count}} SHEETS",
+    "title": "Turn the sheets 180° — all at once",
+    "lead": "No flipping needed: the sheets came out of the feeder backs up. Take all the sheets at once, turn them 180° and put them back in the tray.",
+    "illustration": "all sheets at once —\nturn 180°",
+    "check": {
+      "tray": "Check the input tray: no sheets should be left in it. A sheet left behind was not scanned.",
+      "noFlip": "Do not flip the sheets — they came out of the feeder backs up.",
+      "keepOrder": "Do not change the order of the sheets: the backs come in reverse order, the app accounts for that.",
+      "stuck": "If one sheet got stuck — start the second pass and feed it separately."
+    },
+    "start": "Sheets are in the tray — scan the backs",
+    "skip": "No backs needed",
+    "busy": {
+      "button": "Waiting for the scanner to free up…",
+      "text": "The scanner is finishing the previous pass and ejecting the remaining sheets into the output tray. Take them so the set of backs is complete — scanning will start on its own."
+    },
+    "illustrationTop": "TOP"
+  },
+  "launch": {
+    "failed": "The pass did not start: {{error}}"
+  },
+  "merge": {
+    "title": "Matching fronts and backs",
+    "titleSet": "Matching the set's fronts and backs",
+    "setTag": "SET A{{set}}",
+    "status": {
+      "ok": "pairs matched: {{count}}",
+      "fewer": "mismatch: {{fronts}} fronts, {{backs}} backs — assemble the document in the editor",
+      "extra": "extra backs: {{count}} — assemble the document in the editor",
+      "accepted": "backs pass accepted short: {{fronts}} fronts, {{backs}} backs",
+      "frontsOnly": "no backs needed · pages: {{count}}",
+      "setOk": "set A{{set}}: {{count}} pairs matched",
+      "setMismatch": "set A{{set}}: mismatch — {{fronts}} fronts, {{backs}} backs",
+      "setAccepted": "set A{{set}}: backs accepted short — {{fronts}} fronts, {{backs}} backs",
+      "setDeclined": "set A{{set}}: no backs needed · pages: {{count}}"
+    },
+    "blank": {
+      "scoring": "looking for blank backs…",
+      "found": "blank backs: {{count}}",
+      "none": "blank backs: none",
+      "tail": " · {{blank}}"
+    },
+    "straight": {
+      "pending": " · straightening: {{count}} pages left",
+      "done": " · straightened: {{count}} pages"
+    }
+  },
+  "mismatch": {
+    "kicker": "PASSES DO NOT MATCH",
+    "fewer": {
+      "title": "{{count}} front sides, {{backs}} backs",
+      "text": "Most likely a sheet did not go through the feeder or stuck to its neighbor. The document is not assembled yet: the fronts and backs lie as separate sets in the order of the future document, nothing is deleted. Find the gap in the set of backs, select the back before it and scan the missing one with “+ Add sheets” — or delete the front without a pair. When the sets are balanced, press “Assemble document”."
+    },
+    "extra": {
+      "title": "More backs than front sides: {{backs}} versus {{fronts}}",
+      "text": "Most likely two sheets went through the feeder together in the first pass. The document is not assembled yet: the fronts and backs lie as separate sets, all backs are in place. Find the extra back in the set and delete it — or scan the front with “+ Add sheets”. When the sets are balanced, press “Assemble document”."
+    },
+    "accepted": {
+      "title": "Backs pass stopped: {{backs}} of {{fronts}}",
+      "text": "You kept the pass as is. The document is not assembled yet: the fronts and backs lie as separate sets, nothing is deleted. Scan the missing backs with “+ Add sheets” or delete the fronts without a pair, then press “Assemble document”.",
+      "textExtra": "You kept the pass as is. The document is not assembled yet: all pages are in place, the extra backs are in the set of backs. Delete the extras or scan the fronts, then press “Assemble document”."
+    },
+    "close": "Got it"
+  },
+  "setMismatch": {
+    "kicker": "THE SET'S BACKS DO NOT MATCH",
+    "title": "Set A{{set}} has {{fronts}} fronts, {{backs}} backs",
+    "text_one": "Most likely a sheet did not go through the feeder or stuck to its neighbor. The set's fronts and backs lie side by side, nothing is deleted. Rescan the backs — remove the {{count}} scanned back of the set together with its edits and go back to the turn; keep as is — fix the set in the editor.",
+    "text_other": "Most likely a sheet did not go through the feeder or stuck to its neighbor. The set's fronts and backs lie side by side, nothing is deleted. Rescan the backs — remove the {{count}} scanned backs of the set together with their edits and go back to the turn; keep as is — fix the set in the editor.",
+    "rescan": "Rescan the set's backs",
+    "rescanBusy": "Removing the backs…",
+    "rescanFailed": "Could not remove the backs: {{error}}",
+    "keep": "Keep as is",
+    "keepFailed": "Could not save the decision: {{error}}"
+  },
+  "thumb": {
+    "alt": "Page {{number}}",
+    "lost": "FILE LOST",
+    "lostLabel": "Page {{number}}, file lost",
+    "failed": "NO THUMBNAIL",
+    "failedTitle": "Could not build the thumbnail — the page itself is intact",
+    "gluedTitle": "The back goes together with its page",
+    "tagBacks": "bk",
+    "tagAdded": "A{{set}}",
+    "tagAddedLabel": "added set {{set}}",
+    "addedLabel": "Page {{number}}, added set {{set}}",
+    "setLabel": "Page {{number}}, {{what}}",
+    "angle": "rotated {{angle}}°",
+    "split": "+ New document",
+    "splitTitle": "Start a new document from this page",
+    "unsplit": "⤺ Remove split",
+    "blank": "BLANK",
+    "blankLabel": "{{label}}, blank",
+    "blankHiddenLabel": "{{label}}, blank, hidden — left out of the file",
+    "straightLabel": "{{label}}, straightened",
+    "straightUndoneLabel": "{{label}}, not straightened: {{reason}}",
+    "straightPendingLabel": "{{label}}, straightening"
+  },
+  "editor": {
+    "newScan": "New scan",
+    "add": "Add sheets",
+    "addDisabled": {
+      "saving": "The document is being saved — wait for the write to finish",
+      "busy": "The edit is still being saved — one second",
+      "interrupted": "Finish scanning the interrupted pass first or keep it as is"
+    },
+    "sets": {
+      "fronts": "Front sides",
+      "backs": "Back sides",
+      "count": "· {{count}}",
+      "countLabel_one": "{{count}} page",
+      "countLabel_other": "{{count}} pages",
+      "frontsPages": "Pages of the fronts set",
+      "backsPages": "Pages of the backs set",
+      "divider": "dragging across the divider changes the set",
+      "dividerLabel": "Divider between sets: front sides above, back sides below. Dragging a page across the divider changes its set",
+      "dropFronts": "Drop front pages here",
+      "dropBacks": "Drop back pages here",
+      "mismatch": "The passes do not match: {{fronts}} fronts, {{backs}} backs",
+      "equal": "The sets are balanced — assemble the document"
+    },
+    "assemble": "Assemble document",
+    "assembleDisabled": {
+      "saving": "The document is being saved — wait for the write to finish",
+      "busy": "The edit is still being saved — one second",
+      "interrupted": "Finish scanning the interrupted pass first or keep it as is",
+      "empty": "The sets have no pages",
+      "fewerBacks_one": "{{count}} back missing",
+      "fewerBacks_other": "{{count}} backs missing",
+      "fewerFronts_one": "{{count}} front missing",
+      "fewerFronts_other": "{{count}} fronts missing"
+    },
+    "docPosition": "document {{doc}} of {{docs}} · page {{page}} of {{pages}}",
+    "pagePosition": "page {{page}} of {{pages}}",
+    "noPages": "No pages",
+    "splitHere": "+ New document from this page",
+    "railLabel": "Scanned pages",
+    "position": "{{current}} of {{total}}",
+    "positionNone": "—",
+    "prev": "Previous page",
+    "next": "Next page",
+    "rotateLeft": "Rotate 90° counterclockwise",
+    "rotateLeftMany": "Rotate {{count}} pages 90° counterclockwise",
+    "rotate": "Rotate 90° clockwise",
+    "rotateMany": "Rotate {{count}} pages 90° clockwise",
+    "delete": "Delete page",
+    "deleteMany": "Delete {{count}} pages",
+    "selection": {
+      "label": "Selection",
+      "text": "{{count}} pages selected",
+      "group": "Make a document"
+    },
+    "doc": {
+      "newPill": "NEW DOCUMENT",
+      "unsplit": "Remove the split — join to the previous document",
+      "unsplitLabel": "Remove the split before document {{number}}",
+      "nameLabel": "Name of document {{number}}",
+      "defaultName": "Document {{number}}",
+      "defaultSingleName": "Scan {{date}}",
+      "count_one": "{{count}} page",
+      "count_other": "{{count}} pages",
+      "pagesLabel": "Pages of document {{number}}"
+    },
+    "empty": {
+      "rail": "All pages deleted",
+      "title": "No pages left",
+      "text": "Deleted pages are not erased: Ctrl+Z brings back the last deletion, “Revert” on the right — everything at once.",
+      "railBlank": "All pages hidden",
+      "blankTitle": "All pages are blank backs",
+      "blankText": "They are hidden and left out of the file. The “Blanks” toggle at the bottom of the strip shows them; “Not a blank page” returns the right one to the document."
+    },
+    "edits": {
+      "text": "Manual edits made",
+      "revert": "Revert",
+      "revertTitle": "Revert everything to how it was after scanning"
+    },
+    "rotateBacks": "Backs 180°",
+    "rotateBacksTitle": "Applies to {{target}}. If the backs are upside down, the sheets were scanned without the turn. The rotation goes into the PDF too; the page files themselves do not change.",
+    "rotateTarget": {
+      "main": "the backs of the main document",
+      "set": "the backs of set A{{set}}",
+      "noneMain": "the main document has no backs",
+      "noneSet": "set A{{set}} has no backs",
+      "noneTitle": "{{reason}} — nothing to rotate"
+    },
+    "save": "Save document",
+    "saveFiles_one": "Save {{count}} file",
+    "saveFiles_other": "Save {{count}} files",
+    "unsaved": "Unsaved changes",
+    "interrupted": {
+      "kicker": "PASS INTERRUPTED",
+      "title": "The pass was interrupted after page {{last}}",
+      "titleAdded": "Adding was interrupted after page {{last}}",
+      "titleSetFronts": "The fronts of set A{{set}} were interrupted after page {{last}}",
+      "titleSetBacks": "The backs of set A{{set}} were interrupted after page {{last}} of {{expected}}",
+      "text": "The pages received are in place. To finish scanning, load the remaining sheets into the tray starting from sheet {{next}} and press “Scan the rest”.",
+      "textAdded": "The pages received are already in the document. To finish scanning, load the remaining sheets into the tray starting from sheet {{next}} and press “Scan the rest”.",
+      "textSet": "The pages received are already in the document. To finish scanning, load the remaining sheets into the tray starting from sheet {{next}} and press “Scan the rest”.",
+      "textParamsUnknown": "The pages received are in place. This pass cannot be finished: the page list was rebuilt from files, and the settings and scanner it ran on are unknown. You can keep it as is or start a new scan.",
+      "textOtherScanner": "The pages received are in place. You can finish scanning only on the scanner the pass was started on: {{name}}. Connect it in the setup — or keep the pass as is.",
+      "resume": "Scan the rest",
+      "accept": "Keep as is",
+      "newScan": "New scan",
+      "resumeFailed": "Could not finish scanning: {{error}}",
+      "reconnect": "reconnect",
+      "textReplaced": "The pages received are in place. The scanner the pass was started on no longer answers at this address — it cannot be finished. Keep the pass as is or start a new scan."
+    },
+    "blank": {
+      "toggle": "Blanks",
+      "toggleLabel": "Show hidden blank backs in the strip — they are left out of the file",
+      "toggleTitle": {
+        "off_one": "{{count}} blank back hidden — left out of the file. Turn on to see it in the strip.",
+        "off_other": "{{count}} blank backs hidden — left out of the file. Turn on to see them in the strip.",
+        "on_one": "{{count}} blank back shown — left out of the file. To return the page to the document, press “Not a blank page”.",
+        "on_other": "{{count}} blank backs shown — left out of the file. To return a page to the document, press “Not a blank page”.",
+        "none": "No blank backs found",
+        "scoring": "Blank backs are still being evaluated"
+      },
+      "hidden": "hidden: {{count}}",
+      "shown": "shown: {{count}}",
+      "none": "none found",
+      "scoring": "evaluating…"
+    }
+  },
+  "preview": {
+    "corner": "PAGE {{number}}",
+    "lost": "The file of this page is lost.\nThere is a record of it, but no file on disk — its place is kept.",
+    "failed": "Could not show the page.\nThe file is in place, but it could not be opened as an image.",
+    "docStart": "START OF DOCUMENT {{number}}",
+    "blank": "BLANK SIDE",
+    "blankHidden": "BLANK SIDE · LEFT OUT OF THE FILE",
+    "straight": {
+      "straightened": "STRAIGHTENED",
+      "unstraightened": "NOT STRAIGHTENED",
+      "pending": "STRAIGHTENING"
+    }
+  },
+  "inspector": {
+    "label": "Set details",
+    "details": "DETAILS",
+    "detailsSummary": "page {{page}}",
+    "title": "Page {{page}} — {{what}}",
+    "what": {
+      "front": "front of sheet {{sheet}}",
+      "back": "back of sheet {{sheet}}",
+      "added": "added set {{set}}",
+      "addedFront": "front of sheet {{sheet}} of set A{{set}}",
+      "addedBack": "back of sheet {{sheet}} of set A{{set}}",
+      "addedFrontLoose": "front side of set A{{set}}",
+      "addedBackLoose": "back side of set A{{set}}",
+      "frontLoose": "front side, no sheet",
+      "backLoose": "back side, no sheet",
+      "setFront": "front side, no. {{position}} in the fronts set",
+      "setBack": "back side, no. {{position}} in the backs set",
+      "setAddedFronts": "added set {{set}}, in the fronts set",
+      "setAddedBacks": "added set {{set}}, in the backs set"
+    },
+    "fact": {
+      "set": "Set",
+      "setValue": "added no. {{set}}",
+      "sheet": "Sheet",
+      "sheetValue": "no. {{sheet}}",
+      "sheetNone": "—",
+      "side": "Side",
+      "front": "front",
+      "back": "back",
+      "angle": "Rotation",
+      "angleValue": "{{angle}}°",
+      "group": "Set",
+      "groupFronts": "front sides",
+      "groupBacks": "back sides",
+      "place": "Place",
+      "placeValue": "{{position}} of {{count}}",
+      "origin": "From",
+      "originFronts": "fronts pass",
+      "originBacks": "backs pass",
+      "originAdded": "added set {{set}}",
+      "originSetFronts": "fronts pass of set A{{set}}",
+      "originSetBacks": "backs pass of set A{{set}}",
+      "content": "Content",
+      "contentHidden": "blank — hidden",
+      "contentMarked": "blank — marked",
+      "contentNotBlank": "not blank — your mark",
+      "straight": "Straightening",
+      "straightValue": {
+        "straightened": "straightened",
+        "kept": "original — your choice",
+        "level": "level",
+        "measure": "nothing to measure by",
+        "shape": "line slant does not add up",
+        "nohelp": "did not help",
+        "disk": "deferred — low disk space",
+        "fail": "deferred — failure",
+        "pending": "in progress…"
+      }
+    },
+    "note": {
+      "back": "Back of sheet {{sheet}}: matched to the front by its position in the backs pass.",
+      "front": "Front of sheet {{sheet}}; its back comes from the backs pass.",
+      "frontsOnly": "The backs were not scanned — the sheet is one-sided.",
+      "added": "Page of an added set: scanned in a single pass, without a “front + back” pair.",
+      "addedPair": "Page of a two-sided set: the back is matched to the front by its position in the set's backs pass.",
+      "addedPairLoose": "The set's backs did not match the fronts: the pages lie in sub-blocks, without pairs. Rescan the backs or fix the set by hand.",
+      "lost": "The file of this page is lost — its place in the order is kept.",
+      "setFront": "The document is not assembled: side and place are counted by set. After assembly this page becomes the front of sheet {{position}}.",
+      "setBack": "The document is not assembled: side and place are counted by set. After assembly this page becomes the back of sheet {{position}}.",
+      "setAdded": "Page of an added set: whichever set it lies in, that side of the sheet it becomes after assembly."
+    },
+    "docs": "DOCUMENTS IN THE SET",
+    "docsAfterAssemble": "Documents appear after assembly: right now the fronts and backs lie as separate sets.",
+    "docsCount_one": "{{count}} document",
+    "docsCount_other": "{{count}} documents",
+    "docsNone": "no documents",
+    "docMeta": "{{count}} pages · pages {{from}}–{{to}} of the set",
+    "docMetaOnePage": "1 page · page {{from}} of the set",
+    "docsNoteMany_one": "Saving will produce {{count}} separate file — by the marked splits.",
+    "docsNoteMany_other": "Saving will produce {{count}} separate files — by the marked splits.",
+    "docsNoteOne": "No splits marked: everything will be saved as one file. To split, hover over the top of a thumbnail and press “+ New document” — or select pages (Shift — a range, Ctrl — one by one) and press “Make a document”.",
+    "checks": "CHECK",
+    "check": {
+      "frontsOnly": "The backs were not scanned",
+      "sets": "The sets are not balanced: {{fronts}} fronts, {{backs}} backs — {{missing}} {{what}} missing",
+      "setsMissingBacks_one": "back",
+      "setsMissingBacks_other": "backs",
+      "setsMissingFronts_one": "front",
+      "setsMissingFronts_other": "fronts",
+      "setsEmpty": "The sets are empty: all pages deleted",
+      "setsHint": "Scan what is missing with “+ Add sheets” or drag pages across the divider, then press “Assemble document”.",
+      "setsEqual": "The sets are balanced: {{count}} pages each — press “Assemble document”",
+      "assembled_one": "Fronts and backs assembled: {{count}} sheet",
+      "assembled_other": "Fronts and backs assembled: {{count}} sheets",
+      "orderAuto": "The order matches the scan",
+      "orderEdited": "The order was edited by hand — auto-sorting is off",
+      "blankNone": "No blank backs found",
+      "blankHidden_one": "{{count}} blank back hidden — left out of the file",
+      "blankHidden_other": "{{count}} blank backs hidden — left out of the file",
+      "blankHiddenHint": "The “Blanks” toggle at the bottom of the strip shows them; “Not a blank page” returns the right one to the document.",
+      "blankMarked_one": "{{count}} blank back marked — stays in the file",
+      "blankMarked_other": "{{count}} blank backs marked — stay in the file",
+      "blankSets_one": "{{count}} blank back marked — counted in the sets, hidden after assembly",
+      "blankSets_other": "{{count}} blank backs marked — counted in the sets, hidden after assembly",
+      "blankPending": "Evaluating blank backs: {{count}} pages left",
+      "straightPending": "Straightening: {{count}} pages left",
+      "straightPendingHint": "Saving will wait — the button will become available on its own.",
+      "straightened_one": "{{count}} page straightened",
+      "straightened_other": "{{count}} pages straightened",
+      "straightKept_one": ", {{count}} — kept as original",
+      "straightKept_other": ", {{count}} — kept as originals",
+      "straightNone": "All pages are level",
+      "straightFailedAll": "No page was straightened",
+      "straightHint": "Not straightened {{count}}: {{reasons}}.",
+      "straightReason": "{{reason}} — {{count}}",
+      "straightHintDisk": "Free some disk space — the app will try again on the next start.",
+      "straightHintRetry": "The app will try again on the next start."
+    },
+    "blank": {
+      "kicker": "BLANK BACK",
+      "hidden": "Detected automatically: there is no ink on the page. It is hidden and left out of the file.",
+      "marked": "Detected automatically: there is no ink on the page. It stays in the file with a mark.",
+      "sets": "Detected automatically: there is no ink on the page. In sets mode it is counted; after assembly it will be hidden.",
+      "action": "Not a blank page",
+      "actionTitle": "Return the page to the document. The mark is an edit: Ctrl+Z or “Revert” removes it."
+    },
+    "docMetaBlank": "only blank backs — hidden",
+    "straight": {
+      "kicker": "STRAIGHTENING",
+      "note": {
+        "straightened": "Distortion detected — the page is straightened.",
+        "kept": "The original scan is shown. The straightened view can be restored.",
+        "measure": "Could not straighten the page automatically.",
+        "shape": "Could not straighten the page automatically.",
+        "nohelp": "Could not straighten the page automatically.",
+        "disk": "Could not straighten: not enough disk space. Free some space — the app will try again on the next start.",
+        "fail": "Could not straighten because of a failure — the app will try again on the next start.",
+        "pending": "The app is checking whether the lines are level. The scan is shown as is for now; saving will wait — nothing to do.",
+        "recalc": {
+          "disk": "The straightened view from a previous app version is shown. Recalculation is deferred: not enough disk space — free some space, the app will try again on the next start.",
+          "fail": "The straightened view from a previous app version is shown. Recalculation failed — the app will try again on the next start."
+        }
+      },
+      "selection": "Of {{n}} selected: {{parts}}.",
+      "parts": {
+        "straightened": "straightened {{count}}",
+        "kept": "original by your choice — {{count}}",
+        "undone": "not straightened {{count}}",
+        "pending": "in progress {{count}}",
+        "level": "level {{count}}",
+        "none": "straightening was not applied"
+      },
+      "keep": "Original",
+      "keepAll": "Original — {{count}} pages",
+      "keepSome": "Original — {{k}} of {{n}} selected",
+      "keepTitle": "Show and save as it came from the scanner. This is an edit: Ctrl+Z or “Revert” removes it.",
+      "restore": "Straighten",
+      "restoreAll": "Straighten — {{count}} pages",
+      "restoreSome": "Straighten — {{k}} of {{n}} selected",
+      "restoreTitle": "Restore the straightened view. Ctrl+Z undoes.",
+      "noneEligible": "None of the selected pages is straightened — nothing to keep as original.",
+      "allPending": "The selected pages are still being straightened — the action will become available on its own."
+    },
+    "about": "{{app}} · about the project ↗",
+    "aboutTitle": "Open the project page in the browser"
+  },
+  "add": {
+    "title": "Add pages to the document",
+    "text": "The new pages become a separate set — you can move, rotate and delete them like the rest.",
+    "kind": {
+      "label": "WHAT TO SCAN",
+      "twoSided": "Two-sided scan",
+      "twoSidedNote": "Two passes with a 180° turn, like the main document",
+      "twoSidedDisabled": "Unavailable until the document is assembled — assemble the document first",
+      "oneSided": "One-sided scan",
+      "oneSidedNote": "One or more sheets, backs are not scanned"
+    },
+    "place": {
+      "label": "WHERE TO INSERT",
+      "end": "At the end of the document",
+      "setEnd": "At the end of the set",
+      "after": "After the current page",
+      "afterNone": "No current page — the strip is empty"
+    },
+    "summary": {
+      "twoSided": "Two-sided",
+      "oneSided": "One-sided",
+      "after": "after page {{page}} ({{what}})",
+      "end": "at the end of document “{{name}}”, after page {{page}}",
+      "setEnd": "at the end of the {{group}} set, after page {{page}}",
+      "groupFronts": "fronts",
+      "groupBacks": "backs",
+      "endEmpty": "at the end of the strip",
+      "join": "{{kind}} · {{place}}"
+    },
+    "scanner": {
+      "ready": "ready · {{params}}",
+      "none": "No scanner connected — connect it in the setup"
+    },
+    "cancel": "Cancel",
+    "start": "Start scan"
+  },
+  "revert": {
+    "title": "Revert everything to how it was after scanning?",
+    "text": "This resets the order, rotations, deletions, document splits, their names and the “Original” choice: deleted pages return to the strip, auto-sorting turns on. Changed your mind — Ctrl+Z.",
+    "cancel": "Cancel",
+    "confirm": "Revert all"
+  },
+  "save": {
+    "titleOne": "Save document",
+    "titleMany_one": "Save {{count}} file",
+    "titleMany_other": "Save {{count}} files",
+    "mode": {
+      "label": "WHAT TO SAVE",
+      "separate": "Separate files",
+      "separateNone": "no splits marked yet",
+      "single": "One file",
+      "singleHint": "all {{count}} pages in a row",
+      "separateHint_one": "by splits: {{count}} file",
+      "separateHint_other": "by splits: {{count}} files"
+    },
+    "files": "FILES · {{count}}",
+    "fileLabel": "File name {{number}}",
+    "fileMeta_one": "{{count}} page",
+    "fileMeta_other": "{{count}} pages",
+    "fileMetaBlank": "blanks only — 0 pages",
+    "folder": "FOLDER",
+    "chooseFolder": "Choose…",
+    "folderUnknown": "The folder could not be read — the files will go to the default folder; “Choose…” shows the path.",
+    "fact": {
+      "files": "Files",
+      "pages": "Pages total",
+      "blank": "Blank backs",
+      "blankHidden_one": "{{count}} hidden — left out of the file",
+      "blankHidden_other": "{{count}} hidden — left out of the file",
+      "blankMarked_one": "{{count}} marked — stays in the file",
+      "blankMarked_other": "{{count}} marked — stay in the file",
+      "blankNone": "none found",
+      "format": "Format",
+      "formatValue": "PDF",
+      "straight": "Straightened",
+      "straightNone": "none",
+      "straightValue_one": "{{count}} page",
+      "straightValue_other": "{{count}} pages",
+      "straightPendingTail": " · {{count}} more in progress",
+      "straightUndoneTail": " · not straightened {{count}}"
+    },
+    "documentBlank": "Document “{{name}}” consists of blank backs only — show them with the toggle or remove the split.",
+    "blankPending": "Evaluating blank backs: {{count}} pages left — the button will become available on its own.",
+    "cancel": "Cancel",
+    "submitOne": "Save file",
+    "submitMany_one": "Save {{count}} file",
+    "submitMany_other": "Save {{count}} files",
+    "writing": "Writing files…",
+    "submitting": "Saving…",
+    "result": "RESULT",
+    "resultStatus": "Written {{written}} of {{total}}.",
+    "resultRenamed": "the name was taken — a number was added",
+    "resultChanged": "the name was changed: characters not allowed on Windows removed",
+    "retry": "Retry failed",
+    "close": "Close",
+    "done": "Done",
+    "failed": "Could not save: {{error}}",
+    "straightPending": "Straightening: {{left}} of {{total}} pages left — the button will become available on its own.",
+    "bothPending": "Evaluating blank backs and straightening: {{count}} pages left — the button will become available on its own."
+  },
+  "newScan": {
+    "title": "Start a new scan?",
+    "kicker": {
+      "saved": "CURRENT DOCUMENT SAVED",
+      "unsaved": "UNSAVED CHANGES",
+      "empty": "DOCUMENT IS EMPTY",
+      "unassembled": "DOCUMENT NOT ASSEMBLED"
+    },
+    "text": {
+      "saved": "The document is saved to a file. The session's pages ({{count}} pages) will be deleted from disk — the saved PDFs stay.",
+      "unsaved": "The latest changes are not saved to a file. If you start a new scan, {{count}} pages will be deleted from disk.",
+      "empty": "All pages were deleted from the strip, but they can still be brought back — Ctrl+Z or “Revert”. A new scan erases them ({{count}} pages) from disk for good.",
+      "deleted": "Pages deleted from the strip ({{count}} pages) will be erased too — they cannot be brought back.",
+      "unassembled": "The fronts and backs lie as separate sets — the document is not assembled and not saved to a file. If you start a new scan, {{count}} pages will be deleted from disk.",
+      "blankHidden": "Hidden blank backs ({{count}} pages) will be erased too."
+    },
+    "fresh": "Close the current one and start a new scan",
+    "freshNote": {
+      "saved": "Back to the scan setup",
+      "unsaved": "The current {{count}} pages will be deleted without saving"
+    },
+    "saveFirst": "Save the current one first",
+    "saveFirstNote": "The save window opens, then a new scan starts",
+    "stay": "Stay in the document",
+    "confirming": "Deleting…",
+    "noResponse": "Could not delete the pages: the app got no reply. The pages are in place — try again."
+  },
+  "notices": {
+    "label": "Notifications",
+    "journalRebuilt": "The list of scanned pages could not be read and was rebuilt from files. The pages are in place, but interrupted passes cannot be finished: their settings are unknown.",
+    "pagesLost": "Some pages have no files on disk — they are shown as lost, in their places.",
+    "settingsIncompatible": "The settings were saved by a newer app version. This version leaves them untouched and works with default values.",
+    "settingsUnreadable": "The settings file could not be read and was set aside. Default values are in effect; the scanner needs to be reconnected.",
+    "dismiss": "Got it"
+  },
+  "incompatible": {
+    "kicker": "DATA FROM A NEWER VERSION",
+    "title": "These scans were saved by a newer version of the app",
+    "lead": "To avoid damaging anything, this version does not open or change them. Install the latest version of the app — or move the data folder elsewhere if you want to start from scratch.",
+    "openFolder": "Open the data folder",
+    "quit": "Quit"
+  },
+  "straight": {
+    "reason": {
+      "measure": "nothing to measure by",
+      "shape": "line slant does not add up",
+      "nohelp": "correction did not help",
+      "disk": "low disk space",
+      "fail": "correction failed"
+    },
+    "title": {
+      "straightened": "Straightened — the original scan is intact",
+      "measure": "Not straightened: nothing to measure by",
+      "shape": "Not straightened: the line slant does not fit a single shape",
+      "nohelp": "Not straightened: correction did not help",
+      "disk": "Not straightened: low disk space — the app will try again on the next start",
+      "fail": "Not straightened: correction failed — the app will try again on the next start",
+      "pending": "Straightening — saving will wait"
+    }
+  }
+}

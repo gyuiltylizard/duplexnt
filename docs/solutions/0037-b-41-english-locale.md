@@ -56,7 +56,33 @@ null`. Тест «Сбросить параметры» проверяет, чт
 **Готово:** typecheck, lint, format:check, `npm test`, `test:integration` зелёные. Коммит
 `feat(b-41): U1 …`.
 
-### U2. Английская локаль и тесты паритета — ⏳ в работе
+### U2. Английская локаль и тесты паритета — ✅ зелёный
+
+`locales/en/common.json` — перевод всех ключей по термин-карте плана: sheet / page, front
+sides / backs, document, pass, «New scan», «Add sheets», straighten / Original, «Not a blank
+page», «Keep as is», «Scan the rest», «Assemble document», «Revert». Плюрали — `_one/_other`.
+Там, где русский обходил склонение через «стр.», английский получил формы: `toast.added`,
+`toast.straightRestored`, `toast.straightLate`, `toast.straightRecalcCount`,
+`editor.doc.count`, `save.fileMeta`, `save.fact.straightValue`,
+`inspector.check.straightened` — i18next при `count` берёт `key_one/_other`, русский ключ без
+форм не тронут (закреплено тестом).
+
+**На ревью дизайн-агента (U4), решения переводчика:** тег добавленного набора «Д{{set}}» →
+«A{{set}}» (added), везде «set A1»; тег оборота «об» → «bk» (две буквы, как в макете); «стр.» →
+полные «page / pages» (короче ничего честного нет — длину смотреть в узких местах); «проход» →
+«pass»; кикер `setup` «NEW SCAN» совпадает с кнопкой «New scan» (в русском — «НОВОЕ
+СКАНИРОВАНИЕ» / «Новый скан»); «Пустые» → «Blanks», «Обороты на 180°» → «Backs 180°».
+
+`i18n.ts`: `resources` с обеими локалями, `satisfies Record<Locale, …>`, `DEFAULT_LOCALE` —
+реэкспорт из `shared`; старт по-прежнему `ru`. `i18n.test.tsx`: паритет базовых ключей в обе
+стороны (суффиксы плюралей сняты), набор форм (`en` — только `_one/_other`), одинаковые
+`{{подстановки}}` у каждой пары строк, непустые строки, английские плюрали через
+`getFixedT('en')` (1 / 2 / 0 / 21 / 1.5), «английский суффикс не ломает русский». Запрет
+рабочих терминов для en не вводится (план, Deferred).
+
+**Готово:** typecheck, lint, format:check, `npm test` зелёные. Коммит `feat(b-41): U2 …`.
+
+### U3. Язык в renderer и в main — ⏳ в работе
 
 ---
 
