@@ -697,14 +697,14 @@ describe('editor M3: пустой редактор и инспектор', () =>
     expect(items[2]?.getAttribute('aria-current')).toBe('true');
   });
 
-  it('S12/S13: один документ без оборотов — подсказка о границах и «Обороты не сканировали»', () => {
+  it('S12/S13: один документ без оборотов — подсказка о границах; пункта о лицах и оборотах нет', () => {
     stubApi();
     renderEditor(makeSnapshot([makePass({ pages: pages(3) })]));
 
     const inspector = screen.getByRole('complementary', { name: 'Сведения о наборе' });
     expect(within(inspector).getByText('1 документ')).toBeDefined();
     expect(within(inspector).getByText(/^Границы не отмечены/)).toBeDefined();
-    expect(within(inspector).getByText('Обороты не сканировали')).toBeDefined();
+    expect(within(inspector).queryByText('Обороты не сканировали')).toBeNull();
     expect(within(inspector).getByText('Порядок соответствует сканированию')).toBeDefined();
     expect(
       within(inspector).getByText('Обороты не сканировали — лист односторонний.'),

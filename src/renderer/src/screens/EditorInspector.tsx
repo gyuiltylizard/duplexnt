@@ -31,9 +31,13 @@ import { useHintAttention } from './useHintAttention';
 // (`EditorInspectorStraight.tsx`).
 
 /**
- * Пункт ПРОВЕРКИ о лицах и оборотах (R22): наборы — точка со счётчиками, иначе галочка с числом
- * листов: в парах — число пар по проходам, после сборки — число лиц в видимой ленте (лист = лицо
- * по позиции в записи; добавленные наборы и удаления меняют его честно).
+ * Пункты ПРОВЕРКИ о лицах и оборотах (R22) — только при отклонении (решение автора 2026-11-03,
+ * bugs): при совпавших проходах и без оборотов пунктов нет — модалка уже всё сказала, а
+ * «Обороты не сканировали» про давний выбор только путал, когда потом добавлялись двусторонние
+ * наборы. Остаются: наборы не собраны — точка со счётчиками групп; набор «ДN», у которого
+ * обороты не сошлись и нажато «Оставить как есть», — точка словами кнопки: модалка второй раз
+ * не покажется, а листы без оборотов легко забыть. Числа — по проходам (KTD-7): «отсканировано
+ * 1 из 3» остаётся правдой и после правок.
  */
 function PairsCheck({
   t,
@@ -43,38 +47,50 @@ function PairsCheck({
   readonly assembly: SessionAssembly;
 }): ReactNode {
   const { report, sets } = assembly;
-  if (report.backsState === null) {
-    return <Check warning={false}>{t('inspector.check.frontsOnly')}</Check>;
-  }
+  const keptSets = report.sets
+    .filter((set) => set.decision === 'kept' && set.mismatch)
+    .map((set) => (
+      <Check key={set.set} warning>
+        {t(
+          set.backs < set.fronts ? 'inspector.check.setKeptFewer' : 'inspector.check.setKeptExtra',
+          { set: set.set, fronts: set.fronts, backs: set.backs },
+        )}
+      </Check>
+    ));
   if (report.mode !== 'sets' || sets === null) {
-    const count =
-      report.mode === 'assembled'
-        ? assembly.order.filter((page) => page.side === 'front').length
-        : Math.min(report.fronts, report.backs);
-    return <Check warning={false}>{t('inspector.check.assembled', { count })}</Check>;
+    return keptSets;
   }
   const { fronts, backs } = sets;
+  let main: ReactNode;
   if (fronts === 0 && backs === 0) {
-    return <Check warning>{t('inspector.check.setsEmpty')}</Check>;
+    main = <Check warning>{t('inspector.check.setsEmpty')}</Check>;
+  } else if (fronts === backs) {
+    // Точка остаётся и при уравненных наборах: документ ещё не собран (handoff, Decisions).
+    main = <Check warning>{t('inspector.check.setsEqual', { count: fronts })}</Check>;
+  } else {
+    const missing = Math.abs(fronts - backs);
+    main = (
+      <Check warning>
+        {t('inspector.check.sets', {
+          fronts,
+          backs,
+          missing,
+          what: t(
+            backs < fronts
+              ? 'inspector.check.setsMissingBacks'
+              : 'inspector.check.setsMissingFronts',
+            { count: missing },
+          ),
+        })}
+        <span className="check__hint">{t('inspector.check.setsHint')}</span>
+      </Check>
+    );
   }
-  // Точка остаётся и при уравненных наборах: документ ещё не собран (handoff, Decisions).
-  if (fronts === backs) {
-    return <Check warning>{t('inspector.check.setsEqual', { count: fronts })}</Check>;
-  }
-  const missing = Math.abs(fronts - backs);
   return (
-    <Check warning>
-      {t('inspector.check.sets', {
-        fronts,
-        backs,
-        missing,
-        what: t(
-          backs < fronts ? 'inspector.check.setsMissingBacks' : 'inspector.check.setsMissingFronts',
-          { count: missing },
-        ),
-      })}
-      <span className="check__hint">{t('inspector.check.setsHint')}</span>
-    </Check>
+    <>
+      {main}
+      {keptSets}
+    </>
   );
 }
 

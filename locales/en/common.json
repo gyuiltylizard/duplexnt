@@ -621,7 +621,6 @@
     "docsNoteOne": "No splits marked: everything will be saved as one file. To split, hover over the top of a thumbnail and press “+ New document” — or select pages (Shift — a range, Ctrl — one by one) and press “Make a document”.",
     "checks": "CHECK",
     "check": {
-      "frontsOnly": "The backs were not scanned",
       "sets": "The sets are not balanced: {{fronts}} fronts, {{backs}} backs — {{missing}} {{what}} missing",
       "setsMissingBacks_one": "back",
       "setsMissingBacks_other": "backs",
@@ -630,8 +629,8 @@
       "setsEmpty": "The sets are empty: all pages deleted",
       "setsHint": "Scan what is missing with “+ Add sheets” or drag pages across the divider, then press “Assemble document”.",
       "setsEqual": "The sets are balanced: {{count}} pages each — press “Assemble document”",
-      "assembled_one": "Fronts and backs assembled: {{count}} sheet",
-      "assembled_other": "Fronts and backs assembled: {{count}} sheets",
+      "setKeptFewer": "Set S{{set}}: {{backs}} of {{fronts}} backs scanned — you kept it as is",
+      "setKeptExtra": "Set S{{set}}: {{backs}} backs, {{fronts}} fronts — you kept it as is",
       "orderAuto": "The order matches the scan",
       "orderEdited": "The order was edited by hand — auto-sorting is off",
       "blankNone": "No blank backs found",

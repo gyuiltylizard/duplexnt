@@ -132,6 +132,37 @@ describe('страницы пары в ленте (S8)', () => {
   });
 });
 
+describe('ПРОВЕРКА: лица и обороты набора (решение автора 2026-11-03 — пункт только при отклонении)', () => {
+  const keptPasses = (backs: number) =>
+    pairPasses(backs).map((pass) =>
+      pass.kind === 'addedFronts' ? { ...pass, backsDecision: 'kept' as const } : pass,
+    );
+
+  it('обороты набора не сошлись и нажато «Оставить как есть» — точка словами кнопки', () => {
+    stubApi();
+    renderEditor(makeSnapshot(keptPasses(1)));
+
+    const check = screen
+      .getByText('Набор Д1: оборотов отсканировано 1 из 3 — вы оставили как есть')
+      .closest('li');
+    expect(check?.className).toBe('check check--warning');
+  });
+
+  it('лишние обороты набора оставлены как есть — те же слова, числа без «из»', () => {
+    stubApi();
+    renderEditor(makeSnapshot(keptPasses(4)));
+
+    expect(screen.getByText('Набор Д1: оборотов 4, лиц 3 — вы оставили как есть')).toBeDefined();
+  });
+
+  it('наборы совпали — пункта о лицах и оборотах нет', () => {
+    stubApi();
+    renderEditor(withPair(3));
+
+    expect(screen.queryByText(/вы оставили как есть|Лица и обороты|Наборы/)).toBeNull();
+  });
+});
+
 describe('плашка прерванного прохода набора (S10)', () => {
   it('обороты набора прерваны: заголовок с набором и ожиданием, текст про документ', () => {
     stubApi();
