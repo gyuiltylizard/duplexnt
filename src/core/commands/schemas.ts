@@ -34,6 +34,15 @@ export const probeRequestSchema = z.strictObject({
 }) satisfies z.ZodType<ProbeRequest>;
 
 /** Команда без входа: принимается только `undefined`. */
+/** Токен ожидающей пробы смены устройства (B-29, KTD-7): hex из ядра, та же длина, что у пробы. */
+export const confirmScannerChangeRequestSchema = z.strictObject({
+  token: z
+    .string()
+    .min(1)
+    .max(PROBE_TOKEN_MAX_LENGTH)
+    .regex(/^[0-9a-f]+$/),
+});
+
 export const noRequestSchema = z.undefined();
 
 /**

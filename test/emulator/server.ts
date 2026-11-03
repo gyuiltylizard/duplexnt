@@ -70,6 +70,8 @@ export interface EmulatorOptions {
    * UUID: UUID у эмулятора один — из фикстуры capabilities.
    */
   readonly cert?: SelfSignedCert;
+  /** UUID вместо фикстурного — «другое устройство с тем же сертификатом или адресом» (B-29). */
+  readonly uuid?: string;
   /** Вызывается, когда обмен закончен, — для журнала в консоли. */
   readonly onExchange?: (exchange: EmulatorExchange) => void;
 }
@@ -313,7 +315,19 @@ export async function startEmulator(options: EmulatorOptions = {}): Promise<Emul
         busy();
         return;
       }
-      xml(readFixture(...DEVICE_DIRS[scenario.device], 'ScannerCapabilities.xml'));
+      const capabilities = String(
+        readFixture(...DEVICE_DIRS[scenario.device], 'ScannerCapabilities.xml'),
+      );
+      xml(
+        Buffer.from(
+          options.uuid === undefined
+            ? capabilities
+            : capabilities.replace(
+                /<scan:UUID>[^<]*<\/scan:UUID>/,
+                `<scan:UUID>${options.uuid}</scan:UUID>`,
+              ),
+        ),
+      );
       return;
     }
     if (path === `${basePath}/ScannerStatus` && method === 'GET') {

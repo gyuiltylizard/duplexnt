@@ -64,7 +64,20 @@ export function stubApi(snapshot: Snapshot, overrides: Partial<Record<keyof Api,
     stopDiscovery: vi.fn(() => Promise.resolve(ok(undefined))),
     cancelConnect: vi.fn(() => Promise.resolve(ok(undefined))),
     connectScanner: vi.fn(() =>
-      Promise.resolve(ok({ name: 'ScanPro 200', scheme: 'https', host: '192.0.2.10', port: 443 })),
+      Promise.resolve(
+        ok({
+          kind: 'connected' as const,
+          scanner: { name: 'ScanPro 200', scheme: 'https', host: '192.0.2.10', port: 443 },
+        }),
+      ),
+    ),
+    confirmScannerChange: vi.fn(() =>
+      Promise.resolve(
+        ok({
+          scanner: { name: 'ScanPro 200', scheme: 'https', host: '192.0.2.10', port: 443 },
+          settingsSaved: true,
+        }),
+      ),
     ),
     setScanParams: vi.fn(() => Promise.resolve(ok(undefined))),
     setBlankMode: vi.fn(() => Promise.resolve(ok(undefined))),

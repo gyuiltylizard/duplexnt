@@ -110,7 +110,7 @@ describe('служба прохода: сканер и параметры', () =
     });
 
     const scanner = connected();
-    expect(await service.useScanner(scanner)).toEqual({ ok: true, value: undefined });
+    expect(await service.useScanner(scanner)).toEqual({ ok: true, value: { settingsSaved: true } });
 
     expect(service.snapshot().scanner).toEqual({
       kind: 'ready',

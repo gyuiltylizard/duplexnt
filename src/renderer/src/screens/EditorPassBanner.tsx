@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   isPairKind,
@@ -12,7 +12,7 @@ import {
 } from '@shared';
 import type { TFunction } from 'i18next';
 import { errorText, errorTextInline } from '../state/error-text';
-import { addressOf, reconnectAddress } from '../state/scanner-address';
+import { addressOf, isPassReplaced, reconnectAddress } from '../state/scanner-address';
 import { setOfPass } from '../state/screen';
 
 // Плашка прерванного прохода в `editor` (план M1, U24; handoff U19, S17): досканировать остаток,
@@ -67,6 +67,24 @@ export function EditorPassBanner({
 }: EditorPassBannerProps): ReactNode {
   const { t } = useTranslation();
   const [acceptFailure, setAcceptFailure] = useState<DomainError | null>(null);
+  const acceptRef = useRef<HTMLButtonElement>(null);
+
+  // Прерванный проход заменён подтверждённой сменой устройства (B-29, KTD-10): досканировать
+  // нельзя, ссылка «подключите заново» бессмысленна — по этому адресу прежнего устройства нет.
+  const last = session.passes[session.passes.length - 1];
+  const replaced =
+    last?.state === 'interrupted' &&
+    !snapshot.canResume &&
+    last.paramsKnown &&
+    isPassReplaced(snapshot.scanner, last.scanner);
+
+  // Плашка сменилась на «заменено» после подтверждения: фокус — на «Оставить как есть»
+  // (handoff `scanner-change`, Behaviour); ссылка, с которой открывали модалку, исчезла.
+  useEffect(() => {
+    if (replaced) {
+      acceptRef.current?.focus();
+    }
+  }, [replaced]);
 
   const accept = (): void => {
     setAcceptFailure(null);
@@ -98,7 +116,6 @@ export function EditorPassBanner({
   };
 
   // Плашка S17: последний проход прерван. Ноль страниц проход иметь не может — сессии бы не было.
-  const last = session.passes[session.passes.length - 1];
   if (last?.state !== 'interrupted') {
     return null;
   }
@@ -115,6 +132,8 @@ export function EditorPassBanner({
           ? 'editor.interrupted.text'
           : 'editor.interrupted.textSet';
     text = t(key, { next: lastNumber + 1 });
+  } else if (replaced) {
+    text = t('editor.interrupted.textReplaced');
   } else if (last.paramsKnown) {
     text = (
       <>
@@ -172,7 +191,7 @@ export function EditorPassBanner({
           </button>
         )}
         {snapshot.canAccept && (
-          <button type="button" className="btn btn--tinted" onClick={accept}>
+          <button ref={acceptRef} type="button" className="btn btn--tinted" onClick={accept}>
             {t('editor.interrupted.accept')}
           </button>
         )}

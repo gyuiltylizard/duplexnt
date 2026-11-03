@@ -47,13 +47,22 @@ nsis:
   deleteAppDataOnUninstall: false
   artifactName: duplexnt-${version}-setup.${ext}
 
+# Полный набор держит тест test/tooling/electron-builder.test.ts: выпавший fuse роняет его.
 electronFuses:
   # Выключен с U12. В сессии 4 был временно включён: на нём стояла проверка файрвола из
-  # установленного exe (U11). Остальные fuses — гейт первого публичного релиза (KTD-35).
+  # установленного exe (U11).
   runAsNode: false
   enableNodeOptionsEnvironmentVariable: false
   enableNodeCliInspectArguments: false
   onlyLoadAppFromAsar: true
+  # Гейт первого публичного релиза (B-29, U2). Шифрование cookie необратимо — включено до первого
+  # релиза; cookie и браузерного хранилища у приложения нет, терять нечего. Целостность asar:
+  # electron-builder кладёт хэш заголовка ресурсом exe (`addWinAsarIntegrity`), приложение с
+  # подменённым app.asar не запускается; sharp распакован (`asarUnpack`) и проверке не мешает.
+  # `file://` интерфейсу больше не нужен (U1) — лишних прав у него нет.
+  enableCookieEncryption: true
+  enableEmbeddedAsarIntegrityValidation: true
+  grantFileProtocolExtraPrivileges: false
 
 # Автообновления и публикации нет.
 publish: null

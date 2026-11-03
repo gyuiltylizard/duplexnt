@@ -9,6 +9,7 @@ import {
   session,
   shell,
 } from 'electron';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   createCommands,
@@ -25,10 +26,17 @@ import ru from '@locales/ru/common.json';
 // файл в сборку и даёт путь — нужно для `dev`; упакованное окно иначе взяло бы значок exe.
 import appIcon from '../../build/window-icon.ico?asset';
 import { APP_NAME, fail, ok, PAGE_IMAGE_SCHEME, type Result } from '@shared';
+import {
+  APP_INDEX_URL,
+  APP_SCHEME,
+  APP_SCHEME_REGISTRATION,
+  handleAppRequest,
+} from './app-protocol';
 import { registerBridge } from './bridge';
 import { resolveDataRoot } from './data-root';
 import { createEventSender } from './events';
 import { handlePageImageRequest, PAGE_SCHEME_REGISTRATION } from './page-protocol';
+import { installDebugGuard } from './shell/debug-guard';
 import { denyAllPermissions, installShellGuards } from './shell/guards';
 import { installShortcutGuard } from './shell/shortcuts';
 import { buildWebPreferences } from './shell/web-preferences';
@@ -53,7 +61,7 @@ function createWindow({ bounds, maximized }: WindowPlacement): BrowserWindow {
     show: false,
     title: APP_NAME,
     icon: appIcon,
-    webPreferences: buildWebPreferences(join(__dirname, '../preload/index.js')),
+    webPreferences: buildWebPreferences(join(__dirname, '../preload/index.js'), app.isPackaged),
   });
 
   // Разворот показывает окно сам; границы до разворота остаются его «обычными» (B-3).
@@ -73,14 +81,25 @@ function createWindow({ bounds, maximized }: WindowPlacement): BrowserWindow {
   return window;
 }
 
+// Собранный renderer лежит рядом с main: в `out/` при запуске из исходников, внутри `app.asar`
+// в установленном приложении — `fs` Electron читает из архива прозрачно.
+const RENDERER_DIR = join(__dirname, '../renderer');
+
+// Вне dev-сервера интерфейс грузится со своей схемы (B-29, U1): страниц по `file://` у
+// приложения нет, и fuse `grantFileProtocolExtraPrivileges` можно выключить.
 function loadRenderer(window: BrowserWindow): void {
   const devServerUrl = process.env.ELECTRON_RENDERER_URL;
   if (!app.isPackaged && devServerUrl !== undefined) {
     void window.loadURL(devServerUrl);
   } else {
-    void window.loadFile(join(__dirname, '../renderer/index.html'));
+    void window.loadURL(APP_INDEX_URL);
   }
 }
+
+// Первое действие main (B-29, U3): установленное приложение с ключом отладки выходит, пока
+// ничего не открыто — ни каталог данных, ни блокировка экземпляра, ни порт. `process.exit` не
+// возвращается, поэтому дальше код идёт только без ключей (или из `out/` и под dev-сервером).
+installDebugGuard(app, (code) => process.exit(code));
 
 // Порядок запуска задан явно (план M1, KTD-21): каталог данных → блокировка экземпляра → всё
 // остальное. Блокировка лежит в `userData`, поэтому каталог `dev` выбирается до неё.
@@ -109,6 +128,11 @@ function storageUnreadable(error: unknown): void {
 
 async function start(): Promise<void> {
   denyAllPermissions(session.defaultSession);
+
+  // Схема интерфейса — до первого окна: по ней грузится сам документ.
+  protocol.handle(APP_SCHEME, (request) =>
+    handleAppRequest(request, { rendererDir: RENDERER_DIR, readFile: (path) => readFile(path) }),
+  );
 
   // Размер и место окна с прошлого запуска (B-3): мониторы известны только после `ready`.
   const windowState = await openWindowStateStore(dataRoot);
@@ -221,13 +245,13 @@ async function start(): Promise<void> {
 
 if (acquireSingleInstance(app, () => mainWindow)) {
   // Гварды ставятся до первого окна: событие `web-contents-created` не повторяется. Привилегии
-  // схемы регистрируются только до `ready`.
+  // схем регистрируются только до `ready` и одним вызовом: повторный заменил бы первый.
   installShellGuards(app);
   // В упакованном приложении браузерных клавиш нет: ни перезагрузки, ни DevTools, ни масштаба.
   if (installShortcutGuard(app)) {
     Menu.setApplicationMenu(null);
   }
-  protocol.registerSchemesAsPrivileged([PAGE_SCHEME_REGISTRATION]);
+  protocol.registerSchemesAsPrivileged([PAGE_SCHEME_REGISTRATION, APP_SCHEME_REGISTRATION]);
 
   app.whenReady().then(start).catch(startupFailed);
 

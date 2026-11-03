@@ -49,9 +49,10 @@ export interface ScannerSlot {
   check(signal?: AbortSignal): Promise<void>;
   /**
    * Сканер подключён явным действием пользователя: запоминается, параметры сверяются (KTD-13).
-   * Отказ во время прохода — у службы.
+   * Отказ во время прохода — у службы. Возвращает исход записи настроек: отказ подключение не
+   * отменяет, но подтверждение смены устройства о нём сообщает (B-29).
    */
-  use(connected: ConnectedScanner): Promise<void>;
+  use(connected: ConnectedScanner): Promise<Result<void>>;
   setParams(params: ScanParams): Promise<Result<void>>;
   /** По адресу сканера прохода ответило другое устройство (KTD-40). */
   markOtherDevice(stored: StoredScanner, error: DomainError): void;
@@ -177,7 +178,7 @@ export function createScannerSlot({
       };
       notify();
       // Отказ записи настроек подключения не отменяет: сканер остаётся в памяти до конца работы.
-      await settings.rememberScanner(storedScannerOf(connected));
+      return settings.rememberScanner(storedScannerOf(connected));
     },
 
     async setParams(params) {

@@ -1,6 +1,7 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   PLACEHOLDER_HOST,
@@ -9,6 +10,7 @@ import {
   RAW_DIR,
   VALUES_FILE,
   listTrackedFiles,
+  resolveValuesRoot,
   runGuard,
   scanForKnownValues,
   scanText,
@@ -268,6 +270,123 @@ describe('runGuard — области и список значений', () => {
 
     expect(runGuard({ root, files: ['docs/solutions/a.png'] }).violations).toEqual([]);
   });
+});
+
+describe('страж в git worktree и вне репозитория (B-29, U4)', () => {
+  const SYNTHETIC_SERIAL = 'ZQ7-SYNTH-SERIAL-0042';
+  const GUARD = resolve('scripts/privacy-guard.ts');
+  const roots: string[] = [];
+
+  const git = (cwd: string, ...args: string[]): string =>
+    execFileSync(
+      'git',
+      [
+        '-c',
+        'user.name=t',
+        '-c',
+        'user.email=t@example.com',
+        '-c',
+        'commit.gpgsign=false',
+        ...args,
+      ],
+      { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+    ).trim();
+
+  /** Страж как его зовёт hook: отдельный процесс Node, `process.cwd()` — переданный каталог. */
+  function cli(cwd: string, ...args: string[]) {
+    const env = { ...process.env };
+    delete env.ELECTRON_RUN_AS_NODE;
+    const result = spawnSync(process.execPath, [GUARD, ...args], { cwd, env, encoding: 'utf8' });
+    return { status: result.status, out: result.stdout + result.stderr };
+  }
+
+  function temp(prefix: string): string {
+    const dir = mkdtempSync(join(tmpdir(), prefix));
+    roots.push(dir);
+    return dir;
+  }
+
+  function write(root: string, path: string, content: string): void {
+    mkdirSync(dirname(join(root, path)), { recursive: true });
+    writeFileSync(join(root, path), content);
+  }
+
+  /** Главное дерево: коммит с README, список значений не под git, worktree рядом. */
+  function mainTreeWithWorktree() {
+    const main = temp('duplexnt-guard-main-');
+    git(main, 'init', '-q', '-b', 'main');
+    write(main, '.gitignore', 'local-test-data/\n');
+    write(main, 'README.md', 'чисто\n');
+    git(main, 'add', '.');
+    git(main, 'commit', '-q', '-m', 'init');
+    write(main, VALUES_FILE, `# синтетика\n${SYNTHETIC_SERIAL}\n`);
+    const worktree = join(temp('duplexnt-guard-wt-'), 'wt');
+    git(main, 'worktree', 'add', '-q', worktree, '-b', 'wt');
+    return { main, worktree };
+  }
+
+  const same = (a: string, b: string): boolean =>
+    process.platform === 'win32'
+      ? resolve(a).toLowerCase() === resolve(b).toLowerCase()
+      : resolve(a) === resolve(b);
+
+  afterEach(() => {
+    for (const root of roots.splice(0)) {
+      rmSync(root, { recursive: true, force: true, maxRetries: 3 });
+    }
+  });
+
+  it('в worktree список значений берётся из главного дерева: находка, код выхода не ноль', () => {
+    const { main, worktree } = mainTreeWithWorktree();
+    expect(same(resolveValuesRoot(worktree), main)).toBe(true);
+    expect(same(resolveValuesRoot(main), main)).toBe(true);
+    expect(existsSync(join(worktree, VALUES_FILE))).toBe(false);
+
+    write(worktree, 'docs/note.md', `серийный номер ${SYNTHETIC_SERIAL}\n`);
+    git(worktree, 'add', 'docs/note.md');
+    const staged = cli(worktree, '--staged');
+
+    expect(staged.status).toBe(1);
+    expect(staged.out).toContain('из главного дерева');
+    expect(staged.out).toContain(`docs/note.md:1: [known-value] ${SYNTHETIC_SERIAL.toLowerCase()}`);
+  }, 20_000);
+
+  it('--staged видит только застейдженное: значение в незастейдженном файле не срабатывает', () => {
+    const { worktree } = mainTreeWithWorktree();
+    write(worktree, 'README.md', `было чисто, стало ${SYNTHETIC_SERIAL}\n`);
+    write(worktree, 'docs/clean.md', 'чисто\n');
+    git(worktree, 'add', 'docs/clean.md');
+
+    const clean = cli(worktree, '--staged');
+    expect(clean.status).toBe(0);
+    expect(clean.out).toContain('список значений проверен');
+
+    git(worktree, 'add', 'README.md');
+    const dirty = cli(worktree, '--staged');
+    expect(dirty.status).toBe(1);
+    expect(dirty.out).toContain('README.md:1: [known-value]');
+  }, 20_000);
+
+  it('чистый клон без списка — законный пропуск, код 0', () => {
+    const { main } = mainTreeWithWorktree();
+    const clone = join(temp('duplexnt-guard-clone-'), 'clone');
+    git(main, 'clone', '-q', main, clone);
+
+    expect(same(resolveValuesRoot(clone), clone)).toBe(true);
+    const result = cli(clone);
+    expect(result.status).toBe(0);
+    expect(result.out).toContain('списка значений нет');
+  }, 20_000);
+
+  it('вне git-репозитория страж объясняет причину словами и выходит с кодом 1', () => {
+    const plain = temp('duplexnt-guard-plain-');
+    expect(same(resolveValuesRoot(plain), plain)).toBe(true);
+
+    const result = cli(plain);
+    expect(result.status).toBe(1);
+    expect(result.out).toContain('это git-репозиторий?');
+    expect(result.out).not.toMatch(/\n\s+at /);
+  }, 20_000);
 });
 
 describe('страж на самом репозитории', () => {

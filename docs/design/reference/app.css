@@ -4000,6 +4000,114 @@ samp {
   }
 }
 
+/* Шаг подтверждения смены устройства (B-29; handoff scanner-change, вариант 1b): список и
+   «Дополнительно» скрыты, поле адреса приглушено, карточка — последним элементом тела. */
+.device-modal--confirming .device-modal__pick {
+  opacity: var(--opacity-disabled);
+  pointer-events: none;
+}
+
+.device-modal--confirming .device-modal__list,
+.device-modal--confirming .device-advanced__toggle,
+.device-modal--confirming .device-advanced {
+  display: none;
+}
+
+.device-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding: var(--space-7) var(--space-8);
+  background: var(--color-bg-surface);
+  border: var(--border-width) solid var(--color-warning);
+  border-radius: var(--radius-l);
+}
+
+.device-confirm__title {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-base);
+  line-height: var(--leading-snug);
+}
+
+.device-confirm__who {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+}
+
+.device-confirm__name {
+  flex: none;
+  max-width: 100%;
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-base);
+  line-height: var(--leading-snug);
+  overflow-wrap: anywhere;
+}
+
+.device-confirm__name--unnamed {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-muted);
+}
+
+.device-confirm__address {
+  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-snug) var(--font-family-mono);
+  color: var(--color-text-muted);
+}
+
+.device-confirm__text {
+  margin: 0;
+  font-size: var(--font-size-m);
+  line-height: var(--leading-relaxed);
+  color: var(--color-text-secondary);
+  text-wrap: pretty;
+}
+
+.device-confirm__replace {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  margin: 0;
+  font-size: var(--font-size-m);
+  line-height: var(--leading-relaxed);
+  color: var(--color-text-primary);
+}
+
+.device-confirm__replace-key {
+  flex: none;
+  font: var(--font-weight-medium) var(--font-size-xs) / 1 var(--font-family-mono);
+  letter-spacing: var(--tracking-caps);
+  color: var(--color-warning);
+}
+
+.device-confirm__cost {
+  margin: 0;
+  padding-top: var(--space-4);
+  border-top: var(--border-width) solid var(--color-border-subtle);
+  font-size: var(--font-size-m);
+  line-height: var(--leading-relaxed);
+  color: var(--color-warning);
+  text-wrap: pretty;
+}
+
+/* Появление карточки — проявление; уход и возврат к вводу — сразу. */
+.device-confirm--enter {
+  animation: device-confirm-in var(--duration-fast) var(--ease-standard) both;
+}
+
+@keyframes device-confirm-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .device-confirm--enter {
+    animation: none;
+  }
+}
+
 /* ── modals/add-modal.css ── */
 
 /* Модалка add (handoff M3.5, S2): две секции с кикерами, строка сканера, сводка в футере. */

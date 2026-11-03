@@ -12,11 +12,14 @@ export interface ShellWebPreferences {
   readonly allowRunningInsecureContent: false;
   readonly webviewTag: false;
   readonly experimentalFeatures: false;
+  /** DevTools закрыты в установленном приложении (B-29, U3); из `out/` и под dev — открыты. */
+  readonly devTools: boolean;
 }
 
-export function buildWebPreferences(preloadPath: string): ShellWebPreferences {
+export function buildWebPreferences(preloadPath: string, isPackaged: boolean): ShellWebPreferences {
   return {
     preload: preloadPath,
+    devTools: !isPackaged,
     sandbox: true,
     contextIsolation: true,
     nodeIntegration: false,

@@ -3,8 +3,10 @@ import {
   ok,
   type Api,
   type CommandResult,
+  type ConnectScannerOutcome,
   type DiscoveredScanner,
   type DiscoveryState,
+  type ScannerInfo,
 } from '@shared';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -42,6 +44,13 @@ function stubApi(state: DiscoveryState = FOUND) {
         connects.push(resolve);
       }),
   );
+  const confirms: ((result: CommandResult<'confirmScannerChange'>) => void)[] = [];
+  const confirmScannerChange = vi.fn(
+    () =>
+      new Promise<CommandResult<'confirmScannerChange'>>((resolve) => {
+        confirms.push(resolve);
+      }),
+  );
   const stopDiscovery = vi.fn(() => Promise.resolve(ok(undefined)));
   const cancelConnect = vi.fn(() => Promise.resolve(ok(undefined)));
   const api = {
@@ -50,15 +59,20 @@ function stubApi(state: DiscoveryState = FOUND) {
     stopDiscovery,
     cancelConnect,
     connectScanner,
+    confirmScannerChange,
     onDiscoveryChanged: vi.fn(() => () => undefined),
   } as unknown as Api;
   vi.stubGlobal('api', api);
   return {
     connectScanner,
+    confirmScannerChange,
     stopDiscovery,
     cancelConnect,
     resolveConnect: (index: number, result: CommandResult<'connectScanner'>): void => {
       connects[index]?.(result);
+    },
+    resolveConfirm: (index: number, result: CommandResult<'confirmScannerChange'>): void => {
+      confirms[index]?.(result);
     },
   };
 }
@@ -86,7 +100,7 @@ describe('DeviceModal', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Подключить' }));
     expect(connectScanner).toHaveBeenCalledExactlyOnceWith({ kind: 'discovered', id: SCANNER.id });
 
-    resolveConnect(0, ok(CONNECTED_INFO));
+    resolveConnect(0, ok({ kind: 'connected' as const, scanner: CONNECTED_INFO }));
     await flush();
     expect(onConnected).toHaveBeenCalledExactlyOnceWith('ScanPro 200');
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -247,7 +261,7 @@ describe('DeviceModal', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Подключить' }));
     view.unmount();
 
-    resolveConnect(0, ok(CONNECTED_INFO));
+    resolveConnect(0, ok({ kind: 'connected' as const, scanner: CONNECTED_INFO }));
     await flush();
     expect(onConnected).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
@@ -351,7 +365,7 @@ describe('DeviceModal', () => {
       target: { value: '192.0.2.10' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Подключить' }));
-    resolveConnect(0, ok(CONNECTED_INFO));
+    resolveConnect(0, ok({ kind: 'connected' as const, scanner: CONNECTED_INFO }));
     await flush();
 
     expect(onConnected).toHaveBeenCalledExactlyOnceWith('ScanPro 200');
@@ -367,7 +381,10 @@ describe('DeviceModal', () => {
       target: { value: '192.0.2.10' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Подключить' }));
-    resolveConnect(0, ok({ ...CONNECTED_INFO, name: null }));
+    resolveConnect(
+      0,
+      ok({ kind: 'connected' as const, scanner: { ...CONNECTED_INFO, name: null } }),
+    );
     await flush();
 
     expect(onConnected).toHaveBeenCalledExactlyOnceWith('192.0.2.10');
@@ -406,5 +423,208 @@ describe('DeviceModal', () => {
 
     expect(connectScanner).toHaveBeenCalledOnce();
     expect(connectScanner).toHaveBeenLastCalledWith(expect.objectContaining({ port: 65535 }));
+  });
+});
+
+// --- Шаг подтверждения смены устройства (B-29; handoff scanner-change, вариант 1b) -----------
+
+const REMEMBERED_INFO: ScannerInfo = {
+  name: 'ScanPro 100',
+  scheme: 'https',
+  host: '192.0.2.10',
+  port: 443,
+};
+const CONFIRMATION: Extract<ConnectScannerOutcome, { kind: 'confirmation' }> = {
+  kind: 'confirmation',
+  token: 'ab'.repeat(16),
+  scanner: CONNECTED_INFO,
+  remembered: REMEMBERED_INFO,
+  interruptedPass: false,
+  awaitingBacks: false,
+};
+
+/** Модалка с адресом в поле, «Подключить» нажата, ядро ответило «нужно подтверждение». */
+async function openStep(
+  confirmation: typeof CONFIRMATION = CONFIRMATION,
+  props: { onClose?: () => void; onConnected?: (label: string, saved?: boolean) => void } = {},
+) {
+  const stub = stubApi();
+  const onClose = props.onClose ?? vi.fn();
+  const onConnected = props.onConnected ?? vi.fn();
+  render(
+    <DeviceModal initialAddress="192.0.2.10:443" onClose={onClose} onConnected={onConnected} />,
+  );
+  await flush();
+  fireEvent.click(screen.getByRole('button', { name: 'Подключить' }));
+  await flush();
+  stub.resolveConnect(0, ok(confirmation));
+  await flush();
+  return { ...stub, onClose, onConnected };
+}
+
+describe('DeviceModal — шаг подтверждения смены устройства', () => {
+  it('ответ «нужно подтверждение» открывает шаг: карточка, список скрыт, поле недоступно, фокус на «Отмене»', async () => {
+    await openStep();
+
+    const step = screen.getByRole('alertdialog', {
+      name: 'По этому адресу отвечает другое устройство',
+    });
+    expect(step.textContent).toContain('ScanPro 200');
+    expect(step.textContent).toContain('192.0.2.10:443');
+    expect(step.textContent).toContain('ЗАМЕНИТ');
+    expect(step.textContent).toContain('сканер ScanPro 100');
+    expect(step.textContent).not.toContain('продолжить будет нельзя');
+    expect(screen.queryByRole('listbox')).toBeNull();
+    expect(screen.getByLabelText<HTMLInputElement>('АДРЕС ВРУЧНУЮ').disabled).toBe(true);
+    expect(screen.getByLabelText<HTMLInputElement>('АДРЕС ВРУЧНУЮ').value).toBe('192.0.2.10:443');
+    expect(
+      screen.getByRole<HTMLButtonElement>('button', { name: 'Подключить это устройство' }).disabled,
+    ).toBe(false);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Отмена' }));
+    expect(screen.queryByRole('status')?.textContent ?? '').toBe('');
+  });
+
+  it('безымянное устройство — «Сканер без имени»; имя запомненного без имени — его хост', async () => {
+    await openStep({
+      ...CONFIRMATION,
+      scanner: { ...CONNECTED_INFO, name: null },
+      remembered: { ...REMEMBERED_INFO, name: null },
+    });
+
+    const step = screen.getByRole('alertdialog');
+    expect(step.textContent).toContain('Сканер без имени');
+    expect(step.textContent).toContain('сканер 192.0.2.10');
+  });
+
+  it.each([
+    [
+      'прерванный проход',
+      { interruptedPass: true, awaitingBacks: false },
+      'продолжить будет нельзя',
+    ],
+    [
+      'flip: ждём обороты',
+      { interruptedPass: false, awaitingBacks: true },
+      'соберётся с двух устройств',
+    ],
+  ])('строка последствий: %s', async (_name, consequences, expected) => {
+    await openStep({ ...CONFIRMATION, ...consequences });
+
+    const step = screen.getByRole('alertdialog');
+    expect(step.textContent).toContain(expected);
+    expect(step.getAttribute('aria-describedby')).toContain('device-confirm-cost');
+  });
+
+  it('подтверждение шлёт только токен; успех закрывает модалку и зовёт тост с именем', async () => {
+    const { confirmScannerChange, resolveConfirm, onClose, onConnected } = await openStep();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Подключить это устройство' }));
+    await flush();
+
+    expect(confirmScannerChange).toHaveBeenCalledExactlyOnceWith({ token: 'ab'.repeat(16) });
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Подключаем…' }).disabled).toBe(
+      true,
+    );
+    expect(screen.getByRole('dialog').getAttribute('aria-busy')).toBe('true');
+    expect(screen.getByRole('status').textContent).toBe('Подключаемся к ScanPro 200…');
+
+    resolveConfirm(0, ok({ scanner: CONNECTED_INFO, settingsSaved: true }));
+    await flush();
+
+    expect(onConnected).toHaveBeenCalledExactlyOnceWith('ScanPro 200', true);
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('настройки не записались — модалка закрывается, тост с предупреждением (settingsSaved ложь)', async () => {
+    const { resolveConfirm, onClose, onConnected } = await openStep();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Подключить это устройство' }));
+    await flush();
+    resolveConfirm(0, ok({ scanner: CONNECTED_INFO, settingsSaved: false }));
+    await flush();
+
+    expect(onConnected).toHaveBeenCalledExactlyOnceWith('ScanPro 200', false);
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('двойной клик по подтверждению — одно подтверждение', async () => {
+    const { confirmScannerChange } = await openStep();
+
+    const button = screen.getByRole('button', { name: 'Подключить это устройство' });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    await flush();
+    fireEvent.click(screen.getByRole('button', { name: 'Подключаем…' }));
+    await flush();
+
+    expect(confirmScannerChange).toHaveBeenCalledOnce();
+  });
+
+  it('«Отмена» в шаге возвращает к вводу с прежним адресом, гасит пробу, фокус в поле', async () => {
+    const { cancelConnect, onClose } = await openStep();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Отмена' }));
+    await flush();
+
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(screen.queryByRole('listbox')).not.toBeNull();
+    const address = screen.getByLabelText<HTMLInputElement>('АДРЕС ВРУЧНУЮ');
+    expect(address.disabled).toBe(false);
+    expect(address.value).toBe('192.0.2.10:443');
+    expect(document.activeElement).toBe(address);
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Подключить' }).disabled).toBe(
+      false,
+    );
+    expect(cancelConnect).toHaveBeenCalledOnce();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('Esc в шаге закрывает модалку; размонтирование гасит пробу', async () => {
+    const { cancelConnect, onClose } = await openStep();
+
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledOnce();
+
+    cleanup();
+    await flush();
+    expect(cancelConnect).toHaveBeenCalled();
+  });
+
+  it.each([
+    ['проба устарела', fail('scannerChangeStale', { reason: 'token' }), /пока вы решали/],
+    ['идёт сканирование', fail('sessionConflict', { reason: 'passRunning' }), /идёт сканирование/],
+    ['иной отказ', fail('scannerUnreachable', { reason: 'timeout' }), /^Не удалось подключиться: /],
+  ])('отказ подтверждения — %s: свой текст и возврат к вводу', async (_name, error, expected) => {
+    const { resolveConfirm, onClose } = await openStep();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Подключить это устройство' }));
+    await flush();
+    resolveConfirm(0, error);
+    await flush();
+
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(screen.getByRole('alert').textContent).toMatch(expected);
+    expect(screen.getByLabelText<HTMLInputElement>('АДРЕС ВРУЧНУЮ').value).toBe('192.0.2.10:443');
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Подключить' }).disabled).toBe(
+      false,
+    );
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('новая проба после отказа снова открывает шаг с новым токеном', async () => {
+    const { resolveConnect, resolveConfirm, confirmScannerChange } = await openStep();
+    fireEvent.click(screen.getByRole('button', { name: 'Подключить это устройство' }));
+    await flush();
+    resolveConfirm(0, fail('scannerChangeStale', { reason: 'token' }));
+    await flush();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Подключить' }));
+    await flush();
+    resolveConnect(1, ok({ ...CONFIRMATION, token: 'cd'.repeat(16) }));
+    await flush();
+    fireEvent.click(screen.getByRole('button', { name: 'Подключить это устройство' }));
+    await flush();
+
+    expect(confirmScannerChange).toHaveBeenLastCalledWith({ token: 'cd'.repeat(16) });
   });
 });
