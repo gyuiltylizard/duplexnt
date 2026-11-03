@@ -82,7 +82,33 @@ page», «Keep as is», «Scan the rest», «Assemble document», «Revert». П
 
 **Готово:** typecheck, lint, format:check, `npm test` зелёные. Коммит `feat(b-41): U2 …`.
 
-### U3. Язык в renderer и в main — ⏳ в работе
+### U3. Язык в renderer и в main — ✅ зелёный
+
+`src/renderer/src/state/use-language.ts`: `applyLanguage(locale, target = i18n, root =
+document.documentElement)` — `changeLanguage` только при смене, `lang` только при смене;
+`useLanguage(language | null)` в `useLayoutEffect` (план KTD-4: до первого кадра, не в теле
+рендера). В `App` — сразу после `useSyncExternalStore` снимка, до раннего возврата. Тест с
+настоящим i18n: язык меняется синхронно; `App` с английским снимком показывает «Scanning both
+sides in two passes» и `lang="en"`; `afterEach` возвращает русский.
+
+`src/main/shell/system-locale.ts`: `systemLocaleOf(app)` над `localeOfSystemTag` из `shared`,
+`startupStringsOf(locale)` выбирает бандл `ru | en` — i18next в main нет. `index.ts`:
+`systemLocale` считается в `start()` после `ready`, уходит опцией в `openPassService`, диалог
+`storageUnreadable` получает язык параметром; прямой импорт `ru` из `index.ts` снят.
+
+**Живьём на `out/`** (CDP, отдельный `DUPLEXNT_USER_DATA`): `--lang=en-US` → `lang="en"`,
+заголовок «Scanning both sides in two passes», кикер «NEW SCAN». **Находка:** без ключа —
+тоже английский: на машине автора `app.getLocale()` = `en-US` (язык интерфейса Windows),
+`getPreferredSystemLanguages()` = `[en-US, ru]`, `getSystemLocale()` = `ru-RU`. Решение
+автора 2026-11-03: правило остаётся «язык интерфейса Windows» (`getLocale`), как в плане;
+альтернатива «русский есть в предпочитаемых → русский» отклонена как нестандартная. До U6 у
+автора приложение по умолчанию английское; AE2 читать как «на системе с русским языком
+интерфейса».
+
+**Готово:** typecheck, lint, format:check, `npm test` 154 / 2710 зелёные. Коммит
+`feat(b-41): U3 …`.
+
+### U5. Референс дизайна на двух языках — ⏳ в работе
 
 ---
 
