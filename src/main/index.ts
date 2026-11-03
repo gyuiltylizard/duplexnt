@@ -109,6 +109,13 @@ const dataRoot = resolveDataRoot(app);
 const DERIVED_CONCURRENCY = 2;
 
 let mainWindow: BrowserWindow | null = null;
+/**
+ * Последняя запись состояния окна: она стартует на закрытии окна, а выход по `window-all-closed`
+ * обрывал её на полпути и оставлял `window.json.*.tmp` (bugs). Выход ждёт её, но не дольше
+ * предела — файл окна удобство, а не данные, виснуть из-за него нельзя.
+ */
+let windowStateSettled: Promise<unknown> = Promise.resolve();
+const WINDOW_STATE_QUIT_LIMIT_MS = 2000;
 
 // Исключение при запуске оставило бы процесс без окна, но с блокировкой экземпляра: приложение
 // не открылось бы и повторным запуском, пока процесс не снят вручную.
@@ -145,7 +152,7 @@ async function start(): Promise<void> {
   const window = createWindow(placeWindow(windowState.get(), workAreas));
   mainWindow = window;
   trackWindowState(window, (state) => {
-    void windowState.save(state).then((saved) => {
+    windowStateSettled = windowState.save(state).then((saved) => {
       if (!saved.ok) {
         console.error('[main] состояние окна не записано', saved.error);
       }
@@ -262,6 +269,11 @@ if (acquireSingleInstance(app, () => mainWindow)) {
   app.whenReady().then(start).catch(startupFailed);
 
   app.on('window-all-closed', () => {
-    app.quit();
+    const limit = new Promise<void>((resolve) => {
+      setTimeout(resolve, WINDOW_STATE_QUIT_LIMIT_MS).unref();
+    });
+    void Promise.race([windowStateSettled, limit]).finally(() => {
+      app.quit();
+    });
   });
 }

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { fail, ok, type Result } from '@shared';
+import { removeStaleTemps } from './atomic-file';
 import { layoutOf } from './layout';
 import { ioOf, serialQueue, storageFailure, type StorageOptions } from './storage-fs';
 import { fitsSchema, readVersioned, setAside, writeVersioned } from './versioned-file';
@@ -49,6 +50,8 @@ export async function openWindowStateStore(
   let state: WindowState | null = null;
   // Файл более новой версии или не прочитанный вовсе не переписывается до конца работы.
   let frozen = false;
+  // Хвосты записей, оборванных выходом (окно пишется на закрытии), — уборка до чтения.
+  await removeStaleTemps(windowFile, io);
   try {
     const read = await readVersioned(fs, windowFile, windowStateSchema, WINDOW_STATE_VERSION);
     if (read.kind === 'ok') {

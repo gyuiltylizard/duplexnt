@@ -1,4 +1,5 @@
 import { readdir, readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { fsError, interceptFs } from '../../../test/support/intercept-fs';
 import { makeTempDataRoot } from '../../../test/support/temp-data-root';
@@ -92,6 +93,25 @@ describe('состояние окна (B-3)', () => {
     expect(await store.save({ ...STATE, maximized: true })).toMatchObject({ ok: true });
 
     expect(await readFile(file, 'utf8')).toBe(before);
+  });
+
+  it('хвосты window.json.*.tmp прошлых запусков убираются при открытии; соседи не тронуты', async () => {
+    const root = await makeTempDataRoot();
+    const file = layoutOf(root).windowFile;
+    await writeFile(file, JSON.stringify({ version: 1, ...STATE }));
+    await writeFile(`${file}.0123456789ab.tmp`, '');
+    await writeFile(`${file}.fedcba987654.tmp`, JSON.stringify({ version: 1, ...STATE }));
+    await writeFile(`${file}.unreadable-0123456789ab`, '{ оборвано');
+    await writeFile(join(root, 'settings.json.0123456789ab.tmp'), '');
+
+    const store = await openWindowStateStore(root);
+
+    expect(store.get()).toEqual(STATE);
+    expect((await readdir(root)).sort()).toEqual([
+      'settings.json.0123456789ab.tmp',
+      'window.json',
+      'window.json.unreadable-0123456789ab',
+    ]);
   });
 
   it('отказ записи — ошибкой, состояние в памяти остаётся', async () => {
