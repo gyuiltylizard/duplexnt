@@ -130,26 +130,6 @@ describe('страницы пары в ленте (S8)', () => {
     ]);
     expect(screen.getByText(/Обороты набора не сошлись с лицами/)).toBeDefined();
   });
-
-  it('сводка add для текущей на странице пары — теми же словами', () => {
-    stubApi();
-    renderEditor({
-      ...withPair(3),
-      scanner: {
-        kind: 'ready',
-        scanner: { name: 'ScanPro 200', scheme: 'https', host: '192.0.2.10', port: 443 },
-        options: { colorModes: ['Grayscale8'], resolutions: [300], paperSizes: ['A4'] },
-        params: { colorMode: 'Grayscale8', resolution: 300, paperSize: 'A4' },
-      },
-    });
-
-    fireEvent.click(option(4));
-    fireEvent.click(screen.getByRole('button', { name: 'Добавить листы' }));
-    fireEvent.click(screen.getByRole('radio', { name: 'После текущей страницы' }));
-    expect(document.querySelector('.add-modal__summary')?.textContent).toBe(
-      'Двустороннее · после стр. 5 (оборот листа 1 набора Д1)',
-    );
-  });
 });
 
 describe('плашка прерванного прохода набора (S10)', () => {
@@ -205,7 +185,7 @@ describe('«После текущей страницы» на лице набо�
   // Оборот листа 1 набора Д1 (обороты обратным порядком: лицу 1 — третья страница прохода).
   const SET_B1 = 'p04-s01-0003';
 
-  it('новый набор встаёт после скрытого хвоста; сводка нумерует по показанной ленте', () => {
+  it('новый набор встаёт после скрытого хвоста', () => {
     stubApi();
     const onAdd = vi.fn();
     // Пустые и скрытые: B3 (хвост лица 1 основной пачки, перед текущей) и оборот листа 1 набора.
@@ -233,10 +213,6 @@ describe('«После текущей страницы» на лице набо�
     fireEvent.click(front);
     fireEvent.click(screen.getByRole('button', { name: 'Добавить листы' }));
     fireEvent.click(screen.getByRole('radio', { name: /После текущей страницы/u }));
-    // Номер — по показанной ленте: 3-я (в полной — 4-я).
-    expect(document.querySelector('.add-modal__summary')?.textContent).toBe(
-      'Двустороннее · после стр. 3 (лицо листа 1 набора Д1)',
-    );
     fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
     expect(onAdd).toHaveBeenCalledExactlyOnceWith('addedFronts', SET_B1);
   });

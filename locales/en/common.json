@@ -722,17 +722,6 @@
       "after": "After the current page",
       "afterNone": "No current page — the strip is empty"
     },
-    "summary": {
-      "twoSided": "Two-sided",
-      "oneSided": "One-sided",
-      "after": "after page {{page}} ({{what}})",
-      "end": "at the end of document “{{name}}”, after page {{page}}",
-      "setEnd": "at the end of the {{group}} set, after page {{page}}",
-      "groupFronts": "fronts",
-      "groupBacks": "backs",
-      "endEmpty": "at the end of the strip",
-      "join": "{{kind}} · {{place}}"
-    },
     "scanner": {
       "ready": "ready · {{params}}",
       "none": "No scanner connected — connect it in the setup"

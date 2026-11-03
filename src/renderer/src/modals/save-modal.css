@@ -3,13 +3,6 @@
 .save-modal .kicker {
   margin: 0;
 }
-/* Сводка — второстепенный блок (B-43): значения голосом метаданных строки «Файлы»
-   (`.save-file__ext`), а не первичным текстом; ключи — как в общей таблице фактов. */
-.save-modal .facts__value {
-  font-weight: var(--font-weight-regular);
-  font-size: var(--font-size-s);
-  color: var(--color-text-hint);
-}
 .save-modal__modes {
   display: flex;
   gap: var(--space-4);

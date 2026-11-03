@@ -1,4 +1,4 @@
-/* Модалка add (handoff M3.5, S2): две секции с кикерами, строка сканера, сводка в футере. */
+/* Модалка add (handoff M3.5, S2): две секции с кикерами, строка сканера; футер без сводки (B-44). */
 
 .add-modal__body {
   display: flex;
@@ -39,8 +39,4 @@
 .add-modal__scanner--none .add-modal__scanner-status {
   color: var(--color-text-muted);
   font-family: var(--font-family-sans);
-}
-
-.add-modal__summary {
-  font-family: var(--font-family-mono);
 }

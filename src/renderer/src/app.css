@@ -549,11 +549,13 @@
   color: var(--color-text-muted);
 }
 
+/* Значения — голосом метаданных (`.save-file__ext`), не первичным текстом: сводка `save` с
+   B-43, ДЕТАЛИ инспектора — с B-44 (автор: «слишком яркий шрифт»). */
 .facts__value {
   margin: 0;
   text-align: right;
-  font: var(--font-weight-medium) var(--font-size-m) / var(--leading-snug) var(--font-family-mono);
-  color: var(--color-text-primary);
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-snug) var(--font-family-mono);
+  color: var(--color-text-hint);
 }
 
 /* — тост — */

@@ -5,119 +5,67 @@ import type {
   AssembledDocument,
   AssembledPage,
   AssemblyMode,
-  PassKind,
   ScannerState,
   SetsLayout,
 } from '@shared';
-import type { TFunction } from 'i18next';
 import { Modal } from '../components/Modal';
 import { rovingRadioKeyDown, Segments } from '../components/Segments';
-import { whatOf } from '../state/page-text';
 import { paramsLine } from '../state/params-line';
 import { scannerLabel } from '../state/scanner-address';
 import './add-modal.css';
 
 // Модалка `add` (план M3.5, U6; handoff M3.5, S2; UI_SPEC §7): что сканируем — две
-// карточки-радио, куда вставить — два крупных сегмента, строка сканера, сводка, «Отмена» /
-// «Начать скан». С M4.5 (R1–R4; handoff M4.5, S1–S2) карточки — сценарии: «Двустороннее
+// карточки-радио, куда вставить — два крупных сегмента, строка сканера, «Отмена» /
+// «Начать скан». Сводки в футере нет (B-44): её текст менял высоту модалки при смене места
+// и на миг давал вертикальный скролл, а пользы не нёс — сегменты называют место сами. С M4.5 (R1–R4; handoff M4.5, S1–S2) карточки — сценарии: «Двустороннее
 // сканирование» (пара проходов с разворотом, намерение `addedFronts`) и «Одностороннее
 // сканирование» (`added`); число листов приложение не знает. В режиме раздельных наборов (R3)
 // двусторонняя выключена с причиной и не выбирается ни кликом, ни стрелками. Место даёт якорь
-// (KTD-8) — его выбирает экран из видимой ленты и называет сводка. «Начать скан» всегда закрывает
+// (KTD-8) — его выбирает экран из видимой ленты. «Начать скан» всегда закрывает
 // модалку (KTD-6): экран уйдёт на `scan` раньше, чем ядро начнёт задание, а отказ придёт тостом.
 // Начальный фокус — «Отмена»: запуск — действие с бумагой в лотке, случайный Enter его начинать
 // не должен. В режиме раздельных наборов (M3.6, KTD11; handoff S10) «В конец документа»
-// становится «В конец набора»: якорь — последняя видимая страница группы текущей, сводка называет
-// группу.
-
-/** Страница-якорь из видимой ленты: ключ, номер в ленте и как её назвать в сводке. */
-export interface AddAnchor {
-  readonly key: string;
-  readonly page: number;
-  /**
-   * Текущая — «лицо листа 4» (теми же словами, что ДЕТАЛИ); конец документа — его имя; конец
-   * набора — группа («лиц» / «оборотов»).
-   */
-  readonly label: string;
-}
+// становится «В конец набора»: якорь — последняя видимая страница группы текущей.
 
 /** Куда ведёт второй сегмент места: в конец документа текущей или в конец её набора. */
 export type AddEndKind = 'document' | 'set';
 
+/** Якоря из видимой ленты — ключи страниц, после которых встанет набор. */
 export interface AddAnchors {
-  /** Текущая страница; `null` — лента пуста («После текущей страницы» недоступна). */
-  readonly current: AddAnchor | null;
+  /** Текущая страница (хвост её листа); `null` — лента пуста («После текущей» недоступна). */
+  readonly current: string | null;
   /** Конец документа или набора текущей: его последняя видимая страница; `null` — лента пуста. */
-  readonly end: AddAnchor | null;
+  readonly end: string | null;
   readonly endKind: AddEndKind;
 }
 
 /**
  * Якоря из видимой ленты (KTD-8): текущая — та, что в превью; конец документа — последняя
- * видимая страница документа текущей, имя — как в тулбаре; в режиме наборов (`sets`) — конец
- * группы текущей (KTD11). Пустая лента — оба `null`.
+ * видимая страница документа текущей; в режиме наборов (`sets`) — конец группы текущей
+ * (KTD11). Пустая лента — оба `null`.
  */
-export function anchorsOf(
-  t: TFunction,
-  input: {
-    readonly entry: AssembledPage | undefined;
-    /** Позиция текущей в ленте, с нуля. */
-    readonly index: number;
-    readonly document: AssembledDocument | undefined;
-    readonly documentName: string;
-    readonly visible: readonly string[];
-    readonly mode: AssemblyMode;
-    /** Группы ленты в режиме наборов; `null` — пары или собрано. */
-    readonly sets: SetsLayout | null;
-    /** Роль прохода текущей — слова страницы пары (M4.5, R13); по умолчанию неизвестна. */
-    readonly origin?: PassKind | null;
-    /**
-     * Ключ, после которого встанет набор при «После текущей» (M4, R12; B-13): последняя
-     * страница листа текущей — её склеенный оборот; по умолчанию — сама текущая.
-     */
-    readonly after?: string | undefined;
-    /** Номер страницы в показанной ленте, с единицы (M4, R11); по умолчанию — позиция в `visible`. */
-    readonly numberOf?: (key: string) => number;
-  },
-): AddAnchors {
+export function anchorsOf(input: {
+  readonly entry: AssembledPage | undefined;
+  /** Позиция текущей в ленте, с нуля. */
+  readonly index: number;
+  readonly document: AssembledDocument | undefined;
+  readonly visible: readonly string[];
+  /** Группы ленты в режиме наборов; `null` — пары или собрано. */
+  readonly sets: SetsLayout | null;
+  /**
+   * Ключ, после которого встанет набор при «После текущей» (M4, R12; B-13): последняя
+   * страница листа текущей — её склеенный оборот; по умолчанию — сама текущая.
+   */
+  readonly after?: string | undefined;
+}): AddAnchors {
   const { entry, index, document, sets } = input;
-  const numberOf = input.numberOf ?? ((key: string): number => input.visible.indexOf(key) + 1);
-  const current =
-    entry === undefined
-      ? null
-      : {
-          key: input.after ?? entry.key,
-          // Номер — по показанной ленте, как у миниатюр (M4, R11); `index` — позиция в полной.
-          page: numberOf(entry.key),
-          label: whatOf(t, entry, input.mode, input.origin ?? null),
-        };
+  const current = entry === undefined ? null : (input.after ?? entry.key);
   if (sets !== null) {
-    const inFronts = index < sets.divider;
-    const end = inFronts ? sets.divider - 1 : input.visible.length - 1;
-    const endKey = input.visible[end];
-    return {
-      current,
-      end:
-        endKey === undefined
-          ? null
-          : {
-              key: endKey,
-              page: numberOf(endKey),
-              label: t(inFronts ? 'add.summary.groupFronts' : 'add.summary.groupBacks'),
-            },
-      endKind: 'set',
-    };
+    const end = index < sets.divider ? sets.divider - 1 : input.visible.length - 1;
+    return { current, end: input.visible[end] ?? null, endKind: 'set' };
   }
   const end = document === undefined ? -1 : document.start + document.count - 1;
-  const endKey = input.visible[end];
-  return {
-    current,
-    end:
-      endKey === undefined
-        ? null
-        : { key: endKey, page: numberOf(endKey), label: input.documentName },
-    endKind: 'document',
-  };
+  return { current, end: input.visible[end] ?? null, endKind: 'document' };
 }
 
 export interface AddModalProps extends AddAnchors {
@@ -161,21 +109,10 @@ export function AddModal({
   const [place, setPlace] = useState<Place>('end');
 
   const ready = scanner.kind === 'ready';
-  let placeText: string;
-  if (place === 'after' && current !== null) {
-    placeText = t('add.summary.after', { page: current.page, what: current.label });
-  } else if (end === null) {
-    placeText = t('add.summary.endEmpty');
-  } else if (endKind === 'set') {
-    placeText = t('add.summary.setEnd', { group: end.label, page: end.page });
-  } else {
-    placeText = t('add.summary.end', { name: end.label, page: end.page });
-  }
-  const summary = t('add.summary.join', { kind: t(`add.summary.${kind}`), place: placeText });
 
   const start = (): void => {
     // Якорь — в момент нажатия (KTD-8): текущая, последняя страница документа или `null`.
-    const after = place === 'after' && current !== null ? current.key : (end?.key ?? null);
+    const after = place === 'after' && current !== null ? current : end;
     onClose();
     onStart(INTENT_OF[kind], after);
   };
@@ -284,8 +221,7 @@ export function AddModal({
         )}
       </div>
 
-      <footer className="modal__footer">
-        <p className="modal__status add-modal__summary">{summary}</p>
+      <footer className="modal__footer modal__footer--end">
         <button type="button" className="btn btn--ghost" autoFocus onClick={onClose}>
           {t('add.cancel')}
         </button>
