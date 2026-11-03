@@ -4000,6 +4000,14 @@ samp {
   }
 }
 
+/* Обёртка секций выбора (B-29, U8) повторяет раскладку `modal__body`: колонка с тем же зазором.
+   Без неё секции стояли блоками вплотную, и список наезжал на кикер поля адреса (B-43). */
+.device-modal__pick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-9);
+}
+
 /* Шаг подтверждения смены устройства (B-29; handoff scanner-change, вариант 1b): список и
    «Дополнительно» скрыты, поле адреса приглушено, карточка — последним элементом тела. */
 .device-modal--confirming .device-modal__pick {
@@ -4163,6 +4171,13 @@ samp {
 
 .save-modal .kicker {
   margin: 0;
+}
+/* Сводка — второстепенный блок (B-43): значения голосом метаданных строки «Файлы»
+   (`.save-file__ext`), а не первичным текстом; ключи — как в общей таблице фактов. */
+.save-modal .facts__value {
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-s);
+  color: var(--color-text-hint);
 }
 .save-modal__modes {
   display: flex;

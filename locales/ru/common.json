@@ -167,7 +167,7 @@
   "device": {
     "title": "Добавить сканер",
     "sectionScanners": "СЕТЕВЫЕ СКАНЕРЫ",
-    "sectionAddress": "АДРЕС ВРУЧНУЮ",
+    "sectionAddress": "ВВЕСТИ АДРЕС",
     "listLabel": "Сетевые сканеры",
     "search": {
       "searching": "Идёт поиск сканеров в сети…",
@@ -828,7 +828,7 @@
       "straightNone": "нет",
       "straightValue": "{{count}} стр.",
       "straightPendingTail": " · ещё {{count}} в обработке",
-      "straightUndoneTail": " · не выровнено {{count}} — уйдут как есть"
+      "straightUndoneTail": " · не выровнено {{count}}"
     },
     "documentBlank": "Документ «{{name}}» состоит из одних пустых оборотов — покажите их переключателем или уберите границу.",
     "blankPending": "Оценка пустых оборотов: ещё {{count}} стр. — кнопка станет доступна сама.",

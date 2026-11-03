@@ -475,8 +475,8 @@ describe('DeviceModal — шаг подтверждения смены устр�
     expect(step.textContent).toContain('сканер ScanPro 100');
     expect(step.textContent).not.toContain('продолжить будет нельзя');
     expect(screen.queryByRole('listbox')).toBeNull();
-    expect(screen.getByLabelText<HTMLInputElement>('АДРЕС ВРУЧНУЮ').disabled).toBe(true);
-    expect(screen.getByLabelText<HTMLInputElement>('АДРЕС ВРУЧНУЮ').value).toBe('192.0.2.10:443');
+    expect(screen.getByLabelText<HTMLInputElement>('ВВЕСТИ АДРЕС').disabled).toBe(true);
+    expect(screen.getByLabelText<HTMLInputElement>('ВВЕСТИ АДРЕС').value).toBe('192.0.2.10:443');
     expect(
       screen.getByRole<HTMLButtonElement>('button', { name: 'Подключить это устройство' }).disabled,
     ).toBe(false);
@@ -568,7 +568,7 @@ describe('DeviceModal — шаг подтверждения смены устр�
 
     expect(screen.queryByRole('alertdialog')).toBeNull();
     expect(screen.queryByRole('listbox')).not.toBeNull();
-    const address = screen.getByLabelText<HTMLInputElement>('АДРЕС ВРУЧНУЮ');
+    const address = screen.getByLabelText<HTMLInputElement>('ВВЕСТИ АДРЕС');
     expect(address.disabled).toBe(false);
     expect(address.value).toBe('192.0.2.10:443');
     expect(document.activeElement).toBe(address);
@@ -604,7 +604,7 @@ describe('DeviceModal — шаг подтверждения смены устр�
 
     expect(screen.queryByRole('alertdialog')).toBeNull();
     expect(screen.getByRole('alert').textContent).toMatch(expected);
-    expect(screen.getByLabelText<HTMLInputElement>('АДРЕС ВРУЧНУЮ').value).toBe('192.0.2.10:443');
+    expect(screen.getByLabelText<HTMLInputElement>('ВВЕСТИ АДРЕС').value).toBe('192.0.2.10:443');
     expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Подключить' }).disabled).toBe(
       false,
     );
