@@ -10,12 +10,14 @@ import {
   type BlankMode,
   type CommandResult,
   type DomainError,
+  type Locale,
   type ScanOptions,
   type ScanParams,
   type ScannerInfo,
   type Snapshot,
   type StraightenMode,
 } from '@shared';
+import { LanguageSwitch } from '../components/LanguageSwitch';
 import { LaunchFailureNotice } from '../components/LaunchFailureNotice';
 import { Segments } from '../components/Segments';
 import { errorText } from '../state/error-text';
@@ -29,7 +31,9 @@ import './setup-screen.css';
 // приложения, не устройства: доступен и без сканера, значения — словарь `BLANK_MODES`, а не
 // capabilities. Ряд «Выравнивание» (M6, R13; handoff M6) — такой же ряд приложения: по умолчанию
 // «Выравнивать», «Сбросить параметры» возвращает его; при старте первого прохода режим
-// замораживается в сессии, новый выбор действует со следующего сканирования.
+// замораживается в сессии, новый выбор действует со следующего сканирования. Переключатель
+// языка (B-41, U6; handoff 2026-11-b41-language) — в углу колонки «Как это работает»: не
+// параметр сканирования, «Сбросить параметры» его не трогает, виден при любом сканере.
 
 export interface SetupScreenProps {
   readonly snapshot: Snapshot;
@@ -38,6 +42,8 @@ export interface SetupScreenProps {
   readonly onStart: () => void;
   /** Открыть модалку `device`; адрес — для «Подключить заново» (S4, S6). */
   readonly onOpenDevice: (initialAddress?: string) => void;
+  /** Тост по общему пути — отказ записи языка (B-41). */
+  readonly onNotify: (text: string) => void;
 }
 
 interface KnownParams {
@@ -65,6 +71,7 @@ export function SetupScreen({
   launchFailure,
   onStart,
   onOpenDevice,
+  onNotify,
 }: SetupScreenProps): ReactNode {
   const { t } = useTranslation();
   const { scanner } = snapshot;
@@ -120,6 +127,11 @@ export function SetupScreen({
   };
   const sendStraightenMode = (mode: StraightenMode): void => {
     sendMode(window.api.setStraightenMode(mode), 'выравнивания');
+  };
+  // Язык: сначала запись, потом смена — язык экрана придёт со снимком; отказ — тост на прежнем.
+  const sendLanguage = (locale: Locale) => window.api.setLanguage(locale);
+  const languageFailed = (): void => {
+    onNotify(t('setup.language.saveFailed'));
   };
 
   const recheck = (): void => {
@@ -411,6 +423,11 @@ export function SetupScreen({
             </li>
           ))}
         </ol>
+        <LanguageSwitch
+          language={snapshot.language}
+          onChange={sendLanguage}
+          onFailed={languageFailed}
+        />
       </aside>
     </main>
   );

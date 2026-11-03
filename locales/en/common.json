@@ -80,11 +80,18 @@
     }
   },
   "setup": {
-    "kicker": "NEW SCAN",
+    "kicker": "SCAN SETUP",
     "title": "Scanning both sides in two passes",
-    "lead": "First the front sides of all sheets. Then you turn them 180° — all at once, without flipping — and the app matches the backs to the fronts itself.",
+    "lead": "First the front sides of all sheets. Then you turn them 180° — all at once, without flipping — and the app matches the backs to the fronts on its own.",
     "start": "Scan the front sides",
     "hint": "Load the sheets into the tray face up, first page on top",
+    "language": {
+      "label": "Language",
+      "kicker": "LANGUAGE",
+      "ru": "Русский",
+      "en": "English",
+      "saveFailed": "Couldn’t save the language — try again"
+    },
     "how": {
       "kicker": "HOW IT WORKS",
       "step1": {
@@ -126,7 +133,7 @@
       "color": "Color",
       "resolution": "Resolution",
       "paperSize": "Paper size",
-      "reset": "Reset settings",
+      "reset": "Reset scan settings",
       "colorMode": {
         "BlackAndWhite1": "B/W",
         "Grayscale8": "Grayscale",
@@ -159,7 +166,7 @@
         "off": "Leave as is"
       },
       "straightenModeHint": {
-        "auto": "pages scanned with distortion will be straightened. The mode is remembered: a new choice applies from the next scan",
+        "auto": "skewed pages are straightened. The mode is remembered: a new choice applies from the next scan",
         "off": "pages stay as they came from the scanner. The mode is remembered: a new choice applies from the next scan"
       }
     }
@@ -171,8 +178,8 @@
     "listLabel": "Network scanners",
     "search": {
       "searching": "Searching for scanners on the network…",
-      "found_one": "{{count}} device found · search continues",
-      "found_other": "{{count}} devices found · search continues",
+      "found_one": "{{count}} device found · still searching",
+      "found_other": "{{count}} devices found · still searching",
       "empty": "Nothing found yet — search continues. Check that the scanner is on and on the same network as the computer, and that Windows Firewall is not blocking the app: it asks for permission on the first search. Or enter the address manually.",
       "failure": {
         "noNetwork": "No network connection: no network adapter found. Connect the computer to the network and open this window again, or enter the address manually.",
@@ -278,7 +285,7 @@
     "resumeMeta": "finishing the front sides · {{count}} before the interruption",
     "resumeMetaBacks": "finishing the backs · {{count}} before the interruption",
     "resumeMetaAdded": "finishing the added set · {{count}} before the interruption",
-    "resumeMetaSet": "finishing set A{{set}} · {{count}} before the interruption",
+    "resumeMetaSet": "finishing set S{{set}} · {{count}} before the interruption",
     "busy": {
       "title": "The scanner is busy — waiting for it to free up",
       "meta": "usually another job on the scanner · waiting up to a minute"
@@ -318,17 +325,17 @@
   "merge": {
     "title": "Matching fronts and backs",
     "titleSet": "Matching the set's fronts and backs",
-    "setTag": "SET A{{set}}",
+    "setTag": "SET S{{set}}",
     "status": {
       "ok": "pairs matched: {{count}}",
       "fewer": "mismatch: {{fronts}} fronts, {{backs}} backs — assemble the document in the editor",
       "extra": "extra backs: {{count}} — assemble the document in the editor",
       "accepted": "backs pass accepted short: {{fronts}} fronts, {{backs}} backs",
       "frontsOnly": "no backs needed · pages: {{count}}",
-      "setOk": "set A{{set}}: {{count}} pairs matched",
-      "setMismatch": "set A{{set}}: mismatch — {{fronts}} fronts, {{backs}} backs",
-      "setAccepted": "set A{{set}}: backs accepted short — {{fronts}} fronts, {{backs}} backs",
-      "setDeclined": "set A{{set}}: no backs needed · pages: {{count}}"
+      "setOk": "set S{{set}}: {{count}} pairs matched",
+      "setMismatch": "set S{{set}}: mismatch — {{fronts}} fronts, {{backs}} backs",
+      "setAccepted": "set S{{set}}: backs accepted short — {{fronts}} fronts, {{backs}} backs",
+      "setDeclined": "set S{{set}}: no backs needed · pages: {{count}}"
     },
     "blank": {
       "scoring": "looking for blank backs…",
@@ -345,7 +352,7 @@
     "kicker": "PASSES DO NOT MATCH",
     "fewer": {
       "title": "{{count}} front sides, {{backs}} backs",
-      "text": "Most likely a sheet did not go through the feeder or stuck to its neighbor. The document is not assembled yet: the fronts and backs lie as separate sets in the order of the future document, nothing is deleted. Find the gap in the set of backs, select the back before it and scan the missing one with “+ Add sheets” — or delete the front without a pair. When the sets are balanced, press “Assemble document”."
+      "text": "Most likely a sheet did not go through the feeder or stuck to the next one. The document is not assembled yet: the fronts and backs lie as separate sets in the order of the future document, nothing is deleted. Find the gap in the set of backs, select the back before it and scan the missing one with “+ Add sheets” — or delete the front without a pair. When the sets are balanced, press “Assemble document”."
     },
     "extra": {
       "title": "More backs than front sides: {{backs}} versus {{fronts}}",
@@ -360,9 +367,9 @@
   },
   "setMismatch": {
     "kicker": "THE SET'S BACKS DO NOT MATCH",
-    "title": "Set A{{set}} has {{fronts}} fronts, {{backs}} backs",
-    "text_one": "Most likely a sheet did not go through the feeder or stuck to its neighbor. The set's fronts and backs lie side by side, nothing is deleted. Rescan the backs — remove the {{count}} scanned back of the set together with its edits and go back to the turn; keep as is — fix the set in the editor.",
-    "text_other": "Most likely a sheet did not go through the feeder or stuck to its neighbor. The set's fronts and backs lie side by side, nothing is deleted. Rescan the backs — remove the {{count}} scanned backs of the set together with their edits and go back to the turn; keep as is — fix the set in the editor.",
+    "title": "Set S{{set}} has {{fronts}} fronts, {{backs}} backs",
+    "text_one": "Most likely a sheet did not go through the feeder or stuck to the next one. The set's fronts and backs lie side by side, nothing is deleted. Rescan the backs — remove the {{count}} scanned back of the set together with its edits and go back to the turn; keep as is — fix the set in the editor.",
+    "text_other": "Most likely a sheet did not go through the feeder or stuck to the next one. The set's fronts and backs lie side by side, nothing is deleted. Rescan the backs — remove the {{count}} scanned backs of the set together with their edits and go back to the turn; keep as is — fix the set in the editor.",
     "rescan": "Rescan the set's backs",
     "rescanBusy": "Removing the backs…",
     "rescanFailed": "Could not remove the backs: {{error}}",
@@ -376,8 +383,8 @@
     "failed": "NO THUMBNAIL",
     "failedTitle": "Could not build the thumbnail — the page itself is intact",
     "gluedTitle": "The back goes together with its page",
-    "tagBacks": "bk",
-    "tagAdded": "A{{set}}",
+    "tagBacks": "back",
+    "tagAdded": "S{{set}}",
     "tagAddedLabel": "added set {{set}}",
     "addedLabel": "Page {{number}}, added set {{set}}",
     "setLabel": "Page {{number}}, {{what}}",
@@ -466,7 +473,7 @@
       "blankText": "They are hidden and left out of the file. The “Blanks” toggle at the bottom of the strip shows them; “Not a blank page” returns the right one to the document."
     },
     "edits": {
-      "text": "Manual edits made",
+      "text": "Edited by hand",
       "revert": "Revert",
       "revertTitle": "Revert everything to how it was after scanning"
     },
@@ -474,9 +481,9 @@
     "rotateBacksTitle": "Applies to {{target}}. If the backs are upside down, the sheets were scanned without the turn. The rotation goes into the PDF too; the page files themselves do not change.",
     "rotateTarget": {
       "main": "the backs of the main document",
-      "set": "the backs of set A{{set}}",
+      "set": "the backs of set S{{set}}",
       "noneMain": "the main document has no backs",
-      "noneSet": "set A{{set}} has no backs",
+      "noneSet": "set S{{set}} has no backs",
       "noneTitle": "{{reason}} — nothing to rotate"
     },
     "save": "Save document",
@@ -487,8 +494,8 @@
       "kicker": "PASS INTERRUPTED",
       "title": "The pass was interrupted after page {{last}}",
       "titleAdded": "Adding was interrupted after page {{last}}",
-      "titleSetFronts": "The fronts of set A{{set}} were interrupted after page {{last}}",
-      "titleSetBacks": "The backs of set A{{set}} were interrupted after page {{last}} of {{expected}}",
+      "titleSetFronts": "The fronts of set S{{set}} were interrupted after page {{last}}",
+      "titleSetBacks": "The backs of set S{{set}} were interrupted after page {{last}} of {{expected}}",
       "text": "The pages received are in place. To finish scanning, load the remaining sheets into the tray starting from sheet {{next}} and press “Scan the rest”.",
       "textAdded": "The pages received are already in the document. To finish scanning, load the remaining sheets into the tray starting from sheet {{next}} and press “Scan the rest”.",
       "textSet": "The pages received are already in the document. To finish scanning, load the remaining sheets into the tray starting from sheet {{next}} and press “Scan the rest”.",
@@ -540,10 +547,10 @@
       "front": "front of sheet {{sheet}}",
       "back": "back of sheet {{sheet}}",
       "added": "added set {{set}}",
-      "addedFront": "front of sheet {{sheet}} of set A{{set}}",
-      "addedBack": "back of sheet {{sheet}} of set A{{set}}",
-      "addedFrontLoose": "front side of set A{{set}}",
-      "addedBackLoose": "back side of set A{{set}}",
+      "addedFront": "front of sheet {{sheet}} of set S{{set}}",
+      "addedBack": "back of sheet {{sheet}} of set S{{set}}",
+      "addedFrontLoose": "front side of set S{{set}}",
+      "addedBackLoose": "back side of set S{{set}}",
       "frontLoose": "front side, no sheet",
       "backLoose": "back side, no sheet",
       "setFront": "front side, no. {{position}} in the fronts set",
@@ -555,7 +562,7 @@
       "set": "Set",
       "setValue": "added no. {{set}}",
       "sheet": "Sheet",
-      "sheetValue": "no. {{sheet}}",
+      "sheetValue": "{{sheet}}",
       "sheetNone": "—",
       "side": "Side",
       "front": "front",
@@ -571,8 +578,8 @@
       "originFronts": "fronts pass",
       "originBacks": "backs pass",
       "originAdded": "added set {{set}}",
-      "originSetFronts": "fronts pass of set A{{set}}",
-      "originSetBacks": "backs pass of set A{{set}}",
+      "originSetFronts": "fronts pass of set S{{set}}",
+      "originSetBacks": "backs pass of set S{{set}}",
       "content": "Content",
       "contentHidden": "blank — hidden",
       "contentMarked": "blank — marked",
@@ -683,9 +690,9 @@
         "level": "level {{count}}",
         "none": "straightening was not applied"
       },
-      "keep": "Original",
-      "keepAll": "Original — {{count}} pages",
-      "keepSome": "Original — {{k}} of {{n}} selected",
+      "keep": "Keep original",
+      "keepAll": "Keep original — {{count}} pages",
+      "keepSome": "Keep original — {{k}} of {{n}} selected",
       "keepTitle": "Show and save as it came from the scanner. This is an edit: Ctrl+Z or “Revert” removes it.",
       "restore": "Straighten",
       "restoreAll": "Straighten — {{count}} pages",
@@ -706,7 +713,7 @@
       "twoSidedNote": "Two passes with a 180° turn, like the main document",
       "twoSidedDisabled": "Unavailable until the document is assembled — assemble the document first",
       "oneSided": "One-sided scan",
-      "oneSidedNote": "One or more sheets, backs are not scanned"
+      "oneSidedNote": "One or more sheets, fronts only"
     },
     "place": {
       "label": "WHERE TO INSERT",
@@ -748,9 +755,9 @@
       "separate": "Separate files",
       "separateNone": "no splits marked yet",
       "single": "One file",
-      "singleHint": "all {{count}} pages in a row",
-      "separateHint_one": "by splits: {{count}} file",
-      "separateHint_other": "by splits: {{count}} files"
+      "singleHint": "all {{count}} pages, in order",
+      "separateHint_one": "at splits: {{count}} file",
+      "separateHint_other": "at splits: {{count}} files"
     },
     "files": "FILES · {{count}}",
     "fileLabel": "File name {{number}}",
@@ -762,7 +769,7 @@
     "folderUnknown": "The folder could not be read — the files will go to the default folder; “Choose…” shows the path.",
     "fact": {
       "files": "Files",
-      "pages": "Pages total",
+      "pages": "Total pages",
       "blank": "Blank backs",
       "blankHidden_one": "{{count}} hidden — left out of the file",
       "blankHidden_other": "{{count}} hidden — left out of the file",
@@ -813,12 +820,12 @@
       "unassembled": "The fronts and backs lie as separate sets — the document is not assembled and not saved to a file. If you start a new scan, {{count}} pages will be deleted from disk.",
       "blankHidden": "Hidden blank backs ({{count}} pages) will be erased too."
     },
-    "fresh": "Close the current one and start a new scan",
+    "fresh": "Close this one and start a new scan",
     "freshNote": {
       "saved": "Back to the scan setup",
       "unsaved": "The current {{count}} pages will be deleted without saving"
     },
-    "saveFirst": "Save the current one first",
+    "saveFirst": "Save this one first",
     "saveFirstNote": "The save window opens, then a new scan starts",
     "stay": "Stay in the document",
     "confirming": "Deleting…",

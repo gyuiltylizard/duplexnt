@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Duplexn't — B-41 переключатель языка: варианты размещения</title>
+    <link rel="stylesheet" href="../reference/fonts/fonts.css" />
+    <link rel="stylesheet" href="../reference/app.css" />
+    <link rel="stylesheet" href="../reference/wrapper.css" />
+    <link rel="stylesheet" href="variants.css" />
+    <link rel="stylesheet" href="language-variants.css" />
+  </head>
+  <body class="ref-page mv-page">
+    <header class="mv-head">
+      <div>
+        <div class="kicker">B-41 · ЯЗЫК ИНТЕРФЕЙСА · СТАДИЯ ВАРИАНТОВ</div>
+        <h1 class="mv-head__title">Где живёт переключатель «Русский / English» на <code>setup</code></h1>
+        <p class="mv-head__lead">Три размещения, каждое на живом экране <code>setup</code>. Переключатель меняет язык всего экрана на месте; второй щелчок по текущему языку ничего не делает. Чтобы проверить, что «Сбросить параметры» язык не трогает: смените «Пустые обороты», смените язык, нажмите сброс. Отказ записи и медленная запись — в панели справа. Выберите один вариант — например, «1b».</p>
+      </div>
+      <div class="lv-panel" aria-label="Сценарии">
+        <div class="lv-panel__row">
+          <span class="lv-panel__label">Язык Windows</span>
+          <div class="segments" role="radiogroup" aria-label="Язык Windows" id="lv-system">
+            <button type="button" class="segment segment--selected" role="radio" aria-checked="true" data-value="ru">ru-RU</button>
+            <button type="button" class="segment" role="radio" aria-checked="false" data-value="en">en-US</button>
+          </div>
+        </div>
+        <div class="lv-panel__row">
+          <span class="lv-panel__label">Запись настроек</span>
+          <div class="segments" role="radiogroup" aria-label="Запись настроек" id="lv-write">
+            <button type="button" class="segment segment--selected" role="radio" aria-checked="true" data-value="ok">быстро</button>
+            <button type="button" class="segment" role="radio" aria-checked="false" data-value="slow">1,5 с</button>
+            <button type="button" class="segment" role="radio" aria-checked="false" data-value="fail">отказ</button>
+          </div>
+        </div>
+        <div class="lv-panel__row">
+          <span class="lv-panel__label">Масштаб кадра</span>
+          <div class="segments" role="radiogroup" aria-label="Масштаб" id="lv-scale">
+            <button type="button" class="segment segment--selected" role="radio" aria-checked="true" data-value="0.75">75 %</button>
+            <button type="button" class="segment" role="radio" aria-checked="false" data-value="1">100 %</button>
+          </div>
+        </div>
+        <div class="lv-panel__row">
+          <span class="lv-panel__label">Сброс сценария</span>
+          <button type="button" class="btn btn--secondary" id="lv-restart">Как при первом запуске</button>
+        </div>
+      </div>
+    </header>
+
+    <section class="mv-group" id="g1">
+      <div class="mv-group__head">
+        <h2 class="mv-group__title"><span class="mv-group__num">1</span> Размещение переключателя</h2>
+        <p class="mv-group__note">Во всех трёх: подписи «Русский» и «English» — каждая на своём языке и с <code>lang</code>, имя группы — «Язык» / «Language». Запись идёт до смены: пока она выполняется, повторный выбор игнорируется, а если затянулась дольше 200 мс — переключатель приглушается. Отказ — тост на прежнем языке, выделение не двигается.</p>
+      </div>
+
+      <article class="lv-opt" id="1a">
+        <div class="lv-win"><div class="ref-frame" data-variant="a"></div></div>
+        <div class="lv-opt__side">
+          <div class="mv-opt__head"><span class="mv-badge">1a</span><span class="mv-opt__name">Своя группа под параметрами</span></div>
+          <p class="mv-opt__text">Тот же ряд и те же сегменты, что «Пустые обороты», но в отдельной панели сразу под группой сканирования. «Сбросить параметры» остаётся подвалом своей группы — граница панели и есть ответ «сброс сюда не дотягивается». Самый узнаваемый контрол; цена — ещё одна строка между параметрами и кнопкой запуска, а язык визуально почти равен параметрам.</p>
+          <ul class="lv-log" data-log="a"></ul>
+        </div>
+      </article>
+
+      <article class="lv-opt" id="1b">
+        <div class="lv-win"><div class="ref-frame" data-variant="b"></div></div>
+        <div class="lv-opt__side">
+          <div class="mv-opt__head"><span class="mv-badge">1b</span><span class="mv-opt__name">Подвал группы, через черту</span></div>
+          <p class="mv-opt__text">Подвал на тёмной подложке делится: слева «Сбросить параметры», справа — после волосяной черты — «Язык» и два сегмента. Ни одной новой строки, экран не растёт. Но сброс и язык стоят в одной полосе: черта говорит «разное», соседство — «рядом». Читается слабее, чем 1a и 1c.</p>
+          <ul class="lv-log" data-log="b"></ul>
+        </div>
+      </article>
+
+      <article class="lv-opt" id="1c">
+        <div class="lv-win"><div class="ref-frame" data-variant="c"></div></div>
+        <div class="lv-opt__side">
+          <div class="mv-opt__head"><span class="mv-badge">1c</span><span class="mv-opt__name">Угол «Как это работает»</span></div>
+          <p class="mv-opt__text">Внизу правой колонки, под волосяной чертой: кикер «ЯЗЫК» и два тихих текстовых значения, текущее — в рамке на бумаге. Дальше всех от параметров сканирования — путаницы со сбросом нет. Тише всех: человек «не в своём языке» ищет глазами, но узнаёт «Русский» / «English» по слову. Форма новая (не <code>Segments</code>) — нужен рецепт в дизайн-системе.</p>
+          <ul class="lv-log" data-log="c"></ul>
+        </div>
+      </article>
+    </section>
+
+    <script src="language-variants.js"></script>
+  </body>
+</html>

@@ -477,6 +477,7 @@ export function App(): ReactNode {
             launchFailure={launchFailure?.target === 'setup' ? launchFailure.error : null}
             onStart={startNext}
             onOpenDevice={openDevice}
+            onNotify={showToast}
           />
         </ScreenFrame>
       )}

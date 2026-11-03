@@ -294,6 +294,15 @@ flip / merge / editor, модалки device / add / save / mismatch / newscan).
 - Hover: `border-color:--color-accent` (только в параметрах setup).
 - Selected: фон `--color-bg-selected`, граница `--color-border-focus`, текст `--color-accent`. Вторая строка в крупном сегменте: `--font-size-s/--leading-normal --color-text-subtle`.
 
+### Текстовый переключатель (язык интерфейса)
+
+Тише сегментов — для выбора, который не параметр сканирования (B-41, handoff 2026-11-b41-language). Строка `gap --space-6` с кикером слева (`margin-right:auto`) и опциями справа (`gap --space-2`), сверху волосяная черта `--color-border-subtle` и `padding-top --space-6`. Опция — кнопка `role="radio"`: `padding --space-2 --space-4`, граница `--border-width solid transparent`, `--radius-m`, `--font-weight-regular --font-size-m/--leading-snug --font-family-sans`, текст `--color-text-subtle`; у каждой опции `lang` её языка, подписи не переводятся.
+
+- Hover (нетекущая): текст `--color-text-primary`.
+- Selected: `--font-weight-medium`, текст `--color-text-primary`, фон `--color-bg-surface`, граница `--color-border-default`, `cursor:default`.
+- Focus: кольцо `2px solid --color-border-focus`, `outline-offset 1px`.
+- Pending (идёт запись): граница нажатой опции `--color-accent`; группа `aria-busy` — приглушение до `--opacity-disabled` за `--duration-fast` с задержкой 200 мс (короткая запись не мигает), `cursor:progress`; под `prefers-reduced-motion` без перехода.
+
 ### Карточка-радио («Что сканируем»)
 
 Строка `gap --space-6`, padding `--space-6 --space-6`, `--radius-l`, граница `--border-width solid`; точка `--size-check`, `--radius-round`. Rest: фон `--color-bg-surface`, граница `--color-border-default`, точка `--color-bg-paper` с границей `--color-border-heavy`. Selected: фон `--color-bg-selected`, граница `--color-border-focus`, точка заливка и граница `--color-accent`. Заголовок `--font-weight-medium --font-size-base`, описание `--font-size-s/--leading-relaxed --color-text-muted`.

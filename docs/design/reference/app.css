@@ -1263,6 +1263,7 @@ samp {
 /* — правая колонка «Как это работает» (M2 U8, тексты макета) — */
 
 .setup-screen__aside {
+  position: relative; /* переключатель языка прижат к низу колонки (B-41) */
   background: var(--color-bg-well);
   border-left: var(--border-width) solid var(--color-border-subtle);
   padding: 0 var(--space-15);
@@ -1270,6 +1271,79 @@ samp {
   flex-direction: column;
   justify-content: center;
   gap: var(--space-11);
+}
+
+/* — переключатель языка (B-41, U6; handoff 2026-11-b41-language — CSS дословно) — */
+
+.lang-switch {
+  position: absolute;
+  left: var(--space-15);
+  right: var(--space-15);
+  bottom: var(--space-12);
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  padding-top: var(--space-6);
+  border-top: var(--border-width) solid var(--color-border-subtle);
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+.lang-switch .kicker {
+  margin-right: auto;
+}
+
+.lang-switch__opts {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.lang-switch__opt {
+  padding: var(--space-2) var(--space-4);
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius-m);
+  background: none;
+  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
+  color: var(--color-text-subtle);
+  cursor: pointer;
+}
+
+.lang-switch__opt:hover {
+  color: var(--color-text-primary);
+}
+
+.lang-switch__opt[aria-checked='true'] {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  background: var(--color-bg-surface);
+  border-color: var(--color-border-default);
+  cursor: default;
+}
+
+.lang-switch__opt:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 1px;
+}
+
+.lang-switch__opt--pending {
+  color: var(--color-text-primary);
+  border-color: var(--color-accent);
+}
+
+/* Клики игнорируются сразу; приглушение — только если запись затянулась дольше 200 мс. */
+.lang-switch[aria-busy='true'] {
+  opacity: var(--opacity-disabled);
+  transition-delay: 200ms;
+}
+
+.lang-switch[aria-busy='true'] .lang-switch__opt {
+  cursor: progress;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lang-switch {
+    transition: none;
+  }
 }
 
 .howto {

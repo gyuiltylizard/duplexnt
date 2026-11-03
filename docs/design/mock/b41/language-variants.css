@@ -1,0 +1,50 @@
+/* Страница вариантов B-41 (переключатель языка). Оформление страницы — variants.css; стили
+   приложения — app.css; ниже — демо-обвязка (.lv-*) и правила самого компонента (.lang-switch*). */
+
+.lv-panel { display: grid; gap: 8px; flex: none; padding: var(--space-6) var(--space-8); border: var(--border-width) solid var(--color-border-strong); border-radius: var(--radius-l); background: var(--color-bg-surface); }
+.lv-panel__row { display: flex; align-items: center; gap: 10px; }
+.lv-panel__label { width: 150px; font-size: var(--font-size-m); color: var(--color-text-muted); }
+
+.lv-opt { display: grid; grid-template-columns: auto minmax(260px, 420px); gap: 22px; align-items: start; margin-bottom: 30px; scroll-margin-top: 20px; }
+.lv-opt__side { display: grid; gap: 10px; }
+.lv-win { width: calc(1280px * var(--lv-scale, 0.75)); height: calc(800px * var(--lv-scale, 0.75)); }
+.lv-win .ref-frame { width: 1280px; height: 800px; transform: scale(var(--lv-scale, 0.75)); transform-origin: 0 0; }
+.lv-log { margin: 0; padding: 0; list-style: none; display: grid; gap: 3px; font: var(--font-weight-regular) var(--font-size-s) / var(--leading-relaxed) var(--font-family-mono); color: var(--color-text-subtle); }
+.lv-log li:first-child { color: var(--color-text-secondary); }
+
+/* ── компонент ── */
+
+/* Запись выполняется: клики игнорируются сразу; приглушение — только если запись затянулась
+   дольше 200 мс, чтобы обычная смена не мигала. */
+.lang-switch { transition: opacity var(--duration-fast) var(--ease-standard); }
+.lang-switch[aria-busy='true'] { opacity: var(--opacity-disabled); transition-delay: 200ms; }
+.lang-switch[aria-busy='true'] .segment, .lang-switch[aria-busy='true'] .lang-switch__opt { cursor: progress; }
+.lang-switch[aria-busy='true'] .segment:hover { border-color: var(--color-border-default); }
+.lang-switch[aria-busy='true'] .segment--selected:hover { border-color: var(--color-border-focus); }
+.lang-switch .segment--pending { border-color: var(--color-accent); }
+
+/* A — отдельная группа под параметрами */
+.params--app { margin-top: calc(var(--space-12) * -1 + var(--space-5)); }
+
+/* B — подвал группы */
+.params__footer--lang { align-items: center; justify-content: space-between; gap: var(--space-6); }
+.lang-switch--footer { display: flex; align-items: center; gap: var(--space-5); padding-left: var(--space-6); border-left: var(--border-width) solid var(--color-border-default); }
+.lang-switch__label { font: var(--font-weight-regular) var(--font-size-m) / var(--leading-snug) var(--font-family-sans); color: var(--color-text-subtle); }
+
+/* C — угол aside, текстовые опции */
+.setup-screen__aside { position: relative; }
+.lang-switch--aside { position: absolute; left: var(--space-15); right: var(--space-15); bottom: var(--space-12); display: flex; align-items: center; gap: var(--space-6); padding-top: var(--space-6); border-top: var(--border-width) solid var(--color-border-subtle); }
+.lang-switch--aside .kicker { margin-right: auto; }
+.lang-switch__opts { display: flex; align-items: center; gap: var(--space-2); }
+.lang-switch__opt { padding: var(--space-2) var(--space-4); border: var(--border-width) solid transparent; border-radius: var(--radius-m); background: none; font: var(--font-weight-regular) var(--font-size-m) / var(--leading-snug) var(--font-family-sans); color: var(--color-text-subtle); cursor: pointer; }
+.lang-switch__opt:hover { color: var(--color-text-primary); }
+.lang-switch__opt[aria-checked='true'] { font-weight: var(--font-weight-medium); color: var(--color-text-primary); background: var(--color-bg-surface); border-color: var(--color-border-default); cursor: default; }
+.lang-switch__opt--pending { color: var(--color-text-primary); border-color: var(--color-accent); }
+.lang-switch__opt:focus-visible { outline: 2px solid var(--color-border-focus); outline-offset: 1px; }
+
+@media (prefers-reduced-motion: reduce) { .lang-switch { transition: none; } }
+.lv-reduced .lang-switch { transition: none; }
+
+.mv-head { flex-wrap: wrap; }
+.lv-panel .segments { flex-wrap: nowrap; }
+.lv-panel__row { flex-wrap: wrap; }

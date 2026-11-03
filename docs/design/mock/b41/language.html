@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Duplexn't — B-41 переключатель языка на setup</title>
+    <link rel="stylesheet" href="../reference/fonts/fonts.css" />
+    <link rel="stylesheet" href="../reference/app.css" />
+    <link rel="stylesheet" href="../reference/wrapper.css" />
+    <link rel="stylesheet" href="variants.css" />
+    <link rel="stylesheet" href="language.css" />
+  </head>
+  <body class="ref-page mv-page">
+    <header class="mv-head">
+      <div>
+        <div class="kicker">B-41 · ЯЗЫК ИНТЕРФЕЙСА · ВАРИАНТ 1C В КОНТЕКСТЕ</div>
+        <h1 class="mv-head__title">Переключатель «Русский / English» на <code>setup</code></h1>
+        <p class="mv-head__lead">Окно в настоящий размер. Язык меняется на месте; повторный щелчок по текущему — ничего. Проверка сброса: смените «Пустые обороты», смените язык, нажмите сброс — ряды вернутся, язык останется. «EN-копия» в панели показывает английский экран как в референсе или с правками из handoff'а (кикер, «Reset scan settings»).</p>
+      </div>
+      <div class="lv-panel" aria-label="Сценарии">
+        <div class="lv-panel__row"><span class="lv-panel__label">Язык Windows</span>
+          <div class="segments" role="radiogroup" aria-label="Язык Windows" id="lv-system">
+            <button type="button" class="segment segment--selected" role="radio" aria-checked="true" data-value="ru">ru-RU</button>
+            <button type="button" class="segment" role="radio" aria-checked="false" data-value="en">en-US</button>
+          </div></div>
+        <div class="lv-panel__row"><span class="lv-panel__label">Запись настроек</span>
+          <div class="segments" role="radiogroup" aria-label="Запись настроек" id="lv-write">
+            <button type="button" class="segment segment--selected" role="radio" aria-checked="true" data-value="ok">быстро</button>
+            <button type="button" class="segment" role="radio" aria-checked="false" data-value="slow">1,5 с</button>
+            <button type="button" class="segment" role="radio" aria-checked="false" data-value="fail">отказ</button>
+          </div></div>
+        <div class="lv-panel__row"><span class="lv-panel__label">Сканер</span>
+          <div class="segments" role="radiogroup" aria-label="Сканер" id="lv-device">
+            <button type="button" class="segment segment--selected" role="radio" aria-checked="true" data-value="ready">готов</button>
+            <button type="button" class="segment" role="radio" aria-checked="false" data-value="none">не подключён</button>
+          </div></div>
+        <div class="lv-panel__row"><span class="lv-panel__label">EN-копия</span>
+          <div class="segments" role="radiogroup" aria-label="EN-копия" id="lv-copy">
+            <button type="button" class="segment" role="radio" aria-checked="false" data-value="ref">как сейчас</button>
+            <button type="button" class="segment segment--selected" role="radio" aria-checked="true" data-value="new">с правками</button>
+          </div></div>
+        <div class="lv-panel__row"><span class="lv-panel__label">Сброс сценария</span>
+          <button type="button" class="btn btn--secondary" id="lv-restart">Как при первом запуске</button></div>
+      </div>
+    </header>
+    <div class="lv-stage">
+      <div class="ref-frame" id="lv-frame" style="width:1280px;height:800px"></div>
+      <ul class="lv-log" id="lv-log"></ul>
+    </div>
+    <script src="language.js"></script>
+  </body>
+</html>

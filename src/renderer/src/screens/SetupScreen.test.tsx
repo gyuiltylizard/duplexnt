@@ -66,11 +66,53 @@ function renderSetup(
     launchFailure: null,
     onStart: vi.fn(),
     onOpenDevice: vi.fn(),
+    onNotify: vi.fn(),
     ...overrides,
   };
   const view = render(<SetupScreen {...props} />);
   return { ...props, view };
 }
+
+describe('SetupScreen — переключатель языка (B-41, U6)', () => {
+  it('стоит в колонке «Как это работает», виден без сканера, показывает язык из снимка', () => {
+    stubApi();
+    renderSetup({ kind: 'none' });
+
+    const aside = screen.getByRole('complementary', { name: 'КАК ЭТО РАБОТАЕТ' });
+    const group = within(aside).getByRole('radiogroup', { name: 'Язык' });
+    expect(within(group).getByRole('radio', { name: 'Русский' }).getAttribute('aria-checked')).toBe(
+      'true',
+    );
+    expect(within(group).getByRole('radio', { name: 'English' }).getAttribute('lang')).toBe('en');
+  });
+
+  it('выбор English шлёт setLanguage один раз; выделение ждёт снимка', () => {
+    const { setLanguage } = stubApi();
+    renderSetup(READY);
+
+    fireEvent.click(screen.getByRole('radio', { name: 'English' }));
+    expect(setLanguage).toHaveBeenCalledExactlyOnceWith('en');
+    expect(screen.getByRole('radio', { name: 'Русский' }).getAttribute('aria-checked')).toBe(
+      'true',
+    );
+  });
+
+  it('отказ записи языка — тост по общему пути на прежнем языке', async () => {
+    const { setLanguage } = stubApi();
+    setLanguage.mockImplementation(() =>
+      Promise.resolve({ ok: false as const, error: { code: 'storageFailed' as const } }),
+    );
+    const { onNotify } = renderSetup(READY);
+
+    fireEvent.click(screen.getByRole('radio', { name: 'English' }));
+    await screen.findByRole('radiogroup', { name: 'Язык' });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(onNotify).toHaveBeenCalledExactlyOnceWith(
+      'Не удалось сохранить язык — попробуйте ещё раз',
+    );
+  });
+});
 
 afterEach(() => {
   cleanup();
@@ -102,6 +144,7 @@ describe('SetupScreen', () => {
         launchFailure={null}
         onStart={vi.fn()}
         onOpenDevice={vi.fn()}
+        onNotify={vi.fn()}
       />,
     );
     expect(screen.getByRole('radio', { name: '600 dpi' }).getAttribute('aria-checked')).toBe(
@@ -146,6 +189,7 @@ describe('SetupScreen', () => {
     const app = [
       screen.getByRole('radiogroup', { name: 'Пустые обороты' }),
       screen.getByRole('radiogroup', { name: 'Выравнивание' }),
+      screen.getByRole('radiogroup', { name: 'Язык' }),
     ];
     for (const group of screen.getAllByRole('radiogroup')) {
       expect(group.getAttribute('aria-disabled')).toBe(app.includes(group) ? null : 'true');
@@ -228,6 +272,7 @@ describe('SetupScreen', () => {
         launchFailure={null}
         onStart={vi.fn()}
         onOpenDevice={vi.fn()}
+        onNotify={vi.fn()}
       />,
     );
     expect(
@@ -276,6 +321,7 @@ describe('SetupScreen', () => {
         launchFailure={null}
         onStart={vi.fn()}
         onOpenDevice={vi.fn()}
+        onNotify={vi.fn()}
       />,
     );
     expect(
@@ -336,6 +382,7 @@ describe('SetupScreen', () => {
         launchFailure={null}
         onStart={vi.fn()}
         onOpenDevice={vi.fn()}
+        onNotify={vi.fn()}
       />,
     );
 
