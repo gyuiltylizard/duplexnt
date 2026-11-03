@@ -386,5 +386,8 @@ device и save, с приёмки), B-40 (чистота идентификат�
 - **Отклонения от плана:** U3 — выход `process.exit(1)` вместо `app.exit` (порт Chromium
   открывается позже `PostEarlyInitialization`, немедленный выход его не допускает); остальное
   по плану.
-- **Merge:** `feat/b-29-hardening` → `main`, `--no-ff`, по явному ОК автора 2026-11-03; хэш
-  merge — в строке B-29 бэклога. Ветка удалена после влития.
+- **Merge:** `feat/b-29-hardening` → `main`, `--no-ff`, по явному ОК автора 2026-11-03 — `fda4c41`;
+  гейт на `main` после merge — см. ниже. Ветка удалена после влития.
+- **Гейт на `main` после merge (`fda4c41`):** typecheck, lint, format:check зелёные; `npm test` 151 / 2671;
+  `test:integration` 36 / 315 (4 live пропущены); worst-case 3 / 5. Push в приватный origin — по
+  разрешению автора.
