@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 // Конфиг установщика (B-29, U2): полный набор fuses и целостность asar. Fuse, выпавший из
@@ -32,6 +32,22 @@ function block(name: string): Map<string, string> {
 const CODE = CONFIG.split(/\r?\n/)
   .filter((line) => !line.trimStart().startsWith('#'))
   .join('\n');
+
+describe('electron-builder.yml — графика мастера (B-26)', () => {
+  it('три картинки nsis указывают на собранные BMP в build/', () => {
+    const nsis = block('nsis');
+    expect(nsis.get('installerSidebar')).toBe('build/installer-sidebar.bmp');
+    expect(nsis.get('uninstallerSidebar')).toBe('build/installer-sidebar.bmp');
+    expect(nsis.get('installerHeader')).toBe('build/installer-header.bmp');
+    for (const file of new Set(
+      ['installerSidebar', 'uninstallerSidebar', 'installerHeader'].map(
+        (key) => nsis.get(key) ?? '',
+      ),
+    )) {
+      expect(existsSync(file), `файл ${file}`).toBe(true);
+    }
+  });
+});
 
 describe('electron-builder.yml — fuses', () => {
   it('задаёт ровно ожидаемый набор fuses с нужными значениями', () => {

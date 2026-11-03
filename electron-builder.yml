@@ -46,6 +46,12 @@ nsis:
   allowToChangeInstallationDirectory: true
   deleteAppDataOnUninstall: false
   artifactName: duplexnt-${version}-setup.${ext}
+  # Графика мастера (B-26, handoff installer-art): боковая 164 × 314 на «Добро пожаловать» /
+  # «Готово» установщика и деинсталлятора, шапка 150 × 57 на остальных страницах. BMP 24 бит
+  # генерируются `npm run installer-art` из SVG-мастеров рядом и коммитятся, как значки.
+  installerSidebar: build/installer-sidebar.bmp
+  uninstallerSidebar: build/installer-sidebar.bmp
+  installerHeader: build/installer-header.bmp
 
 # Полный набор держит тест test/tooling/electron-builder.test.ts: выпавший fuse роняет его.
 electronFuses:
