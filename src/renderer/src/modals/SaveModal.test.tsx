@@ -537,7 +537,7 @@ describe('модалка save: выравнивание (M6; handoff M6, `save`)
     expect(screen.queryByRole('status')).toBeNull();
     expect(button('Сохранить 3 файла').hasAttribute('disabled')).toBe(false);
     // Отложенные не блокируют: уйдут как есть.
-    expect(fact('Выровнено')).toBe('7 стр. · не выровнено 6 — уйдут как есть');
+    expect(fact('Выровнено')).toBe('7 стр. · не выровнено 6');
   });
 
   it('идут и оценка пустых, и выравнивание — один статус с суммой; documentBlank выше', () => {
