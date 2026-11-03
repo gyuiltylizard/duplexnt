@@ -243,4 +243,4 @@ U5 и U6. ADR не заводился (план, «Documentation / Operational N
   документа — не в вехе.
 - **Отклонения от плана:** нет; U4 ушёл автору и вернулся handoff'ом в тот же день, сессия 2
   прошла без разрыва.
-- **Merge:** <хеш после ОК автора>
+- **Merge:** `9da3e2a` в `main` 2026-11-03 по явному ОК автора; гейт на `main` после merge зелёный (typecheck, lint, format:check, `npm test` 155 / 2718, integration 36 / 315, worst-case 3 / 5).
