@@ -14,6 +14,7 @@
 
 import type { BlankMode } from './blank';
 import type { HintId } from './hints';
+import type { Locale } from './locale';
 import type { DiscoveryState } from './discovery';
 import type { SessionEdits } from './edits';
 import type { DomainError, Result } from './errors';
@@ -269,6 +270,8 @@ export interface BridgeCommands {
    * при старте первого прохода — открытую сессию не трогает. Принимается и без сканера.
    */
   readonly setStraightenMode: { readonly request: StraightenMode; readonly value: undefined };
+  /** Язык интерфейса (B-41): явный выбор помнится в настройках и применяется сразу. */
+  readonly setLanguage: { readonly request: Locale; readonly value: undefined };
   /** Подсказка показана с привлечением внимания (B-4): помнится в настройках, больше не мигает. */
   readonly markHintSeen: { readonly request: HintId; readonly value: undefined };
   /**
@@ -345,6 +348,7 @@ export const BRIDGE_CHANNELS = {
   setScanParams: 'duplexnt:set-scan-params',
   setBlankMode: 'duplexnt:set-blank-mode',
   setStraightenMode: 'duplexnt:set-straighten-mode',
+  setLanguage: 'duplexnt:set-language',
   markHintSeen: 'duplexnt:mark-hint-seen',
   startPass: 'duplexnt:start-pass',
   stopPass: 'duplexnt:stop-pass',

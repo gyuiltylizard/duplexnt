@@ -13,6 +13,7 @@ import type {
   StraightenSummary,
 } from './straighten';
 import type { HintId } from './hints';
+import type { Locale } from './locale';
 import type { SessionEdits } from './edits';
 import type { DomainError } from './errors';
 import type { ScanOptions, ScanParams } from './scan-params';
@@ -531,4 +532,9 @@ export interface Snapshot {
   readonly straightenProgress: StraightenProgress | null;
   /** Подсказки, уже показанные с привлечением внимания (B-4): больше не мигают. */
   readonly seenHints: readonly HintId[];
+  /**
+   * Эффективный язык интерфейса (B-41): явный выбор из настроек или системный по умолчанию.
+   * Renderer применяет его до первого кадра и при каждом изменении.
+   */
+  readonly language: Locale;
 }

@@ -36,3 +36,21 @@ describe('служба прохода: режим пустых оборотов 
     expect((await openPassService(root)).snapshot().blankMode).toBe('keep');
   });
 });
+
+describe('служба прохода: язык интерфейса (B-41, U1)', () => {
+  it('без выбора — системный язык из опции main, без опции — русский; явный выбор побеждает', async () => {
+    const root = await makeTempDataRoot();
+    expect((await openPassService(root)).snapshot().language).toBe('ru');
+    expect((await openPassService(root, { systemLocale: 'en' })).snapshot().language).toBe('en');
+
+    const service = await openPassService(root, { systemLocale: 'en' });
+    const seqBefore = service.snapshot().seq;
+    expect(await service.setLanguage('ru')).toEqual({ ok: true, value: undefined });
+    expect(service.snapshot().language).toBe('ru');
+    expect(service.snapshot().seq).toBeGreaterThan(seqBefore);
+
+    expect((await openPassService(root, { systemLocale: 'en' })).snapshot().language).toBe('ru');
+    expect((await openPassService(root)).snapshot().language).toBe('ru');
+    expect((await openSettingsStore(root)).get().language).toBe('ru');
+  });
+});

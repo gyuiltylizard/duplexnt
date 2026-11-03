@@ -29,7 +29,34 @@ Notes»); решения записываются здесь.
 
 ## Сессия 1 — настройка, перевод, язык в renderer и main, референс
 
-### U1. Словарь языков, настройки v6, снимок, команда `setLanguage` — ⏳ в работе
+### U1. Словарь языков, настройки v6, снимок, команда `setLanguage` — ✅ зелёный
+
+`src/shared/locale.ts`: `LOCALES`, `Locale`, `DEFAULT_LOCALE = 'ru'`, `resolveLocale(stored,
+systemDefault)` и `localeOfSystemTag(tag)` (`ru`, `ru-RU`, `ru_RU`, `RU` → `ru`; `uk`, `be`,
+пустая метка, `rus` → `en`). Резолв системной метки положен в `shared`, а не в main: чистая
+функция без Electron, main в U3 только подставит `app.getLocale()`.
+
+`settings-store.ts`: `settingsV5Schema` заморожена, v6 = v5 + `language: z.enum(LOCALES)
+.nullable()`; `parseSettings` поднимает v1–v5 значением `null`, ветка `marker === 5` добавлена
+по образцу v4; `settingsOf`, стартовое значение, `setLanguage`, абзац «Версия 6» в шапке.
+Тесты: ожидаемые объекты по всему файлу получили `language: null` (perl по строкам
+`seenHints`), литералы `version: 5` → 6, «маркер новее» → 7; **грабли:** вставка задела и
+входной JSON v4 — неизвестное поле сделало файл «несовместимым», одна строка снята. Два новых
+теста: v5 → v6 при `setLanguage('en')`, память и файл при негодном `'de'`.
+
+`pass-service.ts`: `PassServiceOptions.systemLocale?` (без опции — `DEFAULT_LOCALE`, вызовы
+в тестах не тронуты), `Snapshot.language = resolveLocale(settings.language, systemLocale)`,
+`setLanguage` с `notify()`. Мост по чеклисту ADR 0005: `BridgeCommands.setLanguage`, канал
+`duplexnt:set-language`, `localeSchema`, обработчик, `preload/api.ts`; тест обработчика с
+мусором `'EN'`, `'en-US'`, `'de'`. Фикстуры снимков (12 файлов) — `language: 'ru'` после
+`straightenMode` одним sed; `stubApi` в `app-fixture.ts` и локальный стаб `SetupScreen.test`
+— `setLanguage`; моки `SettingsStore` в `scanner-slot.test.ts` — `setLanguage` и `language:
+null`. Тест «Сбросить параметры» проверяет, что `setLanguage` не зовётся.
+
+**Готово:** typecheck, lint, format:check, `npm test`, `test:integration` зелёные. Коммит
+`feat(b-41): U1 …`.
+
+### U2. Английская локаль и тесты паритета — ⏳ в работе
 
 ---
 

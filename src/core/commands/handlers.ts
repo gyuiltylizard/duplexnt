@@ -35,6 +35,7 @@ import {
   confirmScannerChangeRequestSchema,
   connectScannerRequestSchema,
   noRequestSchema,
+  localeSchema,
   parseInput,
   saveDocumentsRequestSchema,
   scanParamsSchema,
@@ -325,6 +326,11 @@ export function createCommands(context: CommandContext): Commands {
       setStraightenMode: async (rawRequest) => {
         const request = parseInput(straightenModeSchema, rawRequest);
         return request.ok ? done(() => service.setStraightenMode(request.value)) : request;
+      },
+
+      setLanguage: async (rawRequest) => {
+        const request = parseInput(localeSchema, rawRequest);
+        return request.ok ? done(() => service.setLanguage(request.value)) : request;
       },
 
       markHintSeen: async (rawRequest) => {

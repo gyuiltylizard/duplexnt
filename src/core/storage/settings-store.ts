@@ -4,12 +4,14 @@ import {
   DEFAULT_BLANK_MODE,
   DEFAULT_STRAIGHTEN_MODE,
   HINTS,
+  LOCALES,
   STRAIGHTEN_MODES,
   fail,
   ok,
   type BlankMode,
   type DomainError,
   type HintId,
+  type Locale,
   type Result,
   type ScanParams,
   type StartupNotice,
@@ -49,8 +51,12 @@ import {
 // Версия 5 (M6, R13): режим выравнивания перекоса помнится между запусками; файлы версий 1–4
 // читаются с режимом по умолчанию и переписываются только при следующей записи. Приложение до
 // M6 видит файл v5 как несовместимый и работает на дефолтах без записи (KTD-35).
+//
+// Версия 6 (B-41): язык интерфейса — явный выбор пользователя или `null` («следовать системе»);
+// файлы версий 1–5 читаются с `null` и переписываются только при следующей записи. Системный
+// язык ядро не знает: эффективный считает служба прохода из выбора и опции main.
 
-export const SETTINGS_VERSION = 5;
+export const SETTINGS_VERSION = 6;
 
 const settingsV1Schema = z.strictObject({
   version: z.literal(1),
@@ -81,10 +87,16 @@ const settingsV4Schema = settingsV3Schema.extend({
     .refine((hints) => new Set(hints).size === hints.length),
 });
 
-const settingsSchema = settingsV4Schema.extend({
-  version: z.literal(SETTINGS_VERSION),
+const settingsV5Schema = settingsV4Schema.extend({
+  version: z.literal(5),
   /** Режим выравнивания перекоса, выбранный последним (M6, R13); решение приложения. */
   straightenMode: z.enum(STRAIGHTEN_MODES),
+});
+
+const settingsSchema = settingsV5Schema.extend({
+  version: z.literal(SETTINGS_VERSION),
+  /** Язык интерфейса (B-41): явный выбор пользователя; `null` — следовать системе. */
+  language: z.enum(LOCALES).nullable(),
 });
 
 export interface Settings {
@@ -94,16 +106,18 @@ export interface Settings {
   readonly blankMode: BlankMode;
   readonly seenHints: readonly HintId[];
   readonly straightenMode: StraightenMode;
+  readonly language: Locale | null;
 }
 
 /**
  * Разбор файла настроек: версия 1 поднимается без папки, версия 2 — с режимом пустых по
  * умолчанию, версии 1–3 — с пустым списком показанных подсказок, версии 1–4 — с режимом
- * выравнивания по умолчанию.
+ * выравнивания по умолчанию, версии 1–5 — с языком «следовать системе».
  */
 function parseSettings(bytes: Uint8Array): VersionedRead<Settings> {
   const marker = readVersionMarker(bytes);
   const straightenMode = DEFAULT_STRAIGHTEN_MODE;
+  const language = null;
   if (marker === 1) {
     const v1 = parseVersioned(bytes, settingsV1Schema, 1);
     return v1.kind === 'ok'
@@ -115,6 +129,7 @@ function parseSettings(bytes: Uint8Array): VersionedRead<Settings> {
             blankMode: DEFAULT_BLANK_MODE,
             seenHints: [],
             straightenMode,
+            language,
           },
         }
       : v1;
@@ -124,19 +139,29 @@ function parseSettings(bytes: Uint8Array): VersionedRead<Settings> {
     return v2.kind === 'ok'
       ? {
           kind: 'ok',
-          value: { ...v2.value, blankMode: DEFAULT_BLANK_MODE, seenHints: [], straightenMode },
+          value: {
+            ...v2.value,
+            blankMode: DEFAULT_BLANK_MODE,
+            seenHints: [],
+            straightenMode,
+            language,
+          },
         }
       : v2;
   }
   if (marker === 3) {
     const v3 = parseVersioned(bytes, settingsV3Schema, 3);
     return v3.kind === 'ok'
-      ? { kind: 'ok', value: { ...v3.value, seenHints: [], straightenMode } }
+      ? { kind: 'ok', value: { ...v3.value, seenHints: [], straightenMode, language } }
       : v3;
   }
   if (marker === 4) {
     const v4 = parseVersioned(bytes, settingsV4Schema, 4);
-    return v4.kind === 'ok' ? { kind: 'ok', value: { ...v4.value, straightenMode } } : v4;
+    return v4.kind === 'ok' ? { kind: 'ok', value: { ...v4.value, straightenMode, language } } : v4;
+  }
+  if (marker === 5) {
+    const v5 = parseVersioned(bytes, settingsV5Schema, 5);
+    return v5.kind === 'ok' ? { kind: 'ok', value: { ...v5.value, language } } : v5;
   }
   return parseVersioned(bytes, settingsSchema, SETTINGS_VERSION);
 }
@@ -148,6 +173,7 @@ const settingsOf = ({
   blankMode,
   seenHints,
   straightenMode,
+  language,
 }: Settings): Settings => ({
   scanner,
   params,
@@ -155,6 +181,7 @@ const settingsOf = ({
   blankMode,
   seenHints,
   straightenMode,
+  language,
 });
 
 export interface SettingsStore {
@@ -171,6 +198,8 @@ export interface SettingsStore {
   setBlankMode(mode: BlankMode): Promise<Result<void>>;
   /** Режим выравнивания перекоса (M6, R13): помнится между запусками. */
   setStraightenMode(mode: StraightenMode): Promise<Result<void>>;
+  /** Язык интерфейса (B-41): явный выбор помнится между запусками. */
+  setLanguage(locale: Locale): Promise<Result<void>>;
   /** Папка, выбранная в модалке `save` (M3): предлагается при следующем запуске. */
   rememberSaveFolder(folder: string): Promise<Result<void>>;
   /** Подсказка показана с привлечением внимания (B-4): больше не мигает. Повтор — без изменений. */
@@ -192,6 +221,7 @@ export async function openSettingsStore(
     blankMode: DEFAULT_BLANK_MODE,
     seenHints: [],
     straightenMode: DEFAULT_STRAIGHTEN_MODE,
+    language: null,
   };
   let notice: SettingsStore['notice'] = null;
   const readSettings = async (): Promise<VersionedRead<Settings>> => {
@@ -251,6 +281,7 @@ export async function openSettingsStore(
     setParams: (params) => update({ params }),
     setBlankMode: (blankMode) => update({ blankMode }),
     setStraightenMode: (straightenMode) => update({ straightenMode }),
+    setLanguage: (language) => update({ language }),
     rememberSaveFolder: (saveFolder) => update({ saveFolder }),
     markHintSeen: (hint) =>
       settings.seenHints.includes(hint)

@@ -25,6 +25,7 @@ function makeSnapshot(scanner: ScannerState): Snapshot {
   return {
     blankMode: 'hide',
     straightenMode: 'auto',
+    language: 'ru',
     straightenProgress: null,
     seenHints: [],
     seq: 1,
@@ -44,14 +45,16 @@ function stubApi() {
   const recheckScanner = vi.fn(() => Promise.resolve(ok(undefined)));
   const setBlankMode = vi.fn(() => Promise.resolve(ok(undefined)));
   const setStraightenMode = vi.fn(() => Promise.resolve(ok(undefined)));
+  const setLanguage = vi.fn(() => Promise.resolve(ok(undefined)));
   const api = {
     setScanParams,
     recheckScanner,
     setBlankMode,
     setStraightenMode,
+    setLanguage,
   } as unknown as Api;
   vi.stubGlobal('api', api);
-  return { setScanParams, recheckScanner, setBlankMode, setStraightenMode };
+  return { setScanParams, recheckScanner, setBlankMode, setStraightenMode, setLanguage };
 }
 
 function renderSetup(
@@ -232,15 +235,21 @@ describe('SetupScreen', () => {
     ).toBe('true');
   });
 
-  it('«Сбросить параметры» возвращает режим пустых оборотов к «Скрывать» (M4, R1) и выравнивание к «Выравнивать» (M6, R13)', () => {
-    const { setBlankMode, setStraightenMode } = stubApi();
+  it('«Сбросить параметры» возвращает режим пустых оборотов к «Скрывать» (M4, R1) и выравнивание к «Выравнивать» (M6, R13), язык не трогает (B-41)', () => {
+    const { setBlankMode, setStraightenMode, setLanguage } = stubApi();
     renderSetup(READY, {
-      snapshot: { ...makeSnapshot(READY), blankMode: 'mark', straightenMode: 'off' },
+      snapshot: {
+        ...makeSnapshot(READY),
+        blankMode: 'mark',
+        straightenMode: 'off',
+        language: 'en',
+      },
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Сбросить параметры' }));
     expect(setBlankMode).toHaveBeenCalledExactlyOnceWith('hide');
     expect(setStraightenMode).toHaveBeenCalledExactlyOnceWith('auto');
+    expect(setLanguage).not.toHaveBeenCalled();
   });
 
   it('ряд «Выравнивание» показывает режим из снимка, клик шлёт команду, доступен без сканера (M6, R13)', () => {

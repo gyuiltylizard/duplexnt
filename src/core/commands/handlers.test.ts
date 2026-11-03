@@ -25,6 +25,7 @@ import { MAX_EDIT_ITEMS } from './schemas';
 const EMPTY_SNAPSHOT: Snapshot = {
   blankMode: 'hide',
   straightenMode: 'auto',
+  language: 'ru',
   straightenProgress: null,
   seenHints: [],
   seq: 0,
@@ -63,6 +64,7 @@ function setup(
     setParams: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
     setBlankMode: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
     setStraightenMode: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
+    setLanguage: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
     markHintSeen: vi.fn((): Promise<Result<void>> => Promise.resolve(ok(undefined))),
     startPass: vi.fn(() =>
       Promise.resolve(ok({ end: 'completed' as const, pages: 3, error: null })),
@@ -824,6 +826,19 @@ describe('команды: режим выравнивания (M6, U12)', () => 
       );
     }
     expect(service.setStraightenMode).toHaveBeenCalledOnce();
+  });
+});
+
+describe('команды: язык интерфейса (B-41, U1)', () => {
+  it('setLanguage: строгая схема словаря локалей, затем служба', async () => {
+    const { handlers, service } = setup();
+
+    expect(await handlers.setLanguage('en')).toEqual(ok(undefined));
+    expect(service.setLanguage).toHaveBeenCalledExactlyOnceWith('en');
+    for (const garbage of ['EN', 'en-US', 'de', '', null, undefined, 0, { locale: 'en' }, true]) {
+      expect(invalid(await handlers.setLanguage(garbage)), JSON.stringify(garbage)).toBe(true);
+    }
+    expect(service.setLanguage).toHaveBeenCalledOnce();
   });
 });
 

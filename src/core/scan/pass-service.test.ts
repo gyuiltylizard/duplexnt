@@ -63,6 +63,7 @@ describe('служба прохода без сканера', () => {
       notices: [],
       blankMode: 'hide',
       straightenMode: 'auto',
+      language: 'ru',
       straightenProgress: null,
       seenHints: [],
     });

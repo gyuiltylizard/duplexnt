@@ -59,6 +59,7 @@ function makeSnapshot(setPasses: readonly PassSnapshot[], pass: PassProgress): S
     notices: [],
     blankMode: 'hide',
     straightenMode: 'auto',
+    language: 'ru',
     straightenProgress: null,
     seenHints: [],
   };

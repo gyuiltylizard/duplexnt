@@ -5,6 +5,8 @@ export const APP_NAME = "Duplexn't";
 
 export { HINTS, type HintId } from './hints';
 
+export { DEFAULT_LOCALE, LOCALES, localeOfSystemTag, resolveLocale, type Locale } from './locale';
+
 export {
   BRIDGE_CHANNELS,
   BRIDGE_EVENT_CHANNELS,

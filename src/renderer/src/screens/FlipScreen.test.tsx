@@ -68,6 +68,7 @@ function makeSnapshot(fronts: number): Snapshot {
     notices: [],
     blankMode: 'hide',
     straightenMode: 'auto',
+    language: 'ru',
     straightenProgress: null,
     seenHints: [],
   };

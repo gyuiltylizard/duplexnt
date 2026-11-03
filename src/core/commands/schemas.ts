@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   BLANK_MODES,
   HINTS,
+  LOCALES,
   fail,
   MAX_DOCUMENT_NAME_LENGTH,
   ok,
@@ -10,6 +11,7 @@ import {
   STRAIGHTEN_MODES,
   type BlankMode,
   type HintId,
+  type Locale,
   type ConnectScannerRequest,
   type ProbeRequest,
   type Result,
@@ -125,6 +127,9 @@ export const blankModeSchema = z.enum(BLANK_MODES) satisfies z.ZodType<BlankMode
 
 /** Режим выравнивания перекоса (M6, R13): одно из двух значений словаря, без приведения типов. */
 export const straightenModeSchema = z.enum(STRAIGHTEN_MODES) satisfies z.ZodType<StraightenMode>;
+
+/** Язык интерфейса (B-41): одно из значений словаря локалей, без приведения типов. */
+export const localeSchema = z.enum(LOCALES) satisfies z.ZodType<Locale>;
 
 export const hintIdSchema = z.enum(HINTS) satisfies z.ZodType<HintId>;
 

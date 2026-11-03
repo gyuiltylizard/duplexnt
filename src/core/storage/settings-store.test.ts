@@ -95,6 +95,7 @@ describe('настройки', () => {
       blankMode: 'hide',
       straightenMode: 'auto',
       seenHints: [],
+      language: null,
     });
     expect(store.notice).toBeNull();
     expect(await readdir(root)).toEqual([]);
@@ -112,6 +113,7 @@ describe('настройки', () => {
       blankMode: 'hide',
       straightenMode: 'auto',
       seenHints: [],
+      language: null,
     });
     expect(scanner).toMatchObject({
       scheme: 'https',
@@ -120,7 +122,7 @@ describe('настройки', () => {
       basePath: '/eSCL',
       fingerprint: FINGERPRINT,
     });
-    expect(JSON.parse(await readFile(file, 'utf8'))).toMatchObject({ version: 5 });
+    expect(JSON.parse(await readFile(file, 'utf8'))).toMatchObject({ version: 6 });
   });
 
   it('папка сохранения переживает повторное открытие хранилища (M3)', async () => {
@@ -137,6 +139,7 @@ describe('настройки', () => {
       blankMode: 'hide',
       straightenMode: 'auto',
       seenHints: [],
+      language: null,
     });
   });
 
@@ -156,18 +159,20 @@ describe('настройки', () => {
       blankMode: 'hide',
       straightenMode: 'auto',
       seenHints: [],
+      language: null,
     });
     expect(await readFile(file, 'utf8')).toBe(v1);
 
     await store.rememberSaveFolder('E:\\Архив');
     expect(JSON.parse(await readFile(file, 'utf8'))).toEqual({
-      version: 5,
+      version: 6,
       scanner: null,
       params: PARAMS,
       saveFolder: 'E:\\Архив',
       blankMode: 'hide',
       straightenMode: 'auto',
       seenHints: [],
+      language: null,
     });
   });
 
@@ -187,7 +192,7 @@ describe('настройки', () => {
   it('файл настроек с маркером новее понятного не переписывается; приложение работает с дефолтами в памяти', async () => {
     const root = await makeTempDataRoot();
     const file = layoutOf(root).settingsFile;
-    const newer = JSON.stringify({ version: 6, profiles: [{ name: 'будущее' }] });
+    const newer = JSON.stringify({ version: 7, profiles: [{ name: 'будущее' }] });
     await writeFile(file, newer);
 
     const store = await openSettingsStore(root);
@@ -199,6 +204,7 @@ describe('настройки', () => {
       blankMode: 'hide',
       straightenMode: 'auto',
       seenHints: [],
+      language: null,
     });
 
     expect(await store.setParams(PARAMS)).toEqual(ok(undefined));
@@ -214,13 +220,14 @@ describe('настройки', () => {
     const root = await makeTempDataRoot();
     const file = layoutOf(root).settingsFile;
     const content = JSON.stringify({
-      version: 5,
+      version: 6,
       scanner: null,
       params: null,
       saveFolder: null,
       blankMode: 'hide',
       straightenMode: 'auto',
       seenHints: [],
+      language: null,
       theme: 'dark',
     });
     await writeFile(file, content);
@@ -246,6 +253,7 @@ describe('настройки', () => {
       blankMode: 'hide',
       straightenMode: 'auto',
       seenHints: [],
+      language: null,
     });
     const names = await readdir(root);
     expect(names).toHaveLength(1);
@@ -301,6 +309,7 @@ describe('запомненный сканер при запуске', () => {
           saveFolder: null,
           blankMode: 'hide',
           seenHints: [],
+          language: null,
           straightenMode: 'auto',
         },
         { createTransport },
@@ -534,17 +543,19 @@ describe('настройки: режим пустых оборотов (M4, R1)'
       blankMode: 'hide',
       straightenMode: 'auto',
       seenHints: [],
+      language: null,
     });
     expect(await readFile(file, 'utf8')).toBe(v2);
 
     expect(await store.setBlankMode('mark')).toEqual(ok(undefined));
     expect(JSON.parse(await readFile(file, 'utf8'))).toEqual({
-      version: 5,
+      version: 6,
       scanner: null,
       params: PARAMS,
       saveFolder: null,
       blankMode: 'mark',
       seenHints: [],
+      language: null,
       straightenMode: 'auto',
     });
   });
@@ -584,9 +595,10 @@ describe('настройки: режим пустых оборотов (M4, R1)'
 
     expect(await store.markHintSeen('docsSplit')).toEqual(ok(undefined));
     expect(JSON.parse(await readFile(file, 'utf8'))).toMatchObject({
-      version: 5,
+      version: 6,
       blankMode: 'mark',
       seenHints: ['docsSplit'],
+      language: null,
     });
   });
 
@@ -628,18 +640,20 @@ describe('настройки: режим выравнивания (M6, R13)', ()
       saveFolder: 'E:\\Архив',
       blankMode: 'mark',
       seenHints: ['docsSplit'],
+      language: null,
       straightenMode: 'auto',
     });
     expect(await readFile(file, 'utf8')).toBe(v4);
 
     expect(await store.setStraightenMode('off')).toEqual(ok(undefined));
     expect(JSON.parse(await readFile(file, 'utf8'))).toEqual({
-      version: 5,
+      version: 6,
       scanner: null,
       params: PARAMS,
       saveFolder: 'E:\\Архив',
       blankMode: 'mark',
       seenHints: ['docsSplit'],
+      language: null,
       straightenMode: 'off',
     });
   });
@@ -657,5 +671,63 @@ describe('настройки: режим выравнивания (M6, R13)', ()
     );
     expect(store.get().straightenMode).toBe('off');
     expect((await openSettingsStore(root)).get().straightenMode).toBe('off');
+  });
+});
+
+describe('настройки: язык интерфейса (B-41, U1)', () => {
+  it('файл версии 5 читается с языком «следовать системе» и переписывается текущей версией только при записи', async () => {
+    const root = await makeTempDataRoot();
+    const file = layoutOf(root).settingsFile;
+    const v5 = JSON.stringify({
+      version: 5,
+      scanner: null,
+      params: PARAMS,
+      saveFolder: 'E:\\Архив',
+      blankMode: 'mark',
+      seenHints: ['docsSplit'],
+      straightenMode: 'off',
+    });
+    await writeFile(file, v5);
+
+    const store = await openSettingsStore(root);
+
+    expect(store.notice).toBeNull();
+    expect(store.get()).toEqual({
+      scanner: null,
+      params: PARAMS,
+      saveFolder: 'E:\\Архив',
+      blankMode: 'mark',
+      seenHints: ['docsSplit'],
+      straightenMode: 'off',
+      language: null,
+    });
+    expect(await readFile(file, 'utf8')).toBe(v5);
+
+    expect(await store.setLanguage('en')).toEqual(ok(undefined));
+    expect(JSON.parse(await readFile(file, 'utf8'))).toEqual({
+      version: 6,
+      scanner: null,
+      params: PARAMS,
+      saveFolder: 'E:\\Архив',
+      blankMode: 'mark',
+      seenHints: ['docsSplit'],
+      straightenMode: 'off',
+      language: 'en',
+    });
+  });
+
+  it('язык помнится между запусками; негодное значение не попадает ни в файл, ни в память', async () => {
+    const root = await makeTempDataRoot();
+    const store = await openSettingsStore(root);
+
+    expect(store.get().language).toBeNull();
+    expect(await store.setLanguage('en')).toEqual(ok(undefined));
+    expect((await openSettingsStore(root)).get().language).toBe('en');
+
+    expect(await store.setLanguage('de' as never)).toEqual(
+      fail('storageFailed', { reason: 'schema' }),
+    );
+    expect(store.get().language).toBe('en');
+    expect((await openSettingsStore(root)).get().language).toBe('en');
   });
 });

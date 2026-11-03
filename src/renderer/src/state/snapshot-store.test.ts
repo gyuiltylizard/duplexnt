@@ -6,6 +6,7 @@ function makeSnapshot(seq: number): Snapshot {
   return {
     blankMode: 'hide',
     straightenMode: 'auto',
+    language: 'ru',
     straightenProgress: null,
     seenHints: [],
     seq,

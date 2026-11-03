@@ -1,11 +1,14 @@
 import { setTimeout as delay } from 'node:timers/promises';
 import {
+  DEFAULT_LOCALE,
   fail,
   isBacksKind,
   ok,
+  resolveLocale,
   type BlankMode,
   type HintId,
   type DomainError,
+  type Locale,
   sessionConflict,
   type PassKind,
   type PassProgress,
@@ -97,6 +100,11 @@ const DERIVED_CONCURRENCY = 2;
 // только досканирование; при двух уцелевших или отказе от оборотов новый проход не начинается.
 
 export interface PassServiceOptions extends SessionStoreOptions {
+  /**
+   * Язык системы по правилу B-41 (`ru*` → русский, иначе английский) — определяет main; действует,
+   * пока пользователь не выбрал язык сам. Без опции — `DEFAULT_LOCALE`.
+   */
+  readonly systemLocale?: Locale;
   /** Транспорт и его пределы — подмена для тестов, как у подключения. */
   readonly connector?: ConnectorOptions;
   readonly jobLimits?: Partial<ScanJobLimits>;
@@ -144,6 +152,8 @@ export interface PassService {
   setBlankMode(mode: BlankMode): Promise<Result<void>>;
   /** Режим выравнивания (M6, R13, R14): настройка приложения; открытую сессию не трогает. */
   setStraightenMode(mode: StraightenMode): Promise<Result<void>>;
+  /** Язык интерфейса (B-41): явный выбор в настройки, эффективный язык — в снимок. */
+  setLanguage(locale: Locale): Promise<Result<void>>;
   /** Подсказка показана с привлечением внимания (B-4): в настройки, в снимок. */
   markHintSeen(hint: HintId): Promise<Result<void>>;
   /**
@@ -472,6 +482,7 @@ export function createPassService(
       straightenMode: settings.get().straightenMode,
       straightenProgress: straightenProgressOf(session, queue),
       seenHints: settings.get().seenHints,
+      language: resolveLocale(settings.get().language, options.systemLocale ?? DEFAULT_LOCALE),
     };
   }
 
@@ -773,6 +784,13 @@ export function createPassService(
     async setStraightenMode(mode) {
       // Настройка приложения: сессия берёт её только при старте первого прохода (R14).
       const saved = await settings.setStraightenMode(mode);
+      notify();
+      return saved;
+    },
+
+    async setLanguage(locale) {
+      // Настройка приложения (B-41): явный выбор переживает перезапуск и смену системного языка.
+      const saved = await settings.setLanguage(locale);
       notify();
       return saved;
     },
