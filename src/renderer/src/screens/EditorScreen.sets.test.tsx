@@ -159,7 +159,7 @@ describe('лента в режиме наборов (S1–S3, R17)', () => {
     expect(selectedKeys()).toEqual([F1]);
   });
 
-  it('AE10: проходы совпали — обычный редактор: группы документов, «Сохранить», галочка о листах', () => {
+  it('AE10: проходы совпали — обычный редактор: группы документов, «Сохранить», пункта о листах нет', () => {
     stubApi();
     renderEditor(twoPass());
 
@@ -167,8 +167,8 @@ describe('лента в режиме наборов (S1–S3, R17)', () => {
     expect(screen.queryByRole('separator')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Собрать документ' })).toBeNull();
     expect(button('Сохранить документ')).toBeDefined();
-    const check = screen.getByText('Лица и обороты собраны: 3 листа').closest('li');
-    expect(check?.className).toBe('check');
+    expect(screen.queryByText(/Лица и обороты собраны/)).toBeNull();
+    expect(screen.queryByText(/Наборы/)).toBeNull();
   });
 });
 
@@ -454,8 +454,8 @@ describe('тулбар режима и «Собрать документ» (S4�
     expect(option(1).getAttribute('aria-label')).toBe('Страница 2');
     expect(selectedKeys()).toEqual([F2]);
     expect(document.activeElement).toBe(option(2));
-    // Три лица в записи — три листа, добавленный набор в счёт по позиции.
-    expect(screen.getByText('Лица и обороты собраны: 3 листа')).toBeDefined();
+    // Собрано — пункта о лицах и оборотах нет.
+    expect(screen.queryByText(/Лица и обороты собраны|Наборы/)).toBeNull();
   });
 
   it('мост не ответил — тост 6 с, кнопка снова доступна, экран прежний (ревью #7)', async () => {
@@ -601,7 +601,7 @@ describe('после сборки (S9, S13)', () => {
     expect(screen.getByRole('heading', { name: 'Стр. 5 — лицо листа 3' })).toBeDefined();
     expect(screen.queryByRole('separator')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Собрать документ' })).toBeNull();
-    expect(screen.getByText('Лица и обороты собраны: 3 листа')).toBeDefined();
+    expect(screen.queryByText(/Лица и обороты собраны|Наборы/)).toBeNull();
     expect(screen.queryByText('Есть ручные правки')).toBeNull();
   });
 });
