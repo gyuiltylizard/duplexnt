@@ -802,11 +802,13 @@ samp {
   color: var(--color-text-muted);
 }
 
+/* Значения — голосом метаданных (`.save-file__ext`), не первичным текстом: сводка `save` с
+   B-43, ДЕТАЛИ инспектора — с B-44 (автор: «слишком яркий шрифт»). */
 .facts__value {
   margin: 0;
   text-align: right;
-  font: var(--font-weight-medium) var(--font-size-m) / var(--leading-snug) var(--font-family-mono);
-  color: var(--color-text-primary);
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-snug) var(--font-family-mono);
+  color: var(--color-text-hint);
 }
 
 /* — тост — */
@@ -4192,7 +4194,7 @@ samp {
 
 /* ── modals/add-modal.css ── */
 
-/* Модалка add (handoff M3.5, S2): две секции с кикерами, строка сканера, сводка в футере. */
+/* Модалка add (handoff M3.5, S2): две секции с кикерами, строка сканера; футер без сводки (B-44). */
 
 .add-modal__body {
   display: flex;
@@ -4235,23 +4237,12 @@ samp {
   font-family: var(--font-family-sans);
 }
 
-.add-modal__summary {
-  font-family: var(--font-family-mono);
-}
-
 /* ── modals/save-modal.css ── */
 
 /* Модалка `save` (план M3, U9; handoff M3, S16) — стили из handoff'а дословно. */
 
 .save-modal .kicker {
   margin: 0;
-}
-/* Сводка — второстепенный блок (B-43): значения голосом метаданных строки «Файлы»
-   (`.save-file__ext`), а не первичным текстом; ключи — как в общей таблице фактов. */
-.save-modal .facts__value {
-  font-weight: var(--font-weight-regular);
-  font-size: var(--font-size-s);
-  color: var(--color-text-hint);
 }
 .save-modal__modes {
   display: flex;

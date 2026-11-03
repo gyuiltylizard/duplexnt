@@ -549,7 +549,7 @@ describe('инспектор до сборки (S8–S9, R22–R23)', () => {
     expect(facts()[2]).toBe('Откуда: проход лиц');
   });
 
-  it('S10: «+ Добавить» — «В конец набора» и сводка с группой', () => {
+  it('S10: «+ Добавить» — «В конец набора» вместо «В конец документа»', () => {
     stubApi({ ...{} });
     renderEditor(
       makeSnapshot([...(twoPass(2).session?.passes ?? [])], { scanner: { kind: 'none' } }),
@@ -557,10 +557,9 @@ describe('инспектор до сборки (S8–S9, R22–R23)', () => {
 
     fireEvent.click(option(3));
     fireEvent.click(button('Добавить листы'));
-    expect(screen.getByRole('radio', { name: 'В конец набора' })).toBeDefined();
-    fireEvent.click(screen.getByRole('radio', { name: 'В конец набора' }));
-    expect(document.querySelector('.add-modal__summary')?.textContent).toBe(
-      'Одностороннее · в конец набора оборотов, после стр. 5',
+    expect(screen.queryByRole('radio', { name: 'В конец документа' })).toBeNull();
+    expect(screen.getByRole('radio', { name: 'В конец набора' }).getAttribute('aria-checked')).toBe(
+      'true',
     );
   });
 

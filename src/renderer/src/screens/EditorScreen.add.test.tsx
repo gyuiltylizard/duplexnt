@@ -29,7 +29,6 @@ const READY: ScannerState = {
 };
 
 const addButton = (): HTMLElement => screen.getByRole('button', { name: 'Добавить листы' });
-const summary = (): string => document.querySelector('.add-modal__summary')?.textContent ?? '';
 
 /** Пары 3+3 (AE1) — как `twoPass`, но списком проходов для снимка с другими полями. */
 const pairs = () => [
@@ -138,14 +137,13 @@ describe('«+ Добавить»: доступность (S1, R12)', () => {
     expect(
       screen.getByRole('radio', { name: 'После текущей страницы' }).getAttribute('aria-disabled'),
     ).toBe('true');
-    expect(summary()).toBe('Двустороннее · в конец ленты');
     fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
     expect(onAdd).toHaveBeenCalledExactlyOnceWith('addedFronts', null);
   });
 });
 
 describe('«+ Добавить»: якорь из видимой ленты (S2, KTD-8)', () => {
-  it('«После текущей» — ключ текущей; сводка называет её теми же словами, что ДЕТАЛИ', () => {
+  it('«После текущей» — ключ текущей', () => {
     stubApi();
     const onAdd = vi.fn();
     renderEditor(makeSnapshot(pairs(), { scanner: READY }), { onAdd });
@@ -154,7 +152,6 @@ describe('«+ Добавить»: якорь из видимой ленты (S2,
     fireEvent.click(option(2));
     fireEvent.click(addButton());
     fireEvent.click(screen.getByRole('radio', { name: 'После текущей страницы' }));
-    expect(summary()).toBe('Двустороннее · после стр. 3 (лицо листа 2)');
     fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
     expect(onAdd).toHaveBeenCalledExactlyOnceWith('addedFronts', 'p01-s01-0002');
     expect(screen.queryByRole('dialog')).toBeNull();
@@ -172,12 +169,11 @@ describe('«+ Добавить»: якорь из видимой ленты (S2,
     expect(screen.getByText('5 из 6')).toBeDefined();
     fireEvent.click(addButton());
     fireEvent.click(screen.getByRole('radio', { name: 'После текущей страницы' }));
-    expect(summary()).toBe('Двустороннее · после стр. 5 (лицо листа 3)');
     fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
     expect(onAdd).toHaveBeenCalledExactlyOnceWith('addedFronts', 'p01-s01-0003');
   });
 
-  it('«В конец документа» — последняя видимая страница документа текущей, имя — как в тулбаре', () => {
+  it('«В конец документа» — последняя видимая страница документа текущей', () => {
     stubApi();
     const onAdd = vi.fn();
     const base = makeSnapshot(pairs(), { scanner: READY });
@@ -194,15 +190,16 @@ describe('«+ Добавить»: якорь из видимой ленты (S2,
     fireEvent.click(option(1));
     fireEvent.click(addButton());
     fireEvent.click(screen.getByRole('radio', { name: 'В конец документа' }));
-    expect(summary()).toBe('Двустороннее · в конец документа «Акт», после стр. 4');
     fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
     expect(onAdd).toHaveBeenCalledExactlyOnceWith('addedFronts', 'p02-s01-0002');
 
-    // Документ без имени — в сводке имя по умолчанию, как в тулбаре.
+    // Текущая во втором документе — якорь его последняя страница: 6-я, оборот листа 3
+    // (обороты сканируются в обратном порядке — первый файл прохода).
     fireEvent.click(option(5));
     fireEvent.click(addButton());
     fireEvent.click(screen.getByRole('radio', { name: 'В конец документа' }));
-    expect(summary()).toBe('Двустороннее · в конец документа «Документ 2», после стр. 6');
+    fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
+    expect(onAdd).toHaveBeenLastCalledWith('addedFronts', 'p02-s01-0001');
   });
 
   it('после «Начать скан» фокус возвращается на «+ Добавить» (и под StrictMode)', () => {

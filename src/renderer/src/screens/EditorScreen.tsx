@@ -738,35 +738,20 @@ export function EditorScreen({
     },
   });
 
-  /** Номер страницы в показанной ленте; у скрытой — номер её показанного лица (слева). */
-  const numberOf = (key: string): number => {
-    for (let index = positions.get(key) ?? -1; index >= 0; index -= 1) {
-      const shownIndex = shownPositions.get(visible[index] ?? '');
-      if (shownIndex !== undefined) {
-        return shownIndex + 1;
-      }
-    }
-    return 0;
-  };
-
   // Якоря для модалки — только пока она открыта (KTD-8). «После текущей» — после её листа: за
   // склеенными оборотами и при показанных (B-13, R5), номера — по показанной ленте.
   const anchors =
     modal === 'add'
-      ? anchorsOf(t, {
+      ? anchorsOf({
           entry: currentEntry,
           index: currentFull,
           document: currentDoc,
-          documentName: currentDocument === null ? '' : (names[currentDocument] ?? ''),
           visible,
-          mode,
           sets,
-          origin: originKindOf(origins, currentEntry?.key),
           after:
             selection.current === null
               ? undefined
               : sheetOf(selection.current, glued, visible).at(-1),
-          numberOf,
         })
       : null;
 

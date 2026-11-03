@@ -764,18 +764,17 @@ describe('пустые обороты в редакторе (M4)', () => {
     );
   });
 
-  it('S16: «После текущей страницы» в add — после скрытого хвоста, номера по показанной ленте', () => {
+  it('S16: «После текущей страницы» в add — после скрытого хвоста', () => {
     stubApi();
     const onAdd = vi.fn();
     renderEditor({ ...blankSnapshot(), scanner: READY }, { onAdd });
     fireEvent.click(screen.getByRole('button', { name: 'Добавить листы' }));
     fireEvent.click(screen.getByRole('radio', { name: /После текущей страницы/u }));
-    expect(screen.getByText(/после стр\. 1 \(лицо листа 1\)/u)).toBeDefined();
     fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
     expect(onAdd).toHaveBeenCalledWith('addedFronts', B3);
   });
 
-  it('S16: номер «после стр. N» — по показанной ленте и при скрытых перед текущей (упрощение M4)', () => {
+  it('S16: якорь при скрытых перед текущей — хвост листа текущей', () => {
     stubApi();
     const onAdd = vi.fn();
     renderEditor({ ...blankSnapshot(), scanner: READY }, { onAdd });
@@ -783,7 +782,6 @@ describe('пустые обороты в редакторе (M4)', () => {
     fireEvent.click(option(3));
     fireEvent.click(screen.getByRole('button', { name: 'Добавить листы' }));
     fireEvent.click(screen.getByRole('radio', { name: /После текущей страницы/u }));
-    expect(screen.getByText(/после стр\. 4 \(лицо листа 3\)/u)).toBeDefined();
     fireEvent.click(screen.getByRole('button', { name: 'Начать скан' }));
     expect(onAdd).toHaveBeenCalledWith('addedFronts', B1);
   });
