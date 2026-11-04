@@ -2,7 +2,7 @@
 title: 'feat: инспектор v2 и тулбар editor (B-45)'
 type: feat
 date: 2026-11-04
-status: в работе
+status: done
 origin: docs/design/handoffs/2026-11-inspector-v2.md
 ---
 
