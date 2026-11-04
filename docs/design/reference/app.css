@@ -2802,54 +2802,46 @@ samp {
   cursor: default;
 }
 
-/* B-42, B-45: подвал инспектора — логотип (он же ссылка на проект) и плашка BETA рядом, по
-   правому краю; прижат к низу панели, при прокрутке уезжает вместе с содержимым. */
+/* B-42, B-45: подвал инспектора — одна плашка «D’ BETA» по правому краю, она же ссылка на
+   проект; прижат к низу панели, при прокрутке уезжает вместе с содержимым. */
 .inspector__footer {
   display: flex;
-  align-items: center;
   justify-content: flex-end;
-  gap: var(--space-2);
   margin-top: auto;
   padding: var(--space-8);
 }
 
-.inspector__mark {
-  display: block;
-  width: var(--size-beta);
-  height: var(--size-beta);
-}
-
+/* Плашка: монограмма без плитки на инверсном фоне (цвет плитки значка) и текст BETA. */
 .beta-badge {
   display: inline-flex;
   align-items: center;
+  gap: var(--space-1);
   height: var(--size-beta);
-  padding: 0 var(--space-4);
+  margin: 0;
+  padding: 0 var(--space-4) 0 0;
+  border: 0;
   border-radius: var(--radius-s);
+  background: var(--color-bg-inverse);
+  color: var(--color-text-on-inverse);
   font: var(--font-weight-semibold) var(--font-size-xxs) / var(--leading-none)
     var(--font-family-mono);
   letter-spacing: var(--tracking-caps);
-  background: var(--color-bg-inverse);
-  color: var(--color-text-on-inverse);
-}
-
-/* Логотип-ссылка на страницу проекта: без рамки и фона, при наведении чуть светлее. */
-.inspector__about {
-  display: block;
-  flex: none;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-s);
-  background: none;
   cursor: pointer;
   transition: filter var(--duration-fast) var(--ease-standard);
 }
 
-.inspector__about:hover {
+.beta-badge:hover {
   filter: brightness(1.25);
 }
 
-.inspector__about:focus-visible {
+.beta-badge__mark {
+  display: block;
+  flex: none;
+  width: var(--size-beta);
+  height: var(--size-beta);
+}
+
+.beta-badge:focus-visible {
   outline: var(--space-1) solid var(--color-border-focus);
   outline-offset: var(--space-1);
 }

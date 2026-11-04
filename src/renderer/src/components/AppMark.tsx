@@ -4,11 +4,19 @@ import type { ReactNode } from 'react';
 // и цвета — мастер `build/icon-small.svg` (вариант для мелких размеров, без блика и с толстым
 // штрихом), без его c2pa-метаданных. Цвета — цвета значка, а не токены темы: плитка одна и та
 // же в панели задач и в интерфейсе. Размер задаёт CSS (`--size-beta`); декоративна.
+// `plate={false}` — без плитки: на плашке того же цвета (`--color-bg-inverse` = плитка) буква
+// и апостроф ложатся прямо на неё.
 
-export function AppMark({ className }: { readonly className?: string }): ReactNode {
+export function AppMark({
+  className,
+  plate = true,
+}: {
+  readonly className?: string;
+  readonly plate?: boolean;
+}): ReactNode {
   return (
     <svg className={className} viewBox="0 0 64 64" aria-hidden="true" focusable="false">
-      <rect x="1" y="1" width="62" height="62" rx="10" fill="#1c1a16" />
+      {plate && <rect x="1" y="1" width="62" height="62" rx="10" fill="#1c1a16" />}
       <path
         fill="#fbfaf7"
         fillRule="evenodd"

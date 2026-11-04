@@ -587,19 +587,19 @@ export function EditorInspector({
         </button>
       </section>
 
-      {/* Подвал (B-42, B-45, правка автора на приёмке): логотип — сама ссылка на проект, рядом
-          плашка BETA, оба по правому краю; текстовой ссылки нет. */}
+      {/* Подвал (B-42, B-45, правки автора на приёмке): одна плашка «D’ BETA» по правому краю —
+          она же ссылка на проект; текстовой ссылки нет. */}
       <footer className="inspector__footer" data-section="footer">
         <button
           type="button"
-          className="inspector__about"
+          className="beta-badge"
           title={t('inspector.aboutTitle')}
           aria-label={t('inspector.about', { app: APP_NAME })}
           onClick={onOpenProject}
         >
-          <AppMark className="inspector__mark" />
+          <AppMark className="beta-badge__mark" plate={false} />
+          <span className="beta-badge__text">BETA</span>
         </button>
-        <span className="beta-badge">BETA</span>
       </footer>
     </aside>
   );

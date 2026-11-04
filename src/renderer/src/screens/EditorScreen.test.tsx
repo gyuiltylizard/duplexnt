@@ -147,12 +147,12 @@ describe('экран editor', () => {
     // Кнопка — последний элемент секции ДОКУМЕНТЫ В НАБОРЕ.
     expect(save.parentElement?.lastElementChild).toBe(save);
     const footer = inspector.querySelector('.inspector__footer');
-    // Логотип — сама ссылка на проект; текстовой ссылки нет; рядом плашка BETA.
+    // Одна плашка «D’ BETA» — она же ссылка на проект; текстовой ссылки нет.
     const link = within(footer as HTMLElement).getByRole('button', { name: /о проекте/u });
-    expect(link.querySelector('.inspector__mark')).not.toBeNull();
-    expect(link.textContent).toBe('');
-    expect(link.nextElementSibling?.className).toBe('beta-badge');
-    expect(footer?.querySelector('.beta-badge')?.textContent).toBe('BETA');
+    expect(link.className).toBe('beta-badge');
+    expect(link.querySelector('.beta-badge__mark')).not.toBeNull();
+    expect(link.textContent).toBe('BETA');
+    expect(footer?.children).toHaveLength(1);
   });
 
   it('B-45: ПРОВЕРКА — подраздел ДЕТАЛЕЙ; при точке в ней свёрнутая строка несёт янтарную точку', () => {
