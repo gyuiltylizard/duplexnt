@@ -147,9 +147,8 @@ describe('выравнивание в редакторе (M6)', () => {
     expect(screen.getByText('НЕ ВЫРОВНЕНО').getAttribute('title')).toBe(
       'Не выровнено: наклон строк не сходится в одну форму',
     );
-    expect(
-      within(inspector()).getByText('Не удалось автоматически выровнять страницу.'),
-    ).toBeDefined();
+    // Действия нет — секции ВЫРАВНИВАНИЕ нет (B-45); причина — в факте и ПРОВЕРКЕ.
+    expect(document.querySelector('.inspector__section--straight')).toBeNull();
     expect(within(inspector()).getByText('наклон строк не сходится')).toBeDefined();
     expect(checkTexts()).toContain(
       '✓Выровнено 3 стр.Не выровнено 2: наклон строк не сходится — 1, мало места на диске — 1. Освободите место на диске — при следующем запуске приложение попробует снова.',
@@ -180,7 +179,7 @@ describe('выравнивание в редакторе (M6)', () => {
     // Откат первой: адрес превью и миниатюры меняются на месте — та же карточка, без плашки.
     fireEvent.click(option(0));
     const card = option(0);
-    fireEvent.click(straightButton('Оригинал'));
+    fireEvent.click(straightButton('Вернуть оригинал'));
     await settle();
     rerender(applied(snapshot, lastSent(api), undefined, FACTS));
     expect(option(0)).toBe(card);
@@ -194,8 +193,10 @@ describe('выравнивание в редакторе (M6)', () => {
     const snapshot = straightSnapshot();
     const { onToast, rerender } = renderEditor(snapshot);
 
-    expect(within(inspector()).getByText('Страница выровнена.')).toBeDefined();
-    const keep = straightButton('Оригинал');
+    // Текста в секции нет (правка автора на приёмке B-45) — только заголовок и кнопка.
+    expect(within(inspector()).queryByText('Страница выровнена.')).toBeNull();
+    const keep = straightButton('Вернуть оригинал');
+    expect(keep.className).toContain('inspector__straight-action');
     expect(keep.getAttribute('title')).toBe(
       'Показать и сохранить как со сканера. Это правка: Ctrl+Z или «Вернуть» её снимут.',
     );
@@ -213,7 +214,6 @@ describe('выравнивание в редакторе (M6)', () => {
     expect(screen.getByText('Есть ручные правки')).toBeDefined();
     expect(option(0).getAttribute('aria-label')).toBe('Страница 1');
     expect(option(0).querySelector('.thumb__straight')).toBeNull();
-    expect(within(inspector()).getByText('Исходный скан.')).toBeDefined();
     const restore = straightButton('Выровнять');
     expect(restore.getAttribute('title')).toBe('Вернуть выровненный вид. Ctrl+Z отменит.');
     // Фокус остался на кнопке, ставшей парной (handoff M6, Behaviour).
@@ -233,7 +233,7 @@ describe('выравнивание в редакторе (M6)', () => {
     expect(onToast).not.toHaveBeenCalled();
 
     // «Выровнять» снимает ключ.
-    fireEvent.click(straightButton('Оригинал'));
+    fireEvent.click(straightButton('Вернуть оригинал'));
     await settle();
     rerender(applied(restored, lastSent(api), undefined, FACTS));
     fireEvent.click(straightButton('Выровнять'));
@@ -247,13 +247,9 @@ describe('выравнивание в редакторе (M6)', () => {
     fireEvent.click(option(0));
     fireEvent.click(option(5), { shiftKey: true });
 
-    expect(
-      within(inspector()).getByText(
-        'Из 6 выделенных: выровнено 2, не выровнено 2, в обработке 1, ровных 1.',
-      ),
-    ).toBeDefined();
+    expect(within(inspector()).queryByText(/Из 6 выделенных/u)).toBeNull();
     expect(within(inspector()).queryByRole('button', { name: /^Выровнять/u })).toBeNull();
-    fireEvent.click(straightButton('Оригинал — 2 из 6 выделенных'));
+    fireEvent.click(straightButton('Вернуть оригинал — 2 из 6 выделенных'));
     expect(lastSent(api).edits).toEqual({ ...EMPTY_EDITS, keepOriginal: [P(1), P(6)] });
     await settle();
     expect(onToast).toHaveBeenCalledExactlyOnceWith('Оставлены оригиналы: 2 стр. — Ctrl+Z отменит');
@@ -262,12 +258,7 @@ describe('выравнивание в редакторе (M6)', () => {
     rerender(kept);
     // Выделение не изменилось; подходящих для «Оригинал» больше нет — только «Выровнять».
     expect(selectedKeys()).toHaveLength(6);
-    expect(
-      within(inspector()).getByText(
-        'Из 6 выделенных: оригинал по вашему выбору — 2, не выровнено 2, в обработке 1, ровных 1.',
-      ),
-    ).toBeDefined();
-    expect(within(inspector()).queryByRole('button', { name: /^Оригинал/u })).toBeNull();
+    expect(within(inspector()).queryByRole('button', { name: /^Вернуть оригинал/u })).toBeNull();
     onToast.mockClear();
     fireEvent.click(straightButton('Выровнять — 2 из 6 выделенных'));
     expect(lastSent(api).edits).toEqual(EMPTY_EDITS);
@@ -278,37 +269,22 @@ describe('выравнивание в редакторе (M6)', () => {
     rerender(applied(kept, lastSent(api), undefined, FACTS));
     fireEvent.click(option(0));
     fireEvent.click(option(5), { ctrlKey: true });
-    expect(straightButton('Оригинал — 2 стр.')).toBeDefined();
+    expect(straightButton('Вернуть оригинал — 2 стр.')).toBeDefined();
   });
 
-  it('AE17: выделение без подходящих — одна недоступная кнопка и причина: «ещё выравниваются» при ждущих, иначе «нет выровненных»', () => {
+  it('AE17: выделение без подходящих — секции ВЫРАВНИВАНИЕ нет (правка автора на приёмке B-45)', () => {
     stubApi();
     renderEditor(straightSnapshot());
     fireEvent.click(option(1));
     fireEvent.click(option(4), { shiftKey: true });
-
-    const disabled = straightButton('Оригинал');
-    expect(disabled.hasAttribute('disabled')).toBe(true);
-    expect(disabled.getAttribute('title')).toBe(
-      'Выделенные ещё выравниваются — действие станет доступно само.',
-    );
-    expect(
-      within(inspector()).getByText(
-        'Выделенные ещё выравниваются — действие станет доступно само.',
-      ),
-    ).toBeDefined();
+    expect(document.querySelector('.inspector__section--straight')).toBeNull();
 
     fireEvent.click(option(1));
     fireEvent.click(option(2), { shiftKey: true });
-    expect(straightButton('Оригинал').hasAttribute('disabled')).toBe(true);
-    expect(
-      within(inspector()).getByText(
-        'Среди выделенных нет выровненных страниц — оставлять оригинал нечему.',
-      ),
-    ).toBeDefined();
-    expect(
-      within(inspector()).getByText('Из 2 выделенных: не выровнено 1, ровных 1.'),
-    ).toBeDefined();
+    expect(document.querySelector('.inspector__section--straight')).toBeNull();
+    // У одной страницы без действия (не померить) секции тоже нет.
+    fireEvent.click(option(2));
+    expect(document.querySelector('.inspector__section--straight')).toBeNull();
   });
 
   it('ПРОВЕРКА: точка с остатком, пока идёт обработка; затем «Выровнено N» с причинами и подсказкой про место; оставленные оригиналом — хвостом', async () => {
@@ -326,7 +302,7 @@ describe('выравнивание в редакторе (M6)', () => {
       '✓Выровнено 3 стр.Не выровнено 2: не по чему мерить — 1, мало места на диске — 1. Освободите место на диске — при следующем запуске приложение попробует снова.',
     );
 
-    fireEvent.click(straightButton('Оригинал'));
+    fireEvent.click(straightButton('Вернуть оригинал'));
     await settle();
     rerender(applied(snapshot, lastSent(api), undefined, DONE));
     expect(checkTexts()).toContain(
@@ -465,12 +441,8 @@ describe('выравнивание в редакторе (M6)', () => {
     const snapshot = straightSnapshot(deferredRecalc);
     const { rerender } = renderEditor(snapshot);
 
-    expect(
-      within(inspector()).getByText(
-        'Показан выправленный вид прежней версии приложения. Пересчёт отложен: не хватило места на диске — освободите место, при следующем запуске приложение попробует снова.',
-      ),
-    ).toBeDefined();
-    expect(straightButton('Оригинал')).toBeDefined();
+    // Отложенный пересчёт — та же выровненная страница: секция с «Вернуть оригинал», без текста.
+    expect(straightButton('Вернуть оригинал')).toBeDefined();
     expect(thumbSrc(0)).toBe(pageImageUrl(SESSION, 'straight-thumb', P(1), 1, 0));
 
     const session = sessionOf(snapshot);
@@ -484,7 +456,7 @@ describe('выравнивание в редакторе (M6)', () => {
           ),
       }),
     );
-    expect(within(inspector()).getByText('Страница выровнена.')).toBeDefined();
+    expect(straightButton('Вернуть оригинал')).toBeDefined();
   });
 
   it('пересчёт при той же геометрии меняет адрес карточки версией детектора — новый кадр на месте (B-19)', () => {
@@ -543,12 +515,12 @@ describe('выравнивание в редакторе (M6)', () => {
     const api = stubApi();
     const snapshot = straightSnapshot();
     const { rerender } = renderEditor(snapshot);
-    fireEvent.click(straightButton('Оригинал'));
+    fireEvent.click(straightButton('Вернуть оригинал'));
     await settle();
     rerender(applied(snapshot, lastSent(api), undefined, FACTS));
 
     fireEvent.click(screen.getByRole('button', { name: 'Вернуть' }));
-    expect(screen.getByRole('dialog').textContent).toContain('и выбор «Оригинал»');
+    expect(screen.getByRole('dialog').textContent).toContain('и возврат оригинала');
     fireEvent.click(screen.getByRole('button', { name: 'Вернуть всё' }));
     expect(lastSent(api).edits).toEqual(EMPTY_EDITS);
     // Снимок с правками строится зеркалом — статусы сходятся с ядром (guard-тест).

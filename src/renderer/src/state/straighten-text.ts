@@ -55,27 +55,6 @@ export function straightFactText(t: TFunction, mark: StraightenMark): string | n
   }
 }
 
-/**
- * Текст секции ВЫРАВНИВАНИЕ у одной страницы; `null` — секции нет (`level`, `null`). У выправленной
- * с отложенным пересчётом (B-19) — про прежний вид и причину; пересчёт в ходу текста не меняет.
- */
-export function straightNoteText(t: TFunction, mark: StraightenMark): string | null {
-  switch (mark.status) {
-    case 'straightened':
-      return mark.recalc === 'disk' || mark.recalc === 'fail'
-        ? t(`inspector.straight.note.recalc.${mark.recalc}`)
-        : t('inspector.straight.note.straightened');
-    case 'kept':
-    case 'pending':
-      return t(`inspector.straight.note.${mark.status}`);
-    case 'unmeasurable':
-    case 'deferred':
-      return mark.reason === null ? null : t(`inspector.straight.note.${mark.reason}`);
-    default:
-      return null;
-  }
-}
-
 /** Действие секции: «Оригинал» (`straightened`) или «Выровнять» (`kept`). */
 export type StraightAction = 'keep' | 'restore';
 
@@ -144,25 +123,6 @@ export function straightSelectionOf(
     }
   }
   return count === 0 ? EMPTY_SELECTION : { count, ...counts, keep, restore };
-}
-
-/** «Из N выделенных: выровнено 3, не выровнено 1, ровных 1.» — части через запятую. */
-export function straightSelectionText(t: TFunction, selection: StraightSelection): string {
-  const parts = (
-    [
-      ['straightened', selection.straightened],
-      ['kept', selection.kept],
-      ['undone', selection.undone],
-      ['pending', selection.pending],
-      ['level', selection.level],
-    ] as const
-  )
-    .filter(([, count]) => count > 0)
-    .map(([part, count]) => t(`inspector.straight.parts.${part}`, { count }));
-  return t('inspector.straight.selection', {
-    n: selection.count,
-    parts: parts.length === 0 ? t('inspector.straight.parts.none') : parts.join(', '),
-  });
 }
 
 /** Подпись кнопки действия на выделение: «— 3 из 5 выделенных» или «— 5 стр.», если подходят все. */

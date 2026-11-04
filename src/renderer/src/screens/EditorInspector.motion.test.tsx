@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { SkewOutcome, StraightenFact, StraightenFacts } from '@shared';
+import { EMPTY_EDITS, type SkewOutcome, type StraightenFact, type StraightenFacts } from '@shared';
 import '../i18n';
 import {
   clearMotionTokens,
@@ -27,15 +27,22 @@ const fact = (
   cause: null,
   ...extra,
 });
-// 1 — выровнена (секция ВЫРАВНИВАНИЕ есть), 2 — ровная (секции нет), 3 — не померить (есть).
+// 1 — выровнена (секция ВЫРАВНИВАНИЕ с «Вернуть оригинал»), 2 — ровная (секции нет),
+// 3 — выровнена, но оригинал оставлен (секция с «Выровнять»).
 const FACTS: StraightenFacts = new Map([
   [P(1), fact('willStraighten', { version: 1 })],
   [P(2), fact('level')],
-  [P(3), fact('unmeasurable')],
+  [P(3), fact('willStraighten', { version: 1 })],
 ]);
 
 const snapshot = () =>
-  makeSnapshot([makePass({ pages: pages(3) })], {}, { straighten: 'auto' }, undefined, FACTS);
+  makeSnapshot(
+    [makePass({ pages: pages(3) })],
+    {},
+    { straighten: 'auto', edits: { ...EMPTY_EDITS, keepOriginal: [P(3)] } },
+    undefined,
+    FACTS,
+  );
 
 /** Высоты для jsdom (раскладки нет): секция — по `data-section`, с учётом свёрнутости ДЕТАЛЕЙ. */
 const heights = new Map<string, number>();

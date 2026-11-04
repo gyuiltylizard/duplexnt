@@ -665,39 +665,14 @@
     "docMetaBlank": "only blank backs — hidden",
     "straight": {
       "kicker": "STRAIGHTENING",
-      "note": {
-        "straightened": "Distortion detected — the page is straightened.",
-        "kept": "The original scan is shown.",
-        "measure": "Could not straighten the page automatically.",
-        "shape": "Could not straighten the page automatically.",
-        "nohelp": "Could not straighten the page automatically.",
-        "disk": "Could not straighten: not enough disk space. Free some space — the app will try again on the next start.",
-        "fail": "Could not straighten because of a failure — the app will try again on the next start.",
-        "pending": "The app is checking whether the lines are level. The scan is shown as is for now; saving will wait — nothing to do.",
-        "recalc": {
-          "disk": "The straightened view from a previous app version is shown. Recalculation is deferred: not enough disk space — free some space, the app will try again on the next start.",
-          "fail": "The straightened view from a previous app version is shown. Recalculation failed — the app will try again on the next start."
-        }
-      },
-      "selection": "Of {{n}} selected: {{parts}}.",
-      "parts": {
-        "straightened": "straightened {{count}}",
-        "kept": "original by your choice — {{count}}",
-        "undone": "not straightened {{count}}",
-        "pending": "in progress {{count}}",
-        "level": "level {{count}}",
-        "none": "straightening was not applied"
-      },
-      "keep": "Keep original",
-      "keepAll": "Keep original — {{count}} pages",
-      "keepSome": "Keep original — {{k}} of {{n}} selected",
+      "keep": "Restore original",
+      "keepAll": "Restore original — {{count}} pages",
+      "keepSome": "Restore original — {{k}} of {{n}} selected",
       "keepTitle": "Show and save as it came from the scanner. This is an edit: Ctrl+Z or “Revert” removes it.",
       "restore": "Straighten",
       "restoreAll": "Straighten — {{count}} pages",
       "restoreSome": "Straighten — {{k}} of {{n}} selected",
-      "restoreTitle": "Restore the straightened view. Ctrl+Z undoes.",
-      "noneEligible": "None of the selected pages is straightened — nothing to keep as original.",
-      "allPending": "The selected pages are still being straightened — the action will become available on its own."
+      "restoreTitle": "Restore the straightened view. Ctrl+Z undoes."
     },
     "about": "{{app}} · about the project",
     "aboutTitle": "Open the project page in the browser"
@@ -729,7 +704,7 @@
   },
   "revert": {
     "title": "Revert everything to how it was after scanning?",
-    "text": "This resets the order, rotations, deletions, document splits, their names and the “Original” choice: deleted pages return to the strip, auto-sorting turns on. Changed your mind — Ctrl+Z.",
+    "text": "This resets the order, rotations, deletions, document splits, their names and the original restored in place of the straightened view: deleted pages return to the strip, auto-sorting turns on. Changed your mind — Ctrl+Z.",
     "cancel": "Cancel",
     "confirm": "Revert all"
   },

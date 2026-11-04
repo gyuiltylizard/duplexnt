@@ -1,22 +1,16 @@
 import type { ReactNode } from 'react';
 import type { StraightenMark, StraightenSummary } from '@shared';
 import type { TFunction } from 'i18next';
-import {
-  reasonText,
-  straightActionLabel,
-  straightNoteText,
-  straightSelectionText,
-  type StraightSelection,
-} from '../state/straighten-text';
+import { reasonText, straightActionLabel, type StraightSelection } from '../state/straighten-text';
 import type { CheckItem } from './InspectorCheck';
 
-// Выравнивание в инспекторе (план M6, U8; handoff M6 «Anatomy», «States», «Behaviour»): секция
-// ВЫРАВНИВАНИЕ после ДЕТАЛЕЙ — по образцу ПУСТОГО ОБОРОТА (у страницы бывает только одна из
-// двух: у пустой статуса нет) — и пункт ПРОВЕРКИ после пустых оборотов. Одна страница: текст по
-// статусу и действие «Оставить оригинал» (`straightened`) или «Выровнять» (`kept`) в одном
-// слоте — после перерисовки кнопка становится парной, фокус остаётся на ней. Выделение из
-// нескольких: строка «Из N выделенных: …» и до двух кнопок с числом подходящих (AE17);
-// подходящих нет — одна недоступная кнопка и причина строкой ниже.
+// Выравнивание в инспекторе (план M6, U8; handoff M6; правка автора на приёмке B-45,
+// 2026-11-04): секция ВЫРАВНИВАНИЕ после ДЕТАЛЕЙ — только заголовок и действие, без текста
+// (статус и причина — в факте ДЕТАЛЕЙ, на карточке и в ПРОВЕРКЕ). Одна страница: «Вернуть
+// оригинал» у выправленной, «Выровнять» у откаченной, во всю ширину секции, как «Сохранить»;
+// после перерисовки кнопка становится парной, фокус остаётся на ней. У остальных статусов
+// действия нет — секции нет. Выделение из нескольких: до двух кнопок с числом подходящих друг
+// под другом (AE17); подходящих нет — секции нет. Пункт ПРОВЕРКИ — после пустых оборотов.
 
 /**
  * Пункт ПРОВЕРКИ (handoff M6 «ПРОВЕРКА»): при «Не трогать» пункта нет; обработка идёт — точка с
@@ -99,13 +93,12 @@ export interface StraightSectionProps {
   readonly onRestore: () => void;
 }
 
-/** Секция нужна: выделение из нескольких — всегда; одна страница — когда у статуса есть текст. */
-export function straightSectionDue(
-  t: TFunction,
-  selection: StraightSelection,
-  current: StraightenMark,
-): boolean {
-  return selection.count > 1 || straightNoteText(t, current) !== null;
+/** Секция нужна только при действии: у одной страницы — выправлена или откачена; у выделения — есть подходящие. */
+export function straightSectionDue(selection: StraightSelection, current: StraightenMark): boolean {
+  if (selection.count > 1) {
+    return selection.keep.length > 0 || selection.restore.length > 0;
+  }
+  return current.status === 'straightened' || current.status === 'kept';
 }
 
 export function StraightSection({
@@ -117,73 +110,44 @@ export function StraightSection({
   onKeep,
   onRestore,
 }: StraightSectionProps): ReactNode {
-  let body: ReactNode;
+  const action = (
+    kind: 'keep' | 'restore',
+    label: string,
+    onClick: () => void,
+    key?: string,
+  ): ReactNode => (
+    <button
+      key={key}
+      type="button"
+      className="btn btn--tinted inspector__straight-action"
+      data-action={kind}
+      title={t(`inspector.straight.${kind}Title`)}
+      disabled={locked}
+      onClick={onClick}
+    >
+      {label}
+    </button>
+  );
+  let actions: ReactNode;
   if (selection.count <= 1) {
-    // Одна страница: действие — одной кнопкой в одном слоте, по статусу.
-    const action =
-      current.status === 'straightened' ? 'keep' : current.status === 'kept' ? 'restore' : null;
-    body = (
-      <>
-        <p className="inspector__note">{straightNoteText(t, current)}</p>
-        {action !== null && (
-          <button
-            type="button"
-            className="btn btn--tinted inspector__blank-action"
-            data-action={action}
-            title={t(`inspector.straight.${action}Title`)}
-            disabled={locked}
-            onClick={action === 'keep' ? onKeep : onRestore}
-          >
-            {t(`inspector.straight.${action}`)}
-          </button>
-        )}
-      </>
-    );
+    // Одна страница: действие в одном слоте по статусу.
+    actions =
+      current.status === 'kept'
+        ? action('restore', t('inspector.straight.restore'), onRestore)
+        : action('keep', t('inspector.straight.keep'), onKeep);
   } else {
     const { keep, restore, count } = selection;
-    const none = keep.length === 0 && restore.length === 0;
-    const reason = none
-      ? t(
-          selection.pending > 0
-            ? 'inspector.straight.allPending'
-            : 'inspector.straight.noneEligible',
-        )
-      : null;
-    body = (
+    actions = (
       <>
-        <p className="inspector__note">{straightSelectionText(t, selection)}</p>
-        <div className="inspector__straight-actions">
-          {keep.length > 0 && (
-            <button
-              type="button"
-              className="btn btn--tinted"
-              data-action="keep"
-              title={t('inspector.straight.keepTitle')}
-              disabled={locked}
-              onClick={onKeep}
-            >
-              {straightActionLabel(t, 'keep', keep.length, count)}
-            </button>
+        {keep.length > 0 &&
+          action('keep', straightActionLabel(t, 'keep', keep.length, count), onKeep, 'keep')}
+        {restore.length > 0 &&
+          action(
+            'restore',
+            straightActionLabel(t, 'restore', restore.length, count),
+            onRestore,
+            'restore',
           )}
-          {restore.length > 0 && (
-            <button
-              type="button"
-              className="btn btn--tinted"
-              data-action="restore"
-              title={t('inspector.straight.restoreTitle')}
-              disabled={locked}
-              onClick={onRestore}
-            >
-              {straightActionLabel(t, 'restore', restore.length, count)}
-            </button>
-          )}
-          {reason !== null && (
-            <button type="button" className="btn btn--tinted" disabled title={reason}>
-              {t('inspector.straight.keep')}
-            </button>
-          )}
-        </div>
-        {reason !== null && <p className="inspector__straight-reason">{reason}</p>}
       </>
     );
   }
@@ -198,7 +162,7 @@ export function StraightSection({
           {t('inspector.straight.kicker')}
         </h2>
       </div>
-      {body}
+      <div className="inspector__straight-actions">{actions}</div>
     </section>
   );
 }

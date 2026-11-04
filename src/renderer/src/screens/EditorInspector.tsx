@@ -507,7 +507,7 @@ export function EditorInspector({
       {/* M6: при «Не трогать» секции нет; у пустой статуса нет — с секцией пустого не пересекается. */}
       {entry !== undefined &&
         assembly.straighten.mode === 'auto' &&
-        straightSectionDue(t, straight, entry.straighten) && (
+        straightSectionDue(straight, entry.straighten) && (
           <StraightSection
             t={t}
             headingId={straightId}

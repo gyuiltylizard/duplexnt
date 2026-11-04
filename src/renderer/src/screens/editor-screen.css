@@ -1322,10 +1322,17 @@
   align-self: flex-start;
 }
 
-/* B-42: кнопка состояния выравнивания в одном слоте меняет подпись («Оригинал» / «Выровнять») —
-   ширина фиксирована по длинной, чтобы кнопка не прыгала. Литерал макета, как геометрия листов. */
-.inspector__section--straight .inspector__blank-action {
-  min-width: 128px;
+/* B-45 (правка автора на приёмке): действия ВЫРАВНИВАНИЯ — во всю ширину секции, как
+   «Сохранить»; у выделения — друг под другом. */
+.inspector__straight-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.inspector__straight-action {
+  width: 100%;
+  justify-content: center;
 }
 
 /* — B-4: подсказка «обратить внимание» (handoff «5. Подсказка про Ctrl/Shift») — */
