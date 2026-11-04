@@ -336,7 +336,11 @@ flip / merge / editor, модалки device / add / save / mismatch / newscan).
 
 **Тултип**: `bottom calc(100% + 9px)`, `z-index --z-tooltip`, фон `--color-bg-inverse`, `--radius-l`, тень `--shadow-float`, padding `--space-4 --space-6`, `--font-weight-medium --font-size-s/--leading-normal --color-text-on-inverse`, `pointer-events:none`.
 
-**Информационная плашка** («Есть ручные правки»): фон `--color-bg-surface`, граница `--color-border-default`, `--radius-l`, padding `--space-4 --space-4 --space-4 --space-6`, текст `--font-weight-medium --font-size-s --color-warning`, справа тонированная кнопка «Вернуть».
+**Плашка правок** («Есть ручные правки»; с B-45 — в правой зоне тулбара `editor`, на всю ширину зоны): без фона и рамки, `gap --space-4`; янтарная точка `--size-dot` с миганием `edits-blink` (`--duration-loop --ease-loop`, под reduced-motion без мигания), текст `--font-weight-medium --font-size-s --color-warning` слева, справа тонированная кнопка «Вернуть» с `padding-block --space-2`. Прежняя плашка с подложкой `--color-bg-surface` и рамкой в подвале инспектора снята.
+
+**Плашка BETA** (подвал инспектора, B-45): `inline-flex`, высота `--size-beta`, padding `0 --space-4`, `--radius-s`, `--font-weight-semibold --font-size-xxs/--leading-none --font-family-mono --tracking-caps`, фон `--color-bg-inverse`, текст `--color-text-on-inverse`; не интерактивна. Слева от неё логотип-монограмма D’ (`AppMark`, геометрия и цвета `build/icon-small.svg`, не токены темы) размером `--size-beta`, под ним ссылка на проект.
+
+**Первичная кнопка секции** (`inspector__primary`, B-45): `btn--primary` на всю ширину секции ДОКУМЕНТЫ В НАБОРЕ, текст по центру; недоступная — `--opacity-disabled`, как «+ Добавить».
 
 **Плашка-пояснение** (детали): фон `--color-bg-accent-soft`, `--radius-l`, padding `--space-5 --space-6`, `--font-size-s/--leading-relaxed --color-text-primary`.
 
