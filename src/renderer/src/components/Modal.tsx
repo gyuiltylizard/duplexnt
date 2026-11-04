@@ -67,6 +67,9 @@ export interface ModalProps {
   readonly children: ReactNode;
 }
 
+/** Класс окна на время анимации высоты: тело без прокрутки (см. эффект высоты). */
+const RESIZING_CLASS = 'modal--resizing';
+
 export function Modal({
   labelledBy,
   describedBy,
@@ -145,7 +148,11 @@ export function Modal({
   }, []);
 
   // Высота при смене содержимого (B-4, KTD-4): после каждого рендера — сверка с прошлой высотой.
-  // Идёт прежнее изменение — новое начинается от текущей, видимой высоты.
+  // Идёт прежнее изменение — новое начинается от текущей, видимой высоты. Пока высота едет, окно
+  // ниже содержимого, и тело (`overflow: auto`) показало бы скроллбар на эти 200 мс — класс
+  // `modal--resizing` отключает ему прокрутку до конца анимации (замечание автора, 2026-11-04:
+  // «Дополнительно» в `device`). Класс ставится прямо на элемент: состояние React перерисовало бы
+  // окно и этим же эффектом перезапустило анимацию.
   const lastHeight = useRef<number | null>(null);
   const heightAnimation = useRef<Animation | null>(null);
   useLayoutEffect(() => {
@@ -157,15 +164,31 @@ export function Modal({
     const visible = dialog.offsetHeight;
     heightAnimation.current?.cancel();
     heightAnimation.current = null;
+    dialog.classList.remove(RESIZING_CLASS);
     const natural = dialog.offsetHeight;
     const from = running ? visible : lastHeight.current;
     lastHeight.current = natural;
     if (from !== null && Math.abs(natural - from) > 1 && !prefersReducedMotion()) {
-      heightAnimation.current = animate(
+      const animation = animate(
         dialog,
         [{ height: `${String(from)}px` }, { height: `${String(natural)}px` }],
         { duration: durationOf('--duration-base'), easing: easingOf('--ease-out') },
       );
+      if (animation === null) {
+        return;
+      }
+      heightAnimation.current = animation;
+      dialog.classList.add(RESIZING_CLASS);
+      // Событие отмены приходит асинхронно — уже после старта следующей анимации: класс снимает
+      // только та, что ещё текущая.
+      const settle = (): void => {
+        if (heightAnimation.current === animation) {
+          heightAnimation.current = null;
+          dialog.classList.remove(RESIZING_CLASS);
+        }
+      };
+      animation.addEventListener('finish', settle);
+      animation.addEventListener('cancel', settle);
     }
   });
 
