@@ -96,9 +96,13 @@ open source; автор — единственный правообладате�
 платная версия остаются возможными; в README — строка «форки не могут называться Duplexn’t».
 Фикстура `fan-worksheet-color-200` (страница чужой рабочей тетради) под GPL не лицензируется —
 заменить до открытия своей страницей той же структуры.
-**Решения автора 2026-11-04:** историю не переписываем (хэши merge в журналах остались бы
-протухшими, риск значений низкий); email в коммитах — GitHub `noreply` с этого момента, старые
-коммиты не трогаем; `CONTRIBUTING.md` — по-английски, смысл: «This project does not accept
+**Решения автора 2026-11-04:** email в коммитах — GitHub `noreply` с этого момента; историю
+**переписываем** (решение пересмотрено в тот же день: настоящий адрес стоит во всех 580 коммитах
+и после открытия останется в форках навсегда; сейчас репо приватное, вкладчик один — единственный
+дешёвый момент) — `git filter-repo` с mailmap в ветке B-40 после настройки `noreply` и до
+переключения видимости, хэши merge в `docs/solutions/` и бэклоге обновить по таблице
+«старый → новый» того же прогона, force-push в приватный `origin`; `CONTRIBUTING.md` —
+по-английски, смысл: «This project does not accept
 unsolicited pull requests. Please use GitHub Issues to report bugs, suggest improvements, or
 discuss potential changes. Code contributions are accepted by invitation only.»
 **Состав работы:** техбаза и пять файлов с локальными путями; `LICENSE` (GPL-3.0) и поле в
@@ -106,8 +110,9 @@ discuss potential changes. Code contributions are accepted by invitation only.»
 и текст в копиях) плюс руками LGPL-3.0 и список библиотек внутри libvips (sharp помечен
 «Apache-2.0 AND LGPL-3.0», в сборке едет только Apache) и тексты OFL-1.1 шрифтов Golos Text и
 IBM Plex Mono; оба файла — в сборку через `extraResources` рядом с `LICENSE.electron.txt`; README для пришедшего с GitHub; формы Issues; настройка «PR — только коллабораторы»;
-`CONTRIBUTING.md`; Pages; secret scanning и ruleset; переключение видимости — последним шагом,
-после B-29 и B-26. **Попутно (B-26, 2026-11-03):** `description` в `package.json` идёт по-русски в
+`CONTRIBUTING.md`; Pages; secret scanning и ruleset; `noreply`-email в конфиге репо и
+«Block command line pushes that expose my email» на GitHub; переписывание истории (mailmap)
+с правкой хэшей в доках; переключение видимости — последним шагом, после B-29 и B-26. **Попутно (B-26, 2026-11-03):** `description` в `package.json` идёт по-русски в
 свойства exe и установщика («Двусторонний скан на сканере без дуплекса…») — в английской
 Windows остаётся русским; решить вместе с README на двух языках (английское описание или
 нейтральное).
