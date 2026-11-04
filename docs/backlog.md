@@ -105,6 +105,13 @@ open source; автор — единственный правообладате�
 по-английски, смысл: «This project does not accept
 unsolicited pull requests. Please use GitHub Issues to report bugs, suggest improvements, or
 discuss potential changes. Code contributions are accepted by invitation only.»
+**Версии (решение автора 2026-11-04): semver**, первая публичная сборка `1.0.0-beta.1`, дальше
+`beta.N` на каждую отданную наружу сборку (номер не сбрасывается), при желании `1.0.0-rc.N`,
+релиз `1.0.0`; потом патч — только исправления, минор — новая возможность без поломки старого,
+мажор — несовместимый формат сессии/настроек или переосмысление UI. Тег в git — `v<версия>`,
+по нему GitHub Release. Сейчас в `package.json` `0.0.0` — ставить `1.0.0-beta.1` шагом B-40
+перед первой сборкой; electron-builder в свойства exe пишет `1.0.0.0`, суффикс остаётся в имени
+установщика.
 **Состав работы:** техбаза и пять файлов с локальными путями; `LICENSE` (GPL-3.0) и поле в
 `package.json`; `THIRD-PARTY-NOTICES.txt` — скриптом из пакетов бандла (MIT/ISC требуют копирайт
 и текст в копиях) плюс руками LGPL-3.0 и список библиотек внутри libvips (sharp помечен
