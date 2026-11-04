@@ -167,6 +167,7 @@
   --size-toggle-h: 13px;
   --size-toggle-knob: 9px;
   --size-dot: 8px;
+  --size-beta: 22px;
   --size-scrollbar: 10px;
   /* — радиусы, границы, тени — */
   --radius-xs: 2px;
@@ -191,12 +192,14 @@
   --duration-screen: 180ms;
   --duration-base: 200ms;
   --duration-turn: 240ms;
+  --duration-section: 240ms;
   --duration-loop: 1200ms;
   --duration-loop-long: 3800ms;
   --delay-stagger: 200ms;
   --ease-standard: ease;
   --ease-loop: ease-in-out;
   --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-section: cubic-bezier(0.4, 0, 0.2, 1);
   --distance-rise: 6px;
   --distance-enter: 12px;
   --iterations-attention: 3;

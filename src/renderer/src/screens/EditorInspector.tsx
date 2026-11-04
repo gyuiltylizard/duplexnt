@@ -14,12 +14,17 @@ import type { TFunction } from 'i18next';
 import { noteOf, toneOf, whatOf } from '../state/page-text';
 import type { ShownDocument } from '../state/shown';
 import { straightFactText, type StraightSelection } from '../state/straighten-text';
-import { StraightCheck, StraightSection, straightSectionDue } from './EditorInspectorStraight';
-import { Check } from './InspectorCheck';
+import { AppMark } from '../components/AppMark';
+import { StraightSection, straightChecks, straightSectionDue } from './EditorInspectorStraight';
+import { Check, type CheckItem } from './InspectorCheck';
 import { useHintAttention } from './useHintAttention';
+import { useInspectorMotion } from './useInspectorMotion';
 
-// Инспектор редактора (handoff M3, S11–S13; M3.5, S6–S7; M3.6, S8–S9): ДЕТАЛИ текущей страницы,
-// ДОКУМЕНТЫ В НАБОРЕ и ПРОВЕРКА, внизу — плашка правок S14 с «Вернуть». Только показ снимка:
+// Инспектор редактора (handoff M3, S11–S13; M3.5, S6–S7; M3.6, S8–S9; B-45
+// `2026-11-inspector-v2.md`): ДЕТАЛИ текущей страницы с подразделом ПРОВЕРКА внутри, ПУСТОЙ
+// ОБОРОТ, ВЫРАВНИВАНИЕ, ДОКУМЕНТЫ В НАБОРЕ с первичной кнопкой («Сохранить…» / «Собрать
+// документ») на всю ширину, внизу подвал — логотип, ссылка на проект и плашка BETA. Плашка
+// правок с «Вернуть» с B-45 живёт в правой зоне тулбара. Только показ снимка:
 // режим, счётчики групп, порядок и наличие правок — из отчёта и флагов сборки ядра (KTD-2,
 // KTD-7). Страница добавленного набора — без «лица» и «листа»: факт «Набор» и своё пояснение.
 // До сборки (режим наборов) «Лист» не называется: факты «Набор», «Место», «Откуда» (R23);
@@ -39,38 +44,32 @@ import { useHintAttention } from './useHintAttention';
  * не покажется, а листы без оборотов легко забыть. Числа — по проходам (KTD-7): «отсканировано
  * 1 из 3» остаётся правдой и после правок.
  */
-function PairsCheck({
-  t,
-  assembly,
-}: {
-  readonly t: TFunction;
-  readonly assembly: SessionAssembly;
-}): ReactNode {
+function pairsChecks(t: TFunction, assembly: SessionAssembly): CheckItem[] {
   const { report, sets } = assembly;
-  const keptSets = report.sets
+  const keptSets: CheckItem[] = report.sets
     .filter((set) => set.decision === 'kept' && set.mismatch)
-    .map((set) => (
-      <Check key={set.set} warning>
-        {t(
-          set.backs < set.fronts ? 'inspector.check.setKeptFewer' : 'inspector.check.setKeptExtra',
-          { set: set.set, fronts: set.fronts, backs: set.backs },
-        )}
-      </Check>
-    ));
+    .map((set) => ({
+      key: `set-${String(set.set)}`,
+      warning: true,
+      text: t(
+        set.backs < set.fronts ? 'inspector.check.setKeptFewer' : 'inspector.check.setKeptExtra',
+        { set: set.set, fronts: set.fronts, backs: set.backs },
+      ),
+    }));
   if (report.mode !== 'sets' || sets === null) {
     return keptSets;
   }
   const { fronts, backs } = sets;
   let main: ReactNode;
   if (fronts === 0 && backs === 0) {
-    main = <Check warning>{t('inspector.check.setsEmpty')}</Check>;
+    main = t('inspector.check.setsEmpty');
   } else if (fronts === backs) {
     // Точка остаётся и при уравненных наборах: документ ещё не собран (handoff, Decisions).
-    main = <Check warning>{t('inspector.check.setsEqual', { count: fronts })}</Check>;
+    main = t('inspector.check.setsEqual', { count: fronts });
   } else {
     const missing = Math.abs(fronts - backs);
     main = (
-      <Check warning>
+      <>
         {t('inspector.check.sets', {
           fronts,
           backs,
@@ -83,15 +82,10 @@ function PairsCheck({
           ),
         })}
         <span className="check__hint">{t('inspector.check.setsHint')}</span>
-      </Check>
+      </>
     );
   }
-  return (
-    <>
-      {main}
-      {keptSets}
-    </>
-  );
+  return [{ key: 'sets', warning: true, text: main }, ...keptSets];
 }
 
 /**
@@ -140,37 +134,31 @@ function docMetaText(t: TFunction, document: ShownDocument): string {
   });
 }
 
-function BlankCheck({
-  t,
-  blank,
-  inSets,
-}: {
-  readonly t: TFunction;
-  readonly blank: BlankSummary;
-  readonly inSets: boolean;
-}): ReactNode {
+function blankChecks(t: TFunction, blank: BlankSummary, inSets: boolean): CheckItem[] {
   if (blank.mode === 'keep') {
-    return null;
+    return [];
   }
+  const item = (warning: boolean, text: ReactNode): CheckItem[] => [
+    { key: 'blank', warning, text },
+  ];
   if (blank.pending > 0) {
-    return <Check warning>{t('inspector.check.blankPending', { count: blank.pending })}</Check>;
+    return item(true, t('inspector.check.blankPending', { count: blank.pending }));
   }
   if (blank.found === 0) {
-    return <Check warning={false}>{t('inspector.check.blankNone')}</Check>;
+    return item(false, t('inspector.check.blankNone'));
   }
   if (blank.mode === 'mark') {
-    return (
-      <Check warning={false}>{t('inspector.check.blankMarked', { count: blank.found })}</Check>
-    );
+    return item(false, t('inspector.check.blankMarked', { count: blank.found }));
   }
   if (inSets) {
-    return <Check warning>{t('inspector.check.blankSets', { count: blank.found })}</Check>;
+    return item(true, t('inspector.check.blankSets', { count: blank.found }));
   }
-  return (
-    <Check warning>
+  return item(
+    true,
+    <>
       {t('inspector.check.blankHidden', { count: blank.hidden })}
       <span className="check__hint">{t('inspector.check.blankHiddenHint')}</span>
-    </Check>
+    </>,
   );
 }
 
@@ -191,6 +179,7 @@ function Details({
   origin,
   frontsOnly,
   notBlank,
+  checks,
   open,
   onToggle,
 }: {
@@ -202,11 +191,14 @@ function Details({
   readonly frontsOnly: boolean;
   /** Страница помечена «не пустая» (M4, S10) — факт «Содержимое». */
   readonly notBlank: boolean;
+  /** Пункты ПРОВЕРКИ (B-45): подраздел ДЕТАЛЕЙ; точка в свёрнутой строке — пока есть точка в них. */
+  readonly checks: readonly CheckItem[];
   readonly open: boolean;
   readonly onToggle: () => void;
 }): ReactNode {
   const { t } = useTranslation();
   const bodyId = useId();
+  const warned = checks.some((item) => item.warning);
 
   const title = t('inspector.title', {
     page: position,
@@ -305,7 +297,7 @@ function Details({
   }
 
   return (
-    <section className="inspector__section inspector__section--details">
+    <section className="inspector__section inspector__section--details" data-section="details">
       <button
         type="button"
         className="details-toggle"
@@ -315,6 +307,15 @@ function Details({
       >
         <span className="kicker">{t('inspector.details')}</span>
         <span className="details-toggle__rule" aria-hidden="true" />
+        {/* B-45 (решение 3): свёрнутые ДЕТАЛИ не прячут замечания ПРОВЕРКИ — янтарная точка. */}
+        {!open && warned && (
+          <span
+            className="dot dot--warning details-toggle__dot"
+            title={t('inspector.detailsWarning')}
+          >
+            <span className="visually-hidden">{t('inspector.detailsWarning')}</span>
+          </span>
+        )}
         <span className="details-toggle__summary">
           {t('inspector.detailsSummary', { page: position })}
         </span>
@@ -334,9 +335,29 @@ function Details({
           />
         </dl>
         <p className="details__note">{note}</p>
+        <div className="details__checks">
+          <h3 className="kicker">{t('inspector.checks')}</h3>
+          <ul className="checks">
+            {checks.map((item) => (
+              <Check key={item.key} warning={item.warning}>
+                {item.text}
+              </Check>
+            ))}
+          </ul>
+        </div>
       </div>
     </section>
   );
+}
+
+/** Первичная кнопка под ДОКУМЕНТАМИ В НАБОРЕ (B-45, KTD-5): гарды и команду считает экран. */
+export interface InspectorPrimary {
+  /** «Сохранить документ» / «Сохранить N файлов» или «Собрать документ» (режим наборов). */
+  readonly kind: 'save' | 'assemble';
+  readonly disabled: boolean;
+  /** Причина недоступности «Собрать документ» (S5 M3.6). */
+  readonly title?: string | undefined;
+  readonly onClick: () => void;
 }
 
 export function EditorInspector({
@@ -358,7 +379,7 @@ export function EditorInspector({
   onKeepOriginal,
   onRestoreStraight,
   onMouseDown,
-  onRevert,
+  primary,
   onOpenProject,
 }: {
   readonly assembly: SessionAssembly;
@@ -394,8 +415,8 @@ export function EditorInspector({
   readonly onRestoreStraight: () => void;
   /** Клик по поверхности инспектора — сжатие мультивыделения решает экран (M3.5, R21). */
   readonly onMouseDown?: (event: MouseEvent<HTMLElement>) => void;
-  /** «Вернуть» — открыть подтверждение `revert`. */
-  readonly onRevert: () => void;
+  /** Первичная кнопка под документами (B-45). */
+  readonly primary: InspectorPrimary;
   /** Ссылка на страницу проекта в подвале (B-42) — команда моста без входа. */
   readonly onOpenProject: () => void;
 }): ReactNode {
@@ -403,8 +424,10 @@ export function EditorInspector({
   // ДЕТАЛИ свёрнуты по умолчанию; состояние живёт до размонтирования экрана (S11), в том числе
   // пока лента пуста и блок скрыт.
   const [detailsOpen, setDetailsOpen] = useState(false);
+  // B-45: высоты секций играются поверх конечного состояния после каждого рендера.
+  const asideRef = useRef<HTMLElement>(null);
+  useInspectorMotion(asideRef, detailsOpen);
   const docsId = useId();
-  const checksId = useId();
   const blankId = useId();
   const straightId = useId();
   const listed = assembly.order.length === 0 ? [] : documents;
@@ -414,9 +437,32 @@ export function EditorInspector({
   const { report, sets } = assembly;
   const inSets = report.mode === 'sets';
   const blankNote = entry === undefined ? null : blankNoteText(t, entry, inSets);
+  const checks: CheckItem[] = [
+    ...pairsChecks(t, assembly),
+    ...blankChecks(t, assembly.blank, inSets),
+    ...straightChecks(t, assembly.straighten),
+    {
+      key: 'order',
+      warning: assembly.orderEdited,
+      text: t(assembly.orderEdited ? 'inspector.check.orderEdited' : 'inspector.check.orderAuto'),
+    },
+  ];
+  let primaryLabel: string;
+  if (primary.kind === 'assemble') {
+    primaryLabel = t('editor.assemble');
+  } else if (listed.length > 1) {
+    primaryLabel = t('editor.saveFiles', { count: listed.length });
+  } else {
+    primaryLabel = t('editor.save');
+  }
 
   return (
-    <aside className="inspector" aria-label={t('inspector.label')} onMouseDown={onMouseDown}>
+    <aside
+      ref={asideRef}
+      className="inspector"
+      aria-label={t('inspector.label')}
+      onMouseDown={onMouseDown}
+    >
       {entry !== undefined && (
         <Details
           entry={entry}
@@ -426,6 +472,7 @@ export function EditorInspector({
           origin={origin}
           frontsOnly={frontsOnly}
           notBlank={notBlank}
+          checks={checks}
           open={detailsOpen}
           onToggle={() => {
             setDetailsOpen((value) => !value);
@@ -434,7 +481,11 @@ export function EditorInspector({
       )}
 
       {blankNote !== null && (
-        <section className="inspector__section inspector__section--blank" aria-labelledby={blankId}>
+        <section
+          className="inspector__section inspector__section--blank"
+          data-section="blank"
+          aria-labelledby={blankId}
+        >
           <div className="inspector__heading">
             <h2 id={blankId} className="kicker">
               {t('inspector.blank.kicker')}
@@ -456,7 +507,7 @@ export function EditorInspector({
       {/* M6: при «Не трогать» секции нет; у пустой статуса нет — с секцией пустого не пересекается. */}
       {entry !== undefined &&
         assembly.straighten.mode === 'auto' &&
-        straightSectionDue(t, straight, entry.straighten) && (
+        straightSectionDue(straight, entry.straighten) && (
           <StraightSection
             t={t}
             headingId={straightId}
@@ -468,7 +519,7 @@ export function EditorInspector({
           />
         )}
 
-      <section className="inspector__section" aria-labelledby={docsId}>
+      <section className="inspector__section" data-section="docs" aria-labelledby={docsId}>
         <div className="inspector__heading">
           <h2 id={docsId} className="kicker">
             {t('inspector.docs')}
@@ -524,50 +575,32 @@ export function EditorInspector({
             </>
           )
         )}
-      </section>
-
-      <section className="inspector__section" aria-labelledby={checksId}>
-        <h2 id={checksId} className="kicker">
-          {t('inspector.checks')}
-        </h2>
-        <ul className="checks">
-          <PairsCheck t={t} assembly={assembly} />
-          <BlankCheck t={t} blank={assembly.blank} inSets={inSets} />
-          <StraightCheck t={t} straighten={assembly.straighten} />
-          <Check warning={assembly.orderEdited}>
-            {assembly.orderEdited
-              ? t('inspector.check.orderEdited')
-              : t('inspector.check.orderAuto')}
-          </Check>
-        </ul>
-      </section>
-
-      {/* Подвал (B-42): плашка правок и ссылка на проект прижаты к низу панели. */}
-      <div className="inspector__footer">
-        {/* S14: при любой правке, включая тумблер 180° — флаг ядра учитывает и его. */}
-        {assembly.hasEdits && (
-          <div className="edits-bar" role="status">
-            <p className="edits-bar__text">{t('editor.edits.text')}</p>
-            <button
-              type="button"
-              className="btn btn--tinted"
-              title={t('editor.edits.revertTitle')}
-              disabled={locked}
-              onClick={onRevert}
-            >
-              {t('editor.edits.revert')}
-            </button>
-          </div>
-        )}
+        {/* B-45 (KTD-5): первичное действие — у своего объекта, на всю ширину. */}
         <button
           type="button"
-          className="inspector__about"
+          className="btn btn--primary inspector__primary"
+          disabled={primary.disabled}
+          title={primary.title}
+          onClick={primary.onClick}
+        >
+          {primaryLabel}
+        </button>
+      </section>
+
+      {/* Подвал (B-42, B-45, правки автора на приёмке): одна плашка «D’ BETA» по правому краю —
+          она же ссылка на проект; текстовой ссылки нет. */}
+      <footer className="inspector__footer" data-section="footer">
+        <button
+          type="button"
+          className="beta-badge"
           title={t('inspector.aboutTitle')}
+          aria-label={t('inspector.about', { app: APP_NAME })}
           onClick={onOpenProject}
         >
-          {t('inspector.about', { app: APP_NAME })}
+          <AppMark className="beta-badge__mark" plate={false} />
+          <span className="beta-badge__text">BETA</span>
         </button>
-      </div>
+      </footer>
     </aside>
   );
 }

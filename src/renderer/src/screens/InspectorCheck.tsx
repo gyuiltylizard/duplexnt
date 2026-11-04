@@ -1,5 +1,15 @@
 import type { ReactNode } from 'react';
 
+/**
+ * Пункт ПРОВЕРКИ данными (B-45, KTD-4): свёрнутая строка ДЕТАЛЕЙ по `warning` знает, что в
+ * проверке есть точка, не рендеря список.
+ */
+export interface CheckItem {
+  readonly key: string;
+  readonly warning: boolean;
+  readonly text: ReactNode;
+}
+
 /** Строка ПРОВЕРКИ инспектора: ✓ — всё хорошо, • — стоит взглянуть. */
 export function Check({
   warning,

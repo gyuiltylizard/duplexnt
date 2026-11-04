@@ -110,16 +110,20 @@ describe('editor M3: документы', () => {
 
     const toolbar = screen.getByRole('banner');
     expect(within(toolbar).getByText('Акт')).toBeDefined();
-    expect(within(toolbar).getByText('документ 1 из 3 · стр. 1 из 2')).toBeDefined();
+    // Позиция (B-45): страница — в статусбаре, документ — текущий в списке инспектора.
+    expect(screen.getByText(/^1 из \d+$/u)).toBeDefined();
+    expect(screen.getByRole('button', { name: /^Акт/u, current: true })).toBeDefined();
 
     fireEvent.click(option(3));
     expect(within(toolbar).getByText('Документ 2')).toBeDefined();
-    expect(within(toolbar).getByText('документ 2 из 3 · стр. 2 из 2')).toBeDefined();
+    expect(screen.getByText(/^4 из \d+$/u)).toBeDefined();
+    expect(screen.getByRole('button', { name: /^Документ 2/u, current: true })).toBeDefined();
     expect(
       toolbar.querySelector('.editor-screen__toolbar-center')?.classList.contains('doc-tone--2'),
     ).toBe(true);
-    // Три документа — три файла (S1).
-    expect(within(toolbar).getByRole('button', { name: 'Сохранить 3 файла' })).toBeDefined();
+    // Три документа — три файла (S1); кнопка — в инспекторе (B-45).
+    const inspector = screen.getByRole('complementary', { name: 'Сведения о наборе' });
+    expect(within(inspector).getByRole('button', { name: 'Сохранить 3 файла' })).toBeDefined();
   });
 
   it('S1/S3: один документ — имя по умолчанию «Скан ГГГГ-ММ-ДД», позиция без документа', () => {
@@ -128,7 +132,7 @@ describe('editor M3: документы', () => {
 
     const toolbar = screen.getByRole('banner');
     expect(within(toolbar).getByText(/^Скан \d{4}-\d{2}-\d{2}$/u)).toBeDefined();
-    expect(within(toolbar).getByText('стр. 1 из 3')).toBeDefined();
+    expect(screen.getByText('1 из 3')).toBeDefined();
     expect(screen.queryByText('НОВЫЙ ДОКУМЕНТ')).toBeNull();
   });
 

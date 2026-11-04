@@ -508,7 +508,7 @@ function editorSnapshot(): Snapshot {
  */
 async function openEditor(t: SceneT): Promise<HTMLElement> {
   const { container } = renderApp(editorSnapshot(), EDITOR_OVERRIDES);
-  await screen.findByText(t('editor.docPosition', { doc: 1, docs: 2, page: 1, pages: 6 }));
+  await screen.findByRole('button', { name: t('editor.saveFiles', { count: 2 }) });
   fireEvent.click(screen.getByRole('checkbox', { name: t('editor.blank.toggleLabel') }));
   expect(container.querySelectorAll('.thumb__blank')).toHaveLength(1);
   return container;

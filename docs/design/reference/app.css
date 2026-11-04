@@ -171,6 +171,7 @@
   --size-toggle-h: 13px;
   --size-toggle-knob: 9px;
   --size-dot: 8px;
+  --size-beta: 22px;
   --size-scrollbar: 10px;
   /* — радиусы, границы, тени — */
   --radius-xs: 2px;
@@ -195,12 +196,14 @@
   --duration-screen: 180ms;
   --duration-base: 200ms;
   --duration-turn: 240ms;
+  --duration-section: 240ms;
   --duration-loop: 1200ms;
   --duration-loop-long: 3800ms;
   --delay-stagger: 200ms;
   --ease-standard: ease;
   --ease-loop: ease-in-out;
   --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-section: cubic-bezier(0.4, 0, 0.2, 1);
   --distance-rise: 6px;
   --distance-enter: 12px;
   --iterations-attention: 3;
@@ -1681,10 +1684,6 @@ samp {
   border-left: var(--border-width) solid var(--color-border-subtle);
 }
 
-.editor-screen__unsaved {
-  flex: none;
-}
-
 .editor-screen__toolbar-left {
   display: flex;
   align-items: center;
@@ -1724,10 +1723,50 @@ samp {
   line-height: var(--leading-none);
 }
 
-/* S5 M3.6: «Собрать документ» недоступна — как недоступная «+ Добавить». */
-.editor-screen__assemble:disabled {
-  opacity: var(--opacity-disabled);
-  cursor: default;
+/* B-45: плашка правок в правой зоне тулбара (handoff `2026-11-inspector-v2.md`, CSS): без
+   подложки и рамки, на всю ширину зоны; точка мигает циклом, текст слева, «Вернуть» справа. */
+.edits-bar {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+}
+
+.edits-bar__dot {
+  animation: edits-blink var(--duration-loop) var(--ease-loop) infinite;
+}
+
+.edits-bar__text {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  text-align: left;
+  white-space: nowrap;
+  font: var(--font-weight-medium) var(--font-size-s) / var(--leading-snug) var(--font-family-sans);
+  color: var(--color-warning);
+}
+
+.edits-bar .btn {
+  padding-block: var(--space-2);
+}
+
+@keyframes edits-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.2;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .edits-bar__dot {
+    animation: none;
+  }
 }
 
 .editor-screen__toolbar-center {
@@ -1753,12 +1792,6 @@ samp {
   text-overflow: ellipsis;
   white-space: nowrap;
   font: var(--font-weight-semibold) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
-}
-
-.editor-screen__doc-pos {
-  white-space: nowrap;
-  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-snug) var(--font-family-mono);
-  color: var(--color-text-subtle);
 }
 
 /* S4 M3.6: тулбар режима наборов — точка и живые счётчики по центру. */
@@ -2536,6 +2569,21 @@ samp {
   border-left: var(--border-width) solid var(--color-border-subtle);
 }
 
+/* B-45: секции не сжимаются — иначе анимация высоты упирается в сжатие колонки. */
+.inspector > * {
+  flex-shrink: 0;
+}
+
+/* B-45 («Motion»): пока высота секции едет, содержимое не выглядывает за край; ушедшую секцию
+   на её месте подменяет спейсер, который схлопывается (`useInspectorMotion`). */
+.inspector__section--resizing {
+  overflow: hidden;
+}
+
+.inspector__spacer {
+  flex: none;
+}
+
 .inspector__section {
   display: flex;
   flex-direction: column;
@@ -2614,6 +2662,24 @@ samp {
 /* Свёрнутые ДЕТАЛИ: без этого правила `hidden` проигрывает `display: flex`. */
 .details[hidden] {
   display: none;
+}
+
+/* B-45: ПРОВЕРКА — подраздел ДЕТАЛЕЙ после фактов и пояснения, отделён линией. */
+.details__checks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: var(--border-width) solid var(--color-border-subtle);
+}
+
+.details__checks .kicker {
+  margin: 0;
+}
+
+/* B-45 (решение 3): точка в свёрнутой строке ДЕТАЛЕЙ, пока в ПРОВЕРКЕ есть замечание. */
+.details-toggle__dot {
+  flex: none;
 }
 
 .details__title {
@@ -2724,55 +2790,60 @@ samp {
   color: var(--color-text-hint);
 }
 
-/* S14 M3: плашка правок — прижата к низу колонки. */
-/* B-42: подвал инспектора — плашка правок и ссылка на проект прижаты к низу панели, при
-   прокрутке уезжают вместе с содержимым. */
+/* B-45 (KTD-5): первичная кнопка под ДОКУМЕНТАМИ В НАБОРЕ — на всю ширину; недоступна — как
+   недоступная «+ Добавить» (S5 M3.6). */
+.inspector__primary {
+  width: 100%;
+  justify-content: center;
+}
+
+.inspector__primary:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: default;
+}
+
+/* B-42, B-45: подвал инспектора — одна плашка «D’ BETA» по правому краю, она же ссылка на
+   проект; прижат к низу панели, при прокрутке уезжает вместе с содержимым. */
 .inspector__footer {
   display: flex;
-  flex-direction: column;
+  justify-content: flex-end;
   margin-top: auto;
+  padding: var(--space-8);
 }
 
-/* Ссылка на страницу проекта: мелкая строка в цвете подсказки, подчёркивание при наведении. */
-.inspector__about {
-  align-self: flex-end;
-  margin: 0 var(--space-8) var(--space-6);
-  padding: 0;
+/* Плашка: монограмма без плитки на инверсном фоне (цвет плитки значка) и текст BETA. */
+.beta-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: var(--size-beta);
+  margin: 0;
+  padding: 0 var(--space-4) 0 0;
   border: 0;
-  background: none;
+  border-radius: var(--radius-s);
+  background: var(--color-bg-inverse);
+  color: var(--color-text-on-inverse);
+  font: var(--font-weight-semibold) var(--font-size-xxs) / var(--leading-none)
+    var(--font-family-mono);
+  letter-spacing: var(--tracking-caps);
   cursor: pointer;
-  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-snug) var(--font-family-sans);
-  color: var(--color-text-hint);
+  transition: filter var(--duration-fast) var(--ease-standard);
 }
 
-.inspector__about:hover {
-  color: var(--color-text-subtle);
-  text-decoration: underline;
+.beta-badge:hover {
+  filter: brightness(1.25);
 }
 
-.inspector__about:focus-visible {
+.beta-badge__mark {
+  display: block;
+  flex: none;
+  width: var(--size-beta);
+  height: var(--size-beta);
+}
+
+.beta-badge:focus-visible {
   outline: var(--space-1) solid var(--color-border-focus);
   outline-offset: var(--space-1);
-}
-
-.edits-bar {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  margin: 0 var(--space-8) var(--space-8);
-  padding: var(--space-4) var(--space-4) var(--space-4) var(--space-6);
-  border: var(--border-width) solid var(--color-border-default);
-  border-radius: var(--radius-l);
-  background: var(--color-bg-surface);
-}
-
-.edits-bar__text {
-  flex: 1;
-  min-width: 0;
-  margin: 0;
-  font: var(--font-weight-medium) var(--font-size-s) / var(--leading-snug) var(--font-family-sans);
-  color: var(--color-warning);
 }
 
 /* — тумблер «повернуть обороты на 180°» (S7) — рецепт «Переключатель» дизайн-системы — */
@@ -2902,10 +2973,17 @@ samp {
   align-self: flex-start;
 }
 
-/* B-42: кнопка состояния выравнивания в одном слоте меняет подпись («Оригинал» / «Выровнять») —
-   ширина фиксирована по длинной, чтобы кнопка не прыгала. Литерал макета, как геометрия листов. */
-.inspector__section--straight .inspector__blank-action {
-  min-width: 128px;
+/* B-45 (правка автора на приёмке): действия ВЫРАВНИВАНИЯ — во всю ширину секции, как
+   «Сохранить»; у выделения — друг под другом. */
+.inspector__straight-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.inspector__straight-action {
+  width: 100%;
+  justify-content: center;
 }
 
 /* — B-4: подсказка «обратить внимание» (handoff «5. Подсказка про Ctrl/Shift») — */

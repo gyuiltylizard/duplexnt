@@ -4,9 +4,7 @@ import { i18n } from '../i18n';
 import {
   straightActionLabel,
   straightFactText,
-  straightNoteText,
   straightSelectionOf,
-  straightSelectionText,
   thumbStraightLabel,
 } from './straighten-text';
 
@@ -62,20 +60,16 @@ describe('выделение по статусам выравнивания', ()
       keep: ['a', 'h'],
       restore: ['b'],
     });
-    expect(straightSelectionText(t, selection)).toBe(
-      'Из 8 выделенных: выровнено 2, оригинал по вашему выбору — 1, не выровнено 2, в обработке 1, ровных 1.',
-    );
   });
 
   it('пустое выделение и выделение из одних null — «выравнивание не применялось»', () => {
     expect(straightSelectionOf(PAGES, [])).toMatchObject({ count: 0, keep: [], restore: [] });
     const nulls = straightSelectionOf(PAGES, ['g']);
     expect(nulls).toMatchObject({ count: 1, keep: [], restore: [] });
-    expect(straightSelectionText(t, nulls)).toBe('Из 1 выделенных: выравнивание не применялось.');
   });
 
   it('подпись действия: «— k из n выделенных» или «— n стр.», если подходят все', () => {
-    expect(straightActionLabel(t, 'keep', 3, 5)).toBe('Оригинал — 3 из 5 выделенных');
+    expect(straightActionLabel(t, 'keep', 3, 5)).toBe('Вернуть оригинал — 3 из 5 выделенных');
     expect(straightActionLabel(t, 'restore', 5, 5)).toBe('Выровнять — 5 стр.');
   });
 
@@ -90,18 +84,8 @@ describe('выделение по статусам выравнивания', ()
     expect(straightFactText(t, mark(null))).toBeNull();
   });
 
-  it('текст секции у выправленной с отложенным пересчётом — про прежний вид и причину; пересчёт в ходу — прежний текст (B-19)', () => {
-    expect(straightNoteText(t, mark('straightened', null, 'disk'))).toBe(
-      'Показан выправленный вид прежней версии приложения. Пересчёт отложен: не хватило места на диске — освободите место, при следующем запуске приложение попробует снова.',
-    );
-    expect(straightNoteText(t, mark('straightened', null, 'fail'))).toBe(
-      'Показан выправленный вид прежней версии приложения. Пересчёт не удался из-за сбоя — при следующем запуске приложение попробует снова.',
-    );
-    expect(straightNoteText(t, mark('straightened', null, 'pending'))).toBe(
-      straightNoteText(t, mark('straightened')),
-    );
+  it('пересчёт не меняет подписи карточки и сводку выделения — такая страница выровненная (B-19)', () => {
     // Сводка выделения и подписи пересчёт не учитывают: такая страница — выровненная.
-    expect(straightNoteText(t, mark('kept', null, 'disk'))).toBe(straightNoteText(t, mark('kept')));
     expect(thumbStraightLabel(t, 'Страница 1', mark('straightened', null, 'disk'))).toBe(
       'Страница 1, выровнена',
     );

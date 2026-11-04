@@ -320,8 +320,11 @@ describe('тулбар режима и «Собрать документ» (S4�
     expect(assembleButton().hasAttribute('disabled')).toBe(true);
     expect(assembleButton().getAttribute('title')).toBe('Не хватает 1 оборота');
     expect(screen.queryByRole('button', { name: /Сохранить/ })).toBeNull();
-    // Точка несохранённого остаётся: документ правда не сохранён.
-    expect(screen.getByTitle('Есть несохранённые изменения')).toBeDefined();
+    // B-45: «Собрать документ» — в слоте первичной кнопки инспектора, в тулбаре её нет.
+    expect(assembleButton().className).toContain('inspector__primary');
+    expect(
+      within(screen.getByRole('banner')).queryByRole('button', { name: /Собрать/u }),
+    ).toBeNull();
   });
 
   it('AE9: лиц меньше — «Не хватает 1 лица»; после удаления лишнего оборота кнопка доступна', async () => {
@@ -384,7 +387,7 @@ describe('тулбар режима и «Собрать документ» (S4�
     expect(button('Добавить листы').getAttribute('title')).toBe(reason);
   });
 
-  it('все страницы удалены — «В наборах нет страниц», ПРОВЕРКА про пустые наборы', () => {
+  it('все страницы удалены — «В наборах нет страниц»; ПРОВЕРКИ без ДЕТАЛЕЙ нет (B-45)', () => {
     stubApi();
     const snapshot = twoPass(2);
     const { rerender } = renderEditor(snapshot);
@@ -393,7 +396,8 @@ describe('тулбар режима и «Собрать документ» (S4�
     );
 
     expect(assembleButton().getAttribute('title')).toBe('В наборах нет страниц');
-    expect(screen.getByText('Наборы пусты: все страницы удалены')).toBeDefined();
+    // Лента пуста — ДЕТАЛЕЙ нет, а с ними и ПРОВЕРКИ: о пустых наборах говорят лента и кнопка.
+    expect(screen.queryByText('Наборы пусты: все страницы удалены')).toBeNull();
     expect(screen.getByText('Все страницы удалены')).toBeDefined();
   });
 

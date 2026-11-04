@@ -62,7 +62,6 @@ describe('экран editor', () => {
     renderEditor(makeSnapshot([makePass({ pages: pages(4) })]));
 
     expect(screen.getAllByRole('option').length).toBe(4);
-    expect(screen.getByText('стр. 1 из 4')).toBeDefined();
     expect(screen.getByText('1 из 4')).toBeDefined();
 
     fireEvent.click(screen.getAllByRole('option')[2] as Element);
@@ -124,14 +123,74 @@ describe('экран editor', () => {
     expect(screen.queryByRole('checkbox')).toBeNull();
   });
 
-  it('S9: точка несохранённого видна при saved: false и исчезает при saved: true', () => {
+  it('B-45: точки несохранённого в тулбаре нет — ни при saved: false, ни при saved: true', () => {
     stubApi();
     const unsavedView = renderEditor(makeSnapshot([makePass({})]));
-    expect(screen.getByTitle('Есть несохранённые изменения')).toBeDefined();
+    expect(screen.queryByTitle('Есть несохранённые изменения')).toBeNull();
+    expect(screen.queryByRole('status', { name: /несохранённые/u })).toBeNull();
     unsavedView.view.unmount();
 
     renderEditor(makeSnapshot([makePass({})], {}, { saved: true }));
     expect(screen.queryByTitle('Есть несохранённые изменения')).toBeNull();
+  });
+
+  it('B-45: первичная кнопка — под ДОКУМЕНТАМИ В НАБОРЕ, в тулбаре её нет; подвал — логотип, ссылка, BETA', () => {
+    stubApi();
+    renderEditor(makeSnapshot([makePass({ pages: pages(4) })]));
+
+    const inspector = screen.getByRole('complementary', { name: 'Сведения о наборе' });
+    const save = within(inspector).getByRole('button', { name: 'Сохранить документ' });
+    expect(save.className).toContain('inspector__primary');
+    expect(
+      within(screen.getByRole('banner')).queryByRole('button', { name: /Сохранить/u }),
+    ).toBeNull();
+    // Кнопка — последний элемент секции ДОКУМЕНТЫ В НАБОРЕ.
+    expect(save.parentElement?.lastElementChild).toBe(save);
+    const footer = inspector.querySelector('.inspector__footer');
+    // Одна плашка «D’ BETA» — она же ссылка на проект; текстовой ссылки нет.
+    const link = within(footer as HTMLElement).getByRole('button', { name: /о проекте/u });
+    expect(link.className).toBe('beta-badge');
+    expect(link.querySelector('.beta-badge__mark')).not.toBeNull();
+    expect(link.textContent).toBe('BETA');
+    expect(footer?.children).toHaveLength(1);
+  });
+
+  it('B-45: ПРОВЕРКА — подраздел ДЕТАЛЕЙ; при точке в ней свёрнутая строка несёт янтарную точку', () => {
+    stubApi();
+    // Режим «Скрывать», обороты без вердиктов: оценка идёт — точка «Оценка пустых оборотов».
+    renderEditor(
+      makeSnapshot(
+        [
+          makePass({ pages: pages(2) }),
+          makePass({ number: 2, kind: 'backs', pages: pages(2, 1, 'p02-s01') }),
+        ],
+        {},
+        { blankMode: 'hide' },
+      ),
+    );
+
+    const toggle = screen.getByRole('button', { name: /ДЕТАЛИ/u });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(toggle.querySelector('.details-toggle__dot')?.getAttribute('title')).toBe(
+      'В проверке есть замечания',
+    );
+    const body = document.getElementById(toggle.getAttribute('aria-controls') ?? '');
+    expect(body?.hasAttribute('hidden')).toBe(true);
+    expect(body?.querySelector('.details__checks .kicker')?.textContent).toBe('ПРОВЕРКА');
+
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(toggle.querySelector('.details-toggle__dot')).toBeNull();
+    expect(body?.hasAttribute('hidden')).toBe(false);
+    expect(body?.textContent).toContain('Оценка пустых оборотов');
+  });
+
+  it('B-45: без точек в ПРОВЕРКЕ свёрнутая строка ДЕТАЛЕЙ чистая', () => {
+    stubApi();
+    renderEditor(makeSnapshot([makePass({ pages: pages(2) })], {}, { blankMode: 'keep' }));
+
+    const toggle = screen.getByRole('button', { name: /ДЕТАЛИ/u });
+    expect(toggle.querySelector('.details-toggle__dot')).toBeNull();
   });
 
   it('стрелки и Home/End двигают выбор по всей ленте', () => {

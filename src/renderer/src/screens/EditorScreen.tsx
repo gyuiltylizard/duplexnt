@@ -721,6 +721,9 @@ export function EditorScreen({
     }
     runAssemble(sets.fronts);
   };
+  const openSave = (): void => {
+    setModal('save');
+  };
   // Поздние оценки (S13 M4, KTD6): снимок спрятал показанную страницу вердиктом — тост; о
   // скрытых после сборки наборов уже сказал тост сборки.
   const { notBlank } = session.edits;
@@ -780,18 +783,15 @@ export function EditorScreen({
   return (
     <main className="editor-screen">
       <EditorToolbar
-        total={total}
-        saved={session.saved}
         documents={shownDocuments}
         names={names}
-        currentIndex={currentIndex}
         currentDocument={currentDocument}
         sets={sets}
         addDisabledReason={addDisabledReason}
-        assembleDisabled={assembleBlock !== undefined || assembling}
-        assembleTitle={assembleTitle}
         canSplitHere={canSplitHere}
         saving={saving}
+        hasEdits={snapshot.assembly?.hasEdits === true}
+        revertDisabled={locked}
         onNewScan={newScan}
         onAdd={() => {
           setModal('add');
@@ -799,9 +799,8 @@ export function EditorScreen({
         onSplit={() => {
           split(currentIndex);
         }}
-        onAssemble={assemble}
-        onSave={() => {
-          setModal('save');
+        onRevert={() => {
+          setModal('revert');
         }}
         onMouseDown={collapseOnSurfaceClick}
       />
@@ -940,9 +939,16 @@ export function EditorScreen({
             onNotBlank={markNotBlank}
             onKeepOriginal={straighten.keepOriginal}
             onRestoreStraight={straighten.restoreStraight}
-            onRevert={() => {
-              setModal('revert');
-            }}
+            primary={
+              sets === null
+                ? { kind: 'save', disabled: total === 0, onClick: openSave }
+                : {
+                    kind: 'assemble',
+                    disabled: assembleBlock !== undefined || assembling,
+                    title: assembleTitle,
+                    onClick: assemble,
+                  }
+            }
             onOpenProject={openProjectPage}
             onMouseDown={collapseOnSurfaceClick}
           />

@@ -147,7 +147,7 @@ describe('каркас приложения', () => {
     );
     render(<App />);
 
-    expect(await screen.findByText('стр. 1 из 5')).toBeDefined();
+    expect(await screen.findByText('1 из 5')).toBeDefined();
   });
 
   it('M3: правка в StrictMode — одна подписка на сочетания, Delete шлёт один setEdits', async () => {
@@ -186,7 +186,7 @@ describe('каркас приложения', () => {
         <App />
       </StrictMode>,
     );
-    await screen.findByText('стр. 1 из 3');
+    await screen.findByText('1 из 3');
 
     fireEvent.keyDown(document.body, { key: 'Delete' });
     expect(setEdits).toHaveBeenCalledExactlyOnceWith({
@@ -658,7 +658,7 @@ describe('каркас приложения', () => {
         vi.advanceTimersByTime(2);
       });
       expect(document.querySelector('.merge-screen')).toBeNull();
-      expect(screen.getByText('стр. 1 из 6')).toBeDefined();
+      expect(screen.getByText('1 из 6')).toBeDefined();
     } finally {
       vi.useRealTimers();
     }
@@ -723,7 +723,7 @@ describe('каркас приложения', () => {
     });
     // Решение автора на приёмке B-5: сопоставлять нечего — экрана `merge` нет вовсе.
     expect(document.querySelector('.merge-screen')).toBeNull();
-    expect(await screen.findByText('стр. 1 из 3')).toBeDefined();
+    expect(await screen.findByText('1 из 3')).toBeDefined();
   });
 
   it('KTD-5: пауза merge не теряется, когда кадр scan пропущен (снимки пришли пачкой)', async () => {
@@ -805,7 +805,7 @@ describe('каркас приложения', () => {
         vi.advanceTimersByTime(1601);
       });
       expect(document.querySelector('.merge-screen')).toBeNull();
-      expect(screen.getByText('стр. 1 из 6')).toBeDefined();
+      expect(screen.getByText('1 из 6')).toBeDefined();
     } finally {
       vi.useRealTimers();
     }

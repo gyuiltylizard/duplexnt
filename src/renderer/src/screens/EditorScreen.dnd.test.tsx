@@ -467,7 +467,8 @@ describe('editor M3: границы документов (S1, S2, S5, S7)', () =
     // Перед текущей граница уже стоит — кнопки нет.
     fireEvent.click(option(3));
     expect(splitHere()).toBeNull();
-    expect(within(toolbar).getByText('документ 2 из 2 · стр. 1 из 3')).toBeDefined();
+    expect(within(toolbar).getByText('Документ 2')).toBeDefined();
+    expect(screen.getByRole('button', { name: /^Документ 2/u, current: true })).toBeDefined();
   });
 
   it('S1, B-8: при выделении нескольких кнопки тулбара нет — «с этой страницы» неоднозначно', () => {

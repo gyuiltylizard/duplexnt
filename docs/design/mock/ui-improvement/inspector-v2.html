@@ -1,0 +1,57 @@
+<!doctype html>
+<!-- Мок M6 «Выравнивание». Сцены setup, merge, editor и модалка save — по reference/ (перегенерирован
+     2026-10-29), оживлены straighten.js. Стили приложения без изменений; новое — straighten.css. -->
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Duplexn't — инспектор v2: проверка в деталях, сохранение под документами</title>
+    <link rel="stylesheet" href="../reference/fonts/fonts.css" />
+    <link rel="stylesheet" href="../reference/app.css" />
+    <link rel="stylesheet" href="../reference/wrapper.css" />
+    <link rel="stylesheet" href="straighten.css" />
+    <link rel="stylesheet" href="inspector-v2.css" />
+  </head>
+  <body class="ref-page st-page">
+    <p class="ref-note st-note">Инспектор v2, только экран «Сборка страниц» (по моку M6). ПРОВЕРКА стала подразделом ДЕТАЛЕЙ, «Сохранить» переехала из тулбара под ДОКУМЕНТЫ В НАБОРЕ. Ситуации — в панели справа.</p>
+    <div class="st-fit" id="st-fit">
+      <div class="ref-frame st-frame" id="st-frame" style="width:1280px;height:800px">
+        <div class="ref-root"><div class="st-stack" id="st-stack"></div></div>
+      </div>
+    </div>
+
+    <aside class="st-panel" id="st-panel" aria-label="Сценарии">
+      <button type="button" class="st-panel__head" id="st-panel-toggle" aria-expanded="true">
+        <span class="kicker">СЦЕНАРИИ M6</span><span class="st-panel__screen" id="st-screen-name">editor</span><span class="st-panel__arrow" aria-hidden="true">▾</span>
+      </button>
+      <div class="st-panel__body">
+<div id="st-jump" hidden><button data-jump="editor"></button></div>
+        <div class="st-panel__group">
+          <div class="st-panel__label">Ситуация в editor</div>
+          <div class="st-panel__list" id="st-sc">
+            <button type="button" class="segment segment--selected" data-sc="done">всё обработано: 12 листов</button>
+            <button type="button" class="segment" data-sc="partial">после прохода: часть в обработке</button>
+            <button type="button" class="segment" data-sc="recalc">пересчёт после обновления</button>
+            <button type="button" class="segment" data-sc="add">досканирование Д1</button>
+            <button type="button" class="segment" data-sc="save">save во время обработки</button>
+          </div>
+        </div>
+        <div class="st-panel__group">
+          <div class="st-panel__label">Режим сессии</div>
+          <div class="segments" id="st-mode">
+            <button type="button" class="segment segment--selected" data-mode="on">Выравнивать</button>
+            <button type="button" class="segment" data-mode="off">Не трогать</button>
+          </div>
+        </div>
+        <div class="st-panel__group">
+          <div class="st-panel__label">Опции</div>
+          <label class="toggle-row st-panel__toggle"><span class="toggle"><input class="toggle__input" id="st-kept" type="checkbox" autocomplete="off" /><span class="toggle__track" aria-hidden="true"></span></span><span class="toggle-row__label">«Оригинал по выбору» — тихая пометка (открытый вопрос)</span></label>
+          <label class="toggle-row st-panel__toggle"><span class="toggle"><input class="toggle__input" id="st-offline" type="checkbox" autocomplete="off" /><span class="toggle__track" aria-hidden="true"></span></span><span class="toggle-row__label">setup: сканер не подключён</span></label>
+          <label class="toggle-row st-panel__toggle"><span class="toggle"><input class="toggle__input" id="st-reduce" type="checkbox" autocomplete="off" /><span class="toggle__track" aria-hidden="true"></span></span><span class="toggle-row__label">prefers-reduced-motion</span></label>
+          <label class="toggle-row st-panel__toggle"><span class="toggle"><input class="toggle__input" id="st-slow" type="checkbox" autocomplete="off" /><span class="toggle__track" aria-hidden="true"></span></span><span class="toggle-row__label">замедлить ×4</span></label>
+        </div>
+      </div>
+    </aside>
+
+    <script src="inspector-v2.js"></script>
+  </body>
+</html>

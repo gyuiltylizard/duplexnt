@@ -3,69 +3,59 @@ import { useTranslation } from 'react-i18next';
 import type { AssembledDocument, SetsLayout } from '@shared';
 import { toneOf } from '../state/page-text';
 
-// Тулбар редактора (handoff M3, S1; M3.5, S1; M3.6, S4–S5): слева «↺ Новое сканирование» и
-// «+ Добавить», по центру — документ текущей страницы или, в режиме наборов, живые счётчики
-// групп, справа — точка несохранённого и «Сохранить документ» / «Собрать документ». Только
-// показ и клики: причины недоступности и жесты считает экран.
+// Тулбар редактора (handoff M3, S1; M3.5, S1; M3.6, S4–S5; B-45 `2026-11-inspector-v2.md`):
+// слева «↺ Новое сканирование» и «+ Добавить», по центру — метка и название документа текущей
+// страницы (позиция «документ N из M · стр. K из L» снята в B-45: страница — в статусбаре,
+// документ — в списке инспектора) или, в режиме наборов, живые счётчики групп; справа — плашка
+// «Есть ручные правки» с мигающей точкой и «Вернуть», пока правки есть. Первичные кнопки
+// «Сохранить…» / «Собрать документ» и точка «не сохранено» ушли отсюда в инспектор (B-45).
+// Только показ и клики: причины недоступности и жесты считает экран.
 
 export interface EditorToolbarProps {
-  readonly total: number;
-  readonly saved: boolean;
   readonly documents: readonly AssembledDocument[];
   /** Показываемые имена документов: введённые или по умолчанию. */
   readonly names: readonly string[];
-  readonly currentIndex: number;
   /** Документ текущей страницы (с нуля); `null` — лента пуста. */
   readonly currentDocument: number | null;
   /** Группы ленты в режиме наборов; `null` — режим пар или собрано. */
   readonly sets: SetsLayout | null;
   /** Причина недоступности «+ Добавить» (M3.5, R12); `undefined` — доступна. */
   readonly addDisabledReason: 'saving' | 'busy' | 'interrupted' | undefined;
-  /** «Собрать документ»: недоступна с причиной в `title` (S5) или пока команда в полёте. */
-  readonly assembleDisabled: boolean;
-  readonly assembleTitle: string | undefined;
   /** «+ Новый документ с этой страницы» уместна (S1). */
   readonly canSplitHere: boolean;
   /** Идёт запись пакета (KTD-9): кнопка границы недоступна. */
   readonly saving: boolean;
+  /** Есть ручные правки (S14): плашка в правой зоне; флаг ядра учитывает и тумблер 180°. */
+  readonly hasEdits: boolean;
+  /** «Вернуть» недоступна: идёт запись, сборка или правка в полёте (KTD-9). */
+  readonly revertDisabled: boolean;
   readonly onNewScan: () => void;
   readonly onAdd: () => void;
   readonly onSplit: () => void;
-  readonly onAssemble: () => void;
-  readonly onSave: () => void;
+  /** «Вернуть» — открыть подтверждение `revert`. */
+  readonly onRevert: () => void;
   /** Клик по поверхности тулбара — сжатие мультивыделения решает экран (M3.5, R21). */
   readonly onMouseDown: (event: ReactMouseEvent<HTMLElement>) => void;
 }
 
 export function EditorToolbar({
-  total,
-  saved,
   documents,
   names,
-  currentIndex,
   currentDocument,
   sets,
   addDisabledReason,
-  assembleDisabled,
-  assembleTitle,
   canSplitHere,
   saving,
+  hasEdits,
+  revertDisabled,
   onNewScan,
   onAdd,
   onSplit,
-  onAssemble,
-  onSave,
+  onRevert,
   onMouseDown,
 }: EditorToolbarProps): ReactNode {
   const { t } = useTranslation();
   const currentDoc = currentDocument === null ? undefined : documents[currentDocument];
-  // Документы из одних скрытых пустых в ленте не видны — «документ N из M» считает только
-  // видимые, и номер, и число (B-17).
-  const shownDocs = documents.filter((document) => document.count > 0).length;
-  const shownPosition =
-    currentDocument === null
-      ? 0
-      : documents.slice(0, currentDocument + 1).filter((document) => document.count > 0).length;
   // Наборы уравнены (S4): равные ненулевые счётчики — акцентная точка и приглашение собрать.
   const setsEqual = sets !== null && sets.fronts === sets.backs && sets.fronts > 0;
 
@@ -103,7 +93,7 @@ export function EditorToolbar({
           </span>
         </div>
       ) : (
-        /* S1: документ текущей страницы — тон, имя, позиция. */
+        /* S1: документ текущей страницы — тон и имя. */
         <div
           className={
             currentDocument === null
@@ -117,16 +107,6 @@ export function EditorToolbar({
             <>
               <span className="editor-screen__doc-mark" aria-hidden="true" />
               <span className="editor-screen__doc-title">{names[currentDocument]}</span>
-              <span className="editor-screen__doc-pos">
-                {shownDocs > 1
-                  ? t('editor.docPosition', {
-                      doc: shownPosition,
-                      docs: shownDocs,
-                      page: currentIndex - currentDoc.start + 1,
-                      pages: currentDoc.count,
-                    })
-                  : t('editor.pagePosition', { page: currentIndex + 1, pages: total })}
-              </span>
               {canSplitHere && (
                 <button
                   type="button"
@@ -142,40 +122,21 @@ export function EditorToolbar({
         </div>
       )}
       <div className="editor-screen__toolbar-right">
-        {/* S9 M2: точка несохранённого; скрыта, когда набор пуст или сохранён. */}
-        {!saved && total > 0 && (
-          <span
-            className="editor-screen__unsaved dot dot--warning"
-            role="status"
-            title={t('editor.unsaved')}
-          >
-            <span className="visually-hidden">{t('editor.unsaved')}</span>
-          </span>
-        )}
-        {sets !== null ? (
-          /* S4–S5 M3.6: «Собрать документ» на месте «Сохранить»; причина — в title. */
-          <button
-            type="button"
-            className="btn btn--primary btn--small editor-screen__assemble"
-            disabled={assembleDisabled}
-            title={assembleTitle}
-            onClick={onAssemble}
-          >
-            {t('editor.assemble')}
-          </button>
-        ) : (
-          /* S1: «Сохранить документ» при одном документе, «Сохранить N файлов» при нескольких;
-             пустая лента — сохранять нечего. */
-          <button
-            type="button"
-            className="btn btn--primary btn--small"
-            disabled={total === 0}
-            onClick={onSave}
-          >
-            {documents.length > 1
-              ? t('editor.saveFiles', { count: documents.length })
-              : t('editor.save')}
-          </button>
+        {/* S14 M3 → B-45: плашка правок — здесь, без подложки; без правок зона пуста. */}
+        {hasEdits && (
+          <div className="edits-bar" role="status">
+            <span className="dot dot--warning edits-bar__dot" aria-hidden="true" />
+            <p className="edits-bar__text">{t('editor.edits.text')}</p>
+            <button
+              type="button"
+              className="btn btn--tinted"
+              title={t('editor.edits.revertTitle')}
+              disabled={revertDisabled}
+              onClick={onRevert}
+            >
+              {t('editor.edits.revert')}
+            </button>
+          </div>
         )}
       </div>
     </header>

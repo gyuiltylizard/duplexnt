@@ -79,6 +79,8 @@ export function setMotionTokens(): void {
   root.setProperty('--duration-screen', '180ms');
   root.setProperty('--duration-base', '200ms');
   root.setProperty('--duration-turn', '240ms');
+  root.setProperty('--duration-section', '240ms');
+  root.setProperty('--ease-section', 'cubic-bezier(0.4, 0, 0.2, 1)');
   root.setProperty('--ease-out', 'cubic-bezier(0.2, 0, 0, 1)');
   root.setProperty('--ease-standard', 'ease');
   root.setProperty('--distance-rise', '6px');
