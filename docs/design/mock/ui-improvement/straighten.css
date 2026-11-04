@@ -1,0 +1,118 @@
+/* Мок M6 «Выравнивание»: новое и оформление мока. reference/app.css не правится. */
+
+:root { --st-k: 1; }
+.st-slow { --st-k: 4; }
+
+/* — страница и панель мока — */
+.st-page { padding-bottom: 120px; }
+.st-note { max-width: 1280px; }
+.st-note a, .st-panel a { color: var(--color-link); }
+.st-note a:hover, .st-panel a:hover { color: var(--color-link-hover); }
+.st-fit { position: relative; }
+.st-frame { transform-origin: 0 0; }
+.st-stack { position: relative; height: 100%; }
+.st-screen { position: absolute; inset: 0; background: var(--color-bg-app); isolation: isolate; display: flex; flex-direction: column; }
+.st-screen > .app { flex: 1; min-height: 0; }
+.st-screen--in { animation: st-screen-in calc(var(--duration-screen) * var(--st-k)) var(--ease-standard) both; }
+@keyframes st-screen-in { from { opacity: 0; } }
+
+.st-panel { position: fixed; right: 16px; top: 16px; z-index: 50; width: 300px; background: var(--color-bg-elevated); border: var(--border-width) solid var(--color-border-strong); border-radius: var(--radius-xl); box-shadow: var(--shadow-float); font-family: var(--font-family-sans); overflow: hidden; }
+.st-panel__head { display: flex; align-items: center; gap: var(--space-4); width: 100%; padding: var(--space-5) var(--space-7); background: var(--color-bg-panel); border: 0; border-bottom: var(--border-width) solid var(--color-border-subtle); cursor: pointer; }
+.st-panel__screen { margin-left: auto; white-space: nowrap; font: var(--font-weight-medium) var(--font-size-s) / 1 var(--font-family-mono); color: var(--color-text-secondary); }
+.st-panel__arrow { color: var(--color-text-hint); font-size: var(--font-size-xs); }
+.st-panel[data-collapsed='true'] .st-panel__body { display: none; }
+.st-panel__body { display: grid; gap: var(--space-7); padding: var(--space-7); max-height: calc(100vh - 90px); overflow: auto; }
+.st-panel__group { display: grid; gap: var(--space-4); }
+.st-panel__label { font: var(--font-weight-medium) var(--font-size-xs) / 1 var(--font-family-mono); letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--color-text-hint); }
+.st-panel__list { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+.st-panel__list .segment { white-space: normal; text-align: left; line-height: var(--leading-normal); }
+.st-panel .segment { cursor: pointer; }
+.st-panel .toggle-row.st-panel__toggle { display: flex; width: 100%; padding: var(--space-1) 0; cursor: pointer; }
+.st-panel .toggle-row__label { flex: 1; min-width: 0; white-space: normal; text-align: left; font-size: var(--font-size-m); }
+.st-reduced label:has(#st-reduce) .toggle-row__label { color: var(--color-warning); }
+
+/* ── M6: новое приложения (уйдёт в handoff) ── */
+
+/* Глиф выравнивания — 10×9, штрих currentColor. level — три ровные строки, undone — наклон и волна. */
+.straight-glyph { display: block; width: 10px; height: 9px; overflow: visible; fill: none; stroke: currentColor; stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Слот справа в подвале карточки: индикатор обработки и пометка занимают одно место — раскладка не
+   двигается, точки «перетекают» в глиф. Отступы — от края карточки (padding --space-3 + 2 px). */
+.thumb__straight,
+.thumb__pending {
+  position: absolute;
+  right: var(--space-4);
+  transition: opacity calc(var(--duration-fast) * var(--st-k)) var(--ease-standard);
+}
+.thumb__straight { bottom: 7px; color: var(--color-text-subtle); }
+.thumb__straight--kept { color: var(--color-text-ghost); }
+.thumb__pending { bottom: 10px; display: flex; gap: var(--space-1); pointer-events: none; }
+
+/* Точки обработки: фаза общая для всех карточек (delay от общего времени) — лента дышит целиком. */
+.thumb__pending i,
+.preview__straight-dots i {
+  width: 3px;
+  height: 3px;
+  border-radius: var(--radius-round);
+  background: var(--color-text-hint);
+  animation: pulse calc(var(--duration-loop) * var(--st-k)) var(--ease-loop) infinite;
+  animation-delay: var(--st-phase, 0ms);
+}
+.thumb__pending i:nth-child(2), .preview__straight-dots i:nth-child(2) { animation-delay: calc(var(--st-phase, 0ms) + var(--delay-stagger) * var(--st-k)); }
+.thumb__pending i:nth-child(3), .preview__straight-dots i:nth-child(3) { animation-delay: calc(var(--st-phase, 0ms) + var(--delay-stagger) * 2 * var(--st-k)); }
+
+.st-fade { opacity: 0; }
+
+/* Имитация косого скана (только мок): оригинал наклонён, выправленное — ровно. */
+.st-skew-l { transform: rotate(-1.6deg) scale(1.045); }
+.st-skew-r { transform: rotate(1.4deg) scale(1.045); }
+
+/* Смена вида на месте: новый кадр ложится поверх прежнего и проявляется; прежний уходит после. */
+.st-img-new { position: absolute; top: 0; left: 0; opacity: 0; transition: opacity calc(var(--duration-fast) * var(--st-k)) var(--ease-standard); }
+.st-img-new.st-img-in { opacity: 1; }
+
+/* Пилюля превью — место и форма «ПУСТАЯ СТОРОНА» (у пустой статуса нет — не пересекаются). */
+.preview__straight {
+  position: absolute;
+  top: var(--space-4);
+  left: var(--space-4);
+  z-index: var(--z-raised);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-s);
+  background: var(--color-bg-paper);
+  color: var(--color-text-subtle);
+  font: var(--font-weight-medium) var(--font-size-xxs) / var(--leading-none) var(--font-family-mono);
+  letter-spacing: var(--tracking-caps);
+}
+.preview__straight-dots { display: flex; gap: var(--space-1); }
+
+/* Инспектор: секция ВЫРАВНИВАНИЕ — как ПУСТОЙ ОБОРОТ. */
+.inspector__straight-actions { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-3); }
+.inspector__straight-reason { margin: 0; font: var(--font-weight-regular) var(--font-size-s) / var(--leading-relaxed) var(--font-family-sans); color: var(--color-text-hint); }
+
+/* Тост: подъём 180 мс, уход 120 мс (B-4). */
+.st-toast { opacity: 0; transform: translate(-50%, var(--distance-rise)); transition: opacity calc(var(--duration-screen) * var(--st-k)) var(--ease-out), transform calc(var(--duration-screen) * var(--st-k)) var(--ease-out); z-index: 40; }
+.st-toast--in { opacity: 1; transform: translate(-50%, 0); }
+.st-toast--out { opacity: 0; transition-duration: calc(var(--duration-exit) * var(--st-k)); }
+
+/* Хвост merge: счётчик меняется без мигания, проявляется только смена фазы. */
+.st-tail-in { animation: merge-tail-in calc(var(--duration-fast) * var(--st-k)) var(--ease-standard); }
+.merge-screen__tail.st-tail-static { animation: none; }
+
+/* setup: строка без сканера (мок) */
+.device-row__name--empty { color: var(--color-text-muted); }
+
+/* — reduced motion: зеркало для эмуляции + media — */
+.st-reduced .thumb__straight, .st-reduced .thumb__pending, .st-reduced .st-img-new, .st-reduced .st-toast { transition: none; }
+.st-reduced .thumb__pending i, .st-reduced .preview__straight-dots i { animation: none; opacity: var(--opacity-disabled); }
+.st-reduced .st-toast { transform: translate(-50%, 0); }
+.st-reduced .st-screen--in, .st-reduced .st-tail-in { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .thumb__straight, .thumb__pending, .st-img-new, .st-toast { transition: none; }
+  .thumb__pending i, .preview__straight-dots i { animation: none; opacity: var(--opacity-disabled); }
+  .st-toast { transform: translate(-50%, 0); }
+  .st-screen--in, .st-tail-in { animation: none; }
+}
