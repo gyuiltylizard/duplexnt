@@ -668,7 +668,7 @@
       "kicker": "STRAIGHTENING",
       "note": {
         "straightened": "Distortion detected — the page is straightened.",
-        "kept": "The original scan is shown. The straightened view can be restored.",
+        "kept": "The original scan is shown.",
         "measure": "Could not straighten the page automatically.",
         "shape": "Could not straighten the page automatically.",
         "nohelp": "Could not straighten the page automatically.",

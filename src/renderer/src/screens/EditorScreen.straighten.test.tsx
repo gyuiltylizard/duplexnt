@@ -194,9 +194,7 @@ describe('выравнивание в редакторе (M6)', () => {
     const snapshot = straightSnapshot();
     const { onToast, rerender } = renderEditor(snapshot);
 
-    expect(
-      within(inspector()).getByText('Обнаружены искажения — страница выровнена.'),
-    ).toBeDefined();
+    expect(within(inspector()).getByText('Страница выровнена.')).toBeDefined();
     const keep = straightButton('Оригинал');
     expect(keep.getAttribute('title')).toBe(
       'Показать и сохранить как со сканера. Это правка: Ctrl+Z или «Вернуть» её снимут.',
@@ -215,9 +213,7 @@ describe('выравнивание в редакторе (M6)', () => {
     expect(screen.getByText('Есть ручные правки')).toBeDefined();
     expect(option(0).getAttribute('aria-label')).toBe('Страница 1');
     expect(option(0).querySelector('.thumb__straight')).toBeNull();
-    expect(
-      within(inspector()).getByText('Показан исходный скан. Выровненный вид можно вернуть.'),
-    ).toBeDefined();
+    expect(within(inspector()).getByText('Исходный скан.')).toBeDefined();
     const restore = straightButton('Выровнять');
     expect(restore.getAttribute('title')).toBe('Вернуть выровненный вид. Ctrl+Z отменит.');
     // Фокус остался на кнопке, ставшей парной (handoff M6, Behaviour).
@@ -488,9 +484,7 @@ describe('выравнивание в редакторе (M6)', () => {
           ),
       }),
     );
-    expect(
-      within(inspector()).getByText('Обнаружены искажения — страница выровнена.'),
-    ).toBeDefined();
+    expect(within(inspector()).getByText('Страница выровнена.')).toBeDefined();
   });
 
   it('пересчёт при той же геометрии меняет адрес карточки версией детектора — новый кадр на месте (B-19)', () => {
