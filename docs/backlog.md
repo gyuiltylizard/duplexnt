@@ -76,8 +76,11 @@ _(пусто — B-44 закрыт 2026-11-03, см. «Завершённое»)
 ### B-40. Открытие репозитория: код публичный, вклад закрыт
 
 Суть: решение автора 2026-11-01 — репозиторий с кодом становится публичным (читать, проверять,
-Issues, GitHub Pages), но чужой вклад не принимается: PR закрывает Action с текстом «предложения
-через Issues», `CONTRIBUTING.md` говорит то же, ruleset на `main` — пушит только владелец.
+Issues, GitHub Pages), но чужой вклад не принимается: создание PR закрыто настройкой
+репозитория (Settings → General → Features → Pull requests → «Creation allowed by: Collaborators
+only» — постоянная, Issues при этом «All users»; уточнение автора 2026-11-04, Action
+автозакрытия PR не нужен), `CONTRIBUTING.md` говорит «предложения через Issues», ruleset на
+`main` — пушит только владелец.
 Мотив: публичность кода и приём PR — разные вещи; риск инъекций для агентов в PR и Issues
 закрывается правилом, а не настройкой GitHub.
 **Принятые решения:** (а) PR не принимаются, Issues и Pages включены; (б) агент не читает
@@ -99,7 +102,7 @@ open source; автор — единственный правообладате�
 `package.json`; `THIRD-PARTY-NOTICES.txt` — скриптом из пакетов бандла (MIT/ISC требуют копирайт
 и текст в копиях) плюс руками LGPL-3.0 и список библиотек внутри libvips (sharp помечен
 «Apache-2.0 AND LGPL-3.0», в сборке едет только Apache) и тексты OFL-1.1 шрифтов Golos Text и
-IBM Plex Mono; оба файла — в сборку через `extraResources` рядом с `LICENSE.electron.txt`; README для пришедшего с GitHub; формы Issues; Action автозакрытия PR;
+IBM Plex Mono; оба файла — в сборку через `extraResources` рядом с `LICENSE.electron.txt`; README для пришедшего с GitHub; формы Issues; настройка «PR — только коллабораторы»;
 `CONTRIBUTING.md`; Pages; secret scanning и ruleset; переключение видимости — последним шагом,
 после B-29 и B-26. **Попутно (B-26, 2026-11-03):** `description` в `package.json` идёт по-русски в
 свойства exe и установщика («Двусторонний скан на сканере без дуплекса…») — в английской
