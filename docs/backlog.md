@@ -96,8 +96,11 @@ open source; автор — единственный правообладате�
 платная версия остаются возможными; в README — строка «форки не могут называться Duplexn’t».
 Фикстура `fan-worksheet-color-200` (страница чужой рабочей тетради) под GPL не лицензируется —
 заменить до открытия своей страницей той же структуры.
-**Открытые решения автора:** переписывать ли историю (рекомендация — нет: хэши merge в журналах
-протухнут, риск значений низкий), email в коммитах (оставить / noreply с этого момента).
+**Решения автора 2026-11-04:** историю не переписываем (хэши merge в журналах остались бы
+протухшими, риск значений низкий); email в коммитах — GitHub `noreply` с этого момента, старые
+коммиты не трогаем; `CONTRIBUTING.md` — по-английски, смысл: «This project does not accept
+unsolicited pull requests. Please use GitHub Issues to report bugs, suggest improvements, or
+discuss potential changes. Code contributions are accepted by invitation only.»
 **Состав работы:** техбаза и пять файлов с локальными путями; `LICENSE` (GPL-3.0) и поле в
 `package.json`; `THIRD-PARTY-NOTICES.txt` — скриптом из пакетов бандла (MIT/ISC требуют копирайт
 и текст в копиях) плюс руками LGPL-3.0 и список библиотек внутри libvips (sharp помечен
