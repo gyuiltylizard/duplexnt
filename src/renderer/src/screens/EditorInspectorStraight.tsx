@@ -190,6 +190,7 @@ export function StraightSection({
   return (
     <section
       className="inspector__section inspector__section--straight"
+      data-section="straight"
       aria-labelledby={headingId}
     >
       <div className="inspector__heading">

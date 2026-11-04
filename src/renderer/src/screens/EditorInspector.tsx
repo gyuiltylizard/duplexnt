@@ -18,6 +18,7 @@ import { AppMark } from '../components/AppMark';
 import { StraightSection, straightChecks, straightSectionDue } from './EditorInspectorStraight';
 import { Check, type CheckItem } from './InspectorCheck';
 import { useHintAttention } from './useHintAttention';
+import { useInspectorMotion } from './useInspectorMotion';
 
 // Инспектор редактора (handoff M3, S11–S13; M3.5, S6–S7; M3.6, S8–S9; B-45
 // `2026-11-inspector-v2.md`): ДЕТАЛИ текущей страницы с подразделом ПРОВЕРКА внутри, ПУСТОЙ
@@ -296,7 +297,7 @@ function Details({
   }
 
   return (
-    <section className="inspector__section inspector__section--details">
+    <section className="inspector__section inspector__section--details" data-section="details">
       <button
         type="button"
         className="details-toggle"
@@ -423,6 +424,9 @@ export function EditorInspector({
   // ДЕТАЛИ свёрнуты по умолчанию; состояние живёт до размонтирования экрана (S11), в том числе
   // пока лента пуста и блок скрыт.
   const [detailsOpen, setDetailsOpen] = useState(false);
+  // B-45: высоты секций играются поверх конечного состояния после каждого рендера.
+  const asideRef = useRef<HTMLElement>(null);
+  useInspectorMotion(asideRef, detailsOpen);
   const docsId = useId();
   const blankId = useId();
   const straightId = useId();
@@ -453,7 +457,12 @@ export function EditorInspector({
   }
 
   return (
-    <aside className="inspector" aria-label={t('inspector.label')} onMouseDown={onMouseDown}>
+    <aside
+      ref={asideRef}
+      className="inspector"
+      aria-label={t('inspector.label')}
+      onMouseDown={onMouseDown}
+    >
       {entry !== undefined && (
         <Details
           entry={entry}
@@ -472,7 +481,11 @@ export function EditorInspector({
       )}
 
       {blankNote !== null && (
-        <section className="inspector__section inspector__section--blank" aria-labelledby={blankId}>
+        <section
+          className="inspector__section inspector__section--blank"
+          data-section="blank"
+          aria-labelledby={blankId}
+        >
           <div className="inspector__heading">
             <h2 id={blankId} className="kicker">
               {t('inspector.blank.kicker')}
@@ -506,7 +519,7 @@ export function EditorInspector({
           />
         )}
 
-      <section className="inspector__section" aria-labelledby={docsId}>
+      <section className="inspector__section" data-section="docs" aria-labelledby={docsId}>
         <div className="inspector__heading">
           <h2 id={docsId} className="kicker">
             {t('inspector.docs')}
@@ -575,7 +588,7 @@ export function EditorInspector({
       </section>
 
       {/* Подвал (B-42, B-45): логотип со ссылкой на проект и плашка BETA прижаты к низу панели. */}
-      <footer className="inspector__footer">
+      <footer className="inspector__footer" data-section="footer">
         <div className="inspector__brand">
           <AppMark className="inspector__mark" />
           <button

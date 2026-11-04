@@ -923,6 +923,16 @@
   flex-shrink: 0;
 }
 
+/* B-45 («Motion»): пока высота секции едет, содержимое не выглядывает за край; ушедшую секцию
+   на её месте подменяет спейсер, который схлопывается (`useInspectorMotion`). */
+.inspector__section--resizing {
+  overflow: hidden;
+}
+
+.inspector__spacer {
+  flex: none;
+}
+
 .inspector__section {
   display: flex;
   flex-direction: column;
