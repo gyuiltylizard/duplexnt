@@ -133,6 +133,33 @@ describe('модалка — движение (B-4)', () => {
     expect(height?.options.duration).toBe(200);
   });
 
+  it('пока высота едет, окно несёт modal--resizing (тело без прокрутки); конец или отмена снимают', () => {
+    const { animations } = stubAnimate();
+    stubHeights();
+    heights.set('dialog', 300);
+    const view = render(<Dialog name="save" lines={1} />);
+    const dialog = view.getByRole('dialog');
+
+    heights.set('dialog', 420);
+    view.rerender(<Dialog name="save" lines={4} />);
+    expect(dialog.classList.contains('modal--resizing')).toBe(true);
+
+    const first = animations.find((it) => 'height' in (it.keyframes[0] ?? {}));
+    first?.finish();
+    expect(dialog.classList.contains('modal--resizing')).toBe(false);
+
+    // Рендер поверх идущей анимации отменяет её; новой нет (в jsdom видимая высота равна
+    // естественной) — класс снят вместе с отменой, а не висит до события `cancel`.
+    heights.set('dialog', 500);
+    view.rerender(<Dialog name="save" lines={6} />);
+    expect(dialog.classList.contains('modal--resizing')).toBe(true);
+    view.rerender(<Dialog name="save" lines={6} />);
+    const all = animations.filter((it) => 'height' in (it.keyframes[0] ?? {}));
+    expect(all.length).toBe(2);
+    expect(all[1]?.animation.playState).toBe('idle');
+    expect(dialog.classList.contains('modal--resizing')).toBe(false);
+  });
+
   it('высота не изменилась — анимации высоты нет', () => {
     const { animations } = stubAnimate();
     stubHeights();

@@ -435,6 +435,12 @@
   gap: var(--space-9);
 }
 
+/* Пока окно едет к новой высоте (B-4), содержимое выше окна — без этого правила тело показывало
+   бы скроллбар на 200 мс анимации (замечание автора 2026-11-04). Класс ставит Modal. */
+.modal--resizing .modal__body {
+  overflow: hidden;
+}
+
 .modal__section {
   display: flex;
   flex-direction: column;
