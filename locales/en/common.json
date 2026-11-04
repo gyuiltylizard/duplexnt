@@ -776,7 +776,7 @@
     },
     "text": {
       "saved": "The document is saved to a file. The session's pages ({{count}} pages) will be deleted from disk — the saved PDFs stay.",
-      "unsaved": "The latest changes are not saved to a file. If you start a new scan, {{count}} pages will be deleted from disk.",
+      "unsaved": "Changes are not saved. If you start a new scan, the old scans will be deleted.",
       "empty": "All pages were deleted from the strip, but they can still be brought back — Ctrl+Z or “Revert”. A new scan erases them ({{count}} pages) from disk for good.",
       "deleted": "Pages deleted from the strip ({{count}} pages) will be erased too — they cannot be brought back.",
       "unassembled": "The fronts and backs lie as separate sets — the document is not assembled and not saved to a file. If you start a new scan, {{count}} pages will be deleted from disk.",

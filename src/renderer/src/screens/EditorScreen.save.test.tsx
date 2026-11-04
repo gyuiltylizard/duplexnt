@@ -241,7 +241,7 @@ describe('новое сканирование из редактора', () => {
     renderEditor(makeSnapshot([makePass({ pages: pages(24) })]));
 
     fireEvent.click(button(/Новый скан/));
-    expect(screen.getByText(/24 стр. будут удалены с диска/)).toBeDefined();
+    expect(screen.getByText(/старые сканы будут удалены/)).toBeDefined();
     fireEvent.click(button('Остаться в документе'));
 
     expect(screen.queryByRole('dialog')).toBeNull();
