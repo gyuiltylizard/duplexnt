@@ -1157,7 +1157,7 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--space-4);
+  gap: var(--space-2);
   margin-top: auto;
   padding: var(--space-8);
 }
