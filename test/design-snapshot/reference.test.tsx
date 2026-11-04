@@ -25,7 +25,10 @@ import {
   type PassSnapshot,
   type SessionEdits,
   type SessionSnapshot,
+  type SkewOutcome,
   type Snapshot,
+  type StraightenFact,
+  type StraightenFacts,
 } from '@shared';
 import { i18n } from '../../src/renderer/src/i18n';
 import { App } from '../../src/renderer/src/App';
@@ -151,6 +154,11 @@ async function capture(
     image.setAttribute('src', `pages/${file}`);
     // Ленивая загрузка в кадре с transform не срабатывает у части браузеров — миниатюры пустые.
     image.removeAttribute('loading');
+  }
+  // React держит состояние чекбокса свойством, в разметку оно не попадает: включённый
+  // переключатель («Пустые» после показа скрытых) в статическом кадре был бы выключен.
+  for (const input of container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')) {
+    input.toggleAttribute('checked', input.checked);
   }
   // Скелетон остался — значит, картинка не дошла до «загружено»: сцена была бы неправдой.
   expect(container.querySelectorAll('.skeleton').length).toBe(0);
@@ -441,18 +449,57 @@ const BLANK: BlankVerdicts = new Map(
   }),
 );
 
+const fact = (
+  outcome: SkewOutcome | null,
+  extra: Partial<StraightenFact> = {},
+): StraightenFact => ({
+  outcome,
+  cause: null,
+  version: null,
+  detector: extra.version === undefined || extra.version === null ? null : 1,
+  stale: false,
+  deferred: null,
+  ...extra,
+});
+
+/**
+ * Выравнивание (M6) в режиме по умолчанию «Выравнивать»: первое лицо и второй оборот выправлены
+ * (глиф на карточке, выправленный вид, секция ВЫРАВНИВАНИЕ с «Оригинал»), третье лицо — не по
+ * чему мерить, остальные ровные; пустой оборот не измеряется.
+ */
+const STRAIGHTEN: StraightenFacts = new Map([
+  ...Array.from({ length: SHEETS }, (_, index) => [keyOf(1, index + 1), fact('level')] as const),
+  ...Array.from({ length: SHEETS }, (_, index) => [keyOf(2, index + 1), fact('level')] as const),
+  [keyOf(1, 1), fact('willStraighten', { version: 1 })],
+  [keyOf(1, 3), fact('unmeasurable')],
+  [keyOf(2, 2), fact('willStraighten', { version: 1 })],
+]);
+
 function editorSnapshot(): Snapshot {
-  // «Помечать»: пустой оборот виден в ленте с меткой «ПУСТО» (при «Скрывать» его бы не было).
+  // Режимы по умолчанию (замечание автора, 2026-11-04): «Скрывать» — переключатель «Пустые» в
+  // подвале ленты, «Выравнивать» — пометки на карточках и секция ВЫРАВНИВАНИЕ инспектора.
   const session = sessionOf([passOf(1, 'fronts', SHEETS), passOf(2, 'backs', SHEETS)], {
     edits: ASSEMBLED_EDITS,
-    blankMode: 'mark',
-    straighten: 'off',
+    blankMode: 'hide',
+    straighten: 'auto',
   });
   return makeSnapshot({
     scanner: READY,
     session,
-    assembly: assemblyWithEditsOf(session, BLANK),
+    assembly: assemblyWithEditsOf(session, BLANK, STRAIGHTEN),
   });
+}
+
+/**
+ * Редактор на снимке по умолчанию: скрытый пустой оборот показан переключателем «Пустые» —
+ * в кадре и сам переключатель включённым, и карточка с меткой «ПУСТО».
+ */
+async function openEditor(t: SceneT): Promise<HTMLElement> {
+  const { container } = renderApp(editorSnapshot(), EDITOR_OVERRIDES);
+  await screen.findByText(t('editor.docPosition', { doc: 1, docs: 2, page: 1, pages: 6 }));
+  fireEvent.click(screen.getByRole('checkbox', { name: t('editor.blank.toggleLabel') }));
+  expect(container.querySelectorAll('.thumb__blank')).toHaveLength(1);
+  return container;
 }
 
 /** Сколько сцен в референсе: столько `it` ниже; каждая снимается на всех языках. */
@@ -632,12 +679,12 @@ describe('референс интерфейса (B-6)', () => {
       {
         id: 'editor',
         title: 'editor',
-        note: 'Редактор: лента по документам (граница после 6-й страницы), превью, инспектор; один оборот помечен «ПУСТО».',
+        note: 'Редактор: лента по документам (граница после 6-й страницы), превью, инспектор. Режимы по умолчанию: скрытый пустой оборот показан переключателем «Пустые» в подвале ленты; выравнивание — глифы на карточках (1-я и 8-я выправлены, 3-я не померить) и секция ВЫРАВНИВАНИЕ инспектора.',
       },
       async (t) => {
-        const { container } = renderApp(editorSnapshot(), EDITOR_OVERRIDES);
-        await screen.findByText(t('editor.docPosition', { doc: 1, docs: 2, page: 1, pages: 6 }));
-        expect(container.querySelectorAll('.thumb__blank')).toHaveLength(1);
+        const container = await openEditor(t);
+        expect(container.querySelectorAll('.thumb__straight--done')).toHaveLength(2);
+        expect(container.querySelectorAll('.thumb__straight--undone')).toHaveLength(1);
         return container;
       },
       { blank: true },
@@ -651,10 +698,8 @@ describe('референс интерфейса (B-6)', () => {
         note: 'Сохранение: имена файлов документов и папка. После записи модалка сменяется ИТОГом (высота — B-4).',
       },
       async (t) => {
-        const { container } = renderApp(editorSnapshot(), EDITOR_OVERRIDES);
-        fireEvent.click(
-          await screen.findByRole('button', { name: t('editor.saveFiles', { count: 2 }) }),
-        );
+        const container = await openEditor(t);
+        fireEvent.click(screen.getByRole('button', { name: t('editor.saveFiles', { count: 2 }) }));
         await screen.findByRole('dialog');
         await screen.findByText(/Сканы/);
         return container;
@@ -670,8 +715,8 @@ describe('референс интерфейса (B-6)', () => {
         note: 'Досканирование к документу: двустороннее или одностороннее, место вставки.',
       },
       async (t) => {
-        const { container } = renderApp(editorSnapshot(), EDITOR_OVERRIDES);
-        fireEvent.click(await screen.findByRole('button', { name: named(t('editor.add')) }));
+        const container = await openEditor(t);
+        fireEvent.click(screen.getByRole('button', { name: named(t('editor.add')) }));
         await screen.findByRole('dialog');
         return container;
       },
@@ -686,8 +731,8 @@ describe('референс интерфейса (B-6)', () => {
         note: 'Новое сканирование закрывает сессию: страницы стираются с диска — только через эту модалку.',
       },
       async (t) => {
-        const { container } = renderApp(editorSnapshot(), EDITOR_OVERRIDES);
-        fireEvent.click(await screen.findByRole('button', { name: named(t('editor.newScan')) }));
+        const container = await openEditor(t);
+        fireEvent.click(screen.getByRole('button', { name: named(t('editor.newScan')) }));
         await screen.findByRole('dialog');
         return container;
       },
