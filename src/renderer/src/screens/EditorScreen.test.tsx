@@ -147,8 +147,11 @@ describe('экран editor', () => {
     // Кнопка — последний элемент секции ДОКУМЕНТЫ В НАБОРЕ.
     expect(save.parentElement?.lastElementChild).toBe(save);
     const footer = inspector.querySelector('.inspector__footer');
-    expect(footer?.querySelector('.inspector__mark')).not.toBeNull();
-    expect(within(footer as HTMLElement).getByRole('button', { name: /о проекте/u })).toBeDefined();
+    // Логотип — сама ссылка на проект; текстовой ссылки нет; рядом плашка BETA.
+    const link = within(footer as HTMLElement).getByRole('button', { name: /о проекте/u });
+    expect(link.querySelector('.inspector__mark')).not.toBeNull();
+    expect(link.textContent).toBe('');
+    expect(link.nextElementSibling?.className).toBe('beta-badge');
     expect(footer?.querySelector('.beta-badge')?.textContent).toBe('BETA');
   });
 

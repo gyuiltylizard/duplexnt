@@ -2802,23 +2802,15 @@ samp {
   cursor: default;
 }
 
-/* B-42, B-45: подвал инспектора — логотип со ссылкой на проект слева, плашка BETA справа;
-   прижат к низу панели, при прокрутке уезжает вместе с содержимым. */
+/* B-42, B-45: подвал инспектора — логотип (он же ссылка на проект) и плашка BETA рядом, по
+   правому краю; прижат к низу панели, при прокрутке уезжает вместе с содержимым. */
 .inspector__footer {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  align-items: center;
+  justify-content: flex-end;
   gap: var(--space-4);
   margin-top: auto;
   padding: var(--space-8);
-}
-
-.inspector__brand {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-3);
-  min-width: 0;
 }
 
 .inspector__mark {
@@ -2840,20 +2832,21 @@ samp {
   color: var(--color-text-on-inverse);
 }
 
-/* Ссылка на страницу проекта: мелкая строка в цвете подсказки, подчёркивание при наведении. */
+/* Логотип-ссылка на страницу проекта: без рамки и фона, при наведении чуть светлее. */
 .inspector__about {
+  display: block;
+  flex: none;
   margin: 0;
   padding: 0;
   border: 0;
+  border-radius: var(--radius-s);
   background: none;
   cursor: pointer;
-  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-snug) var(--font-family-sans);
-  color: var(--color-text-hint);
+  transition: filter var(--duration-fast) var(--ease-standard);
 }
 
 .inspector__about:hover {
-  color: var(--color-text-subtle);
-  text-decoration: underline;
+  filter: brightness(1.25);
 }
 
 .inspector__about:focus-visible {

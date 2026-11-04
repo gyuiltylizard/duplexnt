@@ -699,7 +699,7 @@
       "noneEligible": "None of the selected pages is straightened — nothing to keep as original.",
       "allPending": "The selected pages are still being straightened — the action will become available on its own."
     },
-    "about": "{{app}} · about the project ↗",
+    "about": "{{app}} · about the project",
     "aboutTitle": "Open the project page in the browser"
   },
   "add": {
