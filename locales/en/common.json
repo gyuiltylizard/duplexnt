@@ -709,6 +709,7 @@
     "confirm": "Revert all"
   },
   "save": {
+    "details": "DETAILS",
     "titleOne": "Save document",
     "titleMany_one": "Save {{count}} file",
     "titleMany_other": "Save {{count}} files",

@@ -969,39 +969,6 @@
   text-wrap: pretty;
 }
 
-.details-toggle {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  width: 100%;
-  padding: var(--space-1) 0;
-  border: 0;
-  background: none;
-  text-align: left;
-  cursor: pointer;
-}
-
-.details-toggle__rule {
-  flex: 1;
-  height: 0;
-  border-top: var(--border-width) solid var(--color-border-subtle);
-}
-
-.details-toggle__summary {
-  white-space: nowrap;
-  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-none) var(--font-family-mono);
-  color: var(--color-text-faint);
-}
-
-.details-toggle__arrow {
-  font: var(--font-weight-regular) var(--font-size-xs) / var(--leading-none) var(--font-family-sans);
-  color: var(--color-text-hint);
-}
-
-.details-toggle[aria-expanded='true'] .details-toggle__arrow {
-  transform: rotate(180deg);
-}
-
 .details {
   display: flex;
   flex-direction: column;

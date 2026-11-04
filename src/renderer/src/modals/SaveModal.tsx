@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import {
@@ -143,6 +143,11 @@ export function SaveModal({
   const [writing, setWriting] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  // Сводка (правка автора 2026-11-04) — под свёрнутыми ДЕТАЛЯМИ: число файлов есть в заголовке
+  // и на кнопке, страницы — у строк; своего в ней только пустые обороты и выравнивание.
+  // Состояние живёт, пока модалка открыта; раскрытие — плавная высота окна (B-4).
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const factsId = useId();
 
   const unmounted = useUnmounted();
 
@@ -539,32 +544,49 @@ export function SaveModal({
           </div>
         </div>
 
-        <dl className="facts">
-          <div className="facts__row">
-            <dt className="facts__key">{t('save.fact.files')}</dt>
-            <dd className="facts__value">{fileCount}</dd>
-          </div>
-          <div className="facts__row">
-            <dt className="facts__key">{t('save.fact.pages')}</dt>
-            <dd className="facts__value">{total}</dd>
-          </div>
-          {blank.mode !== 'keep' && (
+        <div className="modal__section save-modal__details">
+          <button
+            type="button"
+            className="details-toggle"
+            aria-expanded={detailsOpen}
+            aria-controls={factsId}
+            onClick={() => {
+              setDetailsOpen((value) => !value);
+            }}
+          >
+            <span className="kicker">{t('save.details')}</span>
+            <span className="details-toggle__rule" aria-hidden="true" />
+            <span className="details-toggle__arrow" aria-hidden="true">
+              ▾
+            </span>
+          </button>
+          <dl id={factsId} className="facts" hidden={!detailsOpen}>
             <div className="facts__row">
-              <dt className="facts__key">{t('save.fact.blank')}</dt>
-              <dd className="facts__value">{blankFact(t, blank)}</dd>
+              <dt className="facts__key">{t('save.fact.files')}</dt>
+              <dd className="facts__value">{fileCount}</dd>
             </div>
-          )}
-          {straighten.mode === 'auto' && (
             <div className="facts__row">
-              <dt className="facts__key">{t('save.fact.straight')}</dt>
-              <dd className="facts__value">{straightFact(t, straighten)}</dd>
+              <dt className="facts__key">{t('save.fact.pages')}</dt>
+              <dd className="facts__value">{total}</dd>
             </div>
-          )}
-          <div className="facts__row">
-            <dt className="facts__key">{t('save.fact.format')}</dt>
-            <dd className="facts__value">{t('save.fact.formatValue')}</dd>
-          </div>
-        </dl>
+            {blank.mode !== 'keep' && (
+              <div className="facts__row">
+                <dt className="facts__key">{t('save.fact.blank')}</dt>
+                <dd className="facts__value">{blankFact(t, blank)}</dd>
+              </div>
+            )}
+            {straighten.mode === 'auto' && (
+              <div className="facts__row">
+                <dt className="facts__key">{t('save.fact.straight')}</dt>
+                <dd className="facts__value">{straightFact(t, straighten)}</dd>
+              </div>
+            )}
+            <div className="facts__row">
+              <dt className="facts__key">{t('save.fact.format')}</dt>
+              <dd className="facts__value">{t('save.fact.formatValue')}</dd>
+            </div>
+          </dl>
+        </div>
 
         {results !== null && (
           // B-4: ИТОГ проявляется после роста высоты окна; не помещается — тело прокручивается к нему.

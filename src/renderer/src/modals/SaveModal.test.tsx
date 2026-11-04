@@ -171,6 +171,28 @@ describe('модалка save: выбор', () => {
   });
 });
 
+describe('модалка save: сводка под ДЕТАЛЯМИ (правка автора 2026-11-04)', () => {
+  it('по умолчанию свёрнута: таблица с hidden; раскрытие и повторное сворачивание', async () => {
+    stubApi();
+    renderModal();
+    await settle();
+
+    const toggle = screen.getByRole('button', { name: 'ДЕТАЛИ' });
+    const facts = document.getElementById(toggle.getAttribute('aria-controls') ?? '');
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(facts?.hasAttribute('hidden')).toBe(true);
+    expect(facts?.classList.contains('facts')).toBe(true);
+
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(facts?.hasAttribute('hidden')).toBe(false);
+    expect(fact('Файлов')).toBe('3');
+
+    fireEvent.click(toggle);
+    expect(facts?.hasAttribute('hidden')).toBe(true);
+  });
+});
+
 describe('модалка save: свежие данные', () => {
   it('выбор папки после отказа снимает прежнюю ошибку', async () => {
     stubApi({ saveDocuments: vi.fn(() => Promise.resolve(fail('saveWriteFailed'))) });

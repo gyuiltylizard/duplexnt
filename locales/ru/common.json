@@ -753,6 +753,7 @@
     "confirm": "Вернуть всё"
   },
   "save": {
+    "details": "ДЕТАЛИ",
     "titleOne": "Сохранить документ",
     "titleMany_one": "Сохранить {{count}} файл",
     "titleMany_few": "Сохранить {{count}} файла",

@@ -416,6 +416,41 @@ samp {
 .rail__selection-group:focus-visible,
 .doc-group__unsplit:focus-visible,
 .doc-list__item:focus-visible,
+/* Сворачиваемая секция «ДЕТАЛИ» — инспектор `editor` (M3) и модалка `save` (правка автора
+   2026-11-04): кикер, линия, стрелка; тело под ней несёт `hidden`. */
+.details-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  width: 100%;
+  padding: var(--space-1) 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.details-toggle__rule {
+  flex: 1;
+  height: 0;
+  border-top: var(--border-width) solid var(--color-border-subtle);
+}
+
+.details-toggle__summary {
+  white-space: nowrap;
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-none) var(--font-family-mono);
+  color: var(--color-text-faint);
+}
+
+.details-toggle__arrow {
+  font: var(--font-weight-regular) var(--font-size-xs) / var(--leading-none) var(--font-family-sans);
+  color: var(--color-text-hint);
+}
+
+.details-toggle[aria-expanded='true'] .details-toggle__arrow {
+  transform: rotate(180deg);
+}
+
 .details-toggle:focus-visible,
 .save-mode:focus-visible,
 .choice:focus-visible,
@@ -785,6 +820,11 @@ samp {
 }
 
 /* — таблица фактов: ДЕТАЛИ инспектора и сводка `save` (handoff M3) — */
+
+/* Свёрнутые факты (модалка save, ДЕТАЛИ): без этого правила `hidden` проигрывает `display: flex`. */
+.facts[hidden] {
+  display: none;
+}
 
 .facts {
   display: flex;
@@ -2618,39 +2658,6 @@ samp {
     var(--font-family-sans);
   color: var(--color-text-subtle);
   text-wrap: pretty;
-}
-
-.details-toggle {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  width: 100%;
-  padding: var(--space-1) 0;
-  border: 0;
-  background: none;
-  text-align: left;
-  cursor: pointer;
-}
-
-.details-toggle__rule {
-  flex: 1;
-  height: 0;
-  border-top: var(--border-width) solid var(--color-border-subtle);
-}
-
-.details-toggle__summary {
-  white-space: nowrap;
-  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-none) var(--font-family-mono);
-  color: var(--color-text-faint);
-}
-
-.details-toggle__arrow {
-  font: var(--font-weight-regular) var(--font-size-xs) / var(--leading-none) var(--font-family-sans);
-  color: var(--color-text-hint);
-}
-
-.details-toggle[aria-expanded='true'] .details-toggle__arrow {
-  transform: rotate(180deg);
 }
 
 .details {
