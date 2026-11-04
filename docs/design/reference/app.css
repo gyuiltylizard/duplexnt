@@ -1149,31 +1149,93 @@ samp {
   }
 }
 
-/* ── screens/setup-screen.css ── */
+/* ── modals/add-modal.css ── */
 
-/* Экран `setup` (U22): группа параметров со строкой устройства — панели разделены волосяными
-   линиями (`gap: 1px` поверх тонированной подложки, принцип 1 дизайн-системы). Строка
-   устройства — CSS handoff'а U19 (S2–S5). */
+/* Модалка add (handoff M3.5, S2): две секции с кикерами, строка сканера; футер без сводки (B-44). */
 
-.params {
+.add-modal__body {
   display: flex;
   flex-direction: column;
-  gap: var(--space-px);
-  background: var(--color-border-subtle);
-  border: var(--border-width) solid var(--color-border-subtle);
-  border-radius: var(--radius-l);
-  overflow: hidden;
+  gap: var(--space-9);
 }
 
-.device-row {
+.add-modal__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.add-modal__section .kicker {
+  margin: 0;
+}
+
+/* Строка сканера — как строка устройства setup, но без действий. */
+.add-modal__scanner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin: 0;
+  padding: var(--space-4) var(--space-6);
+  border-radius: var(--radius-l);
+  background: var(--color-bg-surface);
+  border: var(--border-width) solid var(--color-border-subtle);
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-normal)
+    var(--font-family-mono);
+  color: var(--color-text-subtle);
+}
+
+.add-modal__scanner-name {
+  font: var(--font-weight-medium) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
+  color: var(--color-text-primary);
+}
+
+.add-modal__scanner--none .add-modal__scanner-status {
+  color: var(--color-text-muted);
+  font-family: var(--font-family-sans);
+}
+
+/* ── modals/device-modal.css ── */
+
+/* Модалка `device` (U21): список найденных, адрес вручную, «Дополнительно».
+   Рецепты — DESIGN_SYSTEM «Элемент списка устройств» и CSS handoff'а U19 (S7–S9). */
+
+.device-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.device-item {
   display: flex;
   align-items: center;
   gap: var(--space-6);
-  padding: var(--space-7) var(--space-8);
+  padding: var(--space-6) var(--space-6);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-l);
   background: var(--color-bg-surface);
+  cursor: pointer;
+  outline: none;
 }
 
-.device-row__name {
+.device-item--selected {
+  background: var(--color-bg-selected);
+  border-color: var(--color-border-focus);
+}
+
+.device-item--disabled {
+  opacity: var(--opacity-disabled);
+  cursor: not-allowed;
+}
+
+.device-item__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.device-item__name {
   font: var(--font-weight-medium) var(--font-size-base) / var(--leading-snug)
     var(--font-family-sans);
   overflow: hidden;
@@ -1181,1452 +1243,404 @@ samp {
   white-space: nowrap;
 }
 
-.device-row__none {
-  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
-  color: var(--color-text-subtle);
+.device-item__name--unnamed {
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-regular);
 }
 
-.device-row__status {
+.device-item__address {
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-snug) var(--font-family-mono);
+  color: var(--color-text-faint);
+  white-space: nowrap;
+}
+
+.device-item__status {
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-snug) var(--font-family-mono);
+  color: var(--color-status-ready);
+  white-space: nowrap;
+}
+
+.device-item__status--no-adf {
+  color: var(--color-status-unavailable);
+}
+
+/* Три скелетона с пульсацией и сдвигом фазы — пока идёт поиск. */
+.device-skeleton {
+  height: var(--size-list-row);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-l);
+  background: var(--color-bg-surface);
+  animation: pulse var(--duration-loop) var(--ease-loop) infinite;
+}
+
+.device-skeleton:nth-child(2) {
+  animation-delay: var(--delay-stagger);
+}
+
+.device-skeleton:nth-child(3) {
+  animation-delay: calc(var(--delay-stagger) * 2);
+}
+
+/* Пустое состояние (S7) и сбой поиска (S8) — в области списка. */
+.device-list__empty {
+  margin: 0;
+  padding: var(--space-8) var(--space-6);
+  min-height: 132px; /* высота трёх скелетонов макета — литерал геометрии */
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-}
-
-/* Базовый цвет — «готов»; остальные состояния переопределяют модификатором строки. */
-.device-row__status-text {
-  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-snug) var(--font-family-mono);
-  white-space: nowrap;
-  color: var(--color-status-ready);
-}
-
-.device-row--checking .device-row__status-text {
+  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-relaxed)
+    var(--font-family-sans);
   color: var(--color-text-subtle);
+  background: var(--color-bg-surface);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-l);
+  text-wrap: pretty;
 }
 
-.device-row--unreachable .device-row__status-text {
+.device-list__empty--danger {
   color: var(--color-danger);
 }
 
-.device-row--changed .device-row__status-text {
-  color: var(--color-warning);
-}
-
-.device-row__spacer {
-  flex: 1;
-}
-
-.device-row__scheme {
-  font: var(--font-weight-medium) var(--font-size-xxs) / var(--leading-none) var(--font-family-mono);
-  letter-spacing: var(--tracking-caps);
-  color: var(--color-text-faint);
-  border: var(--border-width) solid var(--color-border-default);
-  border-radius: var(--radius-s);
-  padding: var(--space-1) var(--space-2);
-}
-
-.param-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-6);
-  padding: var(--space-5) var(--space-8);
-  background: var(--color-bg-surface);
-}
-
-.param-row__label {
-  flex: none;
-  width: var(--size-label-col);
-  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
-  color: var(--color-text-muted);
-}
-
-.params__footer {
-  display: flex;
-  padding: var(--space-4) var(--space-8);
-  background: var(--color-bg-panel);
-}
-
-.params__footer .btn--ghost {
-  color: var(--color-text-subtle);
-}
-
-.params__footer .btn--ghost:hover:not(:disabled) {
-  color: var(--color-text-primary);
-  text-decoration: none;
-}
-
-.setup-screen__launch {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-5);
-}
-
-.setup-screen__hint {
-  margin: 0;
-  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-relaxed)
-    var(--font-family-sans);
-  color: var(--color-text-subtle);
-}
-
-/* — правая колонка «Как это работает» (M2 U8, тексты макета) — */
-
-.setup-screen__aside {
-  position: relative; /* переключатель языка прижат к низу колонки (B-41) */
-  background: var(--color-bg-well);
-  border-left: var(--border-width) solid var(--color-border-subtle);
-  padding: 0 var(--space-15);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: var(--space-11);
-}
-
-/* — переключатель языка (B-41, U6; handoff 2026-11-b41-language — CSS дословно) — */
-
-.lang-switch {
-  position: absolute;
-  left: var(--space-15);
-  right: var(--space-15);
-  bottom: var(--space-12);
-  display: flex;
-  align-items: center;
-  gap: var(--space-6);
-  padding-top: var(--space-6);
-  border-top: var(--border-width) solid var(--color-border-subtle);
-  transition: opacity var(--duration-fast) var(--ease-standard);
-}
-
-.lang-switch .kicker {
-  margin-right: auto;
-}
-
-.lang-switch__opts {
+/* «Дополнительно»: схема — сегментированный выбор, порт и путь — мелкие поля. */
+.device-advanced__toggle {
+  align-self: flex-start;
   display: flex;
   align-items: center;
   gap: var(--space-2);
-}
-
-.lang-switch__opt {
-  padding: var(--space-2) var(--space-4);
-  border: var(--border-width) solid transparent;
-  border-radius: var(--radius-m);
   background: none;
-  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
+  border: 0;
+  padding: var(--space-2) 0;
+  font: var(--font-weight-medium) var(--font-size-m) / var(--leading-none) var(--font-family-sans);
   color: var(--color-text-subtle);
   cursor: pointer;
 }
 
-.lang-switch__opt:hover {
+.device-advanced__toggle:hover {
   color: var(--color-text-primary);
 }
 
-.lang-switch__opt[aria-checked='true'] {
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-primary);
-  background: var(--color-bg-surface);
-  border-color: var(--color-border-default);
-  cursor: default;
-}
-
-.lang-switch__opt:focus-visible {
-  outline: 2px solid var(--color-border-focus);
-  outline-offset: 1px;
-}
-
-.lang-switch__opt--pending {
-  color: var(--color-text-primary);
-  border-color: var(--color-accent);
-}
-
-/* Клики игнорируются сразу; приглушение — только если запись затянулась дольше 200 мс. */
-.lang-switch[aria-busy='true'] {
-  opacity: var(--opacity-disabled);
-  transition-delay: 200ms;
-}
-
-.lang-switch[aria-busy='true'] .lang-switch__opt {
-  cursor: progress;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .lang-switch {
-    transition: none;
-  }
-}
-
-.howto {
+.device-advanced {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.howto__step {
-  display: flex;
-  gap: var(--space-8);
-  padding: var(--space-6) 0;
-  border-bottom: var(--border-width) solid var(--color-border-subtle);
-}
-
-.howto__num {
-  flex: none;
-  width: var(--size-step);
-  height: var(--size-step);
-  border-radius: var(--radius-round);
-  border: var(--border-width) solid var(--color-border-emphasis);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font: var(--font-weight-medium) var(--font-size-m) / var(--leading-none) var(--font-family-mono);
-  color: var(--color-text-muted);
-}
-
-.howto__body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.howto__title {
-  font: var(--font-weight-medium) var(--font-size-base) / var(--leading-normal)
-    var(--font-family-sans);
-}
-
-.howto__text {
-  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-relaxed)
-    var(--font-family-sans);
-  color: var(--color-text-subtle);
-  text-wrap: pretty;
-}
-
-/* ── screens/scan-screen.css ── */
-
-/* Экран `scan` (U23): тег, иллюстрация подачи, счётчик, лента, «Остановить» — по рецепту
-   «Индикатор прогресса прохода» дизайн-системы и CSS handoff'а U19 (S12–S15, S19).
-   Геометрия иллюстрации и карточек — литералы макета (осознанное исключение DS). */
-
-.scan-screen {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-14);
-  padding: var(--space-15);
-  outline: none; /* контейнер принимает фокус в S15 — кольцо ему не нужно */
-}
-
-.scan-screen__tag {
-  padding: var(--space-2) var(--space-5);
-  border-radius: var(--radius-m);
-  background: var(--color-accent);
-  font-family: var(--font-family-mono);
-  font-weight: var(--font-weight-medium);
-  font-size: var(--font-size-xs);
-  line-height: var(--leading-normal);
-  letter-spacing: var(--tracking-caps);
-  color: var(--color-text-on-accent);
-}
-
-/* S3 M3.5: тег добавленного набора — цвет набора, чтобы он читался с первого кадра. */
-.scan-screen__tag--added {
-  background: var(--color-pass-added);
-}
-
-.scan-screen__stage {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-11);
-}
-
-.scan-screen__counter {
-  font-weight: var(--font-weight-semibold);
-  font-size: var(--font-size-xl);
-  line-height: var(--leading-snug);
-  color: var(--color-text-primary);
-  text-align: center;
-  text-wrap: balance;
-}
-
-.scan-screen__meta {
-  font-weight: var(--font-weight-regular);
-  font-size: var(--font-size-m);
-  line-height: var(--leading-relaxed);
-  font-family: var(--font-family-mono);
-  color: var(--color-text-subtle);
-  text-align: center;
-}
-
-/* — иллюстрация подачи: стопка листов над лотком, полоса активности — */
-
-.feed {
-  position: relative;
-  width: 150px;
-  height: 186px;
-  flex: none;
-}
-
-.feed__sheet {
-  position: absolute;
-  width: 118px;
-  height: 150px;
-  border-radius: var(--radius-s);
-  background: var(--color-bg-paper);
-  border: var(--border-width) solid var(--color-border-strong);
-}
-
-.feed__sheet--back {
-  left: 14px;
-  top: 0;
-  box-shadow: var(--shadow-hairline);
-}
-
-.feed__sheet--mid {
-  left: 10px;
-  top: 6px;
-}
-
-.feed__sheet--moving {
-  left: 16px;
-  top: 12px;
-  animation: feed var(--duration-loop) var(--ease-loop) infinite;
-}
-
-.feed__tray {
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  width: 150px;
-  height: 30px;
-  border-radius: var(--radius-s);
-  background: var(--color-bg-tray);
-}
-
-.feed__bar {
-  position: absolute;
-  left: 12px;
-  bottom: 12px;
-  width: 126px;
-  height: 4px;
-  border-radius: var(--radius-xs);
-  background: var(--color-accent);
-  animation: pulse var(--duration-loop) var(--ease-loop) infinite;
-}
-
-/* S13: подача и полоса замирают, полоса приглушается */
-.feed--idle .feed__sheet--moving,
-.feed--idle .feed__bar {
-  animation: none;
-}
-
-.feed--idle .feed__bar {
-  opacity: var(--opacity-disabled);
-}
-
-/* — лента последних пяти: затухание к старому краю шагом 0,17 — */
-
-/* B-9: лента и точки ожидания делят место ленты — высота экрана не меняется. Слот — во всю
-   ширину экрана: пустая лента ширины не даёт, и точки в слоте нулевой ширины сжимались в ноль. */
-.scan-screen__slot {
-  position: relative;
-  align-self: stretch;
-  height: 74px;
-  display: flex;
-  justify-content: center;
-}
-
-.scan-wait {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-}
-
-/* Геометрия точки — литерал, как у иллюстраций экрана; цикл — `pulse` из app.css. */
-.scan-wait__dot {
-  flex: none;
-  width: 6px;
-  height: 6px;
-  border-radius: var(--radius-round);
-  background: var(--color-text-faint);
-  animation: pulse var(--duration-loop) var(--ease-loop) infinite;
-}
-
-.scan-wait__dot:nth-child(2) {
-  animation-delay: var(--delay-stagger);
-}
-
-.scan-wait__dot:nth-child(3) {
-  animation-delay: calc(var(--delay-stagger) * 2);
-}
-
-.strip {
-  position: relative; /* B-4: опора для выталкиваемой карточки */
-  display: flex;
-  gap: var(--space-4);
   align-items: flex-end;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  height: 74px;
+  gap: var(--space-6);
 }
 
-.strip__card {
-  position: relative;
-  width: 50px;
-  height: 70px;
-  border-radius: var(--radius-xs);
-  background: var(--color-bg-paper);
-  border: var(--border-width) solid var(--color-border-default);
-  overflow: hidden;
-  /* B-4: шаг затухания меняется проявлением, карточка не мигает при сдвиге очереди. */
-  transition: opacity var(--duration-screen) var(--ease-standard);
+.device-advanced__port {
+  width: 96px; /* под пять цифр порта — литерал геометрии */
 }
 
-/* Выталкиваемая карточка (B-4): копия на своём месте поверх потока, гаснет и уходит влево. */
-.strip__card--leaving {
-  position: absolute;
-  margin: 0;
-  pointer-events: none;
-}
-
-.strip__card:nth-last-child(2) {
-  opacity: 0.83;
-}
-
-.strip__card:nth-last-child(3) {
-  opacity: 0.66;
-}
-
-.strip__card:nth-last-child(4) {
-  opacity: 0.49;
-}
-
-.strip__card:nth-last-child(5) {
-  opacity: 0.32;
-}
-
-.strip__img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  /* Миниатюра проявляется, а не вспыхивает (смоук приёмки M1). */
-  transition: opacity var(--duration-fast) var(--ease-standard);
-}
-
-.strip__card--loading .strip__img {
-  opacity: 0;
-}
-
-.strip__card--loading + .strip__card--loading .skeleton {
-  animation-delay: var(--delay-stagger);
-}
-
-.strip__card--failed {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--color-bg-surface);
-}
-
-.strip__num {
-  font-family: var(--font-family-mono);
-  font-weight: var(--font-weight-medium);
-  font-size: var(--font-size-xxs);
-  line-height: var(--leading-none);
-  color: var(--color-text-faint);
-}
-
-/* — движение — */
-
-@keyframes feed {
-  0% {
-    transform: translateY(-22px) scaleY(0.98);
-    opacity: 0;
-  }
-
-  25% {
-    opacity: 1;
-  }
-
-  100% {
-    transform: translateY(30px);
-    opacity: 0;
-  }
+.device-advanced__path {
+  flex: 1;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .feed__sheet--moving,
-  .feed__bar {
-    animation: none;
-  }
-
-  .strip__card {
-    transition: none;
-  }
-
-  /* B-9: три ровные точки без цикла. */
-  .scan-wait__dot {
+  .device-skeleton {
     animation: none;
     opacity: var(--opacity-disabled);
   }
 }
 
-/* ── screens/flip-screen.css ── */
-
-/* Экран `flip` (U8): инструкция разворота по макету и UI_SPEC раздел 4; дырки — handoff M2
-   (S1–S3). Геометрия иллюстрации — литералы макета (осознанное исключение DS). */
-
-.flip-screen {
-  flex: 1;
-  min-height: 0;
+/* Обёртка секций выбора (B-29, U8) повторяет раскладку `modal__body`: колонка с тем же зазором.
+   Без неё секции стояли блоками вплотную, и список наезжал на кикер поля адреса (B-43). */
+.device-modal__pick {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-13);
-  padding: var(--space-14) var(--space-16);
-  outline: none; /* контейнер принимает фокус в S2 — кольцо ему не нужно */
+  gap: var(--space-9);
 }
 
-.flip-screen__intro {
+/* Шаг подтверждения смены устройства (B-29; handoff scanner-change, вариант 1b): список и
+   «Дополнительно» скрыты, поле адреса приглушено, карточка — последним элементом тела. */
+.device-modal--confirming .device-modal__pick {
+  opacity: var(--opacity-disabled);
+  pointer-events: none;
+}
+
+.device-modal--confirming .device-modal__list,
+.device-modal--confirming .device-advanced__toggle,
+.device-modal--confirming .device-advanced {
+  display: none;
+}
+
+.device-confirm {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-5);
+  padding: var(--space-7) var(--space-8);
+  background: var(--color-bg-surface);
+  border: var(--border-width) solid var(--color-warning);
+  border-radius: var(--radius-l);
 }
 
-.flip-screen__title {
+.device-confirm__title {
   margin: 0;
   font-weight: var(--font-weight-semibold);
-  font-size: var(--font-size-display-s);
-  line-height: var(--leading-tight);
-  letter-spacing: var(--tracking-tight);
-  text-align: center;
+  font-size: var(--font-size-base);
+  line-height: var(--leading-snug);
 }
 
-.flip-screen__lead {
-  margin: 0;
-  font-weight: var(--font-weight-regular);
-  font-size: var(--font-size-l);
-  line-height: var(--leading-relaxed);
-  color: var(--color-text-muted);
-  max-width: 470px;
-  text-align: center;
-  text-wrap: pretty;
-}
-
-/* — карточка: иллюстрация + чеклист — */
-
-.flip-screen__card {
+.device-confirm__who {
   display: flex;
-  align-items: center;
-  gap: var(--space-13);
-  padding: var(--space-12) var(--space-14);
-  background: var(--color-bg-surface);
-  border: var(--border-width) solid var(--color-border-subtle);
-  border-radius: var(--radius-xl);
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
 }
 
-.flip-screen__demo {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-6);
-}
-
-.flip-screen__caption {
-  font-weight: var(--font-weight-regular);
-  font-size: var(--font-size-s);
-  line-height: var(--leading-normal);
-  font-family: var(--font-family-mono);
-  color: var(--color-text-subtle);
-  text-align: center;
-}
-
-.flip-screen__divider {
-  width: var(--border-width);
-  height: 150px;
-  background: var(--color-border-subtle);
-}
-
-.flip-screen__checklist {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-6);
-  width: 250px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.flip-screen__check {
-  display: flex;
-  gap: var(--space-5);
-  align-items: flex-start;
-}
-
-.flip-screen__checkbox {
+.device-confirm__name {
   flex: none;
-  width: var(--size-check);
-  height: var(--size-check);
-  border-radius: var(--radius-s);
-  border: var(--border-width) solid var(--color-border-emphasis);
-  background: var(--color-bg-paper);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: var(--font-weight-medium);
-  font-size: var(--font-size-xs);
-  line-height: var(--leading-none);
-  color: var(--color-accent);
-  margin-top: var(--space-px);
+  max-width: 100%;
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-base);
+  line-height: var(--leading-snug);
+  overflow-wrap: anywhere;
 }
 
-.flip-screen__check-text {
-  font-weight: var(--font-weight-regular);
+.device-confirm__name--unnamed {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-muted);
+}
+
+.device-confirm__address {
+  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-snug) var(--font-family-mono);
+  color: var(--color-text-muted);
+}
+
+.device-confirm__text {
+  margin: 0;
   font-size: var(--font-size-m);
   line-height: var(--leading-relaxed);
   color: var(--color-text-secondary);
   text-wrap: pretty;
 }
 
-/* — иллюстрация turn180: лист с маркером «ВЕРХ» над лотком — */
-
-.turn {
-  position: relative;
-  width: 150px;
-  height: 186px;
-  flex: none;
-  overflow: hidden;
-}
-
-.turn__shadows {
-  position: absolute;
-  left: 18px;
-  top: 14px;
-  width: 114px;
-  height: 146px;
-  animation: turn180 var(--duration-loop-long) var(--ease-loop) infinite;
-}
-
-.turn__sheet {
-  position: absolute;
-  width: 114px;
-  height: 146px;
-  border-radius: var(--radius-s);
-  border: var(--border-width) solid var(--color-border-default);
-}
-
-.turn__sheet--under {
-  left: 4px;
-  top: 5px;
-  background: var(--color-bg-toolbar);
-}
-
-.turn__sheet--mid {
-  left: 2px;
-  top: 2px;
-  background: var(--color-bg-elevated);
-}
-
-.turn__front {
-  position: absolute;
-  left: 18px;
-  top: 14px;
-  width: 114px;
-  height: 146px;
-  border-radius: var(--radius-s);
-  background: var(--color-bg-paper);
-  border: var(--border-width) solid var(--color-border-strong);
+.device-confirm__replace {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-6) var(--space-5);
-  box-sizing: border-box;
-  animation: turn180 var(--duration-loop-long) var(--ease-loop) infinite;
-}
-
-.turn__arrow {
-  font-weight: var(--font-weight-regular);
-  font-size: var(--font-size-xl);
-  line-height: var(--leading-none);
-  color: var(--color-accent);
-}
-
-.turn__top {
-  font-weight: var(--font-weight-medium);
-  font-size: var(--font-size-xxs);
-  line-height: var(--leading-none);
-  font-family: var(--font-family-mono);
-  letter-spacing: var(--tracking-caps);
-  color: var(--color-accent);
-}
-
-.turn__lines {
-  align-self: stretch;
-  margin-top: var(--space-4);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.turn__line {
-  height: 2px;
-  border-radius: var(--radius-xs);
-  background: var(--color-glyph-soft);
-}
-
-/* Ширины строк-имитаций — геометрия макета, вся в CSS. */
-.turn__line--1 {
-  width: 86%;
-}
-
-.turn__line--2 {
-  width: 72%;
-}
-
-.turn__line--3 {
-  width: 80%;
-}
-
-.turn__tray {
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  width: 150px;
-  height: 30px;
-  border-radius: var(--radius-s);
-  background: var(--color-bg-tray);
-  z-index: var(--z-raised);
-}
-
-/* — действия и строка статуса занятости (S2) — */
-
-.flip-screen__actions {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  align-items: baseline;
   gap: var(--space-4);
-}
-
-.flip-screen__status {
   margin: 0;
-  max-width: 470px;
-  font-weight: var(--font-weight-regular);
   font-size: var(--font-size-m);
   line-height: var(--leading-relaxed);
-  color: var(--color-text-muted);
-  text-align: center;
-  text-wrap: pretty;
+  color: var(--color-text-primary);
 }
 
-/* — движение — */
-
-@keyframes turn180 {
-  0% {
-    transform: translateY(-10px) rotate(0) scale(0.98);
-    opacity: 0;
-  }
-
-  14% {
-    transform: translateY(0) rotate(0) scale(1);
-    opacity: 1;
-  }
-
-  24% {
-    transform: translateY(-7px) rotate(0) scale(1.03);
-    opacity: 1;
-  }
-
-  54% {
-    transform: translateY(-7px) rotate(180deg) scale(1.03);
-    opacity: 1;
-  }
-
-  64% {
-    transform: translateY(0) rotate(180deg) scale(1);
-    opacity: 1;
-  }
-
-  76% {
-    transform: translateY(0) rotate(180deg) scale(1);
-    opacity: 1;
-  }
-
-  94% {
-    transform: translateY(34px) rotate(180deg) scale(0.96);
-    opacity: 0;
-  }
-
-  100% {
-    transform: translateY(34px) rotate(180deg) scale(0.96);
-    opacity: 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  /* Статичный кадр: лист уже развёрнут, подпись остаётся (handoff M2, «Движение»). */
-  .turn__shadows,
-  .turn__front {
-    animation: none;
-    transform: rotate(180deg);
-  }
-}
-
-/* ── screens/merge-screen.css ── */
-
-/* Экран `merge` (U9 M2; редизайн B-5 — handoff `2026-10-b5-merge.md`): процессная пауза —
-   заголовок, иллюстрация «сортировки» (merge-sort.css), одна строка состояния. */
-
-.merge-screen {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-12);
-  outline: none; /* контейнер принимает фокус — органов управления на экране нет */
-}
-
-.merge-screen__head {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-6);
-}
-
-/* Тег набора (M4.5) — форма .scan-screen__tag, цвет набора. */
-.merge-screen__tag {
-  padding: var(--space-2) var(--space-5);
-  border-radius: var(--radius-m);
-  background: var(--color-pass-added);
-  font-family: var(--font-family-mono);
-  font-weight: var(--font-weight-medium);
-  font-size: var(--font-size-xs);
-  line-height: var(--leading-normal);
+.device-confirm__replace-key {
+  flex: none;
+  font: var(--font-weight-medium) var(--font-size-xs) / 1 var(--font-family-mono);
   letter-spacing: var(--tracking-caps);
-  color: var(--color-text-on-accent);
-}
-
-.merge-screen__title {
-  margin: 0;
-  font-weight: var(--font-weight-semibold);
-  font-size: var(--font-size-4xl);
-  line-height: var(--leading-snug);
-  letter-spacing: var(--tracking-snug);
-}
-
-/* Строка состояния — единственный текст под иллюстрацией и первый сигнал о несовпадении:
-   --color-text-subtle, а не --color-text-hint, как было до B-5. */
-.merge-screen__status {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-height: var(--size-dot);
-  margin: 0;
-  font-family: var(--font-family-mono);
-  font-weight: var(--font-weight-regular);
-  font-size: var(--font-size-s);
-  line-height: var(--leading-normal);
-  color: var(--color-text-subtle);
-  text-align: center;
-}
-
-.merge-screen__status--warning {
   color: var(--color-warning);
 }
 
-.merge-screen__status .dot {
-  flex: none;
+.device-confirm__cost {
+  margin: 0;
+  padding-top: var(--space-4);
+  border-top: var(--border-width) solid var(--color-border-subtle);
+  font-size: var(--font-size-m);
+  line-height: var(--leading-relaxed);
+  color: var(--color-warning);
+  text-wrap: pretty;
 }
 
-/* Хвост про пустые обороты: свой узел, при смене текста проявляется — основное не мигает. */
-.merge-screen__tail {
-  color: var(--color-text-hint);
-  animation: merge-tail-in var(--duration-fast) var(--ease-standard);
+/* Появление карточки — проявление; уход и возврат к вводу — сразу. */
+.device-confirm--enter {
+  animation: device-confirm-in var(--duration-fast) var(--ease-standard) both;
 }
 
-@keyframes merge-tail-in {
+@keyframes device-confirm-in {
   from {
     opacity: 0;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .merge-screen__tail {
+  .device-confirm--enter {
     animation: none;
   }
 }
 
-/* ── screens/merge-sort.css ── */
+/* ── modals/save-modal.css ── */
 
-/* Иллюстрация «сортировки» экрана `merge` (B-5, вариант 1b «пары», без лотка) — handoff
-   `docs/design/handoffs/2026-10-b5-merge.md`. Геометрия — литералы иллюстрации, как у .feed и
-   .turn (осознанное исключение DS). Ниже базы — раскадровка из handoff'а
-   (`2026-10-b5-merge.sort.css`) только для режима «сошлось»: анимация одна на все исходы —
-   индикатор сборки (решение автора на приёмке B-5, 2026-10-26). Режимы несовпадения,
-   «Обороты не нужны» и «призрак» сняты. */
+/* Модалка `save` (план M3, U9; handoff M3, S16) — стили из handoff'а дословно. */
 
-.sort {
-  position: relative;
-  width: 320px;
-  height: 170px;
-  flex: none;
-  overflow: hidden;
+.save-modal .kicker {
+  margin: 0;
 }
-
-.sort__sheet {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 48px;
-  height: 64px;
-  box-sizing: border-box;
+.save-modal__modes {
+  display: flex;
+  gap: var(--space-4);
+}
+.save-mode {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding: var(--space-5) var(--space-4) 0;
-  border-radius: var(--radius-s);
+  padding: var(--space-5) var(--space-6);
+  border: var(--border-width) solid var(--color-border-default);
+  border-radius: var(--radius-l);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  text-align: left;
+  font: var(--font-weight-medium) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
+  cursor: pointer;
+}
+.save-mode:hover {
+  border-color: var(--color-accent);
+}
+.save-mode[aria-checked='true'] {
+  border-color: var(--color-border-focus);
+  background: var(--color-bg-selected);
+}
+.save-mode[aria-disabled='true'] {
+  opacity: var(--opacity-disabled);
+  cursor: default;
+}
+.save-mode[aria-disabled='true']:hover {
+  border-color: var(--color-border-default);
+}
+.save-mode__hint {
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-normal)
+    var(--font-family-sans);
+  color: var(--color-text-subtle);
+}
+
+.save-files,
+.save-result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: hidden;
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-l);
+  background: var(--color-border-subtle);
+}
+.save-files--scroll,
+.save-result {
+  max-height: 352px; /* десять строк — порог макета */
+  overflow-y: auto;
+}
+.save-file {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-6);
+  background: var(--color-bg-surface);
+}
+.save-file__name {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-3);
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius-m);
+  background: none;
+  color: var(--color-text-primary);
+  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
+  outline: none;
+}
+.save-file__name::placeholder {
+  color: var(--color-text-hint);
+}
+.save-file__name:hover,
+.save-file__name:focus {
   background: var(--color-bg-paper);
-  border: var(--border-width) solid var(--color-border-strong);
-  border-top: var(--border-width-thick) solid var(--sort-tone);
+}
+.save-file__name:hover {
+  border-color: var(--color-border-strong);
+}
+.save-file__name:focus {
+  border-color: var(--color-border-focus);
+}
+.save-file__name:disabled {
+  border-color: transparent;
+  background: none;
+  color: var(--color-text-muted);
+}
+.save-file__ext,
+.save-file__meta {
+  flex: none;
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-snug) var(--font-family-mono);
+  color: var(--color-text-hint);
 }
 
-.sort__sheet--front {
-  --sort-tone: var(--color-pass-fronts);
+.save-folder {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-6);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-l);
+  background: var(--color-bg-surface);
 }
-
-.sort__sheet--back {
-  --sort-tone: var(--color-pass-backs);
-}
-
-.sort__line {
-  display: none;
-}
-
-.sort__line {
-  height: 2px;
+.save-folder__icon {
+  flex: none;
+  width: 15px;
+  height: 12px;
+  border: var(--border-width) solid var(--color-border-heavy);
+  border-top-width: var(--border-width-thick);
   border-radius: var(--radius-xs);
-  background: var(--color-glyph);
+}
+/* Длинный путь режется с начала — видна сама папка. */
+.save-folder__path {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-normal)
+    var(--font-family-sans);
+  color: var(--color-text-primary);
 }
 
-.sort__line:nth-child(1) {
-  width: 86%;
+.save-result__row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-6);
+  background: var(--color-bg-surface);
+}
+.save-result__icon {
+  flex: none;
+  font: var(--font-weight-medium) var(--font-size-s) / var(--leading-relaxed)
+    var(--font-family-sans);
+  color: var(--color-success);
+}
+.save-result__row--failed .save-result__icon {
+  color: var(--color-danger);
+}
+.save-result__name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
+}
+.save-result__note {
+  display: block;
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-relaxed)
+    var(--font-family-sans);
+  color: var(--color-text-subtle);
+}
+.save-result__row--failed .save-result__note {
+  color: var(--color-danger);
 }
 
-.sort__line:nth-child(2) {
-  width: 72%;
+/* B-4: секция ИТОГ проявляется, пока окно дорастает до новой высоты. */
+.save-modal__result {
+  animation: save-result-in var(--duration-fast) var(--ease-standard) 50ms both;
 }
 
-.sort__line:nth-child(3) {
-  width: 80%;
-}
-
-/* ── Раскадровка ── */
-
-.sort__sheet {
-  animation-duration: var(--duration-loop-long);
-  animation-iteration-count: infinite;
-  animation-timing-function: var(--ease-loop);
-  animation-fill-mode: both;
+@keyframes save-result-in {
+  from {
+    opacity: 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  /* стоп-кадр «пары разложены» (2300ms цикла) */
-  .sort__sheet {
-    animation-play-state: paused;
-    animation-delay: -2300ms;
-  }
-}
-
-.sort__sheet--f1 {
-  animation-name: sort-ok-f1;
-}
-.sort__sheet--f2 {
-  animation-name: sort-ok-f2;
-}
-.sort__sheet--f3 {
-  animation-name: sort-ok-f3;
-}
-.sort__sheet--b1 {
-  animation-name: sort-ok-b1;
-}
-.sort__sheet--b2 {
-  animation-name: sort-ok-b2;
-}
-.sort__sheet--b3 {
-  animation-name: sort-ok-b3;
-}
-@keyframes sort-ok-f1 {
-  0% {
-    transform: translate(14px, 52px);
-    opacity: 1;
-    z-index: 10;
-  }
-  3.95% {
-    transform: translate(14px, 52px);
-    opacity: 1;
-    z-index: 10;
-  }
-  3.97% {
-    transform: translate(14px, 52px);
-    opacity: 1;
-    z-index: 30;
-  }
-  3.98% {
-    transform: translate(14px, 52px);
-    opacity: 1;
-    z-index: 30;
-  }
-  9.24% {
-    transform: translate(44px, 26px);
-    opacity: 1;
-    z-index: 30;
-  }
-  14.5% {
-    transform: translate(74px, 40px);
-    opacity: 1;
-    z-index: 30;
-  }
-  61.84% {
-    transform: translate(74px, 40px);
-    opacity: 1;
-    z-index: 30;
-  }
-  61.87% {
-    transform: translate(74px, 40px);
-    opacity: 1;
-    z-index: 40;
-  }
-  73.68% {
-    transform: translate(136px, 72px);
-    opacity: 1;
-    z-index: 40;
-  }
-  78.95% {
-    transform: translate(136px, 72px);
-    opacity: 1;
-    z-index: 40;
-  }
-  88.16% {
-    transform: translate(136px, 112px);
-    opacity: 0;
-    z-index: 40;
-  }
-  88.17% {
-    transform: translate(136px, 112px);
-    opacity: 0;
-    z-index: 40;
-  }
-  88.18% {
-    transform: translate(14px, 52px);
-    opacity: 0;
-    z-index: 10;
-  }
-  98.68% {
-    transform: translate(14px, 52px);
-    opacity: 1;
-    z-index: 10;
-  }
-  100% {
-    transform: translate(14px, 52px);
-    opacity: 1;
-    z-index: 10;
-  }
-}
-@keyframes sort-ok-f2 {
-  0% {
-    transform: translate(17px, 55px);
-    opacity: 1;
-    z-index: 9;
-  }
-  12.63% {
-    transform: translate(17px, 55px);
-    opacity: 1;
-    z-index: 9;
-  }
-  12.66% {
-    transform: translate(17px, 55px);
-    opacity: 1;
-    z-index: 31;
-  }
-  12.67% {
-    transform: translate(17px, 55px);
-    opacity: 1;
-    z-index: 31;
-  }
-  17.92% {
-    transform: translate(76.5px, 26px);
-    opacity: 1;
-    z-index: 31;
-  }
-  23.18% {
-    transform: translate(136px, 40px);
-    opacity: 1;
-    z-index: 31;
-  }
-  61.84% {
-    transform: translate(136px, 40px);
-    opacity: 1;
-    z-index: 31;
-  }
-  61.87% {
-    transform: translate(136px, 40px);
-    opacity: 1;
-    z-index: 42;
-  }
-  73.68% {
-    transform: translate(136px, 82px);
-    opacity: 1;
-    z-index: 42;
-  }
-  78.95% {
-    transform: translate(136px, 82px);
-    opacity: 1;
-    z-index: 42;
-  }
-  88.16% {
-    transform: translate(136px, 122px);
-    opacity: 0;
-    z-index: 42;
-  }
-  88.17% {
-    transform: translate(136px, 122px);
-    opacity: 0;
-    z-index: 42;
-  }
-  88.18% {
-    transform: translate(17px, 55px);
-    opacity: 0;
-    z-index: 9;
-  }
-  98.68% {
-    transform: translate(17px, 55px);
-    opacity: 1;
-    z-index: 9;
-  }
-  100% {
-    transform: translate(17px, 55px);
-    opacity: 1;
-    z-index: 9;
-  }
-}
-@keyframes sort-ok-f3 {
-  0% {
-    transform: translate(20px, 58px);
-    opacity: 1;
-    z-index: 8;
-  }
-  21.32% {
-    transform: translate(20px, 58px);
-    opacity: 1;
-    z-index: 8;
-  }
-  21.34% {
-    transform: translate(20px, 58px);
-    opacity: 1;
-    z-index: 32;
-  }
-  21.35% {
-    transform: translate(20px, 58px);
-    opacity: 1;
-    z-index: 32;
-  }
-  26.61% {
-    transform: translate(109px, 26px);
-    opacity: 1;
-    z-index: 32;
-  }
-  31.87% {
-    transform: translate(198px, 40px);
-    opacity: 1;
-    z-index: 32;
-  }
-  61.84% {
-    transform: translate(198px, 40px);
-    opacity: 1;
-    z-index: 32;
-  }
-  61.87% {
-    transform: translate(198px, 40px);
-    opacity: 1;
-    z-index: 44;
-  }
-  73.68% {
-    transform: translate(136px, 92px);
-    opacity: 1;
-    z-index: 44;
-  }
-  78.95% {
-    transform: translate(136px, 92px);
-    opacity: 1;
-    z-index: 44;
-  }
-  88.16% {
-    transform: translate(136px, 132px);
-    opacity: 0;
-    z-index: 44;
-  }
-  88.17% {
-    transform: translate(136px, 132px);
-    opacity: 0;
-    z-index: 44;
-  }
-  88.18% {
-    transform: translate(20px, 58px);
-    opacity: 0;
-    z-index: 8;
-  }
-  98.68% {
-    transform: translate(20px, 58px);
-    opacity: 1;
-    z-index: 8;
-  }
-  100% {
-    transform: translate(20px, 58px);
-    opacity: 1;
-    z-index: 8;
-  }
-}
-@keyframes sort-ok-b1 {
-  0% {
-    transform: translate(258px, 52px);
-    opacity: 1;
-    z-index: 10;
-  }
-  31.58% {
-    transform: translate(258px, 52px);
-    opacity: 1;
-    z-index: 10;
-  }
-  31.61% {
-    transform: translate(258px, 52px);
-    opacity: 1;
-    z-index: 20;
-  }
-  31.62% {
-    transform: translate(258px, 52px);
-    opacity: 1;
-    z-index: 20;
-  }
-  36.87% {
-    transform: translate(170px, 34px);
-    opacity: 1;
-    z-index: 20;
-  }
-  42.13% {
-    transform: translate(82px, 48px);
-    opacity: 1;
-    z-index: 20;
-  }
-  61.84% {
-    transform: translate(82px, 48px);
-    opacity: 1;
-    z-index: 20;
-  }
-  61.87% {
-    transform: translate(82px, 48px);
-    opacity: 1;
-    z-index: 41;
-  }
-  73.68% {
-    transform: translate(136px, 77px);
-    opacity: 1;
-    z-index: 41;
-  }
-  78.95% {
-    transform: translate(136px, 77px);
-    opacity: 1;
-    z-index: 41;
-  }
-  88.16% {
-    transform: translate(136px, 117px);
-    opacity: 0;
-    z-index: 41;
-  }
-  88.17% {
-    transform: translate(136px, 117px);
-    opacity: 0;
-    z-index: 41;
-  }
-  88.18% {
-    transform: translate(258px, 52px);
-    opacity: 0;
-    z-index: 10;
-  }
-  98.68% {
-    transform: translate(258px, 52px);
-    opacity: 1;
-    z-index: 10;
-  }
-  100% {
-    transform: translate(258px, 52px);
-    opacity: 1;
-    z-index: 10;
-  }
-}
-@keyframes sort-ok-b2 {
-  0% {
-    transform: translate(255px, 55px);
-    opacity: 1;
-    z-index: 9;
-  }
-  40.26% {
-    transform: translate(255px, 55px);
-    opacity: 1;
-    z-index: 9;
-  }
-  40.29% {
-    transform: translate(255px, 55px);
-    opacity: 1;
-    z-index: 21;
-  }
-  40.3% {
-    transform: translate(255px, 55px);
-    opacity: 1;
-    z-index: 21;
-  }
-  45.55% {
-    transform: translate(199.5px, 34px);
-    opacity: 1;
-    z-index: 21;
-  }
-  50.82% {
-    transform: translate(144px, 48px);
-    opacity: 1;
-    z-index: 21;
-  }
-  61.84% {
-    transform: translate(144px, 48px);
-    opacity: 1;
-    z-index: 21;
-  }
-  61.87% {
-    transform: translate(144px, 48px);
-    opacity: 1;
-    z-index: 43;
-  }
-  73.68% {
-    transform: translate(136px, 87px);
-    opacity: 1;
-    z-index: 43;
-  }
-  78.95% {
-    transform: translate(136px, 87px);
-    opacity: 1;
-    z-index: 43;
-  }
-  88.16% {
-    transform: translate(136px, 127px);
-    opacity: 0;
-    z-index: 43;
-  }
-  88.17% {
-    transform: translate(136px, 127px);
-    opacity: 0;
-    z-index: 43;
-  }
-  88.18% {
-    transform: translate(255px, 55px);
-    opacity: 0;
-    z-index: 9;
-  }
-  98.68% {
-    transform: translate(255px, 55px);
-    opacity: 1;
-    z-index: 9;
-  }
-  100% {
-    transform: translate(255px, 55px);
-    opacity: 1;
-    z-index: 9;
-  }
-}
-@keyframes sort-ok-b3 {
-  0% {
-    transform: translate(252px, 58px);
-    opacity: 1;
-    z-index: 8;
-  }
-  48.95% {
-    transform: translate(252px, 58px);
-    opacity: 1;
-    z-index: 8;
-  }
-  48.97% {
-    transform: translate(252px, 58px);
-    opacity: 1;
-    z-index: 22;
-  }
-  48.98% {
-    transform: translate(252px, 58px);
-    opacity: 1;
-    z-index: 22;
-  }
-  54.24% {
-    transform: translate(229px, 34px);
-    opacity: 1;
-    z-index: 22;
-  }
-  59.5% {
-    transform: translate(206px, 48px);
-    opacity: 1;
-    z-index: 22;
-  }
-  61.84% {
-    transform: translate(206px, 48px);
-    opacity: 1;
-    z-index: 22;
-  }
-  61.87% {
-    transform: translate(206px, 48px);
-    opacity: 1;
-    z-index: 45;
-  }
-  73.68% {
-    transform: translate(136px, 97px);
-    opacity: 1;
-    z-index: 45;
-  }
-  78.95% {
-    transform: translate(136px, 97px);
-    opacity: 1;
-    z-index: 45;
-  }
-  88.16% {
-    transform: translate(136px, 137px);
-    opacity: 0;
-    z-index: 45;
-  }
-  88.17% {
-    transform: translate(136px, 137px);
-    opacity: 0;
-    z-index: 45;
-  }
-  88.18% {
-    transform: translate(252px, 58px);
-    opacity: 0;
-    z-index: 8;
-  }
-  98.68% {
-    transform: translate(252px, 58px);
-    opacity: 1;
-    z-index: 8;
-  }
-  100% {
-    transform: translate(252px, 58px);
-    opacity: 1;
-    z-index: 8;
+  .save-modal__result {
+    animation-duration: var(--duration-exit);
+    animation-delay: 0ms;
   }
 }
 
@@ -3936,48 +2950,1392 @@ samp {
   }
 }
 
-/* ── modals/device-modal.css ── */
+/* ── screens/editor-straighten.css ── */
 
-/* Модалка `device` (U21): список найденных, адрес вручную, «Дополнительно».
-   Рецепты — DESIGN_SYSTEM «Элемент списка устройств» и CSS handoff'а U19 (S7–S9). */
+/* — M6 (handoff M6): выравнивание — */
 
-.device-list {
+/* Глиф 10×9 штрихом currentColor: «выровнено» — три ровные строки, «не выровнено» — косые с волной. */
+.straight-glyph {
+  display: block;
+  width: 10px;
+  height: 9px;
+  overflow: visible;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Слот справа в подвале карточки: индикатор и пометка — одно место, вне потока; подвал не
+   сдвигается. 7px и 10px — геометрия подвала: центр глифа 9px и точек 3px по строке номера. */
+.thumb__straight,
+.thumb__pending {
+  position: absolute;
+  right: var(--space-4);
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+.thumb__straight {
+  bottom: 7px;
+  color: var(--color-text-subtle);
+}
+
+.thumb__pending {
+  bottom: 10px;
+  display: flex;
+  gap: var(--space-1);
+  pointer-events: none;
+}
+
+/* Точки — общая фаза для всех карточек: --straight-phase = −(now mod --duration-loop). */
+.thumb__pending i,
+.preview__straight-dots i {
+  width: 3px;
+  height: 3px;
+  border-radius: var(--radius-round);
+  background: var(--color-text-hint);
+  animation: pulse var(--duration-loop) var(--ease-loop) infinite;
+  animation-delay: var(--straight-phase, 0ms);
+}
+
+.thumb__pending i:nth-child(2),
+.preview__straight-dots i:nth-child(2) {
+  animation-delay: calc(var(--straight-phase, 0ms) + var(--delay-stagger));
+}
+
+.thumb__pending i:nth-child(3),
+.preview__straight-dots i:nth-child(3) {
+  animation-delay: calc(var(--straight-phase, 0ms) + var(--delay-stagger) * 2);
+}
+
+/* Появление глифа и точек — проявлением; класс снимается следующим кадром. */
+.thumb__straight--entering,
+.thumb__pending--entering {
+  opacity: 0;
+}
+
+/* Превью — форма .preview__blank, плюс глиф или точки. */
+.preview__straight {
+  position: absolute;
+  top: var(--space-4);
+  left: var(--space-4);
+  z-index: var(--z-raised);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-s);
+  background: var(--color-bg-paper);
+  color: var(--color-text-subtle);
+  font: var(--font-weight-medium) var(--font-size-xxs) / var(--leading-none) var(--font-family-mono);
+  letter-spacing: var(--tracking-caps);
+}
+
+.preview__straight-dots {
+  display: flex;
+  gap: var(--space-1);
+}
+
+/* Смена кадра на месте: новый слой поверх прежнего проявляется, прежний снимается после. */
+.thumb__img--incoming,
+.preview__img--incoming {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+.thumb__img--incoming.is-in,
+.preview__img--incoming.is-in {
+  opacity: 1;
+}
+
+/* Инспектор: кнопки секции и причина недоступности. */
+.inspector__straight-actions {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: var(--space-3);
 }
 
-.device-item {
+.inspector__straight-reason {
+  margin: 0;
+  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-relaxed)
+    var(--font-family-sans);
+  color: var(--color-text-hint);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thumb__straight,
+  .thumb__pending,
+  .thumb__img--incoming,
+  .preview__img--incoming {
+    transition: none;
+  }
+
+  .thumb__pending i,
+  .preview__straight-dots i {
+    animation: none;
+    opacity: var(--opacity-disabled);
+  }
+}
+
+/* ── screens/flip-screen.css ── */
+
+/* Экран `flip` (U8): инструкция разворота по макету и UI_SPEC раздел 4; дырки — handoff M2
+   (S1–S3). Геометрия иллюстрации — литералы макета (осознанное исключение DS). */
+
+.flip-screen {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-13);
+  padding: var(--space-14) var(--space-16);
+  outline: none; /* контейнер принимает фокус в S2 — кольцо ему не нужно */
+}
+
+.flip-screen__intro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.flip-screen__title {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-display-s);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  text-align: center;
+}
+
+.flip-screen__lead {
+  margin: 0;
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-l);
+  line-height: var(--leading-relaxed);
+  color: var(--color-text-muted);
+  max-width: 470px;
+  text-align: center;
+  text-wrap: pretty;
+}
+
+/* — карточка: иллюстрация + чеклист — */
+
+.flip-screen__card {
   display: flex;
   align-items: center;
-  gap: var(--space-6);
-  padding: var(--space-6) var(--space-6);
-  border: var(--border-width) solid var(--color-border-subtle);
-  border-radius: var(--radius-l);
+  gap: var(--space-13);
+  padding: var(--space-12) var(--space-14);
   background: var(--color-bg-surface);
-  cursor: pointer;
-  outline: none;
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-xl);
 }
 
-.device-item--selected {
-  background: var(--color-bg-selected);
-  border-color: var(--color-border-focus);
+.flip-screen__demo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-6);
 }
 
-.device-item--disabled {
-  opacity: var(--opacity-disabled);
-  cursor: not-allowed;
+.flip-screen__caption {
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-s);
+  line-height: var(--leading-normal);
+  font-family: var(--font-family-mono);
+  color: var(--color-text-subtle);
+  text-align: center;
 }
 
-.device-item__main {
-  flex: 1;
-  min-width: 0;
+.flip-screen__divider {
+  width: var(--border-width);
+  height: 150px;
+  background: var(--color-border-subtle);
+}
+
+.flip-screen__checklist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  width: 250px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.flip-screen__check {
+  display: flex;
+  gap: var(--space-5);
+  align-items: flex-start;
+}
+
+.flip-screen__checkbox {
+  flex: none;
+  width: var(--size-check);
+  height: var(--size-check);
+  border-radius: var(--radius-s);
+  border: var(--border-width) solid var(--color-border-emphasis);
+  background: var(--color-bg-paper);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-xs);
+  line-height: var(--leading-none);
+  color: var(--color-accent);
+  margin-top: var(--space-px);
+}
+
+.flip-screen__check-text {
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-m);
+  line-height: var(--leading-relaxed);
+  color: var(--color-text-secondary);
+  text-wrap: pretty;
+}
+
+/* — иллюстрация turn180: лист с маркером «ВЕРХ» над лотком — */
+
+.turn {
+  position: relative;
+  width: 150px;
+  height: 186px;
+  flex: none;
+  overflow: hidden;
+}
+
+.turn__shadows {
+  position: absolute;
+  left: 18px;
+  top: 14px;
+  width: 114px;
+  height: 146px;
+  animation: turn180 var(--duration-loop-long) var(--ease-loop) infinite;
+}
+
+.turn__sheet {
+  position: absolute;
+  width: 114px;
+  height: 146px;
+  border-radius: var(--radius-s);
+  border: var(--border-width) solid var(--color-border-default);
+}
+
+.turn__sheet--under {
+  left: 4px;
+  top: 5px;
+  background: var(--color-bg-toolbar);
+}
+
+.turn__sheet--mid {
+  left: 2px;
+  top: 2px;
+  background: var(--color-bg-elevated);
+}
+
+.turn__front {
+  position: absolute;
+  left: 18px;
+  top: 14px;
+  width: 114px;
+  height: 146px;
+  border-radius: var(--radius-s);
+  background: var(--color-bg-paper);
+  border: var(--border-width) solid var(--color-border-strong);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-6) var(--space-5);
+  box-sizing: border-box;
+  animation: turn180 var(--duration-loop-long) var(--ease-loop) infinite;
+}
+
+.turn__arrow {
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-xl);
+  line-height: var(--leading-none);
+  color: var(--color-accent);
+}
+
+.turn__top {
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-xxs);
+  line-height: var(--leading-none);
+  font-family: var(--font-family-mono);
+  letter-spacing: var(--tracking-caps);
+  color: var(--color-accent);
+}
+
+.turn__lines {
+  align-self: stretch;
+  margin-top: var(--space-4);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
 }
 
-.device-item__name {
+.turn__line {
+  height: 2px;
+  border-radius: var(--radius-xs);
+  background: var(--color-glyph-soft);
+}
+
+/* Ширины строк-имитаций — геометрия макета, вся в CSS. */
+.turn__line--1 {
+  width: 86%;
+}
+
+.turn__line--2 {
+  width: 72%;
+}
+
+.turn__line--3 {
+  width: 80%;
+}
+
+.turn__tray {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 150px;
+  height: 30px;
+  border-radius: var(--radius-s);
+  background: var(--color-bg-tray);
+  z-index: var(--z-raised);
+}
+
+/* — действия и строка статуса занятости (S2) — */
+
+.flip-screen__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.flip-screen__status {
+  margin: 0;
+  max-width: 470px;
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-m);
+  line-height: var(--leading-relaxed);
+  color: var(--color-text-muted);
+  text-align: center;
+  text-wrap: pretty;
+}
+
+/* — движение — */
+
+@keyframes turn180 {
+  0% {
+    transform: translateY(-10px) rotate(0) scale(0.98);
+    opacity: 0;
+  }
+
+  14% {
+    transform: translateY(0) rotate(0) scale(1);
+    opacity: 1;
+  }
+
+  24% {
+    transform: translateY(-7px) rotate(0) scale(1.03);
+    opacity: 1;
+  }
+
+  54% {
+    transform: translateY(-7px) rotate(180deg) scale(1.03);
+    opacity: 1;
+  }
+
+  64% {
+    transform: translateY(0) rotate(180deg) scale(1);
+    opacity: 1;
+  }
+
+  76% {
+    transform: translateY(0) rotate(180deg) scale(1);
+    opacity: 1;
+  }
+
+  94% {
+    transform: translateY(34px) rotate(180deg) scale(0.96);
+    opacity: 0;
+  }
+
+  100% {
+    transform: translateY(34px) rotate(180deg) scale(0.96);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Статичный кадр: лист уже развёрнут, подпись остаётся (handoff M2, «Движение»). */
+  .turn__shadows,
+  .turn__front {
+    animation: none;
+    transform: rotate(180deg);
+  }
+}
+
+/* ── screens/merge-screen.css ── */
+
+/* Экран `merge` (U9 M2; редизайн B-5 — handoff `2026-10-b5-merge.md`): процессная пауза —
+   заголовок, иллюстрация «сортировки» (merge-sort.css), одна строка состояния. */
+
+.merge-screen {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-12);
+  outline: none; /* контейнер принимает фокус — органов управления на экране нет */
+}
+
+.merge-screen__head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+/* Тег набора (M4.5) — форма .scan-screen__tag, цвет набора. */
+.merge-screen__tag {
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius-m);
+  background: var(--color-pass-added);
+  font-family: var(--font-family-mono);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-xs);
+  line-height: var(--leading-normal);
+  letter-spacing: var(--tracking-caps);
+  color: var(--color-text-on-accent);
+}
+
+.merge-screen__title {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-4xl);
+  line-height: var(--leading-snug);
+  letter-spacing: var(--tracking-snug);
+}
+
+/* Строка состояния — единственный текст под иллюстрацией и первый сигнал о несовпадении:
+   --color-text-subtle, а не --color-text-hint, как было до B-5. */
+.merge-screen__status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--size-dot);
+  margin: 0;
+  font-family: var(--font-family-mono);
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-s);
+  line-height: var(--leading-normal);
+  color: var(--color-text-subtle);
+  text-align: center;
+}
+
+.merge-screen__status--warning {
+  color: var(--color-warning);
+}
+
+.merge-screen__status .dot {
+  flex: none;
+}
+
+/* Хвост про пустые обороты: свой узел, при смене текста проявляется — основное не мигает. */
+.merge-screen__tail {
+  color: var(--color-text-hint);
+  animation: merge-tail-in var(--duration-fast) var(--ease-standard);
+}
+
+@keyframes merge-tail-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .merge-screen__tail {
+    animation: none;
+  }
+}
+
+/* ── screens/merge-sort.css ── */
+
+/* Иллюстрация «сортировки» экрана `merge` (B-5, вариант 1b «пары», без лотка) — handoff
+   `docs/design/handoffs/2026-10-b5-merge.md`. Геометрия — литералы иллюстрации, как у .feed и
+   .turn (осознанное исключение DS). Ниже базы — раскадровка из handoff'а
+   (`2026-10-b5-merge.sort.css`) только для режима «сошлось»: анимация одна на все исходы —
+   индикатор сборки (решение автора на приёмке B-5, 2026-10-26). Режимы несовпадения,
+   «Обороты не нужны» и «призрак» сняты. */
+
+.sort {
+  position: relative;
+  width: 320px;
+  height: 170px;
+  flex: none;
+  overflow: hidden;
+}
+
+.sort__sheet {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 48px;
+  height: 64px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-4) 0;
+  border-radius: var(--radius-s);
+  background: var(--color-bg-paper);
+  border: var(--border-width) solid var(--color-border-strong);
+  border-top: var(--border-width-thick) solid var(--sort-tone);
+}
+
+.sort__sheet--front {
+  --sort-tone: var(--color-pass-fronts);
+}
+
+.sort__sheet--back {
+  --sort-tone: var(--color-pass-backs);
+}
+
+.sort__line {
+  display: none;
+}
+
+.sort__line {
+  height: 2px;
+  border-radius: var(--radius-xs);
+  background: var(--color-glyph);
+}
+
+.sort__line:nth-child(1) {
+  width: 86%;
+}
+
+.sort__line:nth-child(2) {
+  width: 72%;
+}
+
+.sort__line:nth-child(3) {
+  width: 80%;
+}
+
+/* ── Раскадровка ── */
+
+.sort__sheet {
+  animation-duration: var(--duration-loop-long);
+  animation-iteration-count: infinite;
+  animation-timing-function: var(--ease-loop);
+  animation-fill-mode: both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* стоп-кадр «пары разложены» (2300ms цикла) */
+  .sort__sheet {
+    animation-play-state: paused;
+    animation-delay: -2300ms;
+  }
+}
+
+.sort__sheet--f1 {
+  animation-name: sort-ok-f1;
+}
+.sort__sheet--f2 {
+  animation-name: sort-ok-f2;
+}
+.sort__sheet--f3 {
+  animation-name: sort-ok-f3;
+}
+.sort__sheet--b1 {
+  animation-name: sort-ok-b1;
+}
+.sort__sheet--b2 {
+  animation-name: sort-ok-b2;
+}
+.sort__sheet--b3 {
+  animation-name: sort-ok-b3;
+}
+@keyframes sort-ok-f1 {
+  0% {
+    transform: translate(14px, 52px);
+    opacity: 1;
+    z-index: 10;
+  }
+  3.95% {
+    transform: translate(14px, 52px);
+    opacity: 1;
+    z-index: 10;
+  }
+  3.97% {
+    transform: translate(14px, 52px);
+    opacity: 1;
+    z-index: 30;
+  }
+  3.98% {
+    transform: translate(14px, 52px);
+    opacity: 1;
+    z-index: 30;
+  }
+  9.24% {
+    transform: translate(44px, 26px);
+    opacity: 1;
+    z-index: 30;
+  }
+  14.5% {
+    transform: translate(74px, 40px);
+    opacity: 1;
+    z-index: 30;
+  }
+  61.84% {
+    transform: translate(74px, 40px);
+    opacity: 1;
+    z-index: 30;
+  }
+  61.87% {
+    transform: translate(74px, 40px);
+    opacity: 1;
+    z-index: 40;
+  }
+  73.68% {
+    transform: translate(136px, 72px);
+    opacity: 1;
+    z-index: 40;
+  }
+  78.95% {
+    transform: translate(136px, 72px);
+    opacity: 1;
+    z-index: 40;
+  }
+  88.16% {
+    transform: translate(136px, 112px);
+    opacity: 0;
+    z-index: 40;
+  }
+  88.17% {
+    transform: translate(136px, 112px);
+    opacity: 0;
+    z-index: 40;
+  }
+  88.18% {
+    transform: translate(14px, 52px);
+    opacity: 0;
+    z-index: 10;
+  }
+  98.68% {
+    transform: translate(14px, 52px);
+    opacity: 1;
+    z-index: 10;
+  }
+  100% {
+    transform: translate(14px, 52px);
+    opacity: 1;
+    z-index: 10;
+  }
+}
+@keyframes sort-ok-f2 {
+  0% {
+    transform: translate(17px, 55px);
+    opacity: 1;
+    z-index: 9;
+  }
+  12.63% {
+    transform: translate(17px, 55px);
+    opacity: 1;
+    z-index: 9;
+  }
+  12.66% {
+    transform: translate(17px, 55px);
+    opacity: 1;
+    z-index: 31;
+  }
+  12.67% {
+    transform: translate(17px, 55px);
+    opacity: 1;
+    z-index: 31;
+  }
+  17.92% {
+    transform: translate(76.5px, 26px);
+    opacity: 1;
+    z-index: 31;
+  }
+  23.18% {
+    transform: translate(136px, 40px);
+    opacity: 1;
+    z-index: 31;
+  }
+  61.84% {
+    transform: translate(136px, 40px);
+    opacity: 1;
+    z-index: 31;
+  }
+  61.87% {
+    transform: translate(136px, 40px);
+    opacity: 1;
+    z-index: 42;
+  }
+  73.68% {
+    transform: translate(136px, 82px);
+    opacity: 1;
+    z-index: 42;
+  }
+  78.95% {
+    transform: translate(136px, 82px);
+    opacity: 1;
+    z-index: 42;
+  }
+  88.16% {
+    transform: translate(136px, 122px);
+    opacity: 0;
+    z-index: 42;
+  }
+  88.17% {
+    transform: translate(136px, 122px);
+    opacity: 0;
+    z-index: 42;
+  }
+  88.18% {
+    transform: translate(17px, 55px);
+    opacity: 0;
+    z-index: 9;
+  }
+  98.68% {
+    transform: translate(17px, 55px);
+    opacity: 1;
+    z-index: 9;
+  }
+  100% {
+    transform: translate(17px, 55px);
+    opacity: 1;
+    z-index: 9;
+  }
+}
+@keyframes sort-ok-f3 {
+  0% {
+    transform: translate(20px, 58px);
+    opacity: 1;
+    z-index: 8;
+  }
+  21.32% {
+    transform: translate(20px, 58px);
+    opacity: 1;
+    z-index: 8;
+  }
+  21.34% {
+    transform: translate(20px, 58px);
+    opacity: 1;
+    z-index: 32;
+  }
+  21.35% {
+    transform: translate(20px, 58px);
+    opacity: 1;
+    z-index: 32;
+  }
+  26.61% {
+    transform: translate(109px, 26px);
+    opacity: 1;
+    z-index: 32;
+  }
+  31.87% {
+    transform: translate(198px, 40px);
+    opacity: 1;
+    z-index: 32;
+  }
+  61.84% {
+    transform: translate(198px, 40px);
+    opacity: 1;
+    z-index: 32;
+  }
+  61.87% {
+    transform: translate(198px, 40px);
+    opacity: 1;
+    z-index: 44;
+  }
+  73.68% {
+    transform: translate(136px, 92px);
+    opacity: 1;
+    z-index: 44;
+  }
+  78.95% {
+    transform: translate(136px, 92px);
+    opacity: 1;
+    z-index: 44;
+  }
+  88.16% {
+    transform: translate(136px, 132px);
+    opacity: 0;
+    z-index: 44;
+  }
+  88.17% {
+    transform: translate(136px, 132px);
+    opacity: 0;
+    z-index: 44;
+  }
+  88.18% {
+    transform: translate(20px, 58px);
+    opacity: 0;
+    z-index: 8;
+  }
+  98.68% {
+    transform: translate(20px, 58px);
+    opacity: 1;
+    z-index: 8;
+  }
+  100% {
+    transform: translate(20px, 58px);
+    opacity: 1;
+    z-index: 8;
+  }
+}
+@keyframes sort-ok-b1 {
+  0% {
+    transform: translate(258px, 52px);
+    opacity: 1;
+    z-index: 10;
+  }
+  31.58% {
+    transform: translate(258px, 52px);
+    opacity: 1;
+    z-index: 10;
+  }
+  31.61% {
+    transform: translate(258px, 52px);
+    opacity: 1;
+    z-index: 20;
+  }
+  31.62% {
+    transform: translate(258px, 52px);
+    opacity: 1;
+    z-index: 20;
+  }
+  36.87% {
+    transform: translate(170px, 34px);
+    opacity: 1;
+    z-index: 20;
+  }
+  42.13% {
+    transform: translate(82px, 48px);
+    opacity: 1;
+    z-index: 20;
+  }
+  61.84% {
+    transform: translate(82px, 48px);
+    opacity: 1;
+    z-index: 20;
+  }
+  61.87% {
+    transform: translate(82px, 48px);
+    opacity: 1;
+    z-index: 41;
+  }
+  73.68% {
+    transform: translate(136px, 77px);
+    opacity: 1;
+    z-index: 41;
+  }
+  78.95% {
+    transform: translate(136px, 77px);
+    opacity: 1;
+    z-index: 41;
+  }
+  88.16% {
+    transform: translate(136px, 117px);
+    opacity: 0;
+    z-index: 41;
+  }
+  88.17% {
+    transform: translate(136px, 117px);
+    opacity: 0;
+    z-index: 41;
+  }
+  88.18% {
+    transform: translate(258px, 52px);
+    opacity: 0;
+    z-index: 10;
+  }
+  98.68% {
+    transform: translate(258px, 52px);
+    opacity: 1;
+    z-index: 10;
+  }
+  100% {
+    transform: translate(258px, 52px);
+    opacity: 1;
+    z-index: 10;
+  }
+}
+@keyframes sort-ok-b2 {
+  0% {
+    transform: translate(255px, 55px);
+    opacity: 1;
+    z-index: 9;
+  }
+  40.26% {
+    transform: translate(255px, 55px);
+    opacity: 1;
+    z-index: 9;
+  }
+  40.29% {
+    transform: translate(255px, 55px);
+    opacity: 1;
+    z-index: 21;
+  }
+  40.3% {
+    transform: translate(255px, 55px);
+    opacity: 1;
+    z-index: 21;
+  }
+  45.55% {
+    transform: translate(199.5px, 34px);
+    opacity: 1;
+    z-index: 21;
+  }
+  50.82% {
+    transform: translate(144px, 48px);
+    opacity: 1;
+    z-index: 21;
+  }
+  61.84% {
+    transform: translate(144px, 48px);
+    opacity: 1;
+    z-index: 21;
+  }
+  61.87% {
+    transform: translate(144px, 48px);
+    opacity: 1;
+    z-index: 43;
+  }
+  73.68% {
+    transform: translate(136px, 87px);
+    opacity: 1;
+    z-index: 43;
+  }
+  78.95% {
+    transform: translate(136px, 87px);
+    opacity: 1;
+    z-index: 43;
+  }
+  88.16% {
+    transform: translate(136px, 127px);
+    opacity: 0;
+    z-index: 43;
+  }
+  88.17% {
+    transform: translate(136px, 127px);
+    opacity: 0;
+    z-index: 43;
+  }
+  88.18% {
+    transform: translate(255px, 55px);
+    opacity: 0;
+    z-index: 9;
+  }
+  98.68% {
+    transform: translate(255px, 55px);
+    opacity: 1;
+    z-index: 9;
+  }
+  100% {
+    transform: translate(255px, 55px);
+    opacity: 1;
+    z-index: 9;
+  }
+}
+@keyframes sort-ok-b3 {
+  0% {
+    transform: translate(252px, 58px);
+    opacity: 1;
+    z-index: 8;
+  }
+  48.95% {
+    transform: translate(252px, 58px);
+    opacity: 1;
+    z-index: 8;
+  }
+  48.97% {
+    transform: translate(252px, 58px);
+    opacity: 1;
+    z-index: 22;
+  }
+  48.98% {
+    transform: translate(252px, 58px);
+    opacity: 1;
+    z-index: 22;
+  }
+  54.24% {
+    transform: translate(229px, 34px);
+    opacity: 1;
+    z-index: 22;
+  }
+  59.5% {
+    transform: translate(206px, 48px);
+    opacity: 1;
+    z-index: 22;
+  }
+  61.84% {
+    transform: translate(206px, 48px);
+    opacity: 1;
+    z-index: 22;
+  }
+  61.87% {
+    transform: translate(206px, 48px);
+    opacity: 1;
+    z-index: 45;
+  }
+  73.68% {
+    transform: translate(136px, 97px);
+    opacity: 1;
+    z-index: 45;
+  }
+  78.95% {
+    transform: translate(136px, 97px);
+    opacity: 1;
+    z-index: 45;
+  }
+  88.16% {
+    transform: translate(136px, 137px);
+    opacity: 0;
+    z-index: 45;
+  }
+  88.17% {
+    transform: translate(136px, 137px);
+    opacity: 0;
+    z-index: 45;
+  }
+  88.18% {
+    transform: translate(252px, 58px);
+    opacity: 0;
+    z-index: 8;
+  }
+  98.68% {
+    transform: translate(252px, 58px);
+    opacity: 1;
+    z-index: 8;
+  }
+  100% {
+    transform: translate(252px, 58px);
+    opacity: 1;
+    z-index: 8;
+  }
+}
+
+/* ── screens/scan-screen.css ── */
+
+/* Экран `scan` (U23): тег, иллюстрация подачи, счётчик, лента, «Остановить» — по рецепту
+   «Индикатор прогресса прохода» дизайн-системы и CSS handoff'а U19 (S12–S15, S19).
+   Геометрия иллюстрации и карточек — литералы макета (осознанное исключение DS). */
+
+.scan-screen {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-14);
+  padding: var(--space-15);
+  outline: none; /* контейнер принимает фокус в S15 — кольцо ему не нужно */
+}
+
+.scan-screen__tag {
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius-m);
+  background: var(--color-accent);
+  font-family: var(--font-family-mono);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-xs);
+  line-height: var(--leading-normal);
+  letter-spacing: var(--tracking-caps);
+  color: var(--color-text-on-accent);
+}
+
+/* S3 M3.5: тег добавленного набора — цвет набора, чтобы он читался с первого кадра. */
+.scan-screen__tag--added {
+  background: var(--color-pass-added);
+}
+
+.scan-screen__stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-11);
+}
+
+.scan-screen__counter {
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-xl);
+  line-height: var(--leading-snug);
+  color: var(--color-text-primary);
+  text-align: center;
+  text-wrap: balance;
+}
+
+.scan-screen__meta {
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-m);
+  line-height: var(--leading-relaxed);
+  font-family: var(--font-family-mono);
+  color: var(--color-text-subtle);
+  text-align: center;
+}
+
+/* — иллюстрация подачи: стопка листов над лотком, полоса активности — */
+
+.feed {
+  position: relative;
+  width: 150px;
+  height: 186px;
+  flex: none;
+}
+
+.feed__sheet {
+  position: absolute;
+  width: 118px;
+  height: 150px;
+  border-radius: var(--radius-s);
+  background: var(--color-bg-paper);
+  border: var(--border-width) solid var(--color-border-strong);
+}
+
+.feed__sheet--back {
+  left: 14px;
+  top: 0;
+  box-shadow: var(--shadow-hairline);
+}
+
+.feed__sheet--mid {
+  left: 10px;
+  top: 6px;
+}
+
+.feed__sheet--moving {
+  left: 16px;
+  top: 12px;
+  animation: feed var(--duration-loop) var(--ease-loop) infinite;
+}
+
+.feed__tray {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 150px;
+  height: 30px;
+  border-radius: var(--radius-s);
+  background: var(--color-bg-tray);
+}
+
+.feed__bar {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  width: 126px;
+  height: 4px;
+  border-radius: var(--radius-xs);
+  background: var(--color-accent);
+  animation: pulse var(--duration-loop) var(--ease-loop) infinite;
+}
+
+/* S13: подача и полоса замирают, полоса приглушается */
+.feed--idle .feed__sheet--moving,
+.feed--idle .feed__bar {
+  animation: none;
+}
+
+.feed--idle .feed__bar {
+  opacity: var(--opacity-disabled);
+}
+
+/* — лента последних пяти: затухание к старому краю шагом 0,17 — */
+
+/* B-9: лента и точки ожидания делят место ленты — высота экрана не меняется. Слот — во всю
+   ширину экрана: пустая лента ширины не даёт, и точки в слоте нулевой ширины сжимались в ноль. */
+.scan-screen__slot {
+  position: relative;
+  align-self: stretch;
+  height: 74px;
+  display: flex;
+  justify-content: center;
+}
+
+.scan-wait {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+/* Геометрия точки — литерал, как у иллюстраций экрана; цикл — `pulse` из app.css. */
+.scan-wait__dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-round);
+  background: var(--color-text-faint);
+  animation: pulse var(--duration-loop) var(--ease-loop) infinite;
+}
+
+.scan-wait__dot:nth-child(2) {
+  animation-delay: var(--delay-stagger);
+}
+
+.scan-wait__dot:nth-child(3) {
+  animation-delay: calc(var(--delay-stagger) * 2);
+}
+
+.strip {
+  position: relative; /* B-4: опора для выталкиваемой карточки */
+  display: flex;
+  gap: var(--space-4);
+  align-items: flex-end;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  height: 74px;
+}
+
+.strip__card {
+  position: relative;
+  width: 50px;
+  height: 70px;
+  border-radius: var(--radius-xs);
+  background: var(--color-bg-paper);
+  border: var(--border-width) solid var(--color-border-default);
+  overflow: hidden;
+  /* B-4: шаг затухания меняется проявлением, карточка не мигает при сдвиге очереди. */
+  transition: opacity var(--duration-screen) var(--ease-standard);
+}
+
+/* Выталкиваемая карточка (B-4): копия на своём месте поверх потока, гаснет и уходит влево. */
+.strip__card--leaving {
+  position: absolute;
+  margin: 0;
+  pointer-events: none;
+}
+
+.strip__card:nth-last-child(2) {
+  opacity: 0.83;
+}
+
+.strip__card:nth-last-child(3) {
+  opacity: 0.66;
+}
+
+.strip__card:nth-last-child(4) {
+  opacity: 0.49;
+}
+
+.strip__card:nth-last-child(5) {
+  opacity: 0.32;
+}
+
+.strip__img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Миниатюра проявляется, а не вспыхивает (смоук приёмки M1). */
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+.strip__card--loading .strip__img {
+  opacity: 0;
+}
+
+.strip__card--loading + .strip__card--loading .skeleton {
+  animation-delay: var(--delay-stagger);
+}
+
+.strip__card--failed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-surface);
+}
+
+.strip__num {
+  font-family: var(--font-family-mono);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-xxs);
+  line-height: var(--leading-none);
+  color: var(--color-text-faint);
+}
+
+/* — движение — */
+
+@keyframes feed {
+  0% {
+    transform: translateY(-22px) scaleY(0.98);
+    opacity: 0;
+  }
+
+  25% {
+    opacity: 1;
+  }
+
+  100% {
+    transform: translateY(30px);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feed__sheet--moving,
+  .feed__bar {
+    animation: none;
+  }
+
+  .strip__card {
+    transition: none;
+  }
+
+  /* B-9: три ровные точки без цикла. */
+  .scan-wait__dot {
+    animation: none;
+    opacity: var(--opacity-disabled);
+  }
+}
+
+/* ── screens/setup-screen.css ── */
+
+/* Экран `setup` (U22): группа параметров со строкой устройства — панели разделены волосяными
+   линиями (`gap: 1px` поверх тонированной подложки, принцип 1 дизайн-системы). Строка
+   устройства — CSS handoff'а U19 (S2–S5). */
+
+.params {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-px);
+  background: var(--color-border-subtle);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-l);
+  overflow: hidden;
+}
+
+.device-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  padding: var(--space-7) var(--space-8);
+  background: var(--color-bg-surface);
+}
+
+.device-row__name {
   font: var(--font-weight-medium) var(--font-size-base) / var(--leading-snug)
     var(--font-family-sans);
   overflow: hidden;
@@ -3985,448 +4343,222 @@ samp {
   white-space: nowrap;
 }
 
-.device-item__name--unnamed {
-  color: var(--color-text-muted);
-  font-weight: var(--font-weight-regular);
+.device-row__none {
+  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
+  color: var(--color-text-subtle);
 }
 
-.device-item__address {
+.device-row__status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* Базовый цвет — «готов»; остальные состояния переопределяют модификатором строки. */
+.device-row__status-text {
   font: var(--font-weight-regular) var(--font-size-s) / var(--leading-snug) var(--font-family-mono);
-  color: var(--color-text-faint);
   white-space: nowrap;
-}
-
-.device-item__status {
-  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-snug) var(--font-family-mono);
   color: var(--color-status-ready);
-  white-space: nowrap;
 }
 
-.device-item__status--no-adf {
-  color: var(--color-status-unavailable);
-}
-
-/* Три скелетона с пульсацией и сдвигом фазы — пока идёт поиск. */
-.device-skeleton {
-  height: var(--size-list-row);
-  border: var(--border-width) solid var(--color-border-subtle);
-  border-radius: var(--radius-l);
-  background: var(--color-bg-surface);
-  animation: pulse var(--duration-loop) var(--ease-loop) infinite;
-}
-
-.device-skeleton:nth-child(2) {
-  animation-delay: var(--delay-stagger);
-}
-
-.device-skeleton:nth-child(3) {
-  animation-delay: calc(var(--delay-stagger) * 2);
-}
-
-/* Пустое состояние (S7) и сбой поиска (S8) — в области списка. */
-.device-list__empty {
-  margin: 0;
-  padding: var(--space-8) var(--space-6);
-  min-height: 132px; /* высота трёх скелетонов макета — литерал геометрии */
-  display: flex;
-  align-items: center;
-  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-relaxed)
-    var(--font-family-sans);
+.device-row--checking .device-row__status-text {
   color: var(--color-text-subtle);
-  background: var(--color-bg-surface);
-  border: var(--border-width) solid var(--color-border-subtle);
-  border-radius: var(--radius-l);
-  text-wrap: pretty;
 }
 
-.device-list__empty--danger {
+.device-row--unreachable .device-row__status-text {
   color: var(--color-danger);
 }
 
-/* «Дополнительно»: схема — сегментированный выбор, порт и путь — мелкие поля. */
-.device-advanced__toggle {
-  align-self: flex-start;
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  background: none;
-  border: 0;
-  padding: var(--space-2) 0;
-  font: var(--font-weight-medium) var(--font-size-m) / var(--leading-none) var(--font-family-sans);
-  color: var(--color-text-subtle);
-  cursor: pointer;
+.device-row--changed .device-row__status-text {
+  color: var(--color-warning);
 }
 
-.device-advanced__toggle:hover {
-  color: var(--color-text-primary);
-}
-
-.device-advanced {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--space-6);
-}
-
-.device-advanced__port {
-  width: 96px; /* под пять цифр порта — литерал геометрии */
-}
-
-.device-advanced__path {
+.device-row__spacer {
   flex: 1;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .device-skeleton {
-    animation: none;
-    opacity: var(--opacity-disabled);
-  }
-}
-
-/* Обёртка секций выбора (B-29, U8) повторяет раскладку `modal__body`: колонка с тем же зазором.
-   Без неё секции стояли блоками вплотную, и список наезжал на кикер поля адреса (B-43). */
-.device-modal__pick {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-9);
-}
-
-/* Шаг подтверждения смены устройства (B-29; handoff scanner-change, вариант 1b): список и
-   «Дополнительно» скрыты, поле адреса приглушено, карточка — последним элементом тела. */
-.device-modal--confirming .device-modal__pick {
-  opacity: var(--opacity-disabled);
-  pointer-events: none;
-}
-
-.device-modal--confirming .device-modal__list,
-.device-modal--confirming .device-advanced__toggle,
-.device-modal--confirming .device-advanced {
-  display: none;
-}
-
-.device-confirm {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-5);
-  padding: var(--space-7) var(--space-8);
-  background: var(--color-bg-surface);
-  border: var(--border-width) solid var(--color-warning);
-  border-radius: var(--radius-l);
-}
-
-.device-confirm__title {
-  margin: 0;
-  font-weight: var(--font-weight-semibold);
-  font-size: var(--font-size-base);
-  line-height: var(--leading-snug);
-}
-
-.device-confirm__who {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: var(--space-2) var(--space-5);
-}
-
-.device-confirm__name {
-  flex: none;
-  max-width: 100%;
-  font-weight: var(--font-weight-semibold);
-  font-size: var(--font-size-base);
-  line-height: var(--leading-snug);
-  overflow-wrap: anywhere;
-}
-
-.device-confirm__name--unnamed {
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-muted);
-}
-
-.device-confirm__address {
-  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-snug) var(--font-family-mono);
-  color: var(--color-text-muted);
-}
-
-.device-confirm__text {
-  margin: 0;
-  font-size: var(--font-size-m);
-  line-height: var(--leading-relaxed);
-  color: var(--color-text-secondary);
-  text-wrap: pretty;
-}
-
-.device-confirm__replace {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-4);
-  margin: 0;
-  font-size: var(--font-size-m);
-  line-height: var(--leading-relaxed);
-  color: var(--color-text-primary);
-}
-
-.device-confirm__replace-key {
-  flex: none;
-  font: var(--font-weight-medium) var(--font-size-xs) / 1 var(--font-family-mono);
+.device-row__scheme {
+  font: var(--font-weight-medium) var(--font-size-xxs) / var(--leading-none) var(--font-family-mono);
   letter-spacing: var(--tracking-caps);
-  color: var(--color-warning);
-}
-
-.device-confirm__cost {
-  margin: 0;
-  padding-top: var(--space-4);
-  border-top: var(--border-width) solid var(--color-border-subtle);
-  font-size: var(--font-size-m);
-  line-height: var(--leading-relaxed);
-  color: var(--color-warning);
-  text-wrap: pretty;
-}
-
-/* Появление карточки — проявление; уход и возврат к вводу — сразу. */
-.device-confirm--enter {
-  animation: device-confirm-in var(--duration-fast) var(--ease-standard) both;
-}
-
-@keyframes device-confirm-in {
-  from {
-    opacity: 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .device-confirm--enter {
-    animation: none;
-  }
-}
-
-/* ── modals/add-modal.css ── */
-
-/* Модалка add (handoff M3.5, S2): две секции с кикерами, строка сканера; футер без сводки (B-44). */
-
-.add-modal__body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-9);
-}
-
-.add-modal__section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
-
-.add-modal__section .kicker {
-  margin: 0;
-}
-
-/* Строка сканера — как строка устройства setup, но без действий. */
-.add-modal__scanner {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  margin: 0;
-  padding: var(--space-4) var(--space-6);
-  border-radius: var(--radius-l);
-  background: var(--color-bg-surface);
-  border: var(--border-width) solid var(--color-border-subtle);
-  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-normal)
-    var(--font-family-mono);
-  color: var(--color-text-subtle);
-}
-
-.add-modal__scanner-name {
-  font: var(--font-weight-medium) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
-  color: var(--color-text-primary);
-}
-
-.add-modal__scanner--none .add-modal__scanner-status {
-  color: var(--color-text-muted);
-  font-family: var(--font-family-sans);
-}
-
-/* ── modals/save-modal.css ── */
-
-/* Модалка `save` (план M3, U9; handoff M3, S16) — стили из handoff'а дословно. */
-
-.save-modal .kicker {
-  margin: 0;
-}
-.save-modal__modes {
-  display: flex;
-  gap: var(--space-4);
-}
-.save-mode {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-5) var(--space-6);
+  color: var(--color-text-faint);
   border: var(--border-width) solid var(--color-border-default);
-  border-radius: var(--radius-l);
+  border-radius: var(--radius-s);
+  padding: var(--space-1) var(--space-2);
+}
+
+.param-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  padding: var(--space-5) var(--space-8);
   background: var(--color-bg-surface);
-  color: var(--color-text-primary);
-  text-align: left;
-  font: var(--font-weight-medium) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
-  cursor: pointer;
 }
-.save-mode:hover {
-  border-color: var(--color-accent);
+
+.param-row__label {
+  flex: none;
+  width: var(--size-label-col);
+  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
+  color: var(--color-text-muted);
 }
-.save-mode[aria-checked='true'] {
-  border-color: var(--color-border-focus);
-  background: var(--color-bg-selected);
+
+.params__footer {
+  display: flex;
+  padding: var(--space-4) var(--space-8);
+  background: var(--color-bg-panel);
 }
-.save-mode[aria-disabled='true'] {
-  opacity: var(--opacity-disabled);
-  cursor: default;
-}
-.save-mode[aria-disabled='true']:hover {
-  border-color: var(--color-border-default);
-}
-.save-mode__hint {
-  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-normal)
-    var(--font-family-sans);
+
+.params__footer .btn--ghost {
   color: var(--color-text-subtle);
 }
 
-.save-files,
-.save-result {
+.params__footer .btn--ghost:hover:not(:disabled) {
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+
+.setup-screen__launch {
   display: flex;
   flex-direction: column;
-  gap: var(--space-px);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  overflow: hidden;
-  border: var(--border-width) solid var(--color-border-subtle);
-  border-radius: var(--radius-l);
-  background: var(--color-border-subtle);
-}
-.save-files--scroll,
-.save-result {
-  max-height: 352px; /* десять строк — порог макета */
-  overflow-y: auto;
-}
-.save-file {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  padding: var(--space-4) var(--space-6);
-  background: var(--color-bg-surface);
-}
-.save-file__name {
-  flex: 1;
-  min-width: 0;
-  padding: var(--space-3);
-  border: var(--border-width) solid transparent;
-  border-radius: var(--radius-m);
-  background: none;
-  color: var(--color-text-primary);
-  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
-  outline: none;
-}
-.save-file__name::placeholder {
-  color: var(--color-text-hint);
-}
-.save-file__name:hover,
-.save-file__name:focus {
-  background: var(--color-bg-paper);
-}
-.save-file__name:hover {
-  border-color: var(--color-border-strong);
-}
-.save-file__name:focus {
-  border-color: var(--color-border-focus);
-}
-.save-file__name:disabled {
-  border-color: transparent;
-  background: none;
-  color: var(--color-text-muted);
-}
-.save-file__ext,
-.save-file__meta {
-  flex: none;
-  font: var(--font-weight-regular) var(--font-size-s) / var(--leading-snug) var(--font-family-mono);
-  color: var(--color-text-hint);
+  align-items: flex-start;
+  gap: var(--space-5);
 }
 
-.save-folder {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  padding: var(--space-4) var(--space-6);
-  border: var(--border-width) solid var(--color-border-subtle);
-  border-radius: var(--radius-l);
-  background: var(--color-bg-surface);
-}
-.save-folder__icon {
-  flex: none;
-  width: 15px;
-  height: 12px;
-  border: var(--border-width) solid var(--color-border-heavy);
-  border-top-width: var(--border-width-thick);
-  border-radius: var(--radius-xs);
-}
-/* Длинный путь режется с начала — видна сама папка. */
-.save-folder__path {
-  flex: 1;
-  min-width: 0;
+.setup-screen__hint {
   margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  direction: rtl;
-  text-align: left;
-  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-normal)
-    var(--font-family-sans);
-  color: var(--color-text-primary);
-}
-
-.save-result__row {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-4);
-  padding: var(--space-4) var(--space-6);
-  background: var(--color-bg-surface);
-}
-.save-result__icon {
-  flex: none;
-  font: var(--font-weight-medium) var(--font-size-s) / var(--leading-relaxed)
-    var(--font-family-sans);
-  color: var(--color-success);
-}
-.save-result__row--failed .save-result__icon {
-  color: var(--color-danger);
-}
-.save-result__name {
-  flex: 1;
-  min-width: 0;
-  overflow-wrap: anywhere;
-  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
-}
-.save-result__note {
-  display: block;
   font: var(--font-weight-regular) var(--font-size-s) / var(--leading-relaxed)
     var(--font-family-sans);
   color: var(--color-text-subtle);
 }
-.save-result__row--failed .save-result__note {
-  color: var(--color-danger);
+
+/* — правая колонка «Как это работает» (M2 U8, тексты макета) — */
+
+.setup-screen__aside {
+  position: relative; /* переключатель языка прижат к низу колонки (B-41) */
+  background: var(--color-bg-well);
+  border-left: var(--border-width) solid var(--color-border-subtle);
+  padding: 0 var(--space-15);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-11);
 }
 
-/* B-4: секция ИТОГ проявляется, пока окно дорастает до новой высоты. */
-.save-modal__result {
-  animation: save-result-in var(--duration-fast) var(--ease-standard) 50ms both;
+/* — переключатель языка (B-41, U6; handoff 2026-11-b41-language — CSS дословно) — */
+
+.lang-switch {
+  position: absolute;
+  left: var(--space-15);
+  right: var(--space-15);
+  bottom: var(--space-12);
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  padding-top: var(--space-6);
+  border-top: var(--border-width) solid var(--color-border-subtle);
+  transition: opacity var(--duration-fast) var(--ease-standard);
 }
 
-@keyframes save-result-in {
-  from {
-    opacity: 0;
-  }
+.lang-switch .kicker {
+  margin-right: auto;
+}
+
+.lang-switch__opts {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.lang-switch__opt {
+  padding: var(--space-2) var(--space-4);
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius-m);
+  background: none;
+  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
+  color: var(--color-text-subtle);
+  cursor: pointer;
+}
+
+.lang-switch__opt:hover {
+  color: var(--color-text-primary);
+}
+
+.lang-switch__opt[aria-checked='true'] {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  background: var(--color-bg-surface);
+  border-color: var(--color-border-default);
+  cursor: default;
+}
+
+.lang-switch__opt:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 1px;
+}
+
+.lang-switch__opt--pending {
+  color: var(--color-text-primary);
+  border-color: var(--color-accent);
+}
+
+/* Клики игнорируются сразу; приглушение — только если запись затянулась дольше 200 мс. */
+.lang-switch[aria-busy='true'] {
+  opacity: var(--opacity-disabled);
+  transition-delay: 200ms;
+}
+
+.lang-switch[aria-busy='true'] .lang-switch__opt {
+  cursor: progress;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .save-modal__result {
-    animation-duration: var(--duration-exit);
-    animation-delay: 0ms;
+  .lang-switch {
+    transition: none;
   }
+}
+
+.howto {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.howto__step {
+  display: flex;
+  gap: var(--space-8);
+  padding: var(--space-6) 0;
+  border-bottom: var(--border-width) solid var(--color-border-subtle);
+}
+
+.howto__num {
+  flex: none;
+  width: var(--size-step);
+  height: var(--size-step);
+  border-radius: var(--radius-round);
+  border: var(--border-width) solid var(--color-border-emphasis);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: var(--font-weight-medium) var(--font-size-m) / var(--leading-none) var(--font-family-mono);
+  color: var(--color-text-muted);
+}
+
+.howto__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.howto__title {
+  font: var(--font-weight-medium) var(--font-size-base) / var(--leading-normal)
+    var(--font-family-sans);
+}
+
+.howto__text {
+  font: var(--font-weight-regular) var(--font-size-m) / var(--leading-relaxed)
+    var(--font-family-sans);
+  color: var(--color-text-subtle);
+  text-wrap: pretty;
 }

@@ -10,7 +10,7 @@
  * Не входит в `npm test` и `test:all` (свой проект vitest): `npm run design:snapshot`. Читает
  * приложение и пишет только под `docs/design/` — `src/` не трогается.
  */
-import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import sharp from 'sharp';
@@ -217,30 +217,42 @@ async function scene(
 
 // ── Сборка папки референса ──────────────────────────────────────────────────────────────────
 
-const CSS_FILES = [
-  'styles/tokens.css',
-  'styles/base.css',
-  'app.css',
-  'screens/setup-screen.css',
-  'screens/scan-screen.css',
-  'screens/flip-screen.css',
-  'screens/merge-screen.css',
-  'screens/merge-sort.css',
-  'screens/editor-screen.css',
-  'modals/device-modal.css',
-  'modals/add-modal.css',
-  'modals/save-modal.css',
-];
+/**
+ * Стили приложения: токены, база и общий файл первыми, дальше — все остальные `.css` renderer'а
+ * с диска, по алфавиту (так `editor-straighten` идёт после `editor-screen`, `merge-sort` — после
+ * `merge-screen`, как и импорты). Список не захардкожен: `editor-straighten.css` из M6 в него
+ * не попал, и глифы выравнивания в референсе растягивали карточки (замечание автора, 2026-11-04).
+ */
+const CSS_HEAD = ['styles/tokens.css', 'styles/base.css', 'app.css'];
+
+function cssFilesUnder(dir: string): string[] {
+  return readdirSync(join(RENDERER_DIR, dir), { withFileTypes: true }).flatMap((entry) => {
+    const path = dir === '' ? entry.name : `${dir}/${entry.name}`;
+    if (entry.isDirectory()) {
+      return cssFilesUnder(path);
+    }
+    return entry.name.endsWith('.css') ? [path] : [];
+  });
+}
+
+function cssFiles(): string[] {
+  const rest = cssFilesUnder('')
+    .filter((file) => !CSS_HEAD.includes(file))
+    .sort();
+  return [...CSS_HEAD, ...rest];
+}
 
 function appCss(): string {
   const header =
     '/* СГЕНЕРИРОВАНО `npm run design:snapshot` из стилей src/renderer/src — руками не править. */\n';
   return (
     header +
-    CSS_FILES.map(
-      (file) =>
-        `\n/* ── ${file} ── */\n\n${readFileSync(join(RENDERER_DIR, file), 'utf8').replaceAll('\r\n', '\n')}`,
-    ).join('')
+    cssFiles()
+      .map(
+        (file) =>
+          `\n/* ── ${file} ── */\n\n${readFileSync(join(RENDERER_DIR, file), 'utf8').replaceAll('\r\n', '\n')}`,
+      )
+      .join('')
   );
 }
 
