@@ -457,8 +457,6 @@
       "fewerFronts_many": "Не хватает {{count}} лиц",
       "fewerFronts_other": "Не хватает {{count}} лица"
     },
-    "docPosition": "документ {{doc}} из {{docs}} · стр. {{page}} из {{pages}}",
-    "pagePosition": "стр. {{page}} из {{pages}}",
     "noPages": "Нет страниц",
     "splitHere": "+ Новый документ с этой страницы",
     "railLabel": "Отсканированные страницы",
@@ -571,6 +569,7 @@
     "label": "Сведения о наборе",
     "details": "ДЕТАЛИ",
     "detailsSummary": "стр. {{page}}",
+    "detailsWarning": "В проверке есть замечания",
     "title": "Стр. {{page}} — {{what}}",
     "what": {
       "front": "лицо листа {{sheet}}",

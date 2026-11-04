@@ -149,7 +149,7 @@ describe('ожидание выравнивания на merge (M6)', () => {
       });
       expect(document.querySelector('.merge-screen')).toBeNull();
       // Редактор открылся с готовыми статусами — тоста поздних нет.
-      expect(screen.getByText('стр. 1 из 6')).toBeDefined();
+      expect(screen.getByText('1 из 6')).toBeDefined();
       expect(screen.queryByText(/Выровнено ещё/u)).toBeNull();
     } finally {
       vi.useRealTimers();
@@ -172,7 +172,7 @@ describe('ожидание выравнивания на merge (M6)', () => {
         vi.advanceTimersByTime(1601);
       });
       expect(document.querySelector('.merge-screen')).toBeNull();
-      expect(screen.getByText('стр. 1 из 6')).toBeDefined();
+      expect(screen.getByText('1 из 6')).toBeDefined();
     } finally {
       vi.useRealTimers();
     }

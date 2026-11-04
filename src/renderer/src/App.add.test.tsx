@@ -171,7 +171,7 @@ describe('M3.5: посадка добавленного набора (KTD-7; han
 
     expect(toasts()).toEqual([]);
     expect(screen.queryByRole('alert')).toBeNull();
-    expect(screen.getByText('стр. 3 из 6')).toBeDefined();
+    expect(screen.getByText('3 из 6')).toBeDefined();
   });
 
   it('повторное «Начать скан» до ответа ядра запуск не дублирует', async () => {
@@ -214,7 +214,7 @@ describe('M3.5: посадка добавленного набора (KTD-7; han
     await push({ ...withAdded(3, 0), scanner: READY });
 
     expect(document.querySelector('.merge-screen')).toBeNull();
-    expect(screen.getByText('стр. 1 из 6')).toBeDefined();
+    expect(screen.getByText('1 из 6')).toBeDefined();
     expect(toasts()).toEqual([
       'Не удалось начать: в лотке нет бумаги. Положите листы в автоподатчик и запустите ещё раз.',
     ]);
@@ -246,7 +246,7 @@ describe('M3.5: посадка добавленного набора (KTD-7; han
     } finally {
       vi.useRealTimers();
     }
-    expect(screen.getByText('стр. 1 из 6')).toBeDefined();
+    expect(screen.getByText('1 из 6')).toBeDefined();
   });
 
   it('кадры scan пропущены: editor → editor с выросшей лентой после запуска — тост, не пауза', async () => {
@@ -295,7 +295,7 @@ describe('M3.5: посадка добавленного набора (KTD-7; han
       expect(toast.textContent).toMatch(reason);
       expect(screen.queryByRole('alert')).toBeNull();
       expect(screen.queryByRole('dialog')).toBeNull();
-      expect(screen.getByText('стр. 3 из 6')).toBeDefined();
+      expect(screen.getByText('3 из 6')).toBeDefined();
     },
   );
 

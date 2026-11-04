@@ -251,7 +251,7 @@ describe('M4.5: посадка пары набора (KTD7; handoff S6, S10)', (
 
     expect(document.querySelector('.merge-screen')).toBeNull();
     expect(toasts()).toEqual([]);
-    expect(screen.getByText('стр. 1 из 6')).toBeDefined();
+    expect(screen.getByText('1 из 6')).toBeDefined();
   });
 
   it('«Остановить» на оборотах набора до первой страницы: проход снят, экран снова flip набора — ни паузы, ни тоста', async () => {

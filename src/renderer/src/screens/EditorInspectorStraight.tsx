@@ -8,7 +8,7 @@ import {
   straightSelectionText,
   type StraightSelection,
 } from '../state/straighten-text';
-import { Check } from './InspectorCheck';
+import type { CheckItem } from './InspectorCheck';
 
 // Выравнивание в инспекторе (план M6, U8; handoff M6 «Anatomy», «States», «Behaviour»): секция
 // ВЫРАВНИВАНИЕ после ДЕТАЛЕЙ — по образцу ПУСТОГО ОБОРОТА (у страницы бывает только одна из
@@ -24,23 +24,23 @@ import { Check } from './InspectorCheck';
  * про оставленные оригиналом, «Все страницы ровные» или «Ни одна страница не выровнена». Причины
  * «не выровнено» со счётом — в подсказке; при отложенных — что делать.
  */
-export function StraightCheck({
-  t,
-  straighten,
-}: {
-  readonly t: TFunction;
-  readonly straighten: StraightenSummary;
-}): ReactNode {
+export function straightChecks(t: TFunction, straighten: StraightenSummary): CheckItem[] {
   if (straighten.mode !== 'auto') {
-    return null;
+    return [];
   }
   if (straighten.pending > 0) {
-    return (
-      <Check warning>
-        {t('inspector.check.straightPending', { count: straighten.pending })}
-        <span className="check__hint">{t('inspector.check.straightPendingHint')}</span>
-      </Check>
-    );
+    return [
+      {
+        key: 'straight',
+        warning: true,
+        text: (
+          <>
+            {t('inspector.check.straightPending', { count: straighten.pending })}
+            <span className="check__hint">{t('inspector.check.straightPendingHint')}</span>
+          </>
+        ),
+      },
+    ];
   }
   const undone = straighten.unmeasurable + straighten.deferred;
   let text: string;
@@ -71,12 +71,18 @@ export function StraightCheck({
       hint += ` ${t('inspector.check.straightHintRetry')}`;
     }
   }
-  return (
-    <Check warning={false}>
-      {text}
-      {hint !== null && <span className="check__hint">{hint}</span>}
-    </Check>
-  );
+  return [
+    {
+      key: 'straight',
+      warning: false,
+      text: (
+        <>
+          {text}
+          {hint !== null && <span className="check__hint">{hint}</span>}
+        </>
+      ),
+    },
+  ];
 }
 
 export interface StraightSectionProps {

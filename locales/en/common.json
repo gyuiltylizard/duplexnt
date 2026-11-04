@@ -433,8 +433,6 @@
       "fewerFronts_one": "{{count}} front missing",
       "fewerFronts_other": "{{count}} fronts missing"
     },
-    "docPosition": "document {{doc}} of {{docs}} · page {{page}} of {{pages}}",
-    "pagePosition": "page {{page}} of {{pages}}",
     "noPages": "No pages",
     "splitHere": "+ New document from this page",
     "railLabel": "Scanned pages",
@@ -542,6 +540,7 @@
     "label": "Set details",
     "details": "DETAILS",
     "detailsSummary": "page {{page}}",
+    "detailsWarning": "The check has remarks",
     "title": "Page {{page}} — {{what}}",
     "what": {
       "front": "front of sheet {{sheet}}",

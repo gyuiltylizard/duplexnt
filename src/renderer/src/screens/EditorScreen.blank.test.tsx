@@ -104,7 +104,6 @@ describe('пустые обороты в редакторе (M4)', () => {
     renderEditor(blankSnapshot());
 
     expect(keysShown()).toEqual([F1, F2, B2, F3]);
-    expect(screen.getByText('стр. 1 из 4')).toBeDefined();
     expect(screen.getByText('1 из 4')).toBeDefined();
     expect(option(3).textContent).toContain('4');
     // Счётчик переключателя — скрытые.
@@ -118,7 +117,7 @@ describe('пустые обороты в редакторе (M4)', () => {
 
     fireEvent.click(revealToggle());
     expect(keysShown()).toEqual([F1, B3, F2, B2, F3, B1]);
-    expect(screen.getByText('стр. 1 из 6')).toBeDefined();
+    expect(screen.getByText('1 из 6')).toBeDefined();
     expect(screen.getByText('показано: 2')).toBeDefined();
     const hidden = option(1);
     expect(hidden.className).toContain('thumb--hidden');
@@ -743,7 +742,7 @@ describe('пустые обороты в редакторе (M4)', () => {
     stubApi();
     renderEditor(blankSnapshot());
     fireEvent.click(revealToggle());
-    expect(screen.getByText('стр. 1 из 6')).toBeDefined();
+    expect(screen.getByText('1 из 6')).toBeDefined();
 
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить документ' }));
     const dialog = screen.getByRole('dialog', { name: 'Сохранить документ' });
@@ -797,12 +796,14 @@ describe('документ из одних скрытых и гард «не п�
       VERDICTS,
     );
 
-  it('тулбар считает документы по видимым: на третьем — «документ 2 из 2»', () => {
+  it('тулбар и список документов: на третьем документе текущий — «В», второй — «только пустые»', () => {
     stubApi();
     renderEditor(hiddenOnly());
 
     fireEvent.click(option(1)); // F2 — первая страница третьего документа
-    expect(screen.getByText('документ 2 из 2 · стр. 1 из 3')).toBeDefined();
+    expect(within(screen.getByRole('banner')).getByText('В')).toBeDefined();
+    expect(screen.getByRole('button', { name: /^В/u, current: true })).toBeDefined();
+    expect(screen.getByRole('button', { name: /^Б/u }).textContent).toContain('только пустые');
   });
 
   it('«✕» перед третьим документом сливает с первым: оба разреза сняты, имя первого; Ctrl+Z возвращает оба', async () => {
@@ -836,7 +837,7 @@ describe('документ из одних скрытых и гард «не п�
     );
 
     expect(screen.queryByRole('button', { name: /Убрать границу перед документом/ })).toBeNull();
-    expect(screen.getByText('стр. 1 из 4')).toBeDefined();
+    expect(screen.getByText('1 из 4')).toBeDefined();
   });
 
   it('«Это не пустая страница» недоступна, пока команда правки в полёте', () => {
