@@ -10,9 +10,10 @@ export type DurationToken =
   | '--duration-screen'
   | '--duration-base'
   | '--duration-turn'
+  | '--duration-section'
   | '--duration-loop';
 
-export type EasingToken = '--ease-out' | '--ease-standard';
+export type EasingToken = '--ease-out' | '--ease-standard' | '--ease-section';
 
 const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
 
