@@ -525,7 +525,7 @@ const SCENE_COUNT = 11;
 const EXPECTED_CAPTURES = SCENE_COUNT * LOCALES.length;
 
 const EDITOR_OVERRIDES = {
-  getSaveFolder: vi.fn(() => Promise.resolve(ok('C:\\Users\\Анна\\Documents\\Сканы'))),
+  getSaveFolder: vi.fn(() => Promise.resolve(ok('D:\\Documents\\Scans'))),
 };
 
 describe('референс интерфейса (B-6)', () => {
@@ -719,7 +719,7 @@ describe('референс интерфейса (B-6)', () => {
         const container = await openEditor(t);
         fireEvent.click(screen.getByRole('button', { name: t('editor.saveFiles', { count: 4 }) }));
         await screen.findByRole('dialog');
-        await screen.findByText(/Сканы/);
+        await screen.findByText(/Scans/);
         return container;
       },
       { blank: true },
