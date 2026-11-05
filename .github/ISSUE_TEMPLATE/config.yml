@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Project page
+    url: https://gyuiltylizard.github.io/duplexnt/
+    about: What Duplexn't does, how it works, downloads.
+  - name: Security vulnerability
+    url: https://github.com/gyuiltylizard/duplexnt/security/advisories/new
+    about: Report a vulnerability privately instead of opening a public issue.
