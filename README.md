@@ -58,9 +58,10 @@ of time: `npx install-electron --no`. The Windows installer is built with `npm r
 ## Project documentation
 
 The documentation is in Russian. (Yes, I realised that way too f\*\*king late. If you need it,
-an AI agent will make sense of it just fine.) Start with the specification and development rules in [`docs/duplexnt.md`](docs/duplexnt.md); technical notes on eSCL and the
-behaviour verified on hardware are in [`docs/duplexnt-tech.md`](docs/duplexnt-tech.md), and
-architecture decisions in [`docs/decisions/`](docs/decisions/).
+an AI agent will make sense of it just fine.) Start with the specification and development rules
+in [`docs/duplexnt.md`](docs/duplexnt.md); technical notes on eSCL and the behaviour verified on
+hardware are in [`docs/duplexnt-tech.md`](docs/duplexnt-tech.md), and architecture decisions in
+[`docs/decisions/`](docs/decisions/).
 
 ## Contributing
 
