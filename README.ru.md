@@ -58,16 +58,10 @@ npm run dev
 
 ## Документация проекта
 
-- Спека и правила разработки: [`docs/duplexnt.md`](docs/duplexnt.md)
-- Техническая база (eSCL, возможности устройства, проверенное на железе):
-  [`docs/duplexnt-tech.md`](docs/duplexnt-tech.md)
-- Роадмап: [`docs/roadmap.md`](docs/roadmap.md) · бэклог: [`docs/backlog.md`](docs/backlog.md)
-  · баги: [`docs/bugs.md`](docs/bugs.md)
-- Решения: [`docs/decisions/`](docs/decisions/) · журналы реализации:
-  [`docs/solutions/`](docs/solutions/)
-- Исходники лендинга: [`docs/landing.md`](docs/landing.md)
-
-Стек: Electron, TypeScript, React — ADR 0001–0003 в `docs/decisions/`.
+Документация на русском (да, я понял это слишком поздно). Начинать со спеки и правил разработки
+в [`docs/duplexnt.md`](docs/duplexnt.md); техническая база по eSCL и проверенному на железе — в
+[`docs/duplexnt-tech.md`](docs/duplexnt-tech.md), архитектурные решения — в
+[`docs/decisions/`](docs/decisions/).
 
 ## Участие
 

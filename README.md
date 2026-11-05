@@ -57,18 +57,10 @@ of time: `npx install-electron --no`. The Windows installer is built with `npm r
 
 ## Project documentation
 
-The project's working language is Russian; the documentation is in Russian as well:
-
-- Specification and development rules: [`docs/duplexnt.md`](docs/duplexnt.md)
-- Technical notes (eSCL, device capabilities, what was verified on hardware):
-  [`docs/duplexnt-tech.md`](docs/duplexnt-tech.md)
-- Roadmap: [`docs/roadmap.md`](docs/roadmap.md) · backlog: [`docs/backlog.md`](docs/backlog.md)
-  · bugs: [`docs/bugs.md`](docs/bugs.md)
-- Decisions: [`docs/decisions/`](docs/decisions/) · implementation journals:
-  [`docs/solutions/`](docs/solutions/)
-- Landing page sources: [`docs/landing.md`](docs/landing.md)
-
-Stack: Electron, TypeScript, React — see ADR 0001–0003 in `docs/decisions/`.
+The documentation is in Russian. (Yes, I realised that too late.) Start with the specification
+and development rules in [`docs/duplexnt.md`](docs/duplexnt.md); technical notes on eSCL and the
+behaviour verified on hardware are in [`docs/duplexnt-tech.md`](docs/duplexnt-tech.md), and
+architecture decisions in [`docs/decisions/`](docs/decisions/).
 
 ## Contributing
 
