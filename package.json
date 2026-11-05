@@ -1,9 +1,12 @@
 {
   "name": "duplexnt",
-  "version": "0.0.0",
+  "version": "1.0.0-beta.1",
   "private": true,
-  "description": "Двусторонний скан на сканере без дуплекса: два прохода по eSCL и сборка в PDF",
-  "author": "gyuiltylizard",
+  "description": "Duplex scanning on a simplex-feeder scanner: two eSCL passes assembled into one PDF",
+  "author": {
+    "name": "gyuiltylizard"
+  },
+  "license": "GPL-3.0-only",
   "main": "./out/main/index.js",
   "engines": {
     "node": ">=22.18.0"

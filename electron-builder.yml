@@ -1,11 +1,14 @@
 # Установщик Duplexn't. Собирается командой `npm run dist`, выход — release/ (вне git).
-# Установщик M0 не публикуется (план M0, KTD-35).
+# Публикуется ассетом GitHub Release вместе с SHA256SUMS.txt (B-40); подписи кода нет.
 
 # Технические имена — ASCII: appId, имя exe, имя артефакта. Апостроф живёт только в
 # отображаемом названии.
 appId: app.duplexnt
 productName: "Duplexn't"
 executableName: duplexnt
+# Издатель и копирайт в свойствах exe и установщика — из `author` package.json; строка задана
+# явно, чтобы не зависеть от значения по умолчанию electron-builder (B-40).
+copyright: Copyright © 2026 gyuiltylizard
 
 directories:
   output: release

@@ -100,6 +100,12 @@ describe('electron-builder.yml — fuses', () => {
   });
 });
 
+describe('electron-builder.yml — метаданные публичной сборки (B-40)', () => {
+  it('копирайт задан явно', () => {
+    expect(CODE).toMatch(/^copyright: Copyright © \d{4} gyuiltylizard$/m);
+  });
+});
+
 describe('electron-builder.yml — asar', () => {
   it('приложение в asar, проверка целостности не отключена', () => {
     expect(CODE).toMatch(/^asar: true$/m);
