@@ -7,6 +7,11 @@ docs/design/mock/
 docs/design/reference/
 docs/design/handoff-template.md
 
+# Лендинг GitHub Pages (B-40): статический сайт как передан дизайном, правится руками по
+# docs/landing.md; форматер переставил бы инлайновые стили и минифицированный JS.
+docs/index.html
+docs/assets/
+
 # Фикстуры — байт в байт (см. .gitattributes).
 test/fixtures/
 

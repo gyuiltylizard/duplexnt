@@ -94,14 +94,15 @@ B-29 (U4); `pre-push` с полным прогоном — решение авт
 **Лицензия (решение 2026-11-01): GPL-3.0** — закрытый платный клон невозможен, проект остаётся
 open source; автор — единственный правообладатель (PR не принимаются), смена лицензии или своя
 платная версия остаются возможными; в README — строка «форки не могут называться Duplexn’t».
-Фикстура `fan-worksheet-color-200` (страница чужой рабочей тетради) под GPL не лицензируется —
-заменить до открытия своей страницей той же структуры.
+Фикстура `fan-worksheet-color-200` остаётся (решение автора 2026-11-05): изображение страницы
+сгенерировано автором по мотивам реальной тетради, оформление не оригинальное — чужого копирайта
+нет; происхождение записано в README фикстур.
 **Решения автора 2026-11-04:** email в коммитах — GitHub `noreply` с этого момента
 (`151140827+gyuiltylizard@users.noreply.github.com`, сообщён автором 2026-11-05); историю
 **переписываем** (решение пересмотрено в тот же день: настоящий адрес стоит во всех 580 коммитах
 и после открытия останется в форках навсегда; сейчас репо приватное, вкладчик один — единственный
 дешёвый момент) — `git filter-repo` с mailmap в ветке B-40 после настройки `noreply` и до
-переключения видимости, хэши merge в `docs/solutions/` и бэклоге обновить по таблице
+переключения видимости, цитаты хэшей в `docs/` (~208, не только merge) обновить по таблице
 «старый → новый» того же прогона, force-push в приватный `origin`; `CONTRIBUTING.md` —
 по-английски, смысл: «This project does not accept
 unsolicited pull requests. Please use GitHub Issues to report bugs, suggest improvements, or
@@ -117,7 +118,7 @@ discuss potential changes. Code contributions are accepted by invitation only.»
 `package.json`; `THIRD-PARTY-NOTICES.txt` — скриптом из пакетов бандла (MIT/ISC требуют копирайт
 и текст в копиях) плюс руками LGPL-3.0 и список библиотек внутри libvips (sharp помечен
 «Apache-2.0 AND LGPL-3.0», в сборке едет только Apache) и тексты OFL-1.1 шрифтов Golos Text и
-IBM Plex Mono; оба файла — в сборку через `extraResources` рядом с `LICENSE.electron.txt`; README для пришедшего с GitHub; формы Issues; настройка «PR — только коллабораторы»;
+IBM Plex Mono; оба файла — в сборку через `extraFiles` в корень установки, рядом с `LICENSE.electron.txt` (состав — от фактического бандла Vite плюс дерево asar, не от `dependencies`); README для пришедшего с GitHub; формы Issues; настройка «PR — только коллабораторы»;
 `CONTRIBUTING.md`; Pages; secret scanning и ruleset; `noreply`-email в конфиге репо и
 «Block command line pushes that expose my email» на GitHub; переписывание истории (mailmap)
 с правкой хэшей в доках; переключение видимости — последним шагом, после B-29 и B-26. **Попутно (B-26, 2026-11-03):** `description` в `package.json` идёт по-русски в

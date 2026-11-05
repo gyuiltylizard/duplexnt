@@ -1,0 +1,33 @@
+name: Suggestion
+description: An improvement, a missing feature, or support for another device
+title: '[Suggestion] '
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        You can write in English or Russian. The project does not accept pull requests, so
+        describe the idea here — if it is about another scanner model, be ready to help with
+        testing.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is the problem?
+      description: What are you trying to do, and what gets in the way?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you suggest?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+  - type: input
+    id: device
+    attributes:
+      label: Scanner model (if the suggestion is about a device)
+      placeholder: Brand, model, eSCL yes/no

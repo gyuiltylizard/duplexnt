@@ -51,9 +51,10 @@ import { installWindowClose } from './window-close';
 
 /**
  * Страница проекта — ссылка в подвале инспектора (B-42). Адрес живёт только здесь: renderer
- * открыть произвольный URL не может. С открытием репозитория (B-40) сменится на страницу Pages.
+ * открыть произвольный URL не может. С B-40 это лендинг на GitHub Pages (docs/landing.md);
+ * тест test/tooling/landing.test.ts держит адрес в согласии с памяткой.
  */
-const PROJECT_PAGE_URL = 'https://github.com/gyuiltylizard/duplexnt';
+const PROJECT_PAGE_URL = 'https://gyuiltylizard.github.io/duplexnt/';
 
 function createWindow({ bounds, maximized }: WindowPlacement): BrowserWindow {
   const window = new BrowserWindow({

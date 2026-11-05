@@ -39,13 +39,12 @@ export const VALUES_FILE = 'local-test-data/privacy-values.txt';
 export const RAW_DIR = 'local-test-data/device';
 
 /**
- * Файлы, которые страж пропускает целиком. Каждое исключение печатается в отчёте.
- *
- * docs/duplexnt-tech.md: содержит настоящий UUID тестового устройства и его адрес, и они уже в
- * истории. Чистка — решение автора до первого push в публичный remote (план M0 → Open
- * Questions). До решения файл стоит здесь, иначе список значений блокировал бы каждый коммит.
+ * Файлы, которые страж пропускает целиком. Каждое исключение печатается в отчёте. Список пуст с
+ * B-40: настоящие адрес и UUID устройства в docs/duplexnt-tech.md заменены заглушками, а история
+ * переписана перед открытием репозитория. Механизм оставлен на случай осознанного исключения;
+ * тесты подставляют свой список через `GuardOptions.exempt`.
  */
-export const EXEMPT_FILES = ['docs/duplexnt-tech.md'];
+export const EXEMPT_FILES: readonly string[] = [];
 
 // --- Паттерны ------------------------------------------------------------------------------
 
@@ -213,7 +212,8 @@ const MIN_VALUE_LENGTH = 4;
 
 // Windows PowerShell 5.1 пишет перенаправленный вывод в UTF-16LE с BOM. Без декодирования такой
 // журнал спайка выглядел бы бинарным и проходил мимо обоих механизмов. `null` — бинарный файл.
-function decodeText(content: Buffer): string | null {
+// Экспорт — для проверки блобов истории при переписывании (B-40, U8): тем же декодером.
+export function decodeText(content: Buffer): string | null {
   if (content.length >= 2 && content[0] === 0xff && content[1] === 0xfe) {
     return content.subarray(2).toString('utf16le');
   }
@@ -256,6 +256,8 @@ export interface GuardOptions {
   readonly files: readonly string[];
   /** Откуда брать содержимое; по умолчанию — рабочее дерево. Hook читает застейдженное. */
   readonly read?: (file: string) => Buffer;
+  /** Файлы, пропускаемые целиком; по умолчанию — EXEMPT_FILES (пуст). */
+  readonly exempt?: readonly string[];
 }
 
 export interface GuardReport {
@@ -297,8 +299,9 @@ export function runGuard(options: GuardOptions): GuardReport {
       excerpt: `${where}: ${violation.excerpt}`,
     });
 
+  const exempt = options.exempt ?? EXEMPT_FILES;
   for (const file of files) {
-    if (EXEMPT_FILES.includes(file)) {
+    if (exempt.includes(file)) {
       exempted.push(file);
       continue;
     }

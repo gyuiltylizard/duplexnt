@@ -184,17 +184,30 @@ describe('runGuard — области и список значений', () => {
     expect(report.fatal).toContain(VALUES_FILE);
   });
 
-  it('файл из списка исключений не даёт нарушения, и исключение видно в отчёте', () => {
+  it('файл из подставного списка исключений не даёт нарушения, и исключение видно в отчёте', () => {
     const root = repo({
       [VALUES_FILE]: 'X7QZ012345\n',
       'docs/duplexnt-tech.md': 'серийный X7QZ012345',
       'README.md': 'чисто',
     });
-    const report = runGuard({ root, files: ['docs/duplexnt-tech.md', 'README.md'] });
+    const files = ['docs/duplexnt-tech.md', 'README.md'];
+    const report = runGuard({ root, files, exempt: ['docs/duplexnt-tech.md'] });
 
     expect(report.violations).toEqual([]);
     expect(report.exempted).toEqual(['docs/duplexnt-tech.md']);
     expect(report.ok).toBe(true);
+  });
+
+  it('по умолчанию исключений нет (B-40): техбаза вне PATTERN_SCOPE, её сторожит список значений', () => {
+    const root = repo({
+      [VALUES_FILE]: 'X7QZ012345\n',
+      'docs/duplexnt-tech.md': 'серийный X7QZ012345',
+    });
+    const report = runGuard({ root, files: ['docs/duplexnt-tech.md'] });
+
+    expect(report.exempted).toEqual([]);
+    expect(report.violations.map((violation) => violation.kind)).toEqual(['known-value']);
+    expect(report.ok).toBe(false);
   });
 
   it('идентификатор в имени файла или каталога — нарушение, даже при чистом содержимом', () => {

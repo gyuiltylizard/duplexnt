@@ -1,0 +1,64 @@
+name: Bug report
+description: Something does not work the way it should
+title: '[Bug] '
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. You can write in English or Russian.
+  - type: input
+    id: version
+    attributes:
+      label: Duplexn't version
+      description: From the installer file name (for example `duplexnt-1.0.0-beta.1-setup.exe`) or Windows Settings → Apps → Installed apps.
+      placeholder: 1.0.0-beta.1
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: Windows 11 24H2
+    validations:
+      required: true
+  - type: input
+    id: scanner
+    attributes:
+      label: Scanner model and connection
+      description: Which scanner, and how it is connected (Wi-Fi, Ethernet).
+      placeholder: Epson EcoTank ET-3850, Wi-Fi
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Put 5 sheets in the feeder
+        2. Press "Scan fronts"
+        3. …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead
+    validations:
+      required: true
+  - type: markdown
+    attributes:
+      value: |
+        **Before attaching anything.** Issues and attachments are public and cannot be deleted.
+        Do not attach scans of real documents. In logs and screenshots, replace the device's
+        network address, serial number and UUID with placeholders (`192.0.2.10`, `X000000000`,
+        `00000000-0000-4000-8000-000000000000`).
+  - type: textarea
+    id: attachments
+    attributes:
+      label: Screenshots or files (optional)
+      description: Drag and drop files here.

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { APP_HOST, APP_SCHEME, resolveAppFile } from '../../src/main/app-protocol';
+import { BUNDLED_PACKAGES_FILE } from '../../tooling/bundled-packages-plugin';
 import { buildCsp, parseCsp } from '../../tooling/csp';
 
 // Собранный renderer (B-28; B-29, U1). Сборка идёт во временный каталог из самого теста:
@@ -103,6 +104,12 @@ describe('схема интерфейса и каталог сборки', () =>
     for (const file of emitted) {
       const url = `${APP_SCHEME}://${APP_HOST}/${file.split('\\').join('/')}`;
       const resolved = resolveAppFile(url, rendererDir);
+      if (file === BUNDLED_PACKAGES_FILE) {
+        // Служебный файл плагина состава сборки (B-40): в asar не едет (`files:` в
+        // electron-builder.yml), и схема его отдавать не должна — JSON вне белого списка типов.
+        expect(resolved, `${file}: служебный JSON не должен отдаваться схемой`).toBeNull();
+        continue;
+      }
       expect(resolved, `${file}: схема не отдаст этот файл`).not.toBeNull();
       expect(resolved?.path).toBe(join(rendererDir, file));
     }

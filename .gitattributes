@@ -13,6 +13,7 @@
 *.woff2 binary
 *.ttf binary
 *.otf binary
+*.webp binary
 
 # Фикстуры — байт в байт: ни git, ни форматер их не трогают.
 test/fixtures/** -text

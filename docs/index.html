@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Duplexn't — duplex scanning on a simplex scanner</title>
+<meta name="description" content="Duplexn't gets both sides of every page out of a scanner with a one-sided feeder: scan the fronts, scan the backs, get one PDF in the right order.">
+<link rel="icon" href="assets/img/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/fonts/fonts.css">
+<style>
+html{scroll-behavior:smooth}
+body{margin:0;background:#f2efe8;color:#1c1a16;font-family:"Golos Text",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:#0f7a5a}
+a:hover{color:#0a5b43}
+*{box-sizing:border-box}
+@keyframes feed{0%{transform:translateY(-22px) scaleY(.98);opacity:0}25%{opacity:1}100%{transform:translateY(30px);opacity:0}}
+@keyframes pulse{0%,100%{opacity:.35}50%{opacity:1}}
+@keyframes turn180{0%{transform:translateY(-10px) rotate(0) scale(.98);opacity:0}14%{transform:translateY(0) rotate(0) scale(1);opacity:1}24%{transform:translateY(-7px) rotate(0) scale(1.03);opacity:1}54%{transform:translateY(-7px) rotate(180deg) scale(1.03);opacity:1}64%{transform:translateY(0) rotate(180deg) scale(1);opacity:1}76%{transform:translateY(0) rotate(180deg) scale(1);opacity:1}94%{transform:translateY(34px) rotate(180deg) scale(.96);opacity:0}100%{transform:translateY(34px) rotate(180deg) scale(.96);opacity:0}}
+@keyframes pair{0%,12%{transform:translateX(var(--dx)) translateY(-8px);opacity:0}30%,82%{transform:none;opacity:1}100%{transform:none;opacity:1}}
+@keyframes split{0%,18%{transform:translateX(0)}42%,84%{transform:translateX(var(--dx))}100%{transform:translateX(0)}}
+@keyframes tag{0%,30%{opacity:0;transform:translateY(-4px)}46%,82%{opacity:1;transform:none}96%,100%{opacity:0}}
+@keyframes level{0%,20%{transform:rotate(-6deg)}46%,84%{transform:rotate(0)}100%{transform:rotate(-6deg)}}
+@keyframes sort-ok-f1{0%{transform:translate(14px,52px);opacity:1;z-index:10;}3.95%{transform:translate(14px,52px);opacity:1;z-index:10;}3.97%{transform:translate(14px,52px);opacity:1;z-index:30;}3.98%{transform:translate(14px,52px);opacity:1;z-index:30;}9.24%{transform:translate(44px,26px);opacity:1;z-index:30;}14.5%{transform:translate(74px,40px);opacity:1;z-index:30;}61.84%{transform:translate(74px,40px);opacity:1;z-index:30;}61.87%{transform:translate(74px,40px);opacity:1;z-index:40;}73.68%{transform:translate(136px,72px);opacity:1;z-index:40;}78.95%{transform:translate(136px,72px);opacity:1;z-index:40;}88.16%{transform:translate(136px,112px);opacity:0;z-index:40;}88.17%{transform:translate(136px,112px);opacity:0;z-index:40;}88.18%{transform:translate(14px,52px);opacity:0;z-index:10;}98.68%{transform:translate(14px,52px);opacity:1;z-index:10;}100%{transform:translate(14px,52px);opacity:1;z-index:10;}}
+@keyframes sort-ok-f2{0%{transform:translate(17px,55px);opacity:1;z-index:9;}12.63%{transform:translate(17px,55px);opacity:1;z-index:9;}12.66%{transform:translate(17px,55px);opacity:1;z-index:31;}12.67%{transform:translate(17px,55px);opacity:1;z-index:31;}17.92%{transform:translate(76.5px,26px);opacity:1;z-index:31;}23.18%{transform:translate(136px,40px);opacity:1;z-index:31;}61.84%{transform:translate(136px,40px);opacity:1;z-index:31;}61.87%{transform:translate(136px,40px);opacity:1;z-index:42;}73.68%{transform:translate(136px,82px);opacity:1;z-index:42;}78.95%{transform:translate(136px,82px);opacity:1;z-index:42;}88.16%{transform:translate(136px,122px);opacity:0;z-index:42;}88.17%{transform:translate(136px,122px);opacity:0;z-index:42;}88.18%{transform:translate(17px,55px);opacity:0;z-index:9;}98.68%{transform:translate(17px,55px);opacity:1;z-index:9;}100%{transform:translate(17px,55px);opacity:1;z-index:9;}}
+@keyframes sort-ok-f3{0%{transform:translate(20px,58px);opacity:1;z-index:8;}21.32%{transform:translate(20px,58px);opacity:1;z-index:8;}21.34%{transform:translate(20px,58px);opacity:1;z-index:32;}21.35%{transform:translate(20px,58px);opacity:1;z-index:32;}26.61%{transform:translate(109px,26px);opacity:1;z-index:32;}31.87%{transform:translate(198px,40px);opacity:1;z-index:32;}61.84%{transform:translate(198px,40px);opacity:1;z-index:32;}61.87%{transform:translate(198px,40px);opacity:1;z-index:44;}73.68%{transform:translate(136px,92px);opacity:1;z-index:44;}78.95%{transform:translate(136px,92px);opacity:1;z-index:44;}88.16%{transform:translate(136px,132px);opacity:0;z-index:44;}88.17%{transform:translate(136px,132px);opacity:0;z-index:44;}88.18%{transform:translate(20px,58px);opacity:0;z-index:8;}98.68%{transform:translate(20px,58px);opacity:1;z-index:8;}100%{transform:translate(20px,58px);opacity:1;z-index:8;}}
+@keyframes sort-ok-b1{0%{transform:translate(258px,52px);opacity:1;z-index:10;}31.58%{transform:translate(258px,52px);opacity:1;z-index:10;}31.61%{transform:translate(258px,52px);opacity:1;z-index:20;}31.62%{transform:translate(258px,52px);opacity:1;z-index:20;}36.87%{transform:translate(170px,34px);opacity:1;z-index:20;}42.13%{transform:translate(82px,48px);opacity:1;z-index:20;}61.84%{transform:translate(82px,48px);opacity:1;z-index:20;}61.87%{transform:translate(82px,48px);opacity:1;z-index:41;}73.68%{transform:translate(136px,77px);opacity:1;z-index:41;}78.95%{transform:translate(136px,77px);opacity:1;z-index:41;}88.16%{transform:translate(136px,117px);opacity:0;z-index:41;}88.17%{transform:translate(136px,117px);opacity:0;z-index:41;}88.18%{transform:translate(258px,52px);opacity:0;z-index:10;}98.68%{transform:translate(258px,52px);opacity:1;z-index:10;}100%{transform:translate(258px,52px);opacity:1;z-index:10;}}
+@keyframes sort-ok-b2{0%{transform:translate(255px,55px);opacity:1;z-index:9;}40.26%{transform:translate(255px,55px);opacity:1;z-index:9;}40.29%{transform:translate(255px,55px);opacity:1;z-index:21;}40.3%{transform:translate(255px,55px);opacity:1;z-index:21;}45.55%{transform:translate(199.5px,34px);opacity:1;z-index:21;}50.82%{transform:translate(144px,48px);opacity:1;z-index:21;}61.84%{transform:translate(144px,48px);opacity:1;z-index:21;}61.87%{transform:translate(144px,48px);opacity:1;z-index:43;}73.68%{transform:translate(136px,87px);opacity:1;z-index:43;}78.95%{transform:translate(136px,87px);opacity:1;z-index:43;}88.16%{transform:translate(136px,127px);opacity:0;z-index:43;}88.17%{transform:translate(136px,127px);opacity:0;z-index:43;}88.18%{transform:translate(255px,55px);opacity:0;z-index:9;}98.68%{transform:translate(255px,55px);opacity:1;z-index:9;}100%{transform:translate(255px,55px);opacity:1;z-index:9;}}
+@keyframes sort-ok-b3{0%{transform:translate(252px,58px);opacity:1;z-index:8;}48.95%{transform:translate(252px,58px);opacity:1;z-index:8;}48.97%{transform:translate(252px,58px);opacity:1;z-index:22;}48.98%{transform:translate(252px,58px);opacity:1;z-index:22;}54.24%{transform:translate(229px,34px);opacity:1;z-index:22;}59.5%{transform:translate(206px,48px);opacity:1;z-index:22;}61.84%{transform:translate(206px,48px);opacity:1;z-index:22;}61.87%{transform:translate(206px,48px);opacity:1;z-index:45;}73.68%{transform:translate(136px,97px);opacity:1;z-index:45;}78.95%{transform:translate(136px,97px);opacity:1;z-index:45;}88.16%{transform:translate(136px,137px);opacity:0;z-index:45;}88.17%{transform:translate(136px,137px);opacity:0;z-index:45;}88.18%{transform:translate(252px,58px);opacity:0;z-index:8;}98.68%{transform:translate(252px,58px);opacity:1;z-index:8;}100%{transform:translate(252px,58px);opacity:1;z-index:8;}}
+@media (prefers-reduced-motion:reduce){[data-anim]{animation:none!important;opacity:1!important}}
+[data-still="true"] [data-anim]{animation:none!important;opacity:1!important}
+html.i18n-pending body{visibility:hidden}
+.hv1:hover{color:#1c1a16!important;text-decoration:underline!important}
+.hv2:hover{color:#1c1a16!important;text-decoration:underline!important}
+.hv3:hover{color:#1c1a16!important;text-decoration:underline!important}
+.hv4:hover{color:#1c1a16!important;text-decoration:underline!important}
+.hv5:hover{color:#1c1a16!important}
+.hv6:hover{color:#1c1a16!important}
+.hv7:hover{filter:brightness(1.08)!important;color:#fff!important}
+.hv8:hover{border-color:#4a463f!important;color:#4a463f!important}
+.hv9:hover{border-color:#4a463f!important}
+.hv10:hover{border-color:#4a463f!important}
+.hv11:hover{color:#a06a2a!important}
+.hv12:hover{color:#a06a2a!important}
+.hv13:hover{background:#fff!important;color:#1c1a16!important}
+.hv14:hover{border-color:#f7f5f1!important;color:#fff!important}
+.hv15:hover{color:#1c1a16!important}
+.hv16:hover{color:#1c1a16!important}
+.hv17:hover{color:#1c1a16!important}
+</style>
+<script>
+/* Язык выбирается до отрисовки: ?lang= → сохранённый выбор → язык браузера.
+   Английский уже в разметке; для другого языка страница прячется, пока main.js не подставит перевод. */
+(function () {
+  var lang = 'en';
+  try {
+    var q = (location.search.match(/[?&]lang=(en|ru)\b/) || [])[1];
+    var saved = null;
+    try { saved = localStorage.getItem('lang'); } catch (e) {}
+    var nav = ((navigator.languages && navigator.languages[0]) || navigator.language || '').toLowerCase();
+    lang = q || (saved === 'en' || saved === 'ru' ? saved : (nav.indexOf('ru') === 0 ? 'ru' : 'en'));
+  } catch (e) {}
+  window.DUPLEXNT_LANG = lang;
+  var root = document.documentElement;
+  root.lang = lang;
+  if (lang !== 'en') {
+    root.classList.add('i18n-pending');
+    setTimeout(function () { root.classList.remove('i18n-pending'); }, 3000);
+  }
+})();
+</script>
+<script src="assets/js/locales.js" defer></script>
+<script src="assets/js/main.js" defer></script>
+</head>
+<body>
+<div style="min-height:100vh;display:flex;flex-direction:column;overflow:clip">
+
+  <header style="width:100%;max-width:1180px;margin:0 auto;padding:22px clamp(18px,4vw,34px);display:flex;align-items:center;gap:22px;flex-wrap:wrap">
+    <a href="#top" style="display:flex;align-items:center;gap:10px;text-decoration:none;color:#1c1a16">
+      <img src="assets/img/icon.svg" alt="" width="30" height="30" style="display:block">
+      <span style="font:600 16px/1 'Golos Text',sans-serif;letter-spacing:-.01em">Duplexn't</span>
+      <span style="font:600 10px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;padding:4px 6px;border-radius:4px;background:#1c1a16;color:#f2efe8">BETA</span>
+    </a>
+    <nav style="margin-left:auto;display:flex;align-items:center;gap:22px;flex-wrap:wrap">
+      <a class="hv1" href="#how" style="font:500 13px/1 'Golos Text',sans-serif;color:#4a463f;text-decoration:none;white-space:nowrap" data-i18n="page.how_it_works">How it works</a>
+      <a class="hv2" href="#features" style="font:500 13px/1 'Golos Text',sans-serif;color:#4a463f;text-decoration:none;white-space:nowrap" data-i18n="page.features">Features</a>
+      <a class="hv3" href="#requirements" style="font:500 13px/1 'Golos Text',sans-serif;color:#4a463f;text-decoration:none;white-space:nowrap" data-i18n="page.requirements">Requirements</a>
+      <a class="hv4" href="#disclaimer" style="font:500 13px/1 'Golos Text',sans-serif;color:#4a463f;text-decoration:none;white-space:nowrap" data-i18n="page.disclaimer">Disclaimer</a>
+      <div role="group" aria-label="Language" data-i18n-attr="aria-label:ui.langGroup" style="display:inline-flex;align-items:center;gap:6px;padding-left:22px;border-left:1px solid rgba(28,26,22,.16);font:500 12px/1 'IBM Plex Mono',monospace;letter-spacing:.06em">
+        <button class="hv5" type="button" id="lang-en" aria-pressed="true" lang="en" style="padding:0;border:0;background:none;font:inherit;letter-spacing:inherit;color:#1c1a16;text-decoration:underline;text-underline-offset:4px;cursor:pointer;transition:color .2s">ENG</button>
+        <span aria-hidden="true" style="color:#b9b3a7">/</span>
+        <button class="hv6" type="button" id="lang-ru" aria-pressed="false" lang="ru" style="padding:0;border:0;background:none;font:inherit;letter-spacing:inherit;color:#8b857a;text-decoration:none;text-underline-offset:4px;cursor:pointer;transition:color .2s">RU</button>
+      </div>
+    </nav>
+  </header>
+
+  
+
+  <main id="top" style="flex:1">
+
+    
+
+    <section style="max-width:1180px;margin:0 auto;padding:clamp(40px,8vw,96px) clamp(18px,4vw,34px) 0;display:flex;flex-direction:column;gap:26px">
+      <div style="font:500 12px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;color:#6f6a60" data-i18n="page.duplex_scanning_without_a">DUPLEX SCANNING WITHOUT A DUPLEX SCANNER</div>
+      <h1 style="margin: 0; font: 600 clamp(38px,6vw,68px)/1.04 'Golos Text',sans-serif; letter-spacing: -.025em; text-wrap: balance; width: 810px; height: 141px" data-i18n="page.duplexnt_no_duplex_yet">Duplexn't: no duplex, both sides anyway!</h1>
+      <p style="margin: 0; max-width: 58ch; font: 400 clamp(16px,1.6vw,19px)/1.55 'Golos Text',sans-serif; color: #6f6a60; text-wrap: pretty; height: 143px; width: 983px" data-i18n-html="page.if_your_scanners_document">If your scanner’s document feeder only does one side, there’s no need to scan both sides of every page by hand. Seriously, why would you? It’s the 21st century, AI is going to wipe us all out in a couple of years, and you’re wasting time on manual labor? Just install&nbsp;Duplexn't already!</p>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding-top:6px">
+        <a class="hv7" href="https://github.com/gyuiltylizard/duplexnt/releases" style="display:inline-flex;align-items:center;gap:10px;padding:16px 26px;border-radius:8px;background:#4a463f;color:#fff;text-decoration:none;font:600 15px/1 'Golos Text',sans-serif;box-shadow:0 1px 2px rgba(28,26,22,.2)" data-i18n-html="page.download_for_windows_beta">Download for Windows<span style="font:600 10px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;padding:4px 6px;border-radius:4px;background:#f2efe8;color:#1c1a16">BETA</span></a>
+        <a class="hv8" href="https://github.com/gyuiltylizard/duplexnt" style="display:inline-flex;align-items:center;padding:15px 22px;border-radius:8px;border:1px solid rgba(28,26,22,.16);background:#fbfaf7;color:#1c1a16;text-decoration:none;font:500 15px/1 'Golos Text',sans-serif" data-i18n="page.source_code">Source code</a>
+      </div>
+      <div style="font:400 12.5px/1.45 'IBM Plex Mono',monospace;color:#6f6a60" data-i18n="page.windows_10_and_11">Windows 10 and 11 · eSCL network scanners · PDF output</div>
+    </section><section style="max-width:1260px;margin:0 auto;padding:clamp(40px,6vw,72px) clamp(10px,2vw,34px) 0">
+      <div id="hero-carousel" style="display:flex;flex-direction:column;gap:18px">
+      <figure aria-roledescription="carousel" data-i18n-attr="aria-roledescription:ui.carousel" style="position:relative;margin:0;border-radius:12px;overflow:hidden;box-shadow:0 30px 70px rgba(28,26,22,.26);border:1px solid rgba(28,26,22,.1);background:#f2efe8;aspect-ratio:1280/800">
+        <img data-slide="0" src="assets/img/editor.webp" alt="Duplexn&#x27;t editor: page strip of two documents, page preview and assembly check" data-i18n-attr="alt:slides.0.alt" aria-hidden="false" width="1280" height="800" style="position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:cover;opacity:1;transition:opacity .6s ease">
+        <img data-slide="1" src="assets/img/setup.webp" alt="Duplexn&#x27;t setup screen: scanner connected, scan settings" data-i18n-attr="alt:slides.1.alt" aria-hidden="true" width="1280" height="800" loading="lazy" style="position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .6s ease">
+      </figure>
+      <div style="display:flex;align-items:center;gap:14px 22px;flex-wrap:wrap;padding:0 clamp(8px,2vw,0px)">
+        <span style="font:500 12.5px/1.4 'IBM Plex Mono',monospace;color:#4a463f" id="slide-caption">Editor: pages, documents, assembly check</span>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:14px">
+          <div style="display:flex;gap:8px">
+            <button type="button" data-dot="0" aria-label="Screenshot 1" data-i18n-attr="aria-label:slides.0.label" style="all:unset;cursor:pointer;width:22px;height:6px;border-radius:3px;background:#1c1a16;transition:width .3s ease,background .3s ease"></button>
+            <button type="button" data-dot="1" aria-label="Screenshot 2" data-i18n-attr="aria-label:slides.1.label" style="all:unset;cursor:pointer;width:6px;height:6px;border-radius:3px;background:rgba(28,26,22,.25);transition:width .3s ease,background .3s ease"></button>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="hv9" type="button" id="slide-prev" aria-label="Previous screenshot" data-i18n-attr="aria-label:ui.prevShot" style="width:34px;height:34px;border-radius:8px;border:1px solid rgba(28,26,22,.16);background:#fbfaf7;color:#1c1a16;font:500 15px/1 'Golos Text',sans-serif;cursor:pointer">←</button>
+            <button class="hv10" type="button" id="slide-next" aria-label="Next screenshot" data-i18n-attr="aria-label:ui.nextShot" style="width:34px;height:34px;border-radius:8px;border:1px solid rgba(28,26,22,.16);background:#fbfaf7;color:#1c1a16;font:500 15px/1 'Golos Text',sans-serif;cursor:pointer">→</button>
+          </div>
+        </div>
+      </div>
+      </div>
+    </section>
+
+    <section id="how" style="max-width:1180px;margin:0 auto;padding:clamp(72px,10vw,128px) clamp(18px,4vw,34px) 0;display:flex;flex-direction:column;gap:34px">
+      <div style="display:flex;flex-direction:column;gap:14px;max-width:640px">
+        <div style="font:500 12px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;color:#6f6a60" data-i18n="page.how_it_works_2">HOW IT WORKS</div>
+        <h2 style="margin:0;font:600 clamp(28px,3.6vw,40px)/1.12 'Golos Text',sans-serif;letter-spacing:-.02em;text-wrap:balance" data-i18n="page.scanning">Scanning</h2>
+      </div>
+
+      <div style="display:flex;flex-wrap:wrap;gap:1px;background:rgba(28,26,22,.1);border:1px solid rgba(28,26,22,.1);border-radius:12px;overflow:hidden">
+
+        <article style="flex:1 1 280px;min-width:0;background:#fbfaf7;display:flex;flex-direction:column">
+          <div style="height:240px;background:#e8e4db;display:flex;align-items:center;justify-content:center">
+            <div aria-hidden="true" style="position:relative;width:150px;height:186px">
+              <span style="position:absolute;left:16px;top:0;width:118px;height:150px;border-radius:4px;background:#fff;border:1px solid rgba(28,26,22,.16);box-shadow:0 1px 0 rgba(28,26,22,.08)"></span>
+              <span style="position:absolute;left:16px;top:6px;width:118px;height:150px;border-radius:4px;background:#fff;border:1px solid rgba(28,26,22,.16)"></span>
+              <span data-anim="1" style="position:absolute;left:16px;top:12px;width:118px;height:150px;border-radius:4px;background:#fff;border:1px solid rgba(28,26,22,.16);animation:feed 1.2s ease-in-out infinite;padding:22px 14px;display:flex;flex-direction:column;gap:5px">
+                <span style="display:block;height:2px;width:70%;border-radius:2px;background:rgba(28,26,22,.2)"></span>
+                <span style="display:block;height:2px;width:88%;border-radius:2px;background:rgba(28,26,22,.13)"></span>
+                <span style="display:block;height:2px;width:80%;border-radius:2px;background:rgba(28,26,22,.13)"></span>
+                <span style="display:block;height:2px;width:84%;border-radius:2px;background:rgba(28,26,22,.13)"></span>
+              </span>
+              <span style="position:absolute;left:0;bottom:0;width:150px;height:30px;border-radius:4px;background:#cfc9bd;z-index:3"></span>
+              <span data-anim="1" style="position:absolute;left:12px;bottom:-14px;width:126px;height:4px;border-radius:2px;background:#4a463f;animation:pulse 1.2s ease-in-out infinite"></span>
+            </div>
+          </div>
+          <div style="padding:26px 26px 30px;display:flex;flex-direction:column;gap:10px">
+            <div style="font:500 11.5px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;color:#4a463f" data-i18n="page.01_scan_one">01 · PASS ONE</div>
+            <h3 style="margin:0;font:600 20px/1.2 'Golos Text',sans-serif;letter-spacing:-.01em" data-i18n-html="page.front_sides_first">Front sides first<br></h3>
+            <p style="margin:0;font:400 15px/1.55 'Golos Text',sans-serif;color:#6f6a60;text-wrap:pretty" data-i18n-html="page.put_the_whole_stack">Put the whole stack in&nbsp;the tray face up and&nbsp;start scanning.</p>
+          </div>
+        </article>
+
+        <article style="flex:1 1 280px;min-width:0;background:#fbfaf7;display:flex;flex-direction:column">
+          <div style="height:240px;background:#e8e4db;display:flex;align-items:center;justify-content:center">
+            <div aria-hidden="true" style="position:relative;width:150px;height:186px">
+              <span style="position:absolute;left:22px;top:22px;width:114px;height:146px;border-radius:4px;background:#efece5;border:1px solid rgba(28,26,22,.14)"></span>
+              <span style="position:absolute;left:20px;top:18px;width:114px;height:146px;border-radius:4px;background:#f7f5f1;border:1px solid rgba(28,26,22,.14)"></span>
+              <span data-anim="1" style="position:absolute;left:18px;top:14px;width:114px;height:146px;border-radius:4px;background:#fff;border:1px solid rgba(28,26,22,.16);display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 10px;animation:turn180 3.8s ease-in-out infinite">
+                <span style="font:400 17px/1 'Golos Text',sans-serif;color:#4a463f">↑</span>
+                <span style="font:500 9.5px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;color:#4a463f" data-i18n="page.top">TOP</span>
+                <span style="align-self:stretch;margin-top:8px;display:flex;flex-direction:column;gap:4px">
+                  <span style="display:block;height:2px;width:86%;border-radius:2px;background:rgba(28,26,22,.13)"></span>
+                  <span style="display:block;height:2px;width:72%;border-radius:2px;background:rgba(28,26,22,.13)"></span>
+                  <span style="display:block;height:2px;width:80%;border-radius:2px;background:rgba(28,26,22,.13)"></span>
+                </span>
+              </span>
+              <span style="position:absolute;left:0;bottom:0;width:150px;height:30px;border-radius:4px;background:#cfc9bd;z-index:3"></span>
+            </div>
+          </div>
+          <div style="padding:26px 26px 30px;display:flex;flex-direction:column;gap:10px">
+            <div style="font:500 11.5px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;color:#a06a2a" data-i18n="page.02_scan_two">02 · PASS TWO</div>
+            <h3 style="margin:0;font:600 20px/1.2 'Golos Text',sans-serif;letter-spacing:-.01em" data-i18n="page.then_the_not_front">Then the not-front sides</h3>
+            <p style="margin:0;font:400 15px/1.55 'Golos Text',sans-serif;color:#6f6a60;text-wrap:pretty" data-i18n-html="page.then_put_whatever_came">Then take whatever crawled out and put it back in the tray. And scan the back sides.<br></p>
+          </div>
+        </article>
+
+        <article style="flex:1 1 280px;min-width:0;background:#fbfaf7;display:flex;flex-direction:column">
+          <div style="height:240px;background:#e8e4db;display:flex;align-items:center;justify-content:center;overflow:hidden">
+            <div aria-hidden="true" style="position:relative;width:320px;height:170px;flex:none;overflow:hidden">
+              <span data-anim="1" style="position:absolute;left:0;top:0;width:48px;height:64px;box-sizing:border-box;border-radius:4px;background:#fff;border:1px solid rgba(28,26,22,.16);border-top:3px solid #4a463f;animation:sort-ok-f3 3.8s ease-in-out infinite both"></span>
+              <span data-anim="1" style="position:absolute;left:0;top:0;width:48px;height:64px;box-sizing:border-box;border-radius:4px;background:#fff;border:1px solid rgba(28,26,22,.16);border-top:3px solid #4a463f;animation:sort-ok-f2 3.8s ease-in-out infinite both"></span>
+              <span data-anim="1" style="position:absolute;left:0;top:0;width:48px;height:64px;box-sizing:border-box;border-radius:4px;background:#fff;border:1px solid rgba(28,26,22,.16);border-top:3px solid #4a463f;animation:sort-ok-f1 3.8s ease-in-out infinite both"></span>
+              <span data-anim="1" style="position:absolute;left:0;top:0;width:48px;height:64px;box-sizing:border-box;border-radius:4px;background:#fff;border:1px solid rgba(28,26,22,.16);border-top:3px solid #a06a2a;animation:sort-ok-b3 3.8s ease-in-out infinite both"></span>
+              <span data-anim="1" style="position:absolute;left:0;top:0;width:48px;height:64px;box-sizing:border-box;border-radius:4px;background:#fff;border:1px solid rgba(28,26,22,.16);border-top:3px solid #a06a2a;animation:sort-ok-b2 3.8s ease-in-out infinite both"></span>
+              <span data-anim="1" style="position:absolute;left:0;top:0;width:48px;height:64px;box-sizing:border-box;border-radius:4px;background:#fff;border:1px solid rgba(28,26,22,.16);border-top:3px solid #a06a2a;animation:sort-ok-b1 3.8s ease-in-out infinite both"></span>
+            </div>
+          </div>
+          <div style="padding:26px 26px 30px;display:flex;flex-direction:column;gap:10px">
+            <div style="font:500 11.5px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;color:#4a463f" data-i18n-html="page.03_put_it_together">03 · PUT IT TOGETHER<br></div>
+            <h3 style="margin:0;font:600 20px/1.2 'Golos Text',sans-serif;letter-spacing:-.01em" data-i18n="page.and_done">And... done!</h3>
+            <p style="margin:0;font:400 15px/1.55 'Golos Text',sans-serif;color:#6f6a60;text-wrap:pretty" data-i18n="page.unbelievable_you_now_have">Unbelievable! You now have a complete document!</p>
+          </div>
+        </article>
+
+      </div>
+    </section>
+
+    <section id="editor" style="max-width:1180px;margin:0 auto;padding:clamp(72px,10vw,128px) clamp(18px,4vw,34px) 0;display:flex;flex-direction:column;gap:34px">
+      <div style="display:flex;flex-direction:column;gap:14px;max-width:680px">
+        <div style="font:500 12px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;color:#6f6a60" data-i18n="page.after_scanning">AFTER SCANNING</div>
+        <h2 style="margin:0;font:600 clamp(28px,3.6vw,40px)/1.12 'Golos Text',sans-serif;letter-spacing:-.02em;text-wrap:balance" data-i18n="page.editing">Editing</h2>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:1px;background:rgba(28,26,22,.1);border:1px solid rgba(28,26,22,.1);border-radius:12px;overflow:hidden">
+
+        <article style="flex:1 1 420px;min-width:0;background:#fbfaf7;display:flex;flex-direction:column">
+          <div style="height:280px;background:#e8e4db;display:flex;align-items:center;justify-content:center">
+            <div aria-hidden="true" style="position:relative;width:270px;height:96px">
+              <span data-anim="1" style="--dx:-18px;position:absolute;left:18px;top:0;width:34px;height:46px;border-radius:3px;background:#fff;border:1px solid rgba(28,26,22,.16);border-top:3px solid #4a463f;animation:split 4.2s ease-in-out infinite"></span>
+              <span data-anim="1" style="--dx:-18px;position:absolute;left:58px;top:0;width:34px;height:46px;border-radius:3px;background:#fff;border:1px solid rgba(28,26,22,.16);border-top:3px solid #4a463f;animation:split 4.2s ease-in-out infinite"></span>
+              <span style="position:absolute;left:98px;top:0;width:34px;height:46px;border-radius:3px;background:#fff;border:1px solid rgba(28,26,22,.16);border-top:3px solid #a06a2a"></span>
+              <span style="position:absolute;left:138px;top:0;width:34px;height:46px;border-radius:3px;background:#fff;border:1px solid rgba(28,26,22,.16);border-top:3px solid #a06a2a"></span>
+              <span style="position:absolute;left:178px;top:0;width:34px;height:46px;border-radius:3px;background:#fff;border:1px solid rgba(28,26,22,.16);border-top:3px solid #a06a2a"></span>
+              <span data-anim="1" style="--dx:18px;position:absolute;left:218px;top:0;width:34px;height:46px;border-radius:3px;background:#fff;border:1px solid rgba(28,26,22,.16);border-top:3px solid #0f7a5a;animation:split 4.2s ease-in-out infinite"></span>
+              <span data-anim="1" style="position:absolute;left:0;top:62px;width:74px;text-align:center;font:500 11px/1.3 'IBM Plex Mono',monospace;color:#4a463f;animation:tag 4.2s ease-in-out infinite" data-i18n="page.contract_pdf">invoice.pdf</span>
+              <span data-anim="1" style="position:absolute;left:98px;top:62px;width:114px;text-align:center;font:500 11px/1.3 'IBM Plex Mono',monospace;color:#a06a2a;animation:tag 4.2s ease-in-out infinite" data-i18n="page.inventory_pdf">dentist.pdf</span>
+              <span data-anim="1" style="position:absolute;left:206px;top:62px;width:94px;text-align:center;font:500 11px/1.3 'IBM Plex Mono',monospace;color:#0f7a5a;animation:tag 4.2s ease-in-out infinite" data-i18n="page.certificate_pdf">insurance.pdf</span>
+            </div>
+          </div>
+          <div style="padding:28px 28px 32px;display:flex;flex-direction:column;gap:10px">
+            <div style="font:500 11.5px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;color:#4a463f" data-i18n="page.several_documents">SEVERAL DOCUMENTS</div>
+            <h3 style="margin:0;font:600 22px/1.2 'Golos Text',sans-serif;letter-spacing:-.01em" data-i18n="page.splitting_into_documents">Splitting into documents</h3>
+            <p style="margin:0;font:400 15px/1.55 'Golos Text',sans-serif;color:#6f6a60;text-wrap:pretty" data-i18n="page.an_invoice_a_bill">An invoice, a bill from the dentist and some random scrap of paper from the insurance company… Scan them all together, then mark where one ends and the next begins — and save them all in one go.</p>
+          </div>
+        </article>
+
+        <article style="flex:1 1 420px;min-width:0;background:#fbfaf7;display:flex;flex-direction:column">
+          <div style="height:280px;background:#e8e4db;display:flex;align-items:center;justify-content:center">
+            <div aria-hidden="true" style="position:relative;width:150px;height:196px;border-radius:4px;background:#fff;border:1px solid rgba(28,26,22,.16);box-shadow:0 1px 0 rgba(28,26,22,.08);overflow:hidden">
+              <div data-anim="1" style="position:absolute;inset:26px 18px;display:flex;flex-direction:column;gap:9px;transform-origin:50% 40%;animation:level 4.2s ease-in-out infinite">
+                <span style="display:block;height:3px;width:62%;border-radius:2px;background:rgba(28,26,22,.32)"></span>
+                <span style="display:block;height:2px;width:100%;border-radius:2px;background:rgba(28,26,22,.16)"></span>
+                <span style="display:block;height:2px;width:92%;border-radius:2px;background:rgba(28,26,22,.16)"></span>
+                <span style="display:block;height:2px;width:97%;border-radius:2px;background:rgba(28,26,22,.16)"></span>
+                <span style="display:block;height:2px;width:70%;border-radius:2px;background:rgba(28,26,22,.16)"></span>
+                <span style="display:block;height:2px;width:100%;border-radius:2px;background:rgba(28,26,22,.16);margin-top:8px"></span>
+                <span style="display:block;height:2px;width:88%;border-radius:2px;background:rgba(28,26,22,.16)"></span>
+                <span style="display:block;height:2px;width:95%;border-radius:2px;background:rgba(28,26,22,.16)"></span>
+                <span style="display:block;height:2px;width:54%;border-radius:2px;background:rgba(28,26,22,.16)"></span>
+              </div>
+            </div>
+          </div>
+          <div style="padding:28px 28px 32px;display:flex;flex-direction:column;gap:10px">
+            <div style="font:500 11.5px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;color:#4a463f" data-i18n="page.straightening">STRAIGHTENING</div>
+            <h3 style="margin:0;font:600 22px/1.2 'Golos Text',sans-serif;letter-spacing:-.01em" data-i18n="page.skew_correction">Skew correction</h3>
+            <p style="margin:0;font:400 15px/1.55 'Golos Text',sans-serif;color:#6f6a60;text-wrap:pretty" data-i18n="page.if_a_page_comes">If a page comes out crooked, Duplexn’t will straighten it automatically. What? Yes! Pure magic! (Not really — just a sweatshop full of tiny straightening elves.)</p>
+          </div>
+        </article>
+
+      </div>
+
+      <div id="features" style="display:flex;flex-direction:column;gap:22px;padding-top:clamp(20px,3vw,34px);scroll-margin-top:24px">
+        <h3 style="margin:0;font:600 clamp(22px,2.4vw,26px)/1.2 'Golos Text',sans-serif;letter-spacing:-.015em" data-i18n="page.and_theres_more">And there’s more…</h3>
+        <div style="display:flex;flex-wrap:wrap;column-gap:32px;border-top:1px solid rgba(28,26,22,.14)">
+          <div style="flex:3 1 600px;min-width:0;display:flex;flex-wrap:wrap;column-gap:32px">
+              <div style="flex:1 1 calc((560px - 100%) * 999);min-width:0;padding:24px 0 26px;border-bottom:1px solid rgba(28,26,22,.1);display:flex;flex-direction:column;gap:10px">
+                <span style="font:500 12px/1 'IBM Plex Mono',monospace;color:#8b857a">01</span>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                  <h4 style="margin:0;font:600 17px/1.3 'Golos Text',sans-serif;text-wrap:balance" data-i18n="features.0.title">Reordering</h4>
+                  <p style="margin:0;font:400 14.5px/1.55 'Golos Text',sans-serif;color:#6f6a60;text-wrap:pretty" data-i18n="features.0.text">Drag any page back and forth. Or forth and back. Or here and there. Top to bottom, bottom to top. Amazing!</p>
+                </div>
+              </div>
+              <div style="flex:1 1 calc((560px - 100%) * 999);min-width:0;padding:24px 0 26px;border-bottom:1px solid rgba(28,26,22,.1);display:flex;flex-direction:column;gap:10px">
+                <span style="font:500 12px/1 'IBM Plex Mono',monospace;color:#8b857a">02</span>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                  <h4 style="margin:0;font:600 17px/1.3 'Golos Text',sans-serif;text-wrap:balance" data-i18n="features.1.title">Emptiness detector</h4>
+                  <p style="margin:0;font:400 14.5px/1.55 'Golos Text',sans-serif;color:#6f6a60;text-wrap:pretty" data-i18n="features.1.text">There’s plenty of emptiness in us already. Some people are made entirely of it. Let’s at least get the blank backs out of our documents.</p>
+                </div>
+              </div>
+              <div style="flex:1 1 calc((560px - 100%) * 999);min-width:0;padding:24px 0 26px;border-bottom:1px solid rgba(28,26,22,.1);display:flex;flex-direction:column;gap:10px">
+                <span style="font:500 12px/1 'IBM Plex Mono',monospace;color:#8b857a">03</span>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                  <h4 style="margin:0;font:600 17px/1.3 'Golos Text',sans-serif;text-wrap:balance" data-i18n="features.2.title">Missing pages</h4>
+                  <p style="margin:0;font:400 14.5px/1.55 'Golos Text',sans-serif;color:#6f6a60;text-wrap:pretty" data-i18n="features.2.text">Lazy scanner skipped a page? To hell with it: the app will tell you a page is missing and let you add it to the batch.</p>
+                </div>
+              </div>
+          </div>
+          <div style="flex:2 1 400px;min-width:0;display:flex;flex-wrap:wrap;column-gap:32px">
+              <div style="flex:1 1 calc((380px - 100%) * 999);min-width:0;padding:24px 0 26px;border-bottom:1px solid rgba(28,26,22,.1);display:flex;flex-direction:column;gap:10px">
+                <span style="font:500 12px/1 'IBM Plex Mono',monospace;color:#8b857a">04</span>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                  <h4 style="margin:0;font:600 17px/1.3 'Golos Text',sans-serif;text-wrap:balance" data-i18n="features.3.title">Full Ctrl+Z</h4>
+                  <p style="margin:0;font:400 14.5px/1.55 'Golos Text',sans-serif;color:#6f6a60;text-wrap:pretty" data-i18n="features.3.text">Undo any change at any moment, all the way back to the original. Too bad life doesn’t work like that. Or does it? No, it doesn’t.</p>
+                </div>
+              </div>
+              <div style="flex:1 1 calc((380px - 100%) * 999);min-width:0;padding:24px 0 26px;border-bottom:1px solid rgba(28,26,22,.1);display:flex;flex-direction:column;gap:10px">
+                <span style="font:500 12px/1 'IBM Plex Mono',monospace;color:#8b857a">05</span>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                  <h4 style="margin:0;font:600 17px/1.3 'Golos Text',sans-serif;text-wrap:balance" data-i18n="features.4.title">180° rotation</h4>
+                  <p style="margin:0;font:400 14.5px/1.55 'Golos Text',sans-serif;color:#6f6a60;text-wrap:pretty" data-i18n="features.4.text">Loaded the backs upside down? Ha-ha! Well, not everyone is born a genius. Duplexn't can turn them all right side up at once. Ta-da!</p>
+                </div>
+              </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="requirements" style="max-width:1180px;margin:0 auto;padding:clamp(72px,10vw,128px) clamp(18px,4vw,34px) 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,400px),1fr));gap:clamp(34px,5vw,64px);align-items:center">
+      <div style="display:flex;flex-direction:column;gap:26px">
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div style="font:500 12px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;color:#6f6a60" data-i18n="page.requirements_2">REQUIREMENTS</div>
+          <h2 style="margin:0;font:600 clamp(28px,3.6vw,40px)/1.12 'Golos Text',sans-serif;letter-spacing:-.02em;text-wrap:balance" data-i18n-html="page.how_do_i_get">How do I get my hands on this fountain of joy?</h2>
+        </div>
+        <dl style="margin:0;display:flex;flex-direction:column;gap:1px;background:rgba(28,26,22,.1);border:1px solid rgba(28,26,22,.1);border-radius:8px;overflow:hidden">
+            <div style="display:grid;grid-template-columns:minmax(96px,130px) minmax(0,1fr);gap:16px;padding:16px 18px;background:#fbfaf7">
+              <dt style="font:500 12px/1.5 'IBM Plex Mono',monospace;color:#6f6a60" data-i18n="reqs.0.k">System</dt>
+              <dd style="margin:0;font:400 15px/1.5 'Golos Text',sans-serif;color:#1c1a16" data-i18n="reqs.0.v">Windows 10 or 11</dd>
+            </div>
+            <div style="display:grid;grid-template-columns:minmax(96px,130px) minmax(0,1fr);gap:16px;padding:16px 18px;background:#fbfaf7">
+              <dt style="font:500 12px/1.5 'IBM Plex Mono',monospace;color:#6f6a60" data-i18n="reqs.1.k">Scanner</dt>
+              <dd style="margin:0;font:400 15px/1.5 'Golos Text',sans-serif;color:#1c1a16" data-i18n="reqs.1.v">A network scanner or MFP with an automatic document feeder and eSCL (AirScan) support.</dd>
+            </div>
+            <div style="display:grid;grid-template-columns:minmax(96px,130px) minmax(0,1fr);gap:16px;padding:16px 18px;background:#fbfaf7">
+              <dt style="font:500 12px/1.5 'IBM Plex Mono',monospace;color:#6f6a60" data-i18n="reqs.2.k">Connection</dt>
+              <dd style="margin:0;font:400 15px/1.5 'Golos Text',sans-serif;color:#1c1a16" data-i18n="reqs.2.v">If the scanner is on the same network as your computer, Duplexn't will find it on its own.</dd>
+            </div>
+            <div style="display:grid;grid-template-columns:minmax(96px,130px) minmax(0,1fr);gap:16px;padding:16px 18px;background:#fbfaf7">
+              <dt style="font:500 12px/1.5 'IBM Plex Mono',monospace;color:#6f6a60" data-i18n="reqs.3.k">Result</dt>
+              <dd style="margin:0;font:400 15px/1.5 'Golos Text',sans-serif;color:#1c1a16" data-i18n="reqs.3.v">Magnificent.</dd>
+            </div>
+        </dl>
+      </div>
+      <figure style="margin:0;border-radius:12px;overflow:hidden;box-shadow:0 24px 60px rgba(28,26,22,.22);border:1px solid rgba(28,26,22,.1);aspect-ratio:1280/800">
+        <img src="assets/img/setup.webp" alt="Duplexn&#x27;t setup screen: scanner connected, scan settings" data-i18n-attr="alt:ui.setupAlt" width="1280" height="800" loading="lazy" style="display:block;width:100%;height:auto">
+      </figure>
+    </section>
+
+    
+
+    <section id="disclaimer" style="max-width:1180px;margin:0 auto;padding:clamp(72px,10vw,128px) clamp(18px,4vw,34px) 0;display:flex;flex-direction:column;gap:34px">
+      <div style="font:500 12px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;color:#6f6a60" data-i18n="page.what_is_this">WHAT IS THIS</div>
+      <div style="align-self:center;width:100%;max-width:66ch;font-size:17px;display:flex;flex-direction:column;margin-top:-20px">
+        
+        <h2 style="margin:0;font:600 clamp(28px,3.6vw,40px)/1.12 'Golos Text',sans-serif;letter-spacing:-.02em;text-wrap:balance" data-i18n-html="page.whats_all_this_for">What’s all this for?</h2>
+      </div>
+      <div style="max-width:66ch;align-self:center;display:flex;flex-direction:column;gap:18px;font:400 17px/1.65 'Golos Text',sans-serif;color:#4a463f;text-wrap:pretty">
+        
+        <p style="margin:0" data-i18n-html="page.i_made_this_little">I made this app because I got tired of scanning the paperwork that bureaucratic reality so generously showers me with, and because the software from printer makers, and every other program that can do something similar, is TERRIBLE.</p><p style="margin:0" data-i18n-html="page.duplexnt_should_work_with">Duplexn't should work with any device that supports eSCL, but, for obvious reasons, it has only been tested <b>with my home Epson ET-3850</b> (and it’s tired already). So for the rest of the world this is a beta. Or even an alpha. Put simply, Duplexn't may work for you, sort of. Or not at all. That’s fixable, but it takes</p>
+        
+        
+        
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:0;padding:clamp(20px,4vw,48px) 0 0;border-bottom:1px solid rgba(28,26,22,.14);overflow:hidden">
+        
+        <div style="font:700 clamp(56px,13vw,168px)/.9 'Golos Text',sans-serif;letter-spacing:-.04em;color:#1c1a16;text-align:center;position:relative;z-index:1" data-i18n="page.motivation">MOTIVATION</div><img src="assets/img/motivation.webp" alt="" width="1536" height="1024" loading="lazy" style="display:block;width:min(100%,720px);height:auto;margin-top:clamp(8px,2vw,24px)">
+      </div>
+      <div style="max-width:66ch;align-self:center;display:flex;flex-direction:column;gap:18px;font:400 17px/1.65 'Golos Text',sans-serif;color:#4a463f;text-wrap:pretty">
+        <p style="margin:0" data-i18n-html="page.and_requests_in_issues">…and requests in Issues. Nothing motivates me to crack the whip over the code-straightening elves like fresh issues. But keep in mind: if it’s about supporting other devices, you’ll have to help with testing. I’m not about to start a home collection of MFPs.</p>
+        
+      </div>
+    </section>
+
+    <section id="changelog" style="max-width:1180px;margin:0 auto;padding:clamp(72px,10vw,128px) clamp(18px,4vw,34px) 0;display:flex;flex-direction:column;gap:34px;scroll-margin-top:24px">
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:18px;flex-wrap:wrap">
+        <div style="flex:1 1 320px;min-width:0;display:flex;flex-direction:column;gap:14px;max-width:640px">
+          <div style="font:500 12px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;color:#6f6a60" data-i18n="page.version_history">VERSION HISTORY</div>
+          <h2 style="margin:0;font:600 clamp(28px,3.6vw,40px)/1.12 'Golos Text',sans-serif;letter-spacing:-.02em;text-wrap:balance" data-i18n-html="page.what_have_we_got">What have we got here?</h2>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;border-top:1px solid rgba(28,26,22,.14)">
+        <div style="display:flex;flex-direction:column;gap:18px;padding:24px 0;border-bottom:1px solid rgba(28,26,22,.1)">
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="font:600 clamp(18px,2vw,21px)/1.25 'Golos Text',sans-serif;letter-spacing:-.01em;color:#1c1a16">1.0</span>
+              <span style="font:600 10px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;padding:4px 6px;border-radius:4px;background:#1c1a16;color:#f2efe8" data-i18n="page.latest">LATEST</span>
+            </div>
+            <div style="font:400 12.5px/1.45 'IBM Plex Mono',monospace;color:#6f6a60" data-i18n="versions.0.date">First release</div>
+          </div>
+          <ul style="margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px;min-width:0">
+            <li style="display:flex;gap:12px;font:400 15.5px/1.45 'Golos Text',sans-serif;color:#4a463f;text-wrap:pretty"><span aria-hidden="true" style="flex:none;width:6px;height:6px;margin-top:.5em;border-radius:1.5px;background:#a06a2a;transform:rotate(45deg)"></span><span data-i18n="versions.0.items.0">eSCL network scanners</span></li>
+            <li style="display:flex;gap:12px;font:400 15.5px/1.45 'Golos Text',sans-serif;color:#4a463f;text-wrap:pretty"><span aria-hidden="true" style="flex:none;width:6px;height:6px;margin-top:.5em;border-radius:1.5px;background:#a06a2a;transform:rotate(45deg)"></span><span data-i18n="versions.0.items.1">Two-pass duplex assembly</span></li>
+            <li style="display:flex;gap:12px;font:400 15.5px/1.45 'Golos Text',sans-serif;color:#4a463f;text-wrap:pretty"><span aria-hidden="true" style="flex:none;width:6px;height:6px;margin-top:.5em;border-radius:1.5px;background:#a06a2a;transform:rotate(45deg)"></span><span data-i18n="versions.0.items.2">Splitting into documents</span></li>
+            <li style="display:flex;gap:12px;font:400 15.5px/1.45 'Golos Text',sans-serif;color:#4a463f;text-wrap:pretty"><span aria-hidden="true" style="flex:none;width:6px;height:6px;margin-top:.5em;border-radius:1.5px;background:#a06a2a;transform:rotate(45deg)"></span><span data-i18n="versions.0.items.3">Page straightening</span></li>
+          </ul>
+        </div>
+                  <div id="changelog-older" aria-hidden="true" style="display:grid;grid-template-rows:0fr;opacity:0;transition:grid-template-rows .34s cubic-bezier(.3,.7,.2,1),opacity .26s ease">
+            <div style="overflow:hidden;min-height:0">
+              <ol style="margin:0;padding:0;list-style:none;display:flex;flex-direction:column">
+                  <li style="display:flex;flex-direction:column;gap:18px;padding:24px 0;border-bottom:1px solid rgba(28,26,22,.1)">
+                    <div style="display:flex;flex-direction:column;gap:8px">
+                      <span style="font:600 clamp(18px,2vw,21px)/1.25 'Golos Text',sans-serif;letter-spacing:-.01em;color:#1c1a16">0.0</span>
+                      <div style="font:400 12.5px/1.45 'IBM Plex Mono',monospace;color:#6f6a60" data-i18n="versions.1.date">Before the dawn of time</div>
+                    </div>
+                    <ul style="margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px;min-width:0">
+                        <li style="display:flex;gap:12px;font:400 15.5px/1.45 'Golos Text',sans-serif;color:#4a463f;text-wrap:pretty"><span aria-hidden="true" style="flex:none;width:6px;height:6px;margin-top:.5em;border-radius:1.5px;background:#a06a2a;transform:rotate(45deg)"></span><span data-i18n="versions.1.items.0">There was nothing</span></li>
+                        <li style="display:flex;gap:12px;font:400 15.5px/1.45 'Golos Text',sans-serif;color:#4a463f;text-wrap:pretty"><span aria-hidden="true" style="flex:none;width:6px;height:6px;margin-top:.5em;border-radius:1.5px;background:#a06a2a;transform:rotate(45deg)"></span><span data-i18n="versions.1.items.1">The app didn’t exist</span></li>
+                        <li style="display:flex;gap:12px;font:400 15.5px/1.45 'Golos Text',sans-serif;color:#4a463f;text-wrap:pretty"><span aria-hidden="true" style="flex:none;width:6px;height:6px;margin-top:.5em;border-radius:1.5px;background:#a06a2a;transform:rotate(45deg)"></span><span data-i18n="versions.1.items.2">Motivation</span></li>
+                    </ul>
+                  </li>
+              </ol>
+            </div>
+          </div>
+          <div style="display:flex;justify-content:center;position:relative;z-index:1;padding-top:10px">
+            <button class="hv11" type="button" id="older-toggle" aria-expanded="false" aria-controls="changelog-older" aria-label="Show earlier versions" title="Show earlier versions" style="flex:none;width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center;padding:0;border:0;background:none;color:#1c1a16;cursor:pointer"><span aria-hidden="true" style="display:block;width:11px;height:11px;border-right:3px solid currentColor;border-bottom:3px solid currentColor;transform:translateY(-2px) rotate(45deg);transition:transform .34s cubic-bezier(.3,.7,.2,1)"></span></button>
+          </div>
+      </div>
+    </section>
+
+    <section id="roadmap" style="max-width:1180px;margin:0 auto;padding:clamp(72px,10vw,128px) clamp(18px,4vw,34px) 0;display:flex;flex-direction:column;gap:34px;scroll-margin-top:24px">
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:18px;flex-wrap:wrap">
+        <div style="flex:1 1 320px;min-width:0;display:flex;flex-direction:column;gap:14px;max-width:640px">
+          <div style="font:500 12px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;color:#6f6a60" data-i18n="page.roadmap">ROADMAP</div>
+          <h2 style="margin:0;font:600 clamp(28px,3.6vw,40px)/1.12 'Golos Text',sans-serif;letter-spacing:-.02em;text-wrap:balance" data-i18n-html="page.whats_next">What’s next?</h2>
+        </div>
+        <button class="hv12" type="button" id="roadmap-toggle-all" aria-label="Expand all" title="Expand all" style="flex:none;width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center;padding:0;border:0;background:none;color:#1c1a16;cursor:pointer"><span aria-hidden="true" style="display:block;width:11px;height:11px;border-right:3px solid currentColor;border-bottom:3px solid currentColor;transform:translateY(-2px) rotate(45deg);transition:transform .34s cubic-bezier(.3,.7,.2,1)"></span></button>
+      </div>
+      <ol style="margin:0;padding:0;list-style:none;display:flex;flex-direction:column;border-top:1px solid rgba(28,26,22,.14)">
+          <li data-phase="done" style="display:grid;grid-template-columns:28px minmax(0,1fr);column-gap:clamp(14px,2.4vw,26px);border-bottom:1px solid rgba(28,26,22,.1)">
+            <div aria-hidden="true" style="position:relative;display:flex;justify-content:center;align-items:flex-start">
+              <span style="position:absolute;top:0;bottom:0;left:50%;width:2px;margin-left:-1px;background:rgba(28,26,22,.14)"></span>
+              <span style="position:relative;margin-top:24px;width:16px;height:16px;border-radius:50%;background:#1c1a16;box-shadow:0 0 0 5px #f2efe8"></span>
+            </div>
+            <div style="display:flex;flex-direction:column;min-width:0">
+              <button type="button" class="phase-toggle" aria-expanded="false" aria-controls="phase-done" style="all:unset;cursor:pointer;display:flex;align-items:baseline;gap:6px 14px;flex-wrap:wrap;padding:22px 0">
+                <span style="flex:none;white-space:nowrap;font:500 11.5px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;color:#0f7a5a" data-i18n="phases.done.status">ALREADY WORKS</span>
+                <span style="margin-left:auto;font:500 12px/1 'IBM Plex Mono',monospace;color:#6f6a60;display:flex;gap:10px"><span class="phase-count" data-n="4">4 items</span><span class="phase-chev" style="color:#1c1a16">+</span></span>
+              </button>
+              <div id="phase-done" class="phase-panel" aria-hidden="true" style="display:grid;grid-template-rows:0fr;opacity:0;transition:grid-template-rows .34s cubic-bezier(.3,.7,.2,1),opacity .26s ease">
+               <div style="overflow:hidden;min-height:0">
+                <ul style="margin:0 0 26px 4px;padding:2px 0 2px 22px;list-style:none;display:flex;flex-direction:column;gap:12px;border-left:1px solid rgba(28,26,22,.18)">
+                    <li style="position:relative;font:400 15.5px/1.45 'Golos Text',sans-serif;color:#4a463f;text-wrap:pretty">
+                      <span aria-hidden="true" style="position:absolute;left:-22px;top:.72em;width:14px;height:1px;background:rgba(28,26,22,.3)"></span><span data-i18n="phases.done.items.0">eSCL network scanners</span></li>
+                    <li style="position:relative;font:400 15.5px/1.45 'Golos Text',sans-serif;color:#4a463f;text-wrap:pretty">
+                      <span aria-hidden="true" style="position:absolute;left:-22px;top:.72em;width:14px;height:1px;background:rgba(28,26,22,.3)"></span><span data-i18n="phases.done.items.1">Two-pass duplex assembly</span></li>
+                    <li style="position:relative;font:400 15.5px/1.45 'Golos Text',sans-serif;color:#4a463f;text-wrap:pretty">
+                      <span aria-hidden="true" style="position:absolute;left:-22px;top:.72em;width:14px;height:1px;background:rgba(28,26,22,.3)"></span><span data-i18n="phases.done.items.2">Splitting into documents</span></li>
+                    <li style="position:relative;font:400 15.5px/1.45 'Golos Text',sans-serif;color:#4a463f;text-wrap:pretty">
+                      <span aria-hidden="true" style="position:absolute;left:-22px;top:.72em;width:14px;height:1px;background:rgba(28,26,22,.3)"></span><span data-i18n="phases.done.items.3">Page straightening</span></li>
+                </ul>
+               </div>
+              </div>
+            </div>
+          </li>
+          <li data-phase="next" style="display:grid;grid-template-columns:28px minmax(0,1fr);column-gap:clamp(14px,2.4vw,26px);border-bottom:1px solid rgba(28,26,22,.1)">
+            <div aria-hidden="true" style="position:relative;display:flex;justify-content:center;align-items:flex-start">
+              <span style="position:absolute;top:0;bottom:0;left:50%;width:2px;margin-left:-1px;background:rgba(28,26,22,.14)"></span>
+              <span style="position:relative;margin-top:24px;width:16px;height:16px;box-sizing:border-box;border-radius:50%;background:#f2efe8;border:4px solid #a06a2a;box-shadow:0 0 0 5px #f2efe8"></span>
+            </div>
+            <div style="display:flex;flex-direction:column;min-width:0">
+              <button type="button" class="phase-toggle" aria-expanded="true" aria-controls="phase-next" style="all:unset;cursor:pointer;display:flex;align-items:baseline;gap:6px 14px;flex-wrap:wrap;padding:22px 0">
+                <span style="flex:none;white-space:nowrap;font:500 11.5px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;color:#a06a2a" data-i18n="phases.next.status">DEPENDS ON MOTIVATION</span>
+                <span style="margin-left:auto;font:500 12px/1 'IBM Plex Mono',monospace;color:#6f6a60;display:flex;gap:10px"><span class="phase-count" data-n="3">3 items</span><span class="phase-chev" style="color:#1c1a16">−</span></span>
+              </button>
+              <div id="phase-next" class="phase-panel" aria-hidden="false" style="display:grid;grid-template-rows:1fr;opacity:1;transition:grid-template-rows .34s cubic-bezier(.3,.7,.2,1),opacity .26s ease">
+               <div style="overflow:hidden;min-height:0">
+                <ul style="margin:0 0 26px 4px;padding:2px 0 2px 22px;list-style:none;display:flex;flex-direction:column;gap:12px;border-left:1px solid rgba(28,26,22,.18)">
+                    <li style="position:relative;font:400 15.5px/1.45 'Golos Text',sans-serif;color:#4a463f;text-wrap:pretty">
+                      <span aria-hidden="true" style="position:absolute;left:-22px;top:.72em;width:14px;height:1px;background:rgba(28,26,22,.3)"></span><span data-i18n="phases.next.items.0">WIA for USB scanners</span></li>
+                    <li style="position:relative;font:400 15.5px/1.45 'Golos Text',sans-serif;color:#4a463f;text-wrap:pretty">
+                      <span aria-hidden="true" style="position:absolute;left:-22px;top:.72em;width:14px;height:1px;background:rgba(28,26,22,.3)"></span><span data-i18n="phases.next.items.1">Removing files from the save list</span></li>
+                    <li style="position:relative;font:400 15.5px/1.45 'Golos Text',sans-serif;color:#4a463f;text-wrap:pretty">
+                      <span aria-hidden="true" style="position:absolute;left:-22px;top:.72em;width:14px;height:1px;background:rgba(28,26,22,.3)"></span><span data-i18n="phases.next.items.2">More straightening elves</span></li>
+                </ul>
+               </div>
+              </div>
+            </div>
+          </li>
+          <li data-phase="later" style="display:grid;grid-template-columns:28px minmax(0,1fr);column-gap:clamp(14px,2.4vw,26px);border-bottom:1px solid rgba(28,26,22,.1)">
+            <div aria-hidden="true" style="position:relative;display:flex;justify-content:center;align-items:flex-start">
+              <span style="position:absolute;top:0;bottom:0;left:50%;width:2px;margin-left:-1px;background:rgba(28,26,22,.14)"></span>
+              <span style="position:relative;margin-top:24px;width:16px;height:16px;box-sizing:border-box;border-radius:50%;background:#f2efe8;border:2px dashed #8b857a;box-shadow:0 0 0 5px #f2efe8"></span>
+            </div>
+            <div style="display:flex;flex-direction:column;min-width:0">
+              <button type="button" class="phase-toggle" aria-expanded="false" aria-controls="phase-later" style="all:unset;cursor:pointer;display:flex;align-items:baseline;gap:6px 14px;flex-wrap:wrap;padding:22px 0">
+                <span style="flex:none;white-space:nowrap;font:500 11.5px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;color:#6f6a60" data-i18n="phases.later.status">SOMEDAY</span>
+                <span style="margin-left:auto;font:500 12px/1 'IBM Plex Mono',monospace;color:#6f6a60;display:flex;gap:10px"><span class="phase-count" data-n="2">2 items</span><span class="phase-chev" style="color:#1c1a16">+</span></span>
+              </button>
+              <div id="phase-later" class="phase-panel" aria-hidden="true" style="display:grid;grid-template-rows:0fr;opacity:0;transition:grid-template-rows .34s cubic-bezier(.3,.7,.2,1),opacity .26s ease">
+               <div style="overflow:hidden;min-height:0">
+                <ul style="margin:0 0 26px 4px;padding:2px 0 2px 22px;list-style:none;display:flex;flex-direction:column;gap:12px;border-left:1px solid rgba(28,26,22,.18)">
+                    <li style="position:relative;font:400 15.5px/1.45 'Golos Text',sans-serif;color:#4a463f;text-wrap:pretty">
+                      <span aria-hidden="true" style="position:absolute;left:-22px;top:.72em;width:14px;height:1px;background:rgba(28,26,22,.3)"></span><span data-i18n="phases.later.items.0">OCR (text recognition)</span></li>
+                    <li style="position:relative;font:400 15.5px/1.45 'Golos Text',sans-serif;color:#4a463f;text-wrap:pretty">
+                      <span aria-hidden="true" style="position:absolute;left:-22px;top:.72em;width:14px;height:1px;background:rgba(28,26,22,.3)"></span><span data-i18n="phases.later.items.1">Whatever shows up in Issues</span></li>
+                </ul>
+               </div>
+              </div>
+            </div>
+          </li>
+      </ol>
+    </section>
+
+    
+
+    <section style="max-width:1180px;margin:0 auto;padding:clamp(72px,10vw,128px) clamp(18px,4vw,34px) 0">
+      <div id="egg" style="position:relative;transform-origin:22px 22px;transform:rotate(0deg);transition:transform .7s cubic-bezier(.3,.7,.2,1);background:#1c1a16;color:#f7f5f1;border-radius:12px;padding:clamp(34px,6vw,64px);display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:30px">
+        <span id="egg-msg" aria-live="polite" style="position:absolute;top:22px;right:26px;max-width:calc(100% - 52px);text-align:right;pointer-events:none;font:500 12px/1.4 'IBM Plex Mono',monospace;color:#8b857a;opacity:0;transform:translateY(-4px);transition:opacity .3s ease,transform .3s ease"></span>
+        <div style="display:flex;flex-direction:column;gap:14px;max-width:560px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <img src="assets/img/icon.svg" alt="" width="54" height="54" style="display:block">
+            <span style="font:600 10px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;padding:4px 6px;border-radius:4px;background:#f2efe8;color:#1c1a16">BETA</span>
+          </div>
+          <h2 style="margin:0;font:600 clamp(26px,3.2vw,36px)/1.15 'Golos Text',sans-serif;letter-spacing:-.02em;text-wrap:balance" data-i18n="page.wow_you_made_it">Wow. You made it all the way down here? Impressive!</h2>
+          <p style="margin:0;font:400 16px/1.55 'Golos Text',sans-serif;color:#cfc9bd;text-wrap:pretty" data-i18n="page.well_this_is_the">Well... this is the footer. Who in their right mind makes a website without a footer? In this day and age! And there are buttons here too. You can click them. Or not. Do whatever you want! Footer!</p>
+        </div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <a class="hv13" href="https://github.com/gyuiltylizard/duplexnt/releases" style="display:inline-flex;align-items:center;gap:10px;padding:16px 26px;border-radius:8px;background:#f7f5f1;color:#1c1a16;text-decoration:none;font:600 15px/1 'Golos Text',sans-serif" data-i18n-html="page.download_for_windows_beta_2">Download for Windows<span style="font:600 10px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;padding:4px 6px;border-radius:4px;background:#1c1a16;color:#f2efe8">BETA</span></a>
+          <a class="hv14" href="https://github.com/gyuiltylizard/duplexnt/issues" style="display:inline-flex;align-items:center;padding:15px 22px;border-radius:8px;border:1px solid rgba(247,245,241,.28);color:#f7f5f1;text-decoration:none;font:500 15px/1 'Golos Text',sans-serif" data-i18n-html="page.report_a_problem">Report a&nbsp;problem</a>
+        </div>
+      </div>
+    </section>
+
+  </main><footer style="width:100%;max-width:1180px;margin:0 auto;padding:44px clamp(18px,4vw,34px) 34px;display:flex;flex-wrap:wrap;gap:12px 22px;align-items:center;font:400 12.5px/1.45 'IBM Plex Mono',monospace;color:#6f6a60">
+    <span>Duplexn't</span>
+    <span style="margin-left:auto;display:flex;gap:22px;flex-wrap:wrap">
+      <a class="hv15" href="https://github.com/gyuiltylizard/duplexnt" style="color:#6f6a60">GitHub</a>
+      <a class="hv16" href="https://github.com/gyuiltylizard/duplexnt/releases" style="color:#6f6a60" data-i18n="page.releases">Releases</a>
+      <a class="hv17" href="https://github.com/gyuiltylizard/duplexnt/issues" style="color:#6f6a60">Issues</a>
+    </span>
+  </footer>
+</div>
+</body>
+</html>
