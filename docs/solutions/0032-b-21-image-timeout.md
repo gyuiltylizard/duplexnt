@@ -149,6 +149,6 @@ U1–U3 закрыты, simplify и ревью кода применены, те
 ## Закрытие
 
 Merge `fix/b-21-image-timeout` → `main` по явному ОК автора после проверки живьём 2026-11-01 —
-`1344304`. На `main` после merge typecheck, lint, format:check, `npm test` 144 / 2567,
+`dd4f5ef`. На `main` после merge typecheck, lint, format:check, `npm test` 144 / 2567,
 `test:integration` 34 / 302 (4 live пропущены) и worst-case 3 / 5 зелёные. Ветка оставлена. Push
 в приватный origin — по разрешению автора в том же ответе.

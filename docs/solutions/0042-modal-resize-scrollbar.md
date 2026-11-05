@@ -54,6 +54,6 @@ CSS, тест движения. ADR нет. Ветка `fix/modal-resize-scrollb
 Merge `fix/modal-resize-scrollbar` → `main` — по явному ОК автора, отдельным вопросом; хеш и гейт
 на `main` — строкой ниже.
 
-Merge `73ff349` в `main` 2026-11-04 по явному ОК автора. Гейт на `main` после merge: typecheck,
+Merge `ea51a80` в `main` 2026-11-04 по явному ОК автора. Гейт на `main` после merge: typecheck,
 lint, format:check зелёные; `npm test` 156 / 2730, `test:integration` 36 / 315 (4 live пропущены),
 worst-case 3 / 5. Баг закрыт.

@@ -59,6 +59,6 @@ status: done
 Merge `fix/check-pairs-quiet` → `main` — по явному ОК автора, отдельным вопросом; хеш и гейт на
 `main` — строкой ниже.
 
-Merge `d182b51` в `main` 2026-11-03 по явному ОК автора. Гейт на `main` после merge: typecheck,
+Merge `dc55850` в `main` 2026-11-03 по явному ОК автора. Гейт на `main` после merge: typecheck,
 lint, format:check зелёные; `npm test` 155 / 2718, `test:integration` 36 / 315 (4 live пропущены),
 worst-case 3 / 5. Баг закрыт.

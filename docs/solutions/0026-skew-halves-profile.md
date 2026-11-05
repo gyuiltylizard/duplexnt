@@ -59,6 +59,6 @@ format:check, `npm test` 143 / 2530, интеграция 31 / 269 (4 live пр�
 ## Закрытие
 
 Merge `fix/skew-halves-profile` → `main` по явному ОК автора после проверки живьём —
-`799731f`. На `main` после merge typecheck, lint, format:check и `test:all` зелёные с первого
+`4f67d48`. На `main` после merge typecheck, lint, format:check и `test:all` зелёные с первого
 прогона: 143 / 2530, интеграция 31 / 269 (4 пропущены), worst-case 3 / 5. Ветка оставлена. Push в
 приватный origin — по разрешению автора в том же ответе.

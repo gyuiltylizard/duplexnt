@@ -80,6 +80,6 @@ merge отдельным вопросом.
 ## Закрытие
 
 Merge `fix/skew-shape-tolerance` → `main` по явному ОК автора после проверки живьём 2026-10-31 —
-`8b8408b`. На `main` после merge typecheck, lint, format:check, `npm test` 143 / 2564 и
+`3f971c8`. На `main` после merge typecheck, lint, format:check, `npm test` 143 / 2564 и
 `test:integration` 32 / 282 (+ worst-case 3 / 5) зелёные. Ветка оставлена. Push в приватный
 origin — по разрешению автора в том же ответе.

@@ -67,13 +67,13 @@ status: done
 
 ## Закрытие
 
-Гейт на ветке (`d6b6d66`): typecheck, lint, format:check, `npm test` 156 / 2729. Автор прошёл
+Гейт на ветке (`586b462`): typecheck, lint, format:check, `npm test` 156 / 2729. Автор прошёл
 чеклист `docs/output/2026-11-03-smoke-checklist-b-26-acceptance.md` 2026-11-03 — «всё ок»:
 картинки мастера живьём, страница деинсталлятора в Sandbox в обе стороны галочки; открытый
 вопрос handoff'а о 125 % снят приёмкой. Merge `feat/b-26-installer` → `main` по явному ОК
 автора — хеш и гейт на `main` строкой ниже.
 
-Merge `ab0526a` в `main` 2026-11-03 по явному ОК автора. Гейт на `main` после merge: typecheck,
+Merge `4eb3c5a` в `main` 2026-11-03 по явному ОК автора. Гейт на `main` после merge: typecheck,
 lint, format:check зелёные; `test:integration` 36 / 315 (4 live пропущены), worst-case 3 / 5;
 `npm test` в первом прогоне упал одним тестом `pass-service.straighten.test.ts` (статусы по
 исходам, срок измерения) — под нагрузкой Sandbox автора; файл в одиночку 11 / 11 и полный повтор

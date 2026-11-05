@@ -43,6 +43,6 @@ status: done
 
 ## Закрытие
 
-Merge `fix/hidden-tail-cut` → `main` по явному ОК автора — `9b69103`. На `main` после merge
+Merge `fix/hidden-tail-cut` → `main` по явному ОК автора — `b587686`. На `main` после merge
 typecheck, lint, format:check и `test:all` зелёные с первого прогона: 120 / 2302, интеграция
 20 / 208 (4 пропущены). Ветка удалена. Push — по разрешению автора.
