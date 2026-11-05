@@ -189,6 +189,14 @@
 .details-toggle__arrow {
   font: var(--font-weight-regular) var(--font-size-xs) / var(--leading-none) var(--font-family-sans);
   color: var(--color-text-hint);
+  /* Поворот — той же длительности, что высота секции инспектора (B-45, «Motion»). */
+  transition: transform var(--duration-section) var(--ease-section);
+}
+
+/* Строка без тела (лента `editor` пуста): недоступна, как «+ Добавить». */
+.details-toggle:disabled {
+  cursor: default;
+  opacity: var(--opacity-disabled);
 }
 
 .details-toggle[aria-expanded='true'] .details-toggle__arrow {
@@ -929,6 +937,10 @@
   .dot--checking,
   .skeleton {
     animation: none;
+  }
+
+  .details-toggle__arrow {
+    transition: none;
   }
 
   .skeleton {

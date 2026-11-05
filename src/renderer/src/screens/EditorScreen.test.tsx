@@ -3,6 +3,7 @@ import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../i18n';
 import {
+  applied,
   makePass,
   makeSnapshot,
   nameField,
@@ -183,6 +184,42 @@ describe('экран editor', () => {
     expect(toggle.querySelector('.details-toggle__dot')).toBeNull();
     expect(body?.hasAttribute('hidden')).toBe(false);
     expect(body?.textContent).toContain('Оценка пустых оборотов');
+  });
+
+  it('тюнинг тулбара (2026-11-05): строка ДЕТАЛИ — в правой зоне, тело — в инспекторе; плашка правок и кнопка границы — в центре', () => {
+    stubApi();
+    // Разрез после первой страницы — ручная правка: плашка в тулбаре, у третьей страницы кнопка границы.
+    renderEditor(
+      applied(makeSnapshot([makePass({ pages: pages(3) })]), {
+        edits: { ...EMPTY_EDITS, cuts: [1], names: ['', ''] },
+        rotate180: {},
+      }),
+    );
+
+    const toolbar = screen.getByRole('banner');
+    const inspector = screen.getByRole('complementary', { name: 'Сведения о наборе' });
+    const toggle = within(toolbar).getByRole('button', { name: /ДЕТАЛИ/u });
+    expect(toolbar.querySelector('.editor-screen__toolbar-right .details-toggle--bar')).toBe(
+      toggle,
+    );
+    expect(toggle.querySelector('.details-toggle__summary')?.textContent).toBe('стр. 1');
+    expect(within(inspector).queryByRole('button', { name: /ДЕТАЛИ/u })).toBeNull();
+    const body = document.getElementById(toggle.getAttribute('aria-controls') ?? '');
+    expect(body !== null && inspector.contains(body)).toBe(true);
+    expect(body?.hasAttribute('hidden')).toBe(true);
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(body?.hasAttribute('hidden')).toBe(false);
+    expect(within(inspector).getByRole('heading', { name: /^Стр\. 1 — / })).toBeDefined();
+
+    // Центр: плашка правок справа, «+ Новый документ с этой страницы» — у третьей страницы.
+    const center = toolbar.querySelector('.editor-screen__toolbar-center');
+    expect(center?.querySelector('.edits-bar')?.textContent).toContain('Есть ручные правки');
+    expect(toolbar.querySelector('.editor-screen__toolbar-right .edits-bar')).toBeNull();
+    fireEvent.click(option(2));
+    expect(toggle.querySelector('.details-toggle__summary')?.textContent).toBe('стр. 3');
+    const split = screen.getByRole('button', { name: '+ Новый документ с этой страницы' });
+    expect(center?.contains(split)).toBe(true);
   });
 
   it('B-45: без точек в ПРОВЕРКЕ свёрнутая строка ДЕТАЛЕЙ чистая', () => {

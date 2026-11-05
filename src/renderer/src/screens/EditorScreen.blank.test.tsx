@@ -487,7 +487,7 @@ describe('пустые обороты в редакторе (M4)', () => {
         'Распознано автоматически: на странице нет чернил. Она останется в файле с меткой.',
       ),
     ).toBeDefined();
-    fireEvent.click(within(inspector).getByRole('button', { name: /ДЕТАЛИ/u }));
+    fireEvent.click(screen.getByRole('button', { name: /ДЕТАЛИ/u }));
     expect(within(inspector).getByText('пустая — с меткой')).toBeDefined();
 
     rerender(blankSnapshot('hide'));
@@ -526,7 +526,7 @@ describe('пустые обороты в редакторе (M4)', () => {
     expect(screen.queryByRole('button', { name: 'Это не пустая страница' })).toBeNull();
     expect(option(1).textContent).not.toContain('ПУСТО');
     const inspector = screen.getByRole('complementary', { name: 'Сведения о наборе' });
-    fireEvent.click(within(inspector).getByRole('button', { name: /ДЕТАЛИ/u }));
+    fireEvent.click(screen.getByRole('button', { name: /ДЕТАЛИ/u }));
     expect(within(inspector).getByText('не пустая — ваша пометка')).toBeDefined();
     expect(screen.getByText('показано: 1')).toBeDefined();
 

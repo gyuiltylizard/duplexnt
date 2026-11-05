@@ -648,8 +648,11 @@ describe('editor M3: пустой редактор и инспектор', () =>
     ]) {
       expect(screen.getByRole('button', { name }).hasAttribute('disabled'), name).toBe(true);
     }
-    // Инспектор: ДЕТАЛИ скрыты, документов нет; тумблер остаётся.
-    expect(screen.queryByText('ДЕТАЛИ')).toBeNull();
+    // Строка ДЕТАЛИ в тулбаре недоступна (тела в инспекторе нет), документов нет; тумблер остаётся.
+    const details = screen.getByRole('button', { name: /ДЕТАЛИ/u });
+    expect(details.hasAttribute('disabled')).toBe(true);
+    expect(details.hasAttribute('aria-controls')).toBe(false);
+    expect(document.querySelector('.details')).toBeNull();
     expect(screen.getByText('документов нет')).toBeDefined();
     expect(screen.getByRole('checkbox', { name: 'Обороты на 180°' })).toBeDefined();
   });
