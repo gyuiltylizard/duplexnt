@@ -451,12 +451,13 @@ const WRAPPER_CSS = `/* СГЕНЕРИРОВАНО \`npm run design:snapshot\` �
 
 const ASSEMBLED_EDITS: SessionEdits = {
   ...EMPTY_EDITS,
-  cuts: [4, 6, 10],
+  cuts: [3, 5, 7, 10],
   names: [
     'Statement Of Sadness October',
     'Invoice v2 Corrected Real',
     'Insurance Thing Important',
     'Scan Final Final',
+    'Payment Reminder Okay Maybe I Didnt',
   ],
 };
 /** Детектор оценил все обороты; пустым счёл один. */
@@ -514,7 +515,7 @@ function editorSnapshot(): Snapshot {
  */
 async function openEditor(t: SceneT): Promise<HTMLElement> {
   const { container } = renderApp(editorSnapshot(), EDITOR_OVERRIDES);
-  await screen.findByRole('button', { name: t('editor.saveFiles', { count: 4 }) });
+  await screen.findByRole('button', { name: t('editor.saveFiles', { count: 5 }) });
   fireEvent.click(screen.getByRole('checkbox', { name: t('editor.blank.toggleLabel') }));
   expect(container.querySelectorAll('.thumb__blank')).toHaveLength(1);
   return container;
@@ -697,7 +698,7 @@ describe('референс интерфейса (B-6)', () => {
       {
         id: 'editor',
         title: 'editor',
-        note: 'Редактор: лента по четырём документам (границы после 4-й, 6-й и 10-й страниц), превью, инспектор. Режимы по умолчанию: скрытый пустой оборот показан переключателем «Пустые» в подвале ленты; выравнивание — глифы на карточках (1-я и 8-я выправлены, 3-я не померить) и секция ВЫРАВНИВАНИЕ инспектора.',
+        note: 'Редактор: лента по пяти документам (границы после 3-й, 5-й, 7-й и 10-й страниц), превью, инспектор. Режимы по умолчанию: скрытый пустой оборот показан переключателем «Пустые» в подвале ленты; выравнивание — глифы на карточках (1-я и 8-я выправлены, 3-я не померить) и секция ВЫРАВНИВАНИЕ инспектора.',
       },
       async (t) => {
         const container = await openEditor(t);
@@ -717,7 +718,7 @@ describe('референс интерфейса (B-6)', () => {
       },
       async (t) => {
         const container = await openEditor(t);
-        fireEvent.click(screen.getByRole('button', { name: t('editor.saveFiles', { count: 4 }) }));
+        fireEvent.click(screen.getByRole('button', { name: t('editor.saveFiles', { count: 5 }) }));
         await screen.findByRole('dialog');
         await screen.findByText(/Scans/);
         return container;
