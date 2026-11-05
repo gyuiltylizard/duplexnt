@@ -24,6 +24,7 @@ import {
   type BlankVerdicts,
   type Locale,
   type PassSnapshot,
+  type ScannerState,
   type SessionEdits,
   type SessionSnapshot,
   type SkewOutcome,
@@ -33,7 +34,7 @@ import {
 } from '@shared';
 import { i18n } from '../../src/renderer/src/i18n';
 import { App } from '../../src/renderer/src/App';
-import { FOUND, makeSnapshot, PARAMS, READY, stubApi } from '../../src/renderer/src/app-fixture';
+import { FOUND, makeSnapshot, PARAMS, stubApi } from '../../src/renderer/src/app-fixture';
 import { MergeScreen } from '../../src/renderer/src/screens/MergeScreen';
 import { assemblyOf, assemblyWithEditsOf } from '../../src/renderer/src/state/assembly-fixture';
 
@@ -42,6 +43,22 @@ const DESIGN_DIR = join(ROOT, 'docs', 'design');
 const OUT_DIR = join(DESIGN_DIR, 'reference');
 const RENDERER_DIR = join(ROOT, 'src', 'renderer', 'src');
 const DEVICE_FIXTURES = join(ROOT, 'test', 'fixtures', 'escl', 'et-3850');
+
+/**
+ * Сканер референса: как у автора на экране setup — все варианты capabilities видны, выбраны
+ * «Цвет», 200 dpi, A4 (замечание автора, 2026-11-05). Общий READY из app-fixture оставляет по
+ * одному варианту и нужен юнит-тестам таким.
+ */
+const SCANNER: ScannerState = {
+  kind: 'ready',
+  scanner: { name: 'EPSON ET-3850 Series', scheme: 'https', host: '192.0.2.10', port: 443 },
+  options: {
+    colorModes: ['Grayscale8', 'RGB24'],
+    resolutions: [100, 200, 300, 600],
+    paperSizes: ['A4', 'Letter'],
+  },
+  params: { ...PARAMS, colorMode: 'RGB24', resolution: 200 },
+};
 
 /** Кадр окна: размер, под который рисовался исходный мок (KTD-5). */
 const FRAME = { width: 1280, height: 800 } as const;
@@ -503,7 +520,7 @@ function editorSnapshot(): Snapshot {
     straighten: 'auto',
   });
   return makeSnapshot({
-    scanner: READY,
+    scanner: SCANNER,
     session,
     assembly: assemblyWithEditsOf(session, BLANK, STRAIGHTEN),
   });
@@ -570,7 +587,7 @@ describe('референс интерфейса (B-6)', () => {
         note: 'Стартовый экран: запомненный сканер готов, параметры сканирования, запуск первого прохода.',
       },
       async (t) => {
-        const { container } = renderApp(makeSnapshot({ scanner: READY }));
+        const { container } = renderApp(makeSnapshot({ scanner: SCANNER }));
         await screen.findByRole('button', { name: t('setup.start') });
         return container;
       },
@@ -591,7 +608,7 @@ describe('референс интерфейса (B-6)', () => {
           ],
           failure: null,
         });
-        const { container } = renderApp(makeSnapshot({ scanner: READY }), {
+        const { container } = renderApp(makeSnapshot({ scanner: SCANNER }), {
           startDiscovery: vi.fn(() => Promise.resolve(discovery)),
           getDiscovery: vi.fn(() => Promise.resolve(discovery)),
         });
@@ -613,7 +630,7 @@ describe('референс интерфейса (B-6)', () => {
         const running = passOf(1, 'fronts', 4, 'running');
         const { container } = renderApp(
           makeSnapshot({
-            scanner: READY,
+            scanner: SCANNER,
             session: sessionOf([running]),
             pass: {
               phase: 'scanning',
@@ -641,7 +658,7 @@ describe('референс интерфейса (B-6)', () => {
         const running = passOf(2, 'backs', 3, 'running');
         const { container } = renderApp(
           makeSnapshot({
-            scanner: READY,
+            scanner: SCANNER,
             session: sessionOf([passOf(1, 'fronts', SHEETS), running]),
             pass: {
               phase: 'scanning',
@@ -667,7 +684,7 @@ describe('референс интерфейса (B-6)', () => {
       },
       async (t) => {
         const session = sessionOf([passOf(1, 'fronts', SHEETS)]);
-        const { container } = renderApp(makeSnapshot({ scanner: READY, session }));
+        const { container } = renderApp(makeSnapshot({ scanner: SCANNER, session }));
         await screen.findByRole('heading', { level: 1, name: t('flip.title') });
         return container;
       },
@@ -769,7 +786,7 @@ describe('референс интерфейса (B-6)', () => {
         const backs = SHEETS - 1;
         const session = sessionOf([passOf(1, 'fronts', SHEETS), passOf(2, 'backs', backs)]);
         const { container } = renderApp(
-          makeSnapshot({ scanner: READY, session }),
+          makeSnapshot({ scanner: SCANNER, session }),
           EDITOR_OVERRIDES,
         );
         const dialog = await screen.findByRole('dialog');
