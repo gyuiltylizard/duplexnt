@@ -13,6 +13,8 @@ import { makePass, makeSnapshot, option, pages, renderEditor, stubApi } from './
 // Движение секций инспектора (B-45, handoff «Motion»; план U4, KTD-1…3): ключевые кадры и
 // длительности поверх конечного состояния; `hidden` на теле ДЕТАЛЕЙ — по концу свёртывания;
 // ушедшая секция — спейсер; под reduced-motion и без токенов движения ничего не играется.
+// С 2026-11-05 строка ДЕТАЛИ — в тулбаре: свёрнутая секция схлопнута (0), стрелка едет
+// CSS-переходом, а не WAAPI.
 
 const P = (n: number): string => `p01-s01-000${String(n)}`;
 const fact = (
@@ -57,7 +59,7 @@ function stubHeights(): void {
           return heights.get('details-visible') ?? 0;
         }
         const body = this.querySelector('.details');
-        return body?.hasAttribute('hidden') === false ? (heights.get('details-open') ?? 0) : 40;
+        return body?.hasAttribute('hidden') === false ? (heights.get('details-open') ?? 0) : 0;
       }
       return key === null ? 0 : (heights.get(key) ?? 0);
     },
@@ -88,7 +90,7 @@ describe('движение секций инспектора (B-45)', () => {
     heights.clear();
   });
 
-  it('первый рендер — без движения; раскрытие ДЕТАЛЕЙ: высота 40 → 300 за 240 мс, тело проявляется с задержкой ¼, стрелка поворачивается', () => {
+  it('первый рендер — без движения; раскрытие ДЕТАЛЕЙ строкой тулбара: высота 0 → 300 за 240 мс, тело проявляется с задержкой ¼, стрелку WAAPI не трогает', () => {
     const { animations } = stubAnimate();
     stubApi();
     renderEditor(snapshot());
@@ -97,23 +99,20 @@ describe('движение секций инспектора (B-45)', () => {
     fireEvent.click(toggle());
     const details = section('details');
     const height = heightFrames(animations).find((it) => it.element === details);
-    expect(height?.keyframes).toEqual([{ height: '40px' }, { height: '300px' }]);
+    expect(height?.keyframes).toEqual([{ height: '0px' }, { height: '300px' }]);
     expect(height?.options.duration).toBe(240);
     expect(height?.options.easing).toBe('cubic-bezier(0.4, 0, 0.2, 1)');
     expect(details?.classList.contains('inspector__section--resizing')).toBe(true);
     const fade = animations.find((it) => it.element === body());
     expect(fade?.keyframes).toEqual([{ opacity: 0 }, { opacity: 0, offset: 0.25 }, { opacity: 1 }]);
-    const arrow = animations.find((it) => 'transform' in (it.keyframes[0] ?? {}));
-    expect(arrow?.keyframes).toEqual([
-      { transform: 'rotate(0deg)' },
-      { transform: 'rotate(180deg)' },
-    ]);
+    expect(animations.some((it) => 'transform' in (it.keyframes[0] ?? {}))).toBe(false);
+    expect(screen.getByRole('banner').contains(toggle())).toBe(true);
 
     height?.finish();
     expect(details?.classList.contains('inspector__section--resizing')).toBe(false);
   });
 
-  it('свёртывание: тело видимо до конца, гаснет за 60 %, высота 300 → 40; hidden — по finish', () => {
+  it('свёртывание: тело видимо до конца, гаснет за 60 %, высота 300 → 0; hidden — по finish', () => {
     const { animations } = stubAnimate();
     stubApi();
     renderEditor(snapshot());
@@ -128,7 +127,7 @@ describe('движение секций инспектора (B-45)', () => {
     expect(body()?.hasAttribute('hidden')).toBe(false);
     const fresh = animations.slice(before);
     const height = heightFrames(fresh).find((it) => it.element === section('details'));
-    expect(height?.keyframes).toEqual([{ height: '300px' }, { height: '40px' }]);
+    expect(height?.keyframes).toEqual([{ height: '300px' }, { height: '0px' }]);
     const fade = fresh.find((it) => it.element === body());
     expect(fade?.keyframes).toEqual([{ opacity: 1 }, { opacity: 0, offset: 0.6 }, { opacity: 0 }]);
 

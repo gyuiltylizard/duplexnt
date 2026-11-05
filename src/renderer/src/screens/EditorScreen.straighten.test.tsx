@@ -219,7 +219,7 @@ describe('выравнивание в редакторе (M6)', () => {
     // Фокус остался на кнопке, ставшей парной (handoff M6, Behaviour).
     expect(document.activeElement).toBe(restore);
     expect(selectedKeys()).toEqual([P(1)]);
-    fireEvent.click(within(inspector()).getByRole('button', { name: /ДЕТАЛИ/u }));
+    fireEvent.click(screen.getByRole('button', { name: /ДЕТАЛИ/u }));
     expect(within(inspector()).getByText('оригинал — ваш выбор')).toBeDefined();
 
     ctrlZ();
@@ -339,7 +339,7 @@ describe('выравнивание в редакторе (M6)', () => {
     ).toBeNull();
     expect(thumbSrc(0)).toBe(pageImageUrl(SESSION, 'thumb', P(1)));
     expect(within(inspector()).queryByText('ВЫРАВНИВАНИЕ')).toBeNull();
-    fireEvent.click(within(inspector()).getByRole('button', { name: /ДЕТАЛИ/u }));
+    fireEvent.click(screen.getByRole('button', { name: /ДЕТАЛИ/u }));
     expect(within(inspector()).queryByText('Выравнивание')).toBeNull();
     expect(checkTexts().some((text) => text.includes('ыровн'))).toBe(false);
   });

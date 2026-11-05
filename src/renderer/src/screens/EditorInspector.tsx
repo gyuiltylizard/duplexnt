@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type MouseEvent, type ReactNode } from 'react';
+import { useId, useRef, type MouseEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   isPairKind,
@@ -21,10 +21,12 @@ import { useHintAttention } from './useHintAttention';
 import { useInspectorMotion } from './useInspectorMotion';
 
 // Инспектор редактора (handoff M3, S11–S13; M3.5, S6–S7; M3.6, S8–S9; B-45
-// `2026-11-inspector-v2.md`): ДЕТАЛИ текущей страницы с подразделом ПРОВЕРКА внутри, ПУСТОЙ
-// ОБОРОТ, ВЫРАВНИВАНИЕ, ДОКУМЕНТЫ В НАБОРЕ с первичной кнопкой («Сохранить…» / «Собрать
-// документ») на всю ширину, внизу подвал — логотип, ссылка на проект и плашка BETA. Плашка
-// правок с «Вернуть» с B-45 живёт в правой зоне тулбара. Только показ снимка:
+// `2026-11-inspector-v2.md`; тюнинг тулбара автора 2026-11-05): тело ДЕТАЛЕЙ текущей страницы
+// с подразделом ПРОВЕРКА внутри (строка-переключатель ДЕТАЛИ — в правой зоне тулбара над
+// инспектором, состояние и пункты ПРОВЕРКИ считает экран), ПУСТОЙ ОБОРОТ, ВЫРАВНИВАНИЕ,
+// ДОКУМЕНТЫ В НАБОРЕ с первичной кнопкой («Сохранить…» / «Собрать документ») на всю ширину,
+// внизу подвал — плашка «D’ BETA»-ссылка. Плашка правок с «Вернуть» — в центре тулбара.
+// Только показ снимка:
 // режим, счётчики групп, порядок и наличие правок — из отчёта и флагов сборки ядра (KTD-2,
 // KTD-7). Страница добавленного набора — без «лица» и «листа»: факт «Набор» и своё пояснение.
 // До сборки (режим наборов) «Лист» не называется: факты «Набор», «Место», «Откуда» (R23);
@@ -162,6 +164,24 @@ function blankChecks(t: TFunction, blank: BlankSummary, inSets: boolean): CheckI
   );
 }
 
+/**
+ * Пункты ПРОВЕРКИ (B-45) — считает экран: по ним и точка в свёрнутой строке ДЕТАЛИ тулбара, и
+ * подраздел ПРОВЕРКА в теле ДЕТАЛЕЙ; порядок — пары, пустые, выравнивание, порядок страниц.
+ */
+export function inspectorChecks(t: TFunction, assembly: SessionAssembly): CheckItem[] {
+  const inSets = assembly.report.mode === 'sets';
+  return [
+    ...pairsChecks(t, assembly),
+    ...blankChecks(t, assembly.blank, inSets),
+    ...straightChecks(t, assembly.straighten),
+    {
+      key: 'order',
+      warning: assembly.orderEdited,
+      text: t(assembly.orderEdited ? 'inspector.check.orderEdited' : 'inspector.check.orderAuto'),
+    },
+  ];
+}
+
 function Fact({ name, value }: { readonly name: string; readonly value: string }): ReactNode {
   return (
     <div className="facts__row">
@@ -181,7 +201,7 @@ function Details({
   notBlank,
   checks,
   open,
-  onToggle,
+  bodyId,
 }: {
   readonly entry: AssembledPage;
   readonly position: number;
@@ -191,14 +211,14 @@ function Details({
   readonly frontsOnly: boolean;
   /** Страница помечена «не пустая» (M4, S10) — факт «Содержимое». */
   readonly notBlank: boolean;
-  /** Пункты ПРОВЕРКИ (B-45): подраздел ДЕТАЛЕЙ; точка в свёрнутой строке — пока есть точка в них. */
+  /** Пункты ПРОВЕРКИ (B-45): подраздел ДЕТАЛЕЙ после фактов и пояснения. */
   readonly checks: readonly CheckItem[];
+  /** Раскрыты строкой ДЕТАЛИ в тулбаре; свёрнутое тело несёт `hidden`, секция схлопнута. */
   readonly open: boolean;
-  readonly onToggle: () => void;
+  /** `id` тела — его называет `aria-controls` строки в тулбаре. */
+  readonly bodyId: string;
 }): ReactNode {
   const { t } = useTranslation();
-  const bodyId = useId();
-  const warned = checks.some((item) => item.warning);
 
   const title = t('inspector.title', {
     page: position,
@@ -298,31 +318,7 @@ function Details({
 
   return (
     <section className="inspector__section inspector__section--details" data-section="details">
-      <button
-        type="button"
-        className="details-toggle"
-        aria-expanded={open}
-        aria-controls={bodyId}
-        onClick={onToggle}
-      >
-        <span className="kicker">{t('inspector.details')}</span>
-        <span className="details-toggle__rule" aria-hidden="true" />
-        {/* B-45 (решение 3): свёрнутые ДЕТАЛИ не прячут замечания ПРОВЕРКИ — янтарная точка. */}
-        {!open && warned && (
-          <span
-            className="dot dot--warning details-toggle__dot"
-            title={t('inspector.detailsWarning')}
-          >
-            <span className="visually-hidden">{t('inspector.detailsWarning')}</span>
-          </span>
-        )}
-        <span className="details-toggle__summary">
-          {t('inspector.detailsSummary', { page: position })}
-        </span>
-        <span className="details-toggle__arrow" aria-hidden="true">
-          ▾
-        </span>
-      </button>
+      {/* Строка-переключатель — в тулбаре (`EditorToolbar`); здесь только тело. */}
       <div id={bodyId} className="details" hidden={!open}>
         <h2 className="details__title">{title}</h2>
         <dl className="facts">
@@ -381,6 +377,9 @@ export function EditorInspector({
   onMouseDown,
   primary,
   onOpenProject,
+  detailsOpen,
+  detailsId,
+  checks,
 }: {
   readonly assembly: SessionAssembly;
   /** Документы в координатах показанной ленты (M4, R11): счётчики и диапазоны — по показанным. */
@@ -419,11 +418,14 @@ export function EditorInspector({
   readonly primary: InspectorPrimary;
   /** Ссылка на страницу проекта в подвале (B-42) — команда моста без входа. */
   readonly onOpenProject: () => void;
+  /** ДЕТАЛИ раскрыты — состояние строки в тулбаре, живёт у экрана (S11). */
+  readonly detailsOpen: boolean;
+  /** `id` тела ДЕТАЛЕЙ для `aria-controls` строки в тулбаре. */
+  readonly detailsId: string;
+  /** Пункты ПРОВЕРКИ (`inspectorChecks`) — считает экран, он же ставит точку в строке тулбара. */
+  readonly checks: readonly CheckItem[];
 }): ReactNode {
   const { t } = useTranslation();
-  // ДЕТАЛИ свёрнуты по умолчанию; состояние живёт до размонтирования экрана (S11), в том числе
-  // пока лента пуста и блок скрыт.
-  const [detailsOpen, setDetailsOpen] = useState(false);
   // B-45: высоты секций играются поверх конечного состояния после каждого рендера.
   const asideRef = useRef<HTMLElement>(null);
   useInspectorMotion(asideRef, detailsOpen);
@@ -437,16 +439,6 @@ export function EditorInspector({
   const { report, sets } = assembly;
   const inSets = report.mode === 'sets';
   const blankNote = entry === undefined ? null : blankNoteText(t, entry, inSets);
-  const checks: CheckItem[] = [
-    ...pairsChecks(t, assembly),
-    ...blankChecks(t, assembly.blank, inSets),
-    ...straightChecks(t, assembly.straighten),
-    {
-      key: 'order',
-      warning: assembly.orderEdited,
-      text: t(assembly.orderEdited ? 'inspector.check.orderEdited' : 'inspector.check.orderAuto'),
-    },
-  ];
   let primaryLabel: string;
   if (primary.kind === 'assemble') {
     primaryLabel = t('editor.assemble');
@@ -474,9 +466,7 @@ export function EditorInspector({
           notBlank={notBlank}
           checks={checks}
           open={detailsOpen}
-          onToggle={() => {
-            setDetailsOpen((value) => !value);
-          }}
+          bodyId={detailsId}
         />
       )}
 

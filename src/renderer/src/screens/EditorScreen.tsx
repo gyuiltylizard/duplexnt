@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useEffectEvent,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -59,7 +60,7 @@ import {
   shownDocumentsOf,
   shownOf,
 } from '../state/shown';
-import { EditorInspector } from './EditorInspector';
+import { EditorInspector, inspectorChecks } from './EditorInspector';
 import { EditorPassBanner } from './EditorPassBanner';
 import { EditorPreview } from './EditorPreview';
 import { docNameId, EditorRail, focusThumb } from './EditorRail';
@@ -192,6 +193,11 @@ export function EditorScreen({
   const origins = useMemo(() => originsOf(session.passes), [session.passes]);
 
   const [modal, setModal] = useState<EditorModal | null>(null);
+  // ДЕТАЛИ (тюнинг тулбара 2026-11-05): строка-переключатель — в правой зоне тулбара, тело — в
+  // инспекторе; свёрнуты по умолчанию, состояние живёт до размонтирования экрана (S11), в том
+  // числе пока лента пуста и строка недоступна.
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const detailsId = useId();
   /** Идёт запись пакета (модалка `save`): правки заблокированы (KTD-9). */
   const [saving, setSaving] = useState(false);
   // «Собрать документ» (M3.6, KTD5): пока в полёте — правки заблокированы, как при записи.
@@ -614,6 +620,8 @@ export function EditorScreen({
     selection.keys.length <= 1 &&
     selection.current !== null &&
     !glued.has(selection.current);
+  // Пункты ПРОВЕРКИ (B-45): подраздел ДЕТАЛЕЙ и точка в их строке в тулбаре.
+  const checks = snapshot.assembly === null ? [] : inspectorChecks(t, snapshot.assembly);
 
   // Ctrl+Z, Ctrl+Y / Ctrl+Shift+Z, Delete — на всём экране, кроме текстовых полей и модалок
   // (handoff M3, Undo/Redo). Подписка — одна на монтирование: StrictMode её переживает.
@@ -802,6 +810,16 @@ export function EditorScreen({
         onRevert={() => {
           setModal('revert');
         }}
+        details={{
+          open: detailsOpen,
+          disabled: currentEntry === undefined,
+          warned: checks.some((item) => item.warning),
+          position: currentIndex + 1,
+          controls: detailsId,
+          onToggle: () => {
+            setDetailsOpen((value) => !value);
+          },
+        }}
         onMouseDown={collapseOnSurfaceClick}
       />
 
@@ -951,6 +969,9 @@ export function EditorScreen({
             }
             onOpenProject={openProjectPage}
             onMouseDown={collapseOnSurfaceClick}
+            detailsOpen={detailsOpen}
+            detailsId={detailsId}
+            checks={checks}
           />
         )}
       </div>

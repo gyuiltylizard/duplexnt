@@ -157,6 +157,8 @@
   font: var(--font-weight-regular) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
 }
 .save-result__note {
+  /* Текст копируют (ошибки в Issue, адрес сканера) — выделяется вопреки `body` (base.css). */
+  user-select: text;
   display: block;
   font: var(--font-weight-regular) var(--font-size-s) / var(--leading-relaxed)
     var(--font-family-sans);

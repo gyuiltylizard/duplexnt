@@ -243,6 +243,18 @@ body {
   font-weight: var(--font-weight-regular);
   line-height: var(--leading-relaxed);
   -webkit-font-smoothing: antialiased;
+  /* Интерфейс не выделяется мышью, как в настольном приложении (правка автора 2026-11-05):
+     подписи, факты и кнопки не подсвечиваются при жестах. Выделяемым остаётся то, что
+     копируют — поля ввода и тексты, помеченные `user-select: text` в рецептах: ошибки
+     (`.notice__text`, `.modal__status`, `.pass-banner__status`, `.toast__text`,
+     `.save-result__note`, `.incompatible-screen__status`) и адреса устройств. */
+  user-select: none;
+}
+
+input,
+textarea,
+[contenteditable] {
+  user-select: text;
 }
 
 code,
@@ -445,6 +457,14 @@ samp {
 .details-toggle__arrow {
   font: var(--font-weight-regular) var(--font-size-xs) / var(--leading-none) var(--font-family-sans);
   color: var(--color-text-hint);
+  /* Поворот — той же длительности, что высота секции инспектора (B-45, «Motion»). */
+  transition: transform var(--duration-section) var(--ease-section);
+}
+
+/* Строка без тела (лента `editor` пуста): недоступна, как «+ Добавить». */
+.details-toggle:disabled {
+  cursor: default;
+  opacity: var(--opacity-disabled);
 }
 
 .details-toggle[aria-expanded='true'] .details-toggle__arrow {
@@ -525,6 +545,8 @@ samp {
 }
 
 .notice__text {
+  /* Текст копируют (ошибки в Issue, адрес сканера) — выделяется вопреки `body` (base.css). */
+  user-select: text;
   flex: 1;
   min-width: 0;
   margin: 0;
@@ -762,6 +784,8 @@ samp {
 }
 
 .modal__status {
+  /* Текст копируют (ошибки в Issue, адрес сканера) — выделяется вопреки `body` (base.css). */
+  user-select: text;
   flex: 1;
   margin: 0;
   overflow-wrap: anywhere;
@@ -885,6 +909,8 @@ samp {
 
 /* Тост с действием (handoff M3, S18): текст режется, кнопка остаётся целой. */
 .toast__text {
+  /* Текст копируют (ошибки в Issue, адрес сканера) — выделяется вопреки `body` (base.css). */
+  user-select: text;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1148,6 +1174,8 @@ samp {
 }
 
 .incompatible-screen__status {
+  /* Текст копируют (ошибки в Issue, адрес сканера) — выделяется вопреки `body` (base.css). */
+  user-select: text;
   margin: 0;
   font-size: var(--font-size-s);
   line-height: var(--leading-relaxed);
@@ -1185,6 +1213,10 @@ samp {
   .dot--checking,
   .skeleton {
     animation: none;
+  }
+
+  .details-toggle__arrow {
+    transition: none;
   }
 
   .skeleton {
@@ -1292,6 +1324,8 @@ samp {
 }
 
 .device-item__address {
+  /* Текст копируют (ошибки в Issue, адрес сканера) — выделяется вопреки `body` (base.css). */
+  user-select: text;
   font: var(--font-weight-regular) var(--font-size-s) / var(--leading-snug) var(--font-family-mono);
   color: var(--color-text-faint);
   white-space: nowrap;
@@ -1443,6 +1477,8 @@ samp {
 }
 
 .device-confirm__address {
+  /* Текст копируют (ошибки в Issue, адрес сканера) — выделяется вопреки `body` (base.css). */
+  user-select: text;
   font: var(--font-weight-regular) var(--font-size-m) / var(--leading-snug) var(--font-family-mono);
   color: var(--color-text-muted);
 }
@@ -1660,6 +1696,8 @@ samp {
   font: var(--font-weight-regular) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
 }
 .save-result__note {
+  /* Текст копируют (ошибки в Issue, адрес сканера) — выделяется вопреки `body` (base.css). */
+  user-select: text;
   display: block;
   font: var(--font-weight-regular) var(--font-size-s) / var(--leading-relaxed)
     var(--font-family-sans);
@@ -1715,13 +1753,21 @@ samp {
   background: var(--color-bg-toolbar);
 }
 
+/* Правая зона над инспектором (тюнинг автора 2026-11-05): строка ДЕТАЛИ на всю зону — зона
+   без плашки правок пустовала и читалась дырой; линия пунктирная, границы зоны прежние. */
 .editor-screen__toolbar-right {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: var(--space-4);
   padding: 0 var(--space-8);
   border-left: var(--border-width) solid var(--color-border-subtle);
+}
+
+.details-toggle--bar {
+  height: 100%;
+}
+
+.details-toggle--bar .details-toggle__rule {
+  border-top-style: dashed;
 }
 
 .editor-screen__toolbar-left {
@@ -1763,14 +1809,16 @@ samp {
   line-height: var(--leading-none);
 }
 
-/* B-45: плашка правок в правой зоне тулбара (handoff `2026-11-inspector-v2.md`, CSS): без
-   подложки и рамки, на всю ширину зоны; точка мигает циклом, текст слева, «Вернуть» справа. */
+/* B-45: плашка правок (handoff `2026-11-inspector-v2.md`, CSS) без подложки и рамки; с
+   2026-11-05 — в правой колонке центра тулбара, прижата к её правому краю; точка мигает циклом,
+   текст слева, «Вернуть» справа. */
 .edits-bar {
-  flex: 1;
-  min-width: 0;
+  grid-column: 3;
+  justify-self: end;
   display: flex;
   align-items: center;
   gap: var(--space-4);
+  min-width: 0;
   margin: 0;
   padding: 0;
 }
@@ -1780,10 +1828,7 @@ samp {
 }
 
 .edits-bar__text {
-  flex: 1;
-  min-width: 0;
   margin: 0;
-  text-align: left;
   white-space: nowrap;
   font: var(--font-weight-medium) var(--font-size-s) / var(--leading-snug) var(--font-family-sans);
   color: var(--color-warning);
@@ -1809,13 +1854,26 @@ samp {
   }
 }
 
+/* Центр тулбара (тюнинг 2026-11-05): три колонки — документ (или счётчики наборов) слева,
+   кнопка границы по центру зоны, плашка правок справа. Пока места хватает, крайние колонки
+   равные и кнопка стоит ровно по центру; в тесноте плашка правок не сжимается (правая колонка
+   не уже её), кнопка сдвигается влево, название обрезается, последней обрезается подпись
+   кнопки — ничто не наезжает друг на друга и не выходит в правую зону. */
 .editor-screen__toolbar-center {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto) minmax(max-content, 1fr);
   align-items: center;
-  justify-content: flex-start;
-  gap: var(--space-5);
+  column-gap: var(--space-5);
   min-width: 0;
   padding: 0 var(--space-8);
+}
+
+.editor-screen__doc {
+  grid-column: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  min-width: 0;
 }
 
 .editor-screen__doc-mark {
@@ -1834,9 +1892,13 @@ samp {
   font: var(--font-weight-semibold) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
 }
 
-/* S4 M3.6: тулбар режима наборов — точка и живые счётчики по центру. */
-.editor-screen__toolbar-center--sets {
+/* S4 M3.6: тулбар режима наборов — точка и живые счётчики в левой колонке центра. */
+.editor-screen__sets {
+  grid-column: 1;
+  display: flex;
+  align-items: center;
   gap: var(--space-4);
+  min-width: 0;
 }
 
 .editor-screen__sets-text {
@@ -1848,7 +1910,11 @@ samp {
 }
 
 .editor-screen__split {
-  margin-left: auto;
+  grid-column: 2;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   background: var(--color-bg-surface);
   color: var(--color-accent);
 }
@@ -2387,6 +2453,8 @@ samp {
 }
 
 .pass-banner__status {
+  /* Текст копируют (ошибки в Issue, адрес сканера) — выделяется вопреки `body` (base.css). */
+  user-select: text;
   margin: 0;
   font-weight: var(--font-weight-regular);
   font-size: var(--font-size-s);
@@ -2632,8 +2700,17 @@ samp {
   border-bottom: var(--border-width) solid var(--color-border-subtle);
 }
 
+/* Тюнинг 2026-11-05: строка-переключатель ДЕТАЛЕЙ — в тулбаре; секция держит только тело и
+   свёрнутая схлопнута до нуля: поля — у тела (иначе высота упиралась бы в поля секции, и конец
+   свёртывания шёл ступенькой), линия — лишь пока тело видно, в том числе на время свёртывания,
+   когда хук держит его открытым до конца анимации. */
 .inspector__section--details {
-  padding: var(--space-6) var(--space-8);
+  padding: 0;
+  border-bottom: 0;
+}
+
+.inspector__section--details:has(> .details:not([hidden])) {
+  border-bottom: var(--border-width) solid var(--color-border-subtle);
 }
 
 .inspector__section .kicker {
@@ -2664,6 +2741,7 @@ samp {
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
+  padding: var(--space-6) var(--space-8);
 }
 
 /* Свёрнутые ДЕТАЛИ: без этого правила `hidden` проигрывает `display: flex`. */
@@ -2684,7 +2762,7 @@ samp {
   margin: 0;
 }
 
-/* B-45 (решение 3): точка в свёрнутой строке ДЕТАЛЕЙ, пока в ПРОВЕРКЕ есть замечание. */
+/* B-45 (решение 3): точка в свёрнутой строке ДЕТАЛЕЙ (в тулбаре), пока в ПРОВЕРКЕ есть замечание. */
 .details-toggle__dot {
   flex: none;
 }

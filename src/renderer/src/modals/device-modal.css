@@ -51,6 +51,8 @@
 }
 
 .device-item__address {
+  /* Текст копируют (ошибки в Issue, адрес сканера) — выделяется вопреки `body` (base.css). */
+  user-select: text;
   font: var(--font-weight-regular) var(--font-size-s) / var(--leading-snug) var(--font-family-mono);
   color: var(--color-text-faint);
   white-space: nowrap;
@@ -202,6 +204,8 @@
 }
 
 .device-confirm__address {
+  /* Текст копируют (ошибки в Issue, адрес сканера) — выделяется вопреки `body` (base.css). */
+  user-select: text;
   font: var(--font-weight-regular) var(--font-size-m) / var(--leading-snug) var(--font-family-mono);
   color: var(--color-text-muted);
 }

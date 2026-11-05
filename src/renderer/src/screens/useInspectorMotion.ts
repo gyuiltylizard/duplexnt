@@ -8,9 +8,11 @@ import { animate, durationOf, easingOf, prefersReducedMotion } from '../state/mo
 // `--ease-section`. Как и у высоты модалки (B-4, KTD-4): идёт прежняя анимация — новая стартует
 // от видимой высоты; под reduced-motion и без WAAPI (jsdom) — ничего, разметка и так конечная.
 //
-// ДЕТАЛИ: раскрытие — высота от свёрнутой к полной, тело проявляется с задержкой ¼; свёртывание —
-// тело остаётся видимым до конца и гаснет за 60 %, `hidden` ставится по `finish` (KTD-2: 240 мс
-// показ расходится с разметкой — единственное такое место). ПУСТОЙ ОБОРОТ и ВЫРАВНИВАНИЕ:
+// ДЕТАЛИ: раскрытие — высота от нуля (строка-переключатель с 2026-11-05 — в тулбаре, свёрнутая
+// секция схлопнута) к полной, тело проявляется с задержкой ¼; свёртывание — тело остаётся
+// видимым до конца и гаснет за 60 %, `hidden` ставится по `finish` (KTD-2: 240 мс показ
+// расходится с разметкой — единственное такое место). Стрелка строки в тулбаре поворачивается
+// CSS-переходом той же длительности (`.details-toggle__arrow`). ПУСТОЙ ОБОРОТ и ВЫРАВНИВАНИЕ:
 // появление `0 → h` с проявлением, смена текста `h1 → h2`, уход — спейсер прежней высоты на том
 // же месте схлопывается (KTD-3), ДОКУМЕНТЫ поднимаются по потоку. Скролл инспектора сохраняется.
 
@@ -129,7 +131,6 @@ export function useInspectorMotion(
     const details = sections.get('details');
     if (details !== undefined) {
       const body = details.querySelector<HTMLElement>('.details');
-      const arrow = details.querySelector<HTMLElement>('.details-toggle__arrow');
       const to = natural.get('details') ?? 0;
       const from = startOf('details');
       if (previousOpen && !detailsOpen && body !== null && from !== undefined) {
@@ -158,16 +159,6 @@ export function useInspectorMotion(
             easing,
           });
         }
-      }
-      if (arrow !== null && previousOpen !== detailsOpen) {
-        animate(
-          arrow,
-          [
-            { transform: `rotate(${previousOpen ? '180' : '0'}deg)` },
-            { transform: `rotate(${detailsOpen ? '180' : '0'}deg)` },
-          ],
-          { duration, easing },
-        );
       }
     }
 
