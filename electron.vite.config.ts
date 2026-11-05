@@ -3,6 +3,7 @@ import { defineConfig } from 'electron-vite';
 import type { Plugin } from 'vite';
 import { buildCsp } from './tooling/csp';
 import { aliases } from './tooling/aliases';
+import { bundledPackagesPlugin } from './tooling/bundled-packages-plugin';
 import { devCssUrls } from './tooling/dev-css-urls';
 
 // Терминал редактора на машине автора наследует ELECTRON_RUN_AS_NODE=1: с ней Electron
@@ -41,16 +42,20 @@ function cspMeta(): Plugin {
 // Входы и выходы — по умолчанию electron-vite: src/{main,preload}/index.ts и
 // src/renderer/index.html → out/{main,preload,renderer}. В package.json нет поля `type`,
 // поэтому main и preload выходят в CJS: под sandbox preload обязан быть одним CJS-файлом.
+// Состав каждой сборки — в out/<цель>/third-party-packages.json для уведомлений о сторонних
+// компонентах (B-40); в asar файл не едет, см. `files:` в electron-builder.yml.
 export default defineConfig({
   main: {
     resolve: { alias: aliases },
+    plugins: [bundledPackagesPlugin()],
   },
   preload: {
     resolve: { alias: aliases },
+    plugins: [bundledPackagesPlugin()],
   },
   renderer: {
     resolve: { alias: aliases },
-    plugins: [react(), cspMeta(), devCssUrls()],
+    plugins: [react(), cspMeta(), devCssUrls(), bundledPackagesPlugin()],
     build: {
       // Vite превращает ассеты меньше 4 КБ в data:-URI, а `font-src 'self'` их блокирует —
       // как раз на редких подмножествах шрифтов, где это всплыло бы не сразу.

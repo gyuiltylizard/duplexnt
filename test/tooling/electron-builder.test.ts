@@ -104,6 +104,19 @@ describe('electron-builder.yml — метаданные публичной сб�
   it('копирайт задан явно', () => {
     expect(CODE).toMatch(/^copyright: Copyright © \d{4} gyuiltylizard$/m);
   });
+
+  it('лицензия и уведомления едут в корень установки через extraFiles, файлы существуют', () => {
+    const extra = CODE.slice(CODE.indexOf('extraFiles:'), CODE.indexOf('asar:'));
+    expect(extra).toMatch(/- from: LICENSE\n {4}to: LICENSE\.txt/);
+    expect(extra).toContain('- THIRD-PARTY-NOTICES.txt');
+    expect(existsSync('LICENSE')).toBe(true);
+    expect(existsSync('THIRD-PARTY-NOTICES.txt')).toBe(true);
+  });
+
+  it('служебный JSON плагина состава сборки исключён из asar', () => {
+    const files = CODE.slice(CODE.indexOf('files:'), CODE.indexOf('extraFiles:'));
+    expect(files).toContain("- '!out/**/third-party-packages.json'");
+  });
 });
 
 describe('electron-builder.yml — asar', () => {

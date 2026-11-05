@@ -711,8 +711,11 @@ _Инструмент — ADR 0001._ Нативный / тяжёлый слой 
 ```
 npm run dev               # запуск в разработке; ELECTRON_RUN_AS_NODE снимает сам
 npm run build             # сборка в out/
-npm run dist              # build + установщик NSIS в release/ (вне git, не публикуется)
-npm run typecheck         # tsc -b по пяти проектам: shared, core, node, web, test
+npm run dist              # build + проверка THIRD-PARTY-NOTICES.txt (notices --check) +
+                          #   установщик NSIS в release/ (вне git); релиз — ассет GitHub Release
+npm run notices           # THIRD-PARTY-NOTICES.txt из фактического состава сборки (после build);
+                          #   коммитится; дрейф версий ловит test, новые пакеты — --check в dist
+npm run typecheck         # tsc -b по шести проектам: shared, core, node, web, test, design
 npm run lint              # eslint, включая границы слоёв и запрет глобального ослабления TLS
 npm run format            # prettier --write   (format:check — только проверка; pre-commit
                           #   hook форматирует застейдженные файлы сам)
@@ -723,6 +726,7 @@ npm run test:all          # оба зелёные = DoD вехи
 npm run tokens:sync       # перегенерировать tokens.css из docs/design/DESIGN_SYSTEM.md
 npm run icons             # build/icon.ico и build/window-icon.ico из SVG-мастеров build/icon*.svg
                           #   (B-7); результат коммитится
+npm run installer-art     # BMP мастера NSIS из build/installer-*.svg (B-26); результат коммитится
 npm run design:snapshot   # референс интерфейса для дизайн-агента в docs/design/reference/ (B-6);
                           #   в test:all не входит — после вехи, менявшей UI
 npm run emulator -- --scenario <имя>   # эмулятор сканера на 127.0.0.1:9443 для ручного смоука;

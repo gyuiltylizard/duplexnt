@@ -19,7 +19,19 @@ directories:
 # local-test-data/, мимо стража приватности. Production-зависимости (sharp) он добавляет сам.
 files:
   - out/**
+  # Состав сборки для генератора уведомлений (B-40): служебный JSON плагина, в asar не нужен и
+  # несёт пути пакетов.
+  - '!out/**/third-party-packages.json'
   - package.json
+
+# Лицензии — в корень установки, рядом с LICENSE.electron.txt и LICENSES.chromium.html (B-40):
+# extraFiles от белого списка files не зависит. В репозитории LICENSE без расширения, иначе
+# electron-builder подхватил бы его страницей «I agree» мастера; THIRD-PARTY-NOTICES.txt
+# генерирует `npm run notices` из фактического состава сборки, `dist` проверяет его актуальность.
+extraFiles:
+  - from: LICENSE
+    to: LICENSE.txt
+  - THIRD-PARTY-NOTICES.txt
 
 asar: true
 # Нативные бинарники из asar не грузятся. Паттерны явные — рецепт самого sharp;

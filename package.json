@@ -14,7 +14,8 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
-    "dist": "npm run build && electron-builder --win --config electron-builder.yml",
+    "dist": "npm run build && node scripts/third-party-notices.ts --check && electron-builder --win --config electron-builder.yml",
+    "notices": "node scripts/third-party-notices.ts",
     "typecheck": "tsc -b",
     "lint": "eslint .",
     "test": "vitest run --project node --project jsdom",
