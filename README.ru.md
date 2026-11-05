@@ -10,7 +10,7 @@
 
 Страница проекта: <https://gyuiltylizard.github.io/duplexnt/>
 
-![Редактор Duplexn't: отсканированные страницы, документы, проверка сборки](docs/assets/img/editor.webp)
+![Редактор Duplexn't: отсканированные страницы, документы, проверка сборки](docs/assets/img/editor.ru.webp)
 
 ## Скачать
 

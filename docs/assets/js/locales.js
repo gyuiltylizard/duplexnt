@@ -57,10 +57,12 @@ window.DUPLEXNT_LOCALES = {
     "page.releases": "Релизы",
     "ui.langGroup": "Язык",
     "ui.carousel": "карусель",
-    "slides.0.alt": "Редактор Duplexn't: лента страниц двух документов, превью листа и проверка сборки",
-    "slides.0.caption": "Редактор: страницы, документы, проверка сборки",
-    "slides.1.alt": "Экран настройки Duplexn't: сканер подключён, параметры сканирования",
-    "slides.1.caption": "Настройка: сканер и параметры",
+    "slides.0.alt": "Экран настройки Duplexn't: сканер подключён, параметры сканирования",
+    "slides.0.caption": "Настройка: сканер и параметры",
+    "slides.0.src": "assets/img/setup.ru.webp",
+    "slides.1.alt": "Редактор Duplexn't: лента страниц пяти документов, превью листа и проверка сборки",
+    "slides.1.caption": "Редактор: страницы, документы, проверка сборки",
+    "slides.1.src": "assets/img/editor.ru.webp",
     "slides.0.label": "Скриншот 1",
     "slides.1.label": "Скриншот 2",
     "ui.prevShot": "Предыдущий скриншот",
@@ -83,7 +85,8 @@ window.DUPLEXNT_LOCALES = {
     "reqs.2.v": "Если сканер в той же сети, что и компьютер, то Duplexn't найдет его сам.",
     "reqs.3.k": "Результат",
     "reqs.3.v": "Великолепный.",
-    "ui.setupAlt": "Экран настройки: сканер подключён, параметры сканирования",
+    "ui.saveAlt": "Модалка сохранения Duplexn't: по файлу на документ и папка",
+    "ui.saveSrc": "assets/img/save.ru.webp",
     "versions.0.date": "Первый релиз",
     "versions.0.items.0": "Сетевые сканеры eSCL",
     "versions.0.items.1": "Двусторонняя сборка в два прохода",
@@ -122,4 +125,4 @@ window.DUPLEXNT_LOCALES = {
     ]
   }
 };
-window.DUPLEXNT_LOCALES.ru["js.captions"] = ["Редактор: страницы, документы, проверка сборки", "Настройка: сканер и параметры"];
+window.DUPLEXNT_LOCALES.ru["js.captions"] = ["Настройка: сканер и параметры", "Редактор: страницы, документы, проверка сборки"];

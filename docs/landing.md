@@ -14,7 +14,8 @@ docs/
   assets/
     js/locales.js    переводы (сейчас — русский) по ключам data-i18n из index.html
     js/main.js       выбор языка, карусель, раскрывашки роадмапа, история версий, пасхалка
-    img/             скриншоты editor/setup, картинка «Мотивация», значок
+    img/             скриншоты setup/editor/save по языкам (<экран>.<en|ru>.webp), картинка
+                     «Мотивация», значок
     fonts/           Golos Text и IBM Plex Mono локально (без CDN) + fonts.css
 ```
 
@@ -41,7 +42,12 @@ branch → `main` / `/docs`): спека, журналы и прочие `.md` �
    изменений по-английски в `index.html`, перевод под ключами `versions.N.*` в `locales.js`;
    прежняя первая версия уезжает в «earlier versions».
 2. **Роадмап** (`<section id="roadmap">`): закрытые пункты и новые — по `docs/roadmap.md`.
-3. **Скриншоты** `assets/img/editor.webp` и `setup.webp`, если интерфейс менялся заметно.
+3. **Скриншоты**, если интерфейс менялся заметно: карусель — `setup.<lang>.webp` и
+   `editor.<lang>.webp`, раздел требований — `save.<lang>.webp`; по файлу на язык, английский
+   стоит в `src` разметки, русский подставляется через `data-i18n-attr="…;src:<ключ>"` из
+   `locales.js` (`slides.N.src`, `ui.saveSrc`). Снимаются с дизайн-референса в масштабе 2
+   (2560×1600): `npm run design:snapshot`, затем скрипт съёмки через Electron + CDP (память
+   агента «reference-screenshots-method»), PNG → WebP качеством ~82 через `sharp`.
 4. **Кнопки «Скачать»** ведут на `https://github.com/gyuiltylizard/duplexnt/releases` — на список
    релизов: у GitHub `/releases/latest` показывает последний не-pre-release, а до `1.0.0` все
    сборки — beta. При выходе `1.0.0` обе кнопки перевести на `/releases/latest`. Прямой ссылки на

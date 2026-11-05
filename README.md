@@ -9,7 +9,7 @@ and lets you split one stack into several documents before saving.
 
 Project page: <https://gyuiltylizard.github.io/duplexnt/>
 
-![Duplexn't editor: scanned pages, documents, assembly check](docs/assets/img/editor.webp)
+![Duplexn't editor: scanned pages, documents, assembly check](docs/assets/img/editor.en.webp)
 
 ## Download
 

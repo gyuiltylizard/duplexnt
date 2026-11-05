@@ -54,6 +54,25 @@ describe('docs/ — лендинг для GitHub Pages (B-40)', () => {
     }
   });
 
+  it('картинки по языкам: пути из locales.js (src через data-i18n-attr) существуют с тем же регистром', () => {
+    const locales = readFileSync(join(DOCS, 'assets', 'js', 'locales.js'), 'utf8');
+    const fromLocales = [...locales.matchAll(/"(assets\/img\/[^"]+)"/g)].map(
+      (match) => match[1] ?? '',
+    );
+    expect(fromLocales.length).toBeGreaterThanOrEqual(3);
+    for (const url of fromLocales) {
+      expect(existsCaseExact(url), url).toBe(true);
+    }
+    // Каждому src с подменой по языку в разметке отвечает ключ в переводах.
+    const keys = [...html.matchAll(/data-i18n-attr="[^"]*src:([^";]+)/g)].map(
+      (match) => match[1] ?? '',
+    );
+    expect(keys.length).toBeGreaterThanOrEqual(3);
+    for (const key of keys) {
+      expect(locales, key).toContain(`"${key}"`);
+    }
+  });
+
   it('ссылки на GitHub — только на настоящий репозиторий; «Скачать» ведёт на список релизов, не на latest и не на exe', () => {
     const github = attributeUrls(html).filter((url) => url.startsWith('https://github.com/'));
     expect(github.length).toBeGreaterThan(0);

@@ -14,8 +14,8 @@
   "olderShow": "Show earlier versions",
   "olderHide": "Hide earlier versions",
   "captions": [
-    "Editor: pages, documents, assembly check",
-    "Setup: scanner and settings"
+    "Setup: scanner and settings",
+    "Editor: pages, documents, assembly check"
   ]
 };
   var LOCALES = window.DUPLEXNT_LOCALES || {};
