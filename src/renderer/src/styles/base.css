@@ -24,6 +24,18 @@ body {
   font-weight: var(--font-weight-regular);
   line-height: var(--leading-relaxed);
   -webkit-font-smoothing: antialiased;
+  /* Интерфейс не выделяется мышью, как в настольном приложении (правка автора 2026-11-05):
+     подписи, факты и кнопки не подсвечиваются при жестах. Выделяемым остаётся то, что
+     копируют — поля ввода и тексты, помеченные `user-select: text` в рецептах: ошибки
+     (`.notice__text`, `.modal__status`, `.pass-banner__status`, `.toast__text`,
+     `.save-result__note`, `.incompatible-screen__status`) и адреса устройств. */
+  user-select: none;
+}
+
+input,
+textarea,
+[contenteditable] {
+  user-select: text;
 }
 
 code,

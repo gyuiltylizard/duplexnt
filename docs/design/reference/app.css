@@ -243,6 +243,18 @@ body {
   font-weight: var(--font-weight-regular);
   line-height: var(--leading-relaxed);
   -webkit-font-smoothing: antialiased;
+  /* Интерфейс не выделяется мышью, как в настольном приложении (правка автора 2026-11-05):
+     подписи, факты и кнопки не подсвечиваются при жестах. Выделяемым остаётся то, что
+     копируют — поля ввода и тексты, помеченные `user-select: text` в рецептах: ошибки
+     (`.notice__text`, `.modal__status`, `.pass-banner__status`, `.toast__text`,
+     `.save-result__note`, `.incompatible-screen__status`) и адреса устройств. */
+  user-select: none;
+}
+
+input,
+textarea,
+[contenteditable] {
+  user-select: text;
 }
 
 code,
@@ -533,6 +545,8 @@ samp {
 }
 
 .notice__text {
+  /* Текст копируют (ошибки в Issue, адрес сканера) — выделяется вопреки `body` (base.css). */
+  user-select: text;
   flex: 1;
   min-width: 0;
   margin: 0;
@@ -770,6 +784,8 @@ samp {
 }
 
 .modal__status {
+  /* Текст копируют (ошибки в Issue, адрес сканера) — выделяется вопреки `body` (base.css). */
+  user-select: text;
   flex: 1;
   margin: 0;
   overflow-wrap: anywhere;
@@ -893,6 +909,8 @@ samp {
 
 /* Тост с действием (handoff M3, S18): текст режется, кнопка остаётся целой. */
 .toast__text {
+  /* Текст копируют (ошибки в Issue, адрес сканера) — выделяется вопреки `body` (base.css). */
+  user-select: text;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1156,6 +1174,8 @@ samp {
 }
 
 .incompatible-screen__status {
+  /* Текст копируют (ошибки в Issue, адрес сканера) — выделяется вопреки `body` (base.css). */
+  user-select: text;
   margin: 0;
   font-size: var(--font-size-s);
   line-height: var(--leading-relaxed);
@@ -1304,6 +1324,8 @@ samp {
 }
 
 .device-item__address {
+  /* Текст копируют (ошибки в Issue, адрес сканера) — выделяется вопреки `body` (base.css). */
+  user-select: text;
   font: var(--font-weight-regular) var(--font-size-s) / var(--leading-snug) var(--font-family-mono);
   color: var(--color-text-faint);
   white-space: nowrap;
@@ -1455,6 +1477,8 @@ samp {
 }
 
 .device-confirm__address {
+  /* Текст копируют (ошибки в Issue, адрес сканера) — выделяется вопреки `body` (base.css). */
+  user-select: text;
   font: var(--font-weight-regular) var(--font-size-m) / var(--leading-snug) var(--font-family-mono);
   color: var(--color-text-muted);
 }
@@ -1672,6 +1696,8 @@ samp {
   font: var(--font-weight-regular) var(--font-size-m) / var(--leading-snug) var(--font-family-sans);
 }
 .save-result__note {
+  /* Текст копируют (ошибки в Issue, адрес сканера) — выделяется вопреки `body` (base.css). */
+  user-select: text;
   display: block;
   font: var(--font-weight-regular) var(--font-size-s) / var(--leading-relaxed)
     var(--font-family-sans);
@@ -2427,6 +2453,8 @@ samp {
 }
 
 .pass-banner__status {
+  /* Текст копируют (ошибки в Issue, адрес сканера) — выделяется вопреки `body` (base.css). */
+  user-select: text;
   margin: 0;
   font-weight: var(--font-weight-regular);
   font-size: var(--font-size-s);

@@ -724,6 +724,8 @@
 }
 
 .pass-banner__status {
+  /* Текст копируют (ошибки в Issue, адрес сканера) — выделяется вопреки `body` (base.css). */
+  user-select: text;
   margin: 0;
   font-weight: var(--font-weight-regular);
   font-size: var(--font-size-s);

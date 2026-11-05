@@ -277,6 +277,8 @@
 }
 
 .notice__text {
+  /* Текст копируют (ошибки в Issue, адрес сканера) — выделяется вопреки `body` (base.css). */
+  user-select: text;
   flex: 1;
   min-width: 0;
   margin: 0;
@@ -514,6 +516,8 @@
 }
 
 .modal__status {
+  /* Текст копируют (ошибки в Issue, адрес сканера) — выделяется вопреки `body` (base.css). */
+  user-select: text;
   flex: 1;
   margin: 0;
   overflow-wrap: anywhere;
@@ -637,6 +641,8 @@
 
 /* Тост с действием (handoff M3, S18): текст режется, кнопка остаётся целой. */
 .toast__text {
+  /* Текст копируют (ошибки в Issue, адрес сканера) — выделяется вопреки `body` (base.css). */
+  user-select: text;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -900,6 +906,8 @@
 }
 
 .incompatible-screen__status {
+  /* Текст копируют (ошибки в Issue, адрес сканера) — выделяется вопреки `body` (base.css). */
+  user-select: text;
   margin: 0;
   font-size: var(--font-size-s);
   line-height: var(--leading-relaxed);
