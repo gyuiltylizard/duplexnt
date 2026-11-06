@@ -13,7 +13,7 @@ import { connectService, saveSingle, scanned } from '../support/pass-service';
 import { unwrap } from '../support/result';
 import { journalOnDisk } from '../support/session-store';
 import { skewDirOf, statusesOf, straightJpegOf, straightRecordOf } from '../support/straighten';
-import { until, untilScored } from '../support/until';
+import { straightenQueueIdle, until, untilScored } from '../support/until';
 import { SKEW_DETECTOR_VERSION } from '../../src/core/detect/skew';
 
 // Выравнивание перекоса на настоящей цепочке (план M6, U5, U12; R6, R11, KTD-4, KTD-8, KTD-9,
@@ -106,7 +106,10 @@ describe('выравнивание на эмуляторе: измерение �
 
     // U12: статусы в снимке — по исходам и файлам; скрытый пустой оборот без статуса; в PDF
     // выправленные страницы идут из производного, фото — байт в байт (KTD-8).
-    await until(() => service.snapshot().assembly?.straighten.pending === 0);
+    await until(() => {
+      const snapshot = service.snapshot();
+      return snapshot.assembly?.straighten.pending === 0 && straightenQueueIdle(snapshot);
+    });
     const statuses = {
       [F(1)]: 'straightened',
       [B(2)]: 'straightened',
