@@ -1,4 +1,4 @@
-THIRD-PARTY NOTICES FOR DUPLEXN'T 1.0.0-beta.1
+THIRD-PARTY NOTICES FOR DUPLEXN'T 1.0.0-beta.2
 
 Duplexn't is licensed under the GNU General Public License, version 3 only (see
 LICENSE.txt next to this file). The installed application bundles the third-party

@@ -11,8 +11,8 @@ body:
     id: version
     attributes:
       label: Duplexn't version
-      description: From the installer file name (for example `duplexnt-1.0.0-beta.1-setup.exe`) or Windows Settings → Apps → Installed apps.
-      placeholder: 1.0.0-beta.1
+      description: From the installer file name (for example `duplexnt-1.0.0-beta.2-setup.exe`) or Windows Settings → Apps → Installed apps.
+      placeholder: 1.0.0-beta.2
     validations:
       required: true
   - type: input

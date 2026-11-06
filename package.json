@@ -1,6 +1,6 @@
 {
   "name": "duplexnt",
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0-beta.2",
   "private": true,
   "description": "Duplex scanning on a simplex-feeder scanner: two eSCL passes assembled into one PDF",
   "author": {

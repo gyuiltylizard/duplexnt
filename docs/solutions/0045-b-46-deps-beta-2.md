@@ -244,6 +244,21 @@ dev-режиме (`temp/smoke-b46.mjs dev` — `electron-vite dev`, тот же 
 (36 / 315, worst-case 3 / 5) зелёные с первого прогона, лог
 `docs/output/2026-11-06-gate-b-46-u4.log`. Коммит `chore(b-46): U4 …`.
 
+### U5. Версия `1.0.0-beta.2`, уведомления и спека — ✅ зелёный
+
+`npm version 1.0.0-beta.2 --no-git-tag-version`: версия в `package.json` и в двух местах lock,
+git-тега нет. `npm run build` и `npm run notices`: в `THIRD-PARTY-NOTICES.txt` изменилась только
+шапка. В `.github/ISSUE_TEMPLATE/bug.yml` пример имени установщика и placeholder версии —
+`1.0.0-beta.2`. В спеку, «Публичный репозиторий», добавлено правило «Уязвимости зависимостей
+закрываем сами»: мерило — `npm audit` вместе с алертами Dependabot, способы подъёма, без мажора
+ради алерта, отдельная сборка `beta.N` для пакетов из установщика, перегенерация уведомлений в
+том же коммите. Лендинг и README не менялись (KTD-8).
+
+**Готово:** typecheck + lint + format:check + `npm test` (162 / 2785) + `test:integration`
+(36 / 315, worst-case 3 / 5) зелёные с первого прогона, `notices --check` чист, лог
+`docs/output/2026-11-06-gate-b-46-u5-acceptance.log`. Этот же прогон — гейт приёмочного дерева
+для U6. Коммит `chore(b-46): U5 …`.
+
 ---
 
 ## На чём встали
