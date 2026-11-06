@@ -2,7 +2,7 @@
 title: 'chore: Обновление зависимостей по алертам Dependabot и релиз 1.0.0-beta.2 (B-46)'
 type: chore
 date: 2026-11-06
-status: в работе
+status: done
 ---
 
 # chore: Обновление зависимостей по алертам Dependabot и релиз 1.0.0-beta.2 (B-46)
