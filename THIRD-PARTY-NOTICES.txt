@@ -1,4 +1,4 @@
-THIRD-PARTY NOTICES FOR DUPLEXN'T 1.0.0-beta.1
+THIRD-PARTY NOTICES FOR DUPLEXN'T 1.0.0-beta.2
 
 Duplexn't is licensed under the GNU General Public License, version 3 only (see
 LICENSE.txt next to this file). The installed application bundles the third-party
@@ -11,7 +11,7 @@ LICENSES.chromium.html next to this file.
 @fontsource/golos-text@5.3.0  node_modules/@fontsource/golos-text
 @fontsource/ibm-plex-mono@5.3.0  node_modules/@fontsource/ibm-plex-mono
 @img/colour@1.1.0  node_modules/@img/colour
-@img/sharp-win32-x64@0.35.4  node_modules/@img/sharp-win32-x64
+@img/sharp-win32-x64@0.35.5  node_modules/@img/sharp-win32-x64
 @leichtgewicht/ip-codec@2.0.5  node_modules/@leichtgewicht/ip-codec
 bonjour-service@1.4.4  node_modules/bonjour-service
 culori@4.0.2  node_modules/culori
@@ -29,12 +29,12 @@ react-i18next@17.0.14  node_modules/react-i18next
 saxes@6.0.0  node_modules/saxes
 scheduler@0.28.0  node_modules/scheduler
 semver@7.8.5  node_modules/sharp/node_modules/semver
-sharp@0.35.4  node_modules/sharp
+sharp@0.35.5  node_modules/sharp
 thunky@1.1.0  node_modules/thunky
 tslib@2.8.1  node_modules/tslib
 use-sync-external-store@1.7.0  node_modules/use-sync-external-store
 xmlchars@2.2.0  node_modules/xmlchars
-zod@4.6.5  node_modules/zod
+zod@4.6.7  node_modules/zod
 == End of components ==
 
 ==============================================================================
@@ -343,8 +343,8 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-@img/sharp-win32-x64 0.35.4 (Apache-2.0 AND LGPL-3.0-or-later)
-sharp 0.35.4 (Apache-2.0)
+@img/sharp-win32-x64 0.35.5 (Apache-2.0 AND LGPL-3.0-or-later)
+sharp 0.35.5 (Apache-2.0)
 ------------------------------------------------------------------------------
 Apache License
 Version 2.0, January 2004
@@ -1132,7 +1132,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-zod 4.6.5 (MIT)
+zod 4.6.7 (MIT)
 ------------------------------------------------------------------------------
 MIT License
 
@@ -1157,22 +1157,22 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ==============================================================================
-libvips and the native libraries built into @img/sharp-win32-x64 0.35.4
+libvips and the native libraries built into @img/sharp-win32-x64 0.35.5
 ------------------------------------------------------------------------------
 Components and versions (from versions.json of that package):
-  aom 3.14.1
+  aom 3.15.1
   archive 3.8.9
-  cairo 1.18.4
-  cgif 0.5.3
+  cairo 1.18.6
+  cgif 0.5.4
   exif 0.6.26
-  expat 2.8.3
+  expat 2.8.5
   ffi 3.8.0
   fontconfig 2.18.3
   freetype 2.14.3
-  fribidi 1.0.16
-  glib 2.89.4
-  harfbuzz 14.3.1
-  heif 1.23.2
+  fribidi 1.0.17
+  glib 2.90.0
+  harfbuzz 14.5.0
+  heif 1.23.5
   highway 1.4.0
   imagequant 2.4.1
   lcms 2.19.1
@@ -1181,12 +1181,12 @@ Components and versions (from versions.json of that package):
   pixman 0.46.4
   png 1.6.58
   proxy-libintl 0.5
-  rsvg 2.62.91
+  rsvg 2.63.2
   tiff 4.7.2
   uhdr 2.0.2
-  vips 8.18.6
+  vips 8.18.7
   webp 1.6.0
-  xml2 2.15.3
+  xml2 2.15.4
   zlib-ng 2.3.3
 
 Licensing of these libraries, as stated by the package README:
@@ -1197,7 +1197,7 @@ used under the terms of the following licenses:
 | Library       | Used under the terms of                                                                                   |
 |---------------|-----------------------------------------------------------------------------------------------------------|
 | aom           | BSD 2-Clause + [Alliance for Open Media Patent License 1.0](https://aomedia.org/license/patent-license/)  |
-| cairo         | Mozilla Public License 2.0                                                                                |
+| cairo         | Mozilla Public License 1.1                                                                                |
 | cgif          | MIT License                                                                                               |
 | expat         | MIT License                                                                                               |
 | fontconfig    | [fontconfig License](https://gitlab.freedesktop.org/fontconfig/fontconfig/blob/main/COPYING) (BSD-like)   |

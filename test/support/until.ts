@@ -25,8 +25,20 @@ export const untilScored = (snapshot: () => Snapshot): Promise<void> =>
   });
 
 /**
- * Ждёт конца измерений и коррекции (M6, U9): настоящий исполнитель на эмуляторе тратит до
- * секунды на страницу, поэтому бюджет — 40 с.
+ * Очередь коррекции пуста. Сверять `straightenProgress` сразу после `straighten.pending === 0`
+ * нельзя: хранилище заносит выправленную страницу в индекс раньше, чем дописывает уборку прежних
+ * пар, и в этом окне страница уже «выправлена», а очередь ещё держит её исполняемой (B-46,
+ * `docs/bugs.md`). Вне режима «выравнивать» хода нет — очередь считается пустой.
+ */
+export const straightenQueueIdle = (snapshot: Snapshot): boolean =>
+  (snapshot.straightenProgress?.queued ?? 0) === 0;
+
+/**
+ * Ждёт конца измерений и коррекции (M6, U9), включая опустошение очереди: настоящий исполнитель
+ * на эмуляторе тратит до секунды на страницу, поэтому бюджет — 40 с.
  */
 export const untilStraightened = (snapshot: () => Snapshot): Promise<void> =>
-  until(() => (snapshot().assembly?.straighten.pending ?? 0) === 0, 8000);
+  until(() => {
+    const current = snapshot();
+    return (current.assembly?.straighten.pending ?? 0) === 0 && straightenQueueIdle(current);
+  }, 8000);

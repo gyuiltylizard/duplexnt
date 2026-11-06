@@ -16,7 +16,7 @@ import { pageFixture, pageFixtureNumberOf, pdfImageStreams } from '../../../test
 import { makeTempDataRoot } from '../../../test/support/temp-data-root';
 import { stubWorker } from '../../../test/support/image-worker';
 import { unwrap } from '../../../test/support/result';
-import { until } from '../../../test/support/until';
+import { straightenQueueIdle, until } from '../../../test/support/until';
 import type { BlankDetector } from '../detect/blank';
 import { SKEW_DETECTOR_VERSION } from '../detect/skew';
 import { layoutOf, straightFileName } from '../storage/layout';
@@ -251,8 +251,12 @@ const statusesOf = (service: PassService): Record<string, StraightenStatus> =>
     (service.snapshot().assembly?.order ?? []).map((page) => [page.key, page.straighten.status]),
   );
 
+/** Измерения и коррекция кончились, очередь пуста — иначе сверка хода попадает в окно записи. */
 const untilStraightened = (service: PassService): Promise<void> =>
-  until(() => service.snapshot().assembly?.straighten.pending === 0);
+  until(() => {
+    const snapshot = service.snapshot();
+    return snapshot.assembly?.straighten.pending === 0 && straightenQueueIdle(snapshot);
+  });
 
 /** Потоки изображений PDF по пути. */
 const streamsOf = async (path: string): Promise<Buffer[]> =>
